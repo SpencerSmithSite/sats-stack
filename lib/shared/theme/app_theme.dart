@@ -40,7 +40,7 @@ abstract final class AppTheme {
       scaffoldBackgroundColor:
           isDark ? AppColors.darkBackground : AppColors.lightBackground,
 
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: colorScheme.surface,
         elevation: 0,
         shape: RoundedRectangleBorder(
@@ -67,13 +67,13 @@ abstract final class AppTheme {
           if (states.contains(WidgetState.selected)) {
             return const TextStyle(
               color: AppColors.bitcoinOrange,
-              fontSize: 12,
+              fontSize: 11,
               fontWeight: FontWeight.w600,
             );
           }
           return const TextStyle(
             color: AppColors.textSecondary,
-            fontSize: 12,
+            fontSize: 11,
           );
         }),
       ),
