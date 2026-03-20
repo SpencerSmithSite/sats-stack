@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../../shared/constants/app_constants.dart';
 import '../../shared/theme/app_colors.dart';
 import '../../shared/theme/app_text_styles.dart';
+import '../../shared/utils/platform_utils.dart';
 import '../../main.dart' as app;
 
 // ── Message model ─────────────────────────────────────────────────────────────
@@ -189,6 +190,9 @@ class _AiChatScreenState extends State<AiChatScreen> {
         models: _models,
         onSave: (url, model) async {
           await app.ollamaService.saveSettings(url: url, model: model);
+          app.aiEnabledNotifier.value = PlatformUtils.isDesktop ||
+              (app.ollamaService.baseUrl != AppConstants.defaultOllamaUrl &&
+                  app.ollamaService.baseUrl.isNotEmpty);
           if (mounted) setState(() {});
         },
         onRefresh: () async {
@@ -228,7 +232,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
       body: _checking
           ? const Center(child: CircularProgressIndicator())
           : !_ollamaAvailable
-              ? _OfflineState(onRetry: _init)
+              ? _OfflineState(onRetry: _init, onOpenSettings: _openSettings)
               : Column(
                   children: [
                     Expanded(child: _ChatList(
@@ -584,44 +588,62 @@ class _SendButton extends StatelessWidget {
 // ── Offline state ─────────────────────────────────────────────────────────────
 
 class _OfflineState extends StatelessWidget {
-  const _OfflineState({required this.onRetry});
+  const _OfflineState({required this.onRetry, required this.onOpenSettings});
   final VoidCallback onRetry;
+  final VoidCallback onOpenSettings;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDesktop = PlatformUtils.isDesktop;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.computer_outlined, size: 56, color: AppColors.textSecondary),
+            Icon(
+              isDesktop ? Icons.computer_outlined : Icons.cloud_off_outlined,
+              size: 56,
+              color: AppColors.textSecondary,
+            ),
             const SizedBox(height: 16),
             Text(
-              'Ollama not running',
+              isDesktop ? 'Ollama not running' : 'Cannot reach Ollama server',
               style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 8),
             Text(
-              'Install Ollama and pull a model, then tap Retry.\n\nollama pull llama3.2',
+              isDesktop
+                  ? 'Install Ollama and pull a model, then tap Retry.\n\nollama pull llama3.2'
+                  : 'Check that your remote server URL is correct and the server is reachable, then tap Retry.',
               textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: AppColors.textSecondary,
                 height: 1.6,
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              AppConstants.defaultOllamaUrl,
-              style: AppTextStyles.monoSmall.copyWith(color: AppColors.textSecondary),
-            ),
+            if (isDesktop) ...[
+              const SizedBox(height: 8),
+              Text(
+                AppConstants.defaultOllamaUrl,
+                style: AppTextStyles.monoSmall.copyWith(color: AppColors.textSecondary),
+              ),
+            ],
             const SizedBox(height: 24),
             FilledButton.icon(
               onPressed: onRetry,
               icon: const Icon(Icons.refresh),
               label: const Text('Retry'),
             ),
+            if (!isDesktop) ...[
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: onOpenSettings,
+                icon: const Icon(Icons.settings_outlined, size: 18),
+                label: const Text('Update server URL'),
+              ),
+            ],
           ],
         ),
       ),

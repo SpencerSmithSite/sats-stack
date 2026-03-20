@@ -56,7 +56,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _esploraUrlCtrl = TextEditingController(
       text: storedUrl == AppConstants.mempoolBaseUrl ? '' : storedUrl,
     );
-    if (PlatformUtils.isDesktop) _loadModels();
+    _loadModels();
     _loadVersion();
   }
 
@@ -129,6 +129,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       url: _ollamaUrlCtrl.text.trim(),
       model: _selectedModel,
     );
+    // Update the AI-enabled notifier so the nav tab appears/disappears reactively.
+    app.aiEnabledNotifier.value = PlatformUtils.isDesktop ||
+        (app.ollamaService.baseUrl != AppConstants.defaultOllamaUrl &&
+            app.ollamaService.baseUrl.isNotEmpty);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Ollama settings saved')),
@@ -470,19 +474,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
             tilePadding:
                 const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             children: [
-              if (PlatformUtils.isDesktop) ...[
-                _SectionHeader('AI — Ollama'),
+              ...[
+                _SectionHeader(
+                  PlatformUtils.isDesktop ? 'AI — Ollama' : 'AI — Remote Ollama Server',
+                ),
                 Padding(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      if (!PlatformUtils.isDesktop)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: _Banner(
+                            color: const Color(0xFF1A2A1A),
+                            borderColor: const Color(0xFF2A5A2A),
+                            icon: Icons.cloud_outlined,
+                            iconColor: const Color(0xFF6AC86A),
+                            child: Text(
+                              'Connect to an Ollama instance running on your home server or VPS. '
+                              'The AI tab will appear once a server URL is saved.',
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: const Color(0xFF6AC86A),
+                                    height: 1.5,
+                                  ),
+                            ),
+                          ),
+                        ),
                       TextField(
                         controller: _ollamaUrlCtrl,
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           labelText: 'Ollama base URL',
-                          hintText: 'http://localhost:11434',
+                          hintText: PlatformUtils.isDesktop
+                              ? 'http://localhost:11434'
+                              : 'http://your-server:11434',
                         ),
                       ),
                       const SizedBox(height: 12),
