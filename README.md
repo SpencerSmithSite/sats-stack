@@ -131,4 +131,4 @@ lib/
 
 ## License
 
-MIT
+[GPL-3.0](LICENSE)
