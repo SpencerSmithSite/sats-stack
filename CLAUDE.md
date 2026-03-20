@@ -26,9 +26,9 @@ flutter test
 
 **Dashboard data flow**: `DashboardService.watchDashboard(month)` → `StreamBuilder<DashboardData>` (outer) → `ValueListenableBuilder<String>` (currency) → `ValueListenableBuilder<double?>` (price) → `_DashboardContent`.
 
-**Navigation**: GoRouter 16.3.0 with `ShellRoute` for 5-tab bottom nav (`/dashboard`, `/transactions`, `/budgets`, `/stack`, `/ai`). AI tab is conditionally included only when `PlatformUtils.isDesktop` (mobile AI support is planned — see backlog). `/settings` and `/analytics` are pushed modally via `context.push(...)`.
+**Navigation**: GoRouter with `ShellRoute` for 5-tab bottom nav (`/dashboard`, `/transactions`, `/budgets`, `/stack`, `/ai`). `/ai` route is always registered; the AI tab appears reactively via `aiEnabledNotifier`. `/settings` and `/analytics` are pushed modally via `context.push(...)`.
 
-**AI/Ollama features** are currently gated behind `PlatformUtils.isDesktop` (`Platform.isMacOS || Platform.isWindows || Platform.isLinux`). Planned: `aiEnabledNotifier` (`ValueNotifier<bool>` in `main.dart`) will replace the hard `isDesktop` gate — true on desktop always, true on mobile when a non-localhost Ollama URL is configured.
+**AI/Ollama features** gated by `aiEnabledNotifier` (`ValueNotifier<bool>` in `main.dart`) — `true` on desktop always; `true` on mobile only when a non-localhost Ollama URL is configured. `PlatformUtils.isDesktop` is only used for platform-specific UI copy, not feature gating.
 
 **Transaction dedup**: SHA-256 of `"date|amount|description|salt"`. CSV re-imports use `salt=''` to deduplicate; manual entries use `salt=microsecondsSinceEpoch` to allow intentional duplicates; recurring instances use `salt='recurring_${anchorMs}_${nextDueMs}'`.
 
@@ -44,14 +44,14 @@ flutter test
 
 ## Critical package version pins
 
+Flutter SDK: **3.41.5** · Dart: **3.11.3** (installed via Homebrew at `/opt/homebrew/share/flutter`)
+
 | Package | Version | Reason |
 |---|---|---|
 | `drift_flutter` | `^0.2.8` | 0.3.0 requires sqlite3_flutter_libs 0.6, conflicts |
-| `go_router` | `^16.3.0` | 17.x requires Dart 3.9 |
 | `fl_chart` | `^0.71.0` | 1.x requires vector_math 2.2, conflicts with flutter_test |
-| `flutter_local_notifications` | `^19.5.0` | 20+ requires Dart 3.8 |
 
-Do not upgrade these without verifying Dart SDK compatibility.
+`go_router` and `flutter_local_notifications` no longer need version pins (Dart 3.11.3 satisfies their constraints). Upgrade with care — check for breaking API changes first.
 
 **pointycastle note**: `pointy_castle` (underscore) does NOT exist. `pointycastle` (no underscore) v4.0.0 is the real package. `ECCurve_secp256k1` extends `ECDomainParametersImpl` — it IS the domain params object, no `.domainParams` getter.
 
