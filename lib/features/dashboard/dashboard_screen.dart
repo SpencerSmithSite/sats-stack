@@ -3,7 +3,6 @@ import 'package:go_router/go_router.dart';
 import '../../core/models/dashboard_data.dart';
 import '../../core/models/wallet_summary.dart';
 import '../../shared/theme/app_colors.dart';
-import '../../shared/utils/platform_utils.dart';
 import '../../shared/widgets/btc_price_chip.dart';
 import '../../features/transactions/widgets/transaction_list_item.dart';
 import '../../core/services/category_service.dart';
@@ -34,7 +33,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
-    if (PlatformUtils.isDesktop) _initInsight();
+    if (app.aiEnabledNotifier.value) _initInsight();
   }
 
   Future<void> _initInsight() async {

@@ -13,6 +13,7 @@ import 'core/services/xpub_service.dart';
 import 'core/services/budget_service.dart';
 import 'core/services/notification_service.dart';
 import 'core/services/ollama_service.dart';
+import 'shared/utils/platform_utils.dart';
 
 late AppDatabase db;
 late TransactionService transactionService;
@@ -28,6 +29,7 @@ late NotificationService notificationService;
 late ValueNotifier<ThemeMode> themeModeNotifier;
 late ValueNotifier<String> currencyNotifier;
 late ValueNotifier<bool> showBtcPriceNotifier;
+late ValueNotifier<bool> aiEnabledNotifier;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -42,6 +44,12 @@ void main() async {
   budgetService = BudgetService(db);
   ollamaService = OllamaService(db);
   await ollamaService.loadSettings();
+  // AI is enabled on desktop always; on mobile only when a non-localhost URL is saved.
+  aiEnabledNotifier = ValueNotifier(
+    PlatformUtils.isDesktop ||
+        (ollamaService.baseUrl != AppConstants.defaultOllamaUrl &&
+            ollamaService.baseUrl.isNotEmpty),
+  );
   await xpubService.loadSettings();
   // btcPriceService.loadSettings() is called inside initialize() below.
 

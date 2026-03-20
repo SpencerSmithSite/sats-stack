@@ -12,7 +12,6 @@ import 'features/analytics/analytics_screen.dart';
 import 'main.dart' as app;
 import 'shared/constants/app_constants.dart';
 import 'shared/theme/app_theme.dart';
-import 'shared/utils/platform_utils.dart';
 
 class SatsStackApp extends StatelessWidget {
   const SatsStackApp({super.key});
@@ -72,11 +71,10 @@ final _router = GoRouter(
           path: '/stack',
           builder: (ctx, state) => const StackScreen(),
         ),
-        if (PlatformUtils.isDesktop)
-          GoRoute(
-            path: '/ai',
-            builder: (ctx, state) => const AiChatScreen(),
-          ),
+        GoRoute(
+          path: '/ai',
+          builder: (ctx, state) => const AiChatScreen(),
+        ),
       ],
     ),
     GoRoute(
@@ -90,11 +88,16 @@ final _router = GoRouter(
   ],
 );
 
-class AppShell extends StatelessWidget {
+class AppShell extends StatefulWidget {
   const AppShell({required this.child, super.key});
 
   final Widget child;
 
+  @override
+  State<AppShell> createState() => _AppShellState();
+}
+
+class _AppShellState extends State<AppShell> {
   static const _allTabPaths = [
     '/dashboard',
     '/transactions',
@@ -103,13 +106,29 @@ class AppShell extends StatelessWidget {
     '/ai',
   ];
 
-  List<String> get _tabPaths =>
-      PlatformUtils.isDesktop ? _allTabPaths : _allTabPaths.take(4).toList();
+  @override
+  void initState() {
+    super.initState();
+    app.aiEnabledNotifier.addListener(_onAiEnabledChanged);
+  }
+
+  @override
+  void dispose() {
+    app.aiEnabledNotifier.removeListener(_onAiEnabledChanged);
+    super.dispose();
+  }
+
+  void _onAiEnabledChanged() => setState(() {});
+
+  List<String> get _tabPaths => app.aiEnabledNotifier.value
+      ? _allTabPaths
+      : _allTabPaths.take(4).toList();
 
   @override
   Widget build(BuildContext context) {
     final location = GoRouterState.of(context).uri.path;
     final currentIndex = _indexForLocation(location);
+    final aiEnabled = app.aiEnabledNotifier.value;
 
     final destinations = <NavigationDestination>[
       const NavigationDestination(
@@ -132,7 +151,7 @@ class AppShell extends StatelessWidget {
         selectedIcon: Icon(Icons.trending_up),
         label: 'Stack',
       ),
-      if (PlatformUtils.isDesktop)
+      if (aiEnabled)
         const NavigationDestination(
           icon: Icon(Icons.auto_awesome_outlined),
           selectedIcon: Icon(Icons.auto_awesome),
@@ -141,7 +160,7 @@ class AppShell extends StatelessWidget {
     ];
 
     return Scaffold(
-      body: child,
+      body: widget.child,
       bottomNavigationBar: NavigationBar(
         selectedIndex: currentIndex,
         destinations: destinations,

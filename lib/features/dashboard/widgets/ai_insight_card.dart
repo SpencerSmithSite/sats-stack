@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../../../shared/utils/platform_utils.dart';
+import '../../../main.dart' as app;
 
 /// Shows the latest AI insight if available, otherwise a static Bitcoiner tip.
 /// On mobile, AI features are disabled so this always shows a tip.
@@ -34,7 +34,7 @@ class AiInsightCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDesktop = PlatformUtils.isDesktop;
+    final isDesktop = app.aiEnabledNotifier.value;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
