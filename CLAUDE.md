@@ -62,6 +62,8 @@ Flutter SDK: **3.41.5** · Dart: **3.11.3** (installed via Homebrew at `/opt/hom
 - iOS Podfile (`ios/Podfile`): must have `platform :ios, '12.0'` (uncommented) and `use_modular_headers!` inside the `target 'Runner'` block. Required because `sqlite3_flutter_libs` (Swift) depends on `sqlite3` (C) and `file_picker` pulls in `DKPhotoGallery` (Swift) → `SDWebImage` (C), both of which need modular headers.
 - Bitcoin crypto packages (`bs58check ^1.0.2`, `bech32 ^0.2.2`) are in pubspec.
 - Current DB schemaVersion: **3** (v1→v2: adds `recurringPeriod` + `recurringAnchorDate` to Transactions; v2→v3: creates `BtcPriceHistory` table).
+- iOS bundle identifier: `app.satsstack.SatsStack` (RunnerTests: `app.satsstack.SatsStack.RunnerTests`).
+- Android package/applicationId: `app.satsstack.satsstack`; MainActivity at `kotlin/app/satsstack/satsstack/`.
 
 ## Current state
 

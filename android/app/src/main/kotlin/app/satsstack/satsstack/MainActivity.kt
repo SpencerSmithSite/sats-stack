@@ -1,4 +1,4 @@
-package com.satsstack.sats_stack
+package app.satsstack.satsstack
 
 import io.flutter.embedding.android.FlutterActivity
 
