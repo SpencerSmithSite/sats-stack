@@ -1,0 +1,28 @@
+flutter_launcher_icons:
+  # === ANDROID ===
+  android: true
+  adaptive_icon_background: "#141414"
+  adaptive_icon_foreground: "assets/icons/satsstack_icon_dark.png"
+  min_sdk_android: 21
+
+  # === iOS ===
+  ios: true
+
+  # === SHARED (iOS + Android fallback) ===
+  image_path: "assets/icons/satsstack_icon_dark.png"
+
+  # === MACOS ===
+  macos:
+    generate: true
+    image_path: "assets/icons/satsstack_icon_dark.png"
+
+  # === WINDOWS ===
+  windows:
+    generate: true
+    image_path: "assets/icons/satsstack_icon_dark.png"
+    icon_size: 48
+
+  # === LINUX ===
+  linux:
+    generate: true
+    image_path: "assets/icons/satsstack_icon_dark.png"
