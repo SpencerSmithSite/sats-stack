@@ -47,32 +47,8 @@
 			</array>
 		</dict>
 	</dict>
-	<key>CFBundleIcons</key>
-	<dict>
-		<key>CFBundlePrimaryIcon</key>
-		<dict>
-			<key>CFBundleIconName</key>
-			<string>AppIcon</string>
-		</dict>
-		<key>CFBundleAlternateIcons</key>
-		<dict>
-			<key>AppIcon-Light</key>
-			<dict>
-				<key>CFBundleIconName</key>
-				<string>AppIcon-Light</string>
-			</dict>
-			<key>AppIcon-Dark</key>
-			<dict>
-				<key>CFBundleIconName</key>
-				<string>AppIcon-Dark</string>
-			</dict>
-			<key>AppIcon-Tinted</key>
-			<dict>
-				<key>CFBundleIconName</key>
-				<string>AppIcon-Tinted</string>
-			</dict>
-		</dict>
-	</dict>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Sats Stack uses photo library access to import files.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>
