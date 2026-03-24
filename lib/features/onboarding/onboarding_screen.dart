@@ -822,31 +822,35 @@ class _BitcoinServerPage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1A2A1A),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFF2A5A2A)),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(Icons.info_outline,
-                    size: 16, color: Color(0xFF6AC86A)),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'You can change this later in Settings → Servers.',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: const Color(0xFF6AC86A),
-                      height: 1.5,
+          Builder(builder: (context) {
+            const accent = Color(0xFF6AC86A);
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            return Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: accent.withOpacity(isDark ? 0.12 : 0.08),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                    color: accent.withOpacity(isDark ? 0.35 : 0.20)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.info_outline, size: 16, color: accent),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'You can change this later in Settings → Servers.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: accent,
+                        height: 1.5,
+                      ),
                     ),
                   ),
-                ),
-              ],
-            ),
-          ),
+                ],
+              ),
+            );
+          }),
           const Spacer(flex: 2),
         ],
       ),
@@ -918,18 +922,21 @@ class _AiServerPage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
-          Container(
+          Builder(builder: (context) {
+            const accent = Color(0xFF6AB0E8);
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            return Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0xFF1A1A2A),
+              color: accent.withOpacity(isDark ? 0.12 : 0.08),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFF2A2A5A)),
+              border: Border.all(
+                  color: accent.withOpacity(isDark ? 0.35 : 0.20)),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.info_outline,
-                    size: 16, color: Color(0xFF6AB0E8)),
+                const Icon(Icons.info_outline, size: 16, color: accent),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -937,14 +944,15 @@ class _AiServerPage extends StatelessWidget {
                         ? 'Ollama must be running locally. You can install it at ollama.com.'
                         : 'The AI tab will appear once a valid server URL is saved. You can update this in Settings → Servers.',
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: const Color(0xFF6AB0E8),
+                      color: accent,
                       height: 1.5,
                     ),
                   ),
                 ),
               ],
             ),
-          ),
+          );
+          }),
           const Spacer(flex: 2),
         ],
       ),

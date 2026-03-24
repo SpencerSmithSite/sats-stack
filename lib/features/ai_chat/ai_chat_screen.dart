@@ -315,8 +315,11 @@ class _ChatList extends StatelessWidget {
                 ActionChip(
                   label: Text(s, style: const TextStyle(fontSize: 12)),
                   onPressed: () => onStarterTap(s),
-                  backgroundColor: const Color(0xFF1A2A3A),
-                  side: const BorderSide(color: Color(0xFF2A4A6A), width: 0.5),
+                  backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  side: BorderSide(
+                    color: Theme.of(context).colorScheme.outlineVariant,
+                    width: 0.5,
+                  ),
                 ),
             ],
           ),
@@ -362,9 +365,9 @@ class _Bubble extends StatelessWidget {
             Container(
               width: 28, height: 28,
               decoration: BoxDecoration(
-                color: const Color(0xFF1A2A3A),
+                color: theme.colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFF2A4A6A), width: 0.5),
+                border: Border.all(color: theme.colorScheme.outlineVariant, width: 0.5),
               ),
               child: const Icon(Icons.auto_awesome, size: 14, color: Color(0xFF6AB0E8)),
             ),
@@ -386,7 +389,7 @@ class _Bubble extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: isUser
                       ? AppColors.bitcoinOrange.withAlpha(25)
-                      : const Color(0xFF1A1A1A),
+                      : theme.colorScheme.surfaceContainerHighest,
                   borderRadius: BorderRadius.only(
                     topLeft: const Radius.circular(16),
                     topRight: const Radius.circular(16),
@@ -396,7 +399,7 @@ class _Bubble extends StatelessWidget {
                   border: Border.all(
                     color: isUser
                         ? AppColors.bitcoinOrange.withAlpha(60)
-                        : Colors.white.withAlpha(12),
+                        : theme.colorScheme.outlineVariant,
                     width: 0.5,
                   ),
                 ),
