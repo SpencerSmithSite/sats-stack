@@ -488,8 +488,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         Padding(
                           padding: const EdgeInsets.only(bottom: 10),
                           child: _Banner(
-                            color: const Color(0xFF1A2A1A),
-                            borderColor: const Color(0xFF2A5A2A),
                             icon: Icons.cloud_outlined,
                             iconColor: const Color(0xFF6AC86A),
                             child: Text(
@@ -740,8 +738,6 @@ class _DataRoutingBanner extends StatelessWidget {
 
     if (usingDefault) {
       return _Banner(
-        color: const Color(0xFF1A2A3A),
-        borderColor: const Color(0xFF2A4A6A),
         icon: Icons.public,
         iconColor: const Color(0xFF6AB0E8),
         child: Column(
@@ -785,8 +781,6 @@ class _DataRoutingBanner extends StatelessWidget {
     }
 
     return _Banner(
-      color: const Color(0xFF1A2A1A),
-      borderColor: const Color(0xFF2A5A2A),
       icon: Icons.shield_outlined,
       iconColor: const Color(0xFF6AC86A),
       child: Column(
@@ -833,27 +827,26 @@ class _DataRoutingBanner extends StatelessWidget {
 
 class _Banner extends StatelessWidget {
   const _Banner({
-    required this.color,
-    required this.borderColor,
     required this.icon,
     required this.iconColor,
     required this.child,
   });
 
-  final Color color;
-  final Color borderColor;
   final IconData icon;
   final Color iconColor;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = iconColor.withOpacity(isDark ? 0.12 : 0.08);
+    final border = iconColor.withOpacity(isDark ? 0.35 : 0.20);
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: color,
+        color: bg,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: borderColor, width: 0.5),
+        border: Border.all(color: border, width: 0.5),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,

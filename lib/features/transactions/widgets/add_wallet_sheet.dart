@@ -288,27 +288,30 @@ class _FormBody extends StatelessWidget {
               final esploraUrl = xpubService.esploraBaseUrl;
               final usingCustom = esploraUrl != AppConstants.mempoolBaseUrl;
 
+              final isDark = Theme.of(context).brightness == Brightness.dark;
               if (usingCustom) {
+                const accent = Color(0xFF6AC86A);
                 // Custom server: show which server is being used, no warning
                 return Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1A2A1A),
+                    color: accent.withOpacity(isDark ? 0.12 : 0.08),
                     borderRadius: BorderRadius.circular(10),
-                    border:
-                        Border.all(color: const Color(0xFF2A5A2A), width: 0.5),
+                    border: Border.all(
+                        color: accent.withOpacity(isDark ? 0.35 : 0.20),
+                        width: 0.5),
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Icon(Icons.check_circle_outline,
-                          size: 14, color: Color(0xFF6AC86A)),
+                          size: 14, color: accent),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           'Transactions will be fetched exclusively from your custom server ($esploraUrl). No data is sent to public servers.',
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: const Color(0xFF6AC86A),
+                            color: accent,
                             height: 1.5,
                           ),
                         ),
@@ -319,25 +322,26 @@ class _FormBody extends StatelessWidget {
               }
 
               // Default mempool.space: show the original privacy warning
+              const accent = Color(0xFF6AB0E8);
               return Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1A2A3A),
+                  color: accent.withOpacity(isDark ? 0.12 : 0.08),
                   borderRadius: BorderRadius.circular(10),
-                  border:
-                      Border.all(color: const Color(0xFF2A4A6A), width: 0.5),
+                  border: Border.all(
+                      color: accent.withOpacity(isDark ? 0.35 : 0.20),
+                      width: 0.5),
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.info_outline,
-                        size: 14, color: Color(0xFF6AB0E8)),
+                    const Icon(Icons.info_outline, size: 14, color: accent),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         'Transactions are fetched from mempool.space. Your xpub is stored locally only — never sent to any server.',
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: const Color(0xFF6AB0E8),
+                          color: accent,
                           height: 1.5,
                         ),
                       ),

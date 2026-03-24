@@ -36,16 +36,18 @@ class AiInsightCard extends StatelessWidget {
     final theme = Theme.of(context);
     final isDesktop = app.aiEnabledNotifier.value;
 
+    const accent = Color(0xFF6AB0E8);
+    final isDark = theme.brightness == Brightness.dark;
+    final bgColor = accent.withOpacity(isDark ? 0.12 : 0.08);
+    final borderColor = accent.withOpacity(isDark ? 0.35 : 0.20);
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A2A3A),
+        color: bgColor,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: const Color(0xFF2A4A6A),
-          width: 0.5,
-        ),
+        border: Border.all(color: borderColor, width: 0.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -55,13 +57,13 @@ class AiInsightCard extends StatelessWidget {
               Icon(
                 isDesktop ? Icons.auto_awesome : Icons.lightbulb_outline,
                 size: 14,
-                color: const Color(0xFF6AB0E8),
+                color: accent,
               ),
               const SizedBox(width: 6),
               Text(
                 isDesktop ? 'AI Insight' : 'Tip',
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: const Color(0xFF6AB0E8),
+                  color: accent,
                   fontWeight: FontWeight.w600,
                   letterSpacing: 0.3,
                 ),
@@ -71,28 +73,24 @@ class AiInsightCard extends StatelessWidget {
                 GestureDetector(
                   onTap: isGenerating ? null : onRefresh,
                   child: isGenerating
-                      ? const SizedBox(
+                      ? SizedBox(
                           width: 12,
                           height: 12,
                           child: CircularProgressIndicator(
                             strokeWidth: 1.5,
-                            color: Color(0xFF6AB0E8),
+                            color: accent,
                           ),
                         )
-                      : const Icon(
-                          Icons.refresh,
-                          size: 14,
-                          color: Color(0xFF6AB0E8),
-                        ),
+                      : Icon(Icons.refresh, size: 14, color: accent),
                 ),
             ],
           ),
           const SizedBox(height: 10),
           isGenerating && (cachedInsight == null || cachedInsight!.isEmpty)
-              ? const Text(
+              ? Text(
                   'Generating insight…',
                   style: TextStyle(
-                    color: Color(0x996AB0E8),
+                    color: accent.withOpacity(0.6),
                     fontSize: 14,
                     fontStyle: FontStyle.italic,
                   ),
@@ -100,7 +98,7 @@ class AiInsightCard extends StatelessWidget {
               : Text(
                   _tip,
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: Colors.white.withAlpha(220),
+                    color: theme.colorScheme.onSurface,
                     height: 1.5,
                   ),
                 ),
@@ -111,7 +109,7 @@ class AiInsightCard extends StatelessWidget {
               child: Text(
                 'Ask the AI analyst →',
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: const Color(0xFF6AB0E8),
+                  color: accent,
                   fontWeight: FontWeight.w600,
                 ),
               ),
