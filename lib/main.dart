@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app.dart';
+import 'screens/splash_screen.dart';
 import 'core/database/database.dart';
 import 'shared/constants/app_constants.dart';
 import 'core/services/transaction_service.dart';
@@ -102,5 +103,36 @@ void main() async {
     ).ignore();
   });
 
-  runApp(const SatsStackApp());
+  runApp(const _AppWithSplash());
+}
+
+class _AppWithSplash extends StatefulWidget {
+  const _AppWithSplash();
+
+  @override
+  State<_AppWithSplash> createState() => _AppWithSplashState();
+}
+
+class _AppWithSplashState extends State<_AppWithSplash> {
+  bool _splashDone = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: Stack(
+        children: [
+          const SatsStackApp(),
+          if (!_splashDone)
+            Positioned.fill(
+              child: SplashScreen(
+                onComplete: () {
+                  if (mounted) setState(() => _splashDone = true);
+                },
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 }
