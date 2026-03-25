@@ -93,9 +93,9 @@ The separate `AppIcon-Light/Dark/Tinted.appiconset` folders in Assets.xcassets a
 - Xcode must be signed in with `spencer@spencersmith.site` for automatic signing to work (Xcode → Settings → Accounts)
 - App record exists in App Store Connect; bundle ID registered in Apple Developer portal
 
-**Build number progression**: 1 (initial) → 2 (icon adaptive fix attempt) → 3 (legacy+adaptive fix). Increment `version` in `pubspec.yaml` (e.g. `1.0.0+4`) before each Transporter upload — ASC rejects duplicate build numbers.
+**Build number progression**: 1 (initial) → 2 (icon adaptive fix attempt) → 3 (legacy+adaptive fix) → 4 (splash screen + custom launch image). Increment `version` in `pubspec.yaml` (e.g. `1.0.0+5`) before each Transporter upload — ASC rejects duplicate build numbers.
 
-**Known Transporter warning (non-blocking)**: "Launch image is set to the default placeholder icon." Safe to ignore until a custom launch screen is added (`ios/Runner/Assets.xcassets/LaunchImage.imageset/`).
+**iOS 18 default icon in light mode**: the "universal/platform:ios" entry with no `appearances` array is the Automatic base shown in light mode — point it at `satsstack_icon_light.png`, not dark.
 
 ## Platform notes
 
@@ -149,10 +149,12 @@ All 12 original build steps complete, plus 12 backlog items:
 19. ✓ iOS code signing — `CODE_SIGN_STYLE = Automatic` on Runner target, team Y2Q5JVG8X5, `NSPhotoLibraryUsageDescription` added
 20. ✓ Light mode fix — all hardcoded dark hex backgrounds (`0xFF1A2A3A`, `0xFF1A2A1A`, etc.) replaced with theme-adaptive colors (`accent.withOpacity()` for semantic banners, `colorScheme.surfaceContainerHighest` for neutral surfaces)
 21. ✓ TestFlight — app registered in App Store Connect, build 3 uploaded
+22. ✓ iOS icon light-mode fix — default (no-appearances) universal entry now points to `satsstack_icon_light.png` so Automatic mode shows light icon in light mode
+23. ✓ Animated splash screen — `lib/screens/splash_screen.dart`; three coins fall one-at-a-time with `Curves.bounceOut` (400ms each), screen shake on landing, 600ms hold, 350ms fade-out; `_AppWithSplash` overlay in `main.dart` renders it on top of `SatsStackApp` with no router changes; `SplashScreen` accepts optional `Future<void> initFuture`
+24. ✓ Native launch screen — `flutter_native_splash` (`^2.4.0`) configured with `#141414` background + `satsstack_icon_dark.png`; custom `LaunchImage.png/2x/3x` copied into `LaunchImage.imageset/` replacing Flutter placeholder; fixes Transporter warning
 
 **Pending:**
 - Mobile AI — Remote Ollama server: `aiEnabledNotifier` (`ValueNotifier<bool>`), ungate `/ai` route, reactive nav tab, mobile Ollama settings UI, platform-aware `_OfflineState`
-- Custom launch screen image (currently shows Flutter placeholder — harmless but flagged by Transporter)
 
 ## Seeded data (DB `onCreate`)
 
