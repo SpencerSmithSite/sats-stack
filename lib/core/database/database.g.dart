@@ -3125,6 +3125,1089 @@ class AiConversationsCompanion extends UpdateCompanion<AiConversation> {
   }
 }
 
+class $ImportSourcesTable extends ImportSources
+    with TableInfo<$ImportSourcesTable, ImportSource> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ImportSourcesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _typeMeta = const VerificationMeta('type');
+  @override
+  late final GeneratedColumn<String> type = GeneratedColumn<String>(
+    'type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _currencyMeta = const VerificationMeta(
+    'currency',
+  );
+  @override
+  late final GeneratedColumn<String> currency = GeneratedColumn<String>(
+    'currency',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _columnMappingMeta = const VerificationMeta(
+    'columnMapping',
+  );
+  @override
+  late final GeneratedColumn<String> columnMapping = GeneratedColumn<String>(
+    'column_mapping',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    name,
+    type,
+    currency,
+    columnMapping,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'import_sources';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ImportSource> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('type')) {
+      context.handle(
+        _typeMeta,
+        type.isAcceptableOrUnknown(data['type']!, _typeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_typeMeta);
+    }
+    if (data.containsKey('currency')) {
+      context.handle(
+        _currencyMeta,
+        currency.isAcceptableOrUnknown(data['currency']!, _currencyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_currencyMeta);
+    }
+    if (data.containsKey('column_mapping')) {
+      context.handle(
+        _columnMappingMeta,
+        columnMapping.isAcceptableOrUnknown(
+          data['column_mapping']!,
+          _columnMappingMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  ImportSource map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ImportSource(
+      id:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}id'],
+          )!,
+      name:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}name'],
+          )!,
+      type:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}type'],
+          )!,
+      currency:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}currency'],
+          )!,
+      columnMapping: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}column_mapping'],
+      ),
+      createdAt:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.dateTime,
+            data['${effectivePrefix}created_at'],
+          )!,
+    );
+  }
+
+  @override
+  $ImportSourcesTable createAlias(String alias) {
+    return $ImportSourcesTable(attachedDatabase, alias);
+  }
+}
+
+class ImportSource extends DataClass implements Insertable<ImportSource> {
+  final int id;
+  final String name;
+  final String type;
+  final String currency;
+  final String? columnMapping;
+  final DateTime createdAt;
+  const ImportSource({
+    required this.id,
+    required this.name,
+    required this.type,
+    required this.currency,
+    this.columnMapping,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['name'] = Variable<String>(name);
+    map['type'] = Variable<String>(type);
+    map['currency'] = Variable<String>(currency);
+    if (!nullToAbsent || columnMapping != null) {
+      map['column_mapping'] = Variable<String>(columnMapping);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  ImportSourcesCompanion toCompanion(bool nullToAbsent) {
+    return ImportSourcesCompanion(
+      id: Value(id),
+      name: Value(name),
+      type: Value(type),
+      currency: Value(currency),
+      columnMapping:
+          columnMapping == null && nullToAbsent
+              ? const Value.absent()
+              : Value(columnMapping),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory ImportSource.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ImportSource(
+      id: serializer.fromJson<int>(json['id']),
+      name: serializer.fromJson<String>(json['name']),
+      type: serializer.fromJson<String>(json['type']),
+      currency: serializer.fromJson<String>(json['currency']),
+      columnMapping: serializer.fromJson<String?>(json['columnMapping']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'name': serializer.toJson<String>(name),
+      'type': serializer.toJson<String>(type),
+      'currency': serializer.toJson<String>(currency),
+      'columnMapping': serializer.toJson<String?>(columnMapping),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  ImportSource copyWith({
+    int? id,
+    String? name,
+    String? type,
+    String? currency,
+    Value<String?> columnMapping = const Value.absent(),
+    DateTime? createdAt,
+  }) => ImportSource(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    type: type ?? this.type,
+    currency: currency ?? this.currency,
+    columnMapping:
+        columnMapping.present ? columnMapping.value : this.columnMapping,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  ImportSource copyWithCompanion(ImportSourcesCompanion data) {
+    return ImportSource(
+      id: data.id.present ? data.id.value : this.id,
+      name: data.name.present ? data.name.value : this.name,
+      type: data.type.present ? data.type.value : this.type,
+      currency: data.currency.present ? data.currency.value : this.currency,
+      columnMapping:
+          data.columnMapping.present
+              ? data.columnMapping.value
+              : this.columnMapping,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ImportSource(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('type: $type, ')
+          ..write('currency: $currency, ')
+          ..write('columnMapping: $columnMapping, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, name, type, currency, columnMapping, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ImportSource &&
+          other.id == this.id &&
+          other.name == this.name &&
+          other.type == this.type &&
+          other.currency == this.currency &&
+          other.columnMapping == this.columnMapping &&
+          other.createdAt == this.createdAt);
+}
+
+class ImportSourcesCompanion extends UpdateCompanion<ImportSource> {
+  final Value<int> id;
+  final Value<String> name;
+  final Value<String> type;
+  final Value<String> currency;
+  final Value<String?> columnMapping;
+  final Value<DateTime> createdAt;
+  const ImportSourcesCompanion({
+    this.id = const Value.absent(),
+    this.name = const Value.absent(),
+    this.type = const Value.absent(),
+    this.currency = const Value.absent(),
+    this.columnMapping = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  });
+  ImportSourcesCompanion.insert({
+    this.id = const Value.absent(),
+    required String name,
+    required String type,
+    required String currency,
+    this.columnMapping = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  }) : name = Value(name),
+       type = Value(type),
+       currency = Value(currency);
+  static Insertable<ImportSource> custom({
+    Expression<int>? id,
+    Expression<String>? name,
+    Expression<String>? type,
+    Expression<String>? currency,
+    Expression<String>? columnMapping,
+    Expression<DateTime>? createdAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (name != null) 'name': name,
+      if (type != null) 'type': type,
+      if (currency != null) 'currency': currency,
+      if (columnMapping != null) 'column_mapping': columnMapping,
+      if (createdAt != null) 'created_at': createdAt,
+    });
+  }
+
+  ImportSourcesCompanion copyWith({
+    Value<int>? id,
+    Value<String>? name,
+    Value<String>? type,
+    Value<String>? currency,
+    Value<String?>? columnMapping,
+    Value<DateTime>? createdAt,
+  }) {
+    return ImportSourcesCompanion(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      type: type ?? this.type,
+      currency: currency ?? this.currency,
+      columnMapping: columnMapping ?? this.columnMapping,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (type.present) {
+      map['type'] = Variable<String>(type.value);
+    }
+    if (currency.present) {
+      map['currency'] = Variable<String>(currency.value);
+    }
+    if (columnMapping.present) {
+      map['column_mapping'] = Variable<String>(columnMapping.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ImportSourcesCompanion(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('type: $type, ')
+          ..write('currency: $currency, ')
+          ..write('columnMapping: $columnMapping, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $ImportedTransactionsTable extends ImportedTransactions
+    with TableInfo<$ImportedTransactionsTable, ImportedTransaction> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ImportedTransactionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _sourceIdMeta = const VerificationMeta(
+    'sourceId',
+  );
+  @override
+  late final GeneratedColumn<int> sourceId = GeneratedColumn<int>(
+    'source_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES import_sources (id)',
+    ),
+  );
+  static const VerificationMeta _dateMeta = const VerificationMeta('date');
+  @override
+  late final GeneratedColumn<DateTime> date = GeneratedColumn<DateTime>(
+    'date',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _amountCentsMeta = const VerificationMeta(
+    'amountCents',
+  );
+  @override
+  late final GeneratedColumn<int> amountCents = GeneratedColumn<int>(
+    'amount_cents',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _directionMeta = const VerificationMeta(
+    'direction',
+  );
+  @override
+  late final GeneratedColumn<String> direction = GeneratedColumn<String>(
+    'direction',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _descriptionMeta = const VerificationMeta(
+    'description',
+  );
+  @override
+  late final GeneratedColumn<String> description = GeneratedColumn<String>(
+    'description',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _categoryMeta = const VerificationMeta(
+    'category',
+  );
+  @override
+  late final GeneratedColumn<String> category = GeneratedColumn<String>(
+    'category',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _currencyMeta = const VerificationMeta(
+    'currency',
+  );
+  @override
+  late final GeneratedColumn<String> currency = GeneratedColumn<String>(
+    'currency',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _rawDescriptionMeta = const VerificationMeta(
+    'rawDescription',
+  );
+  @override
+  late final GeneratedColumn<String> rawDescription = GeneratedColumn<String>(
+    'raw_description',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _importHashMeta = const VerificationMeta(
+    'importHash',
+  );
+  @override
+  late final GeneratedColumn<String> importHash = GeneratedColumn<String>(
+    'import_hash',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    sourceId,
+    date,
+    amountCents,
+    direction,
+    description,
+    category,
+    currency,
+    rawDescription,
+    importHash,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'imported_transactions';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ImportedTransaction> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('source_id')) {
+      context.handle(
+        _sourceIdMeta,
+        sourceId.isAcceptableOrUnknown(data['source_id']!, _sourceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sourceIdMeta);
+    }
+    if (data.containsKey('date')) {
+      context.handle(
+        _dateMeta,
+        date.isAcceptableOrUnknown(data['date']!, _dateMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_dateMeta);
+    }
+    if (data.containsKey('amount_cents')) {
+      context.handle(
+        _amountCentsMeta,
+        amountCents.isAcceptableOrUnknown(
+          data['amount_cents']!,
+          _amountCentsMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_amountCentsMeta);
+    }
+    if (data.containsKey('direction')) {
+      context.handle(
+        _directionMeta,
+        direction.isAcceptableOrUnknown(data['direction']!, _directionMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_directionMeta);
+    }
+    if (data.containsKey('description')) {
+      context.handle(
+        _descriptionMeta,
+        description.isAcceptableOrUnknown(
+          data['description']!,
+          _descriptionMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_descriptionMeta);
+    }
+    if (data.containsKey('category')) {
+      context.handle(
+        _categoryMeta,
+        category.isAcceptableOrUnknown(data['category']!, _categoryMeta),
+      );
+    }
+    if (data.containsKey('currency')) {
+      context.handle(
+        _currencyMeta,
+        currency.isAcceptableOrUnknown(data['currency']!, _currencyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_currencyMeta);
+    }
+    if (data.containsKey('raw_description')) {
+      context.handle(
+        _rawDescriptionMeta,
+        rawDescription.isAcceptableOrUnknown(
+          data['raw_description']!,
+          _rawDescriptionMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_rawDescriptionMeta);
+    }
+    if (data.containsKey('import_hash')) {
+      context.handle(
+        _importHashMeta,
+        importHash.isAcceptableOrUnknown(data['import_hash']!, _importHashMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_importHashMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  ImportedTransaction map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ImportedTransaction(
+      id:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}id'],
+          )!,
+      sourceId:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}source_id'],
+          )!,
+      date:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.dateTime,
+            data['${effectivePrefix}date'],
+          )!,
+      amountCents:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}amount_cents'],
+          )!,
+      direction:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}direction'],
+          )!,
+      description:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}description'],
+          )!,
+      category: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}category'],
+      ),
+      currency:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}currency'],
+          )!,
+      rawDescription:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}raw_description'],
+          )!,
+      importHash:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}import_hash'],
+          )!,
+      createdAt:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.dateTime,
+            data['${effectivePrefix}created_at'],
+          )!,
+    );
+  }
+
+  @override
+  $ImportedTransactionsTable createAlias(String alias) {
+    return $ImportedTransactionsTable(attachedDatabase, alias);
+  }
+}
+
+class ImportedTransaction extends DataClass
+    implements Insertable<ImportedTransaction> {
+  final int id;
+  final int sourceId;
+  final DateTime date;
+  final int amountCents;
+  final String direction;
+  final String description;
+  final String? category;
+  final String currency;
+  final String rawDescription;
+  final String importHash;
+  final DateTime createdAt;
+  const ImportedTransaction({
+    required this.id,
+    required this.sourceId,
+    required this.date,
+    required this.amountCents,
+    required this.direction,
+    required this.description,
+    this.category,
+    required this.currency,
+    required this.rawDescription,
+    required this.importHash,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['source_id'] = Variable<int>(sourceId);
+    map['date'] = Variable<DateTime>(date);
+    map['amount_cents'] = Variable<int>(amountCents);
+    map['direction'] = Variable<String>(direction);
+    map['description'] = Variable<String>(description);
+    if (!nullToAbsent || category != null) {
+      map['category'] = Variable<String>(category);
+    }
+    map['currency'] = Variable<String>(currency);
+    map['raw_description'] = Variable<String>(rawDescription);
+    map['import_hash'] = Variable<String>(importHash);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  ImportedTransactionsCompanion toCompanion(bool nullToAbsent) {
+    return ImportedTransactionsCompanion(
+      id: Value(id),
+      sourceId: Value(sourceId),
+      date: Value(date),
+      amountCents: Value(amountCents),
+      direction: Value(direction),
+      description: Value(description),
+      category:
+          category == null && nullToAbsent
+              ? const Value.absent()
+              : Value(category),
+      currency: Value(currency),
+      rawDescription: Value(rawDescription),
+      importHash: Value(importHash),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory ImportedTransaction.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ImportedTransaction(
+      id: serializer.fromJson<int>(json['id']),
+      sourceId: serializer.fromJson<int>(json['sourceId']),
+      date: serializer.fromJson<DateTime>(json['date']),
+      amountCents: serializer.fromJson<int>(json['amountCents']),
+      direction: serializer.fromJson<String>(json['direction']),
+      description: serializer.fromJson<String>(json['description']),
+      category: serializer.fromJson<String?>(json['category']),
+      currency: serializer.fromJson<String>(json['currency']),
+      rawDescription: serializer.fromJson<String>(json['rawDescription']),
+      importHash: serializer.fromJson<String>(json['importHash']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'sourceId': serializer.toJson<int>(sourceId),
+      'date': serializer.toJson<DateTime>(date),
+      'amountCents': serializer.toJson<int>(amountCents),
+      'direction': serializer.toJson<String>(direction),
+      'description': serializer.toJson<String>(description),
+      'category': serializer.toJson<String?>(category),
+      'currency': serializer.toJson<String>(currency),
+      'rawDescription': serializer.toJson<String>(rawDescription),
+      'importHash': serializer.toJson<String>(importHash),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  ImportedTransaction copyWith({
+    int? id,
+    int? sourceId,
+    DateTime? date,
+    int? amountCents,
+    String? direction,
+    String? description,
+    Value<String?> category = const Value.absent(),
+    String? currency,
+    String? rawDescription,
+    String? importHash,
+    DateTime? createdAt,
+  }) => ImportedTransaction(
+    id: id ?? this.id,
+    sourceId: sourceId ?? this.sourceId,
+    date: date ?? this.date,
+    amountCents: amountCents ?? this.amountCents,
+    direction: direction ?? this.direction,
+    description: description ?? this.description,
+    category: category.present ? category.value : this.category,
+    currency: currency ?? this.currency,
+    rawDescription: rawDescription ?? this.rawDescription,
+    importHash: importHash ?? this.importHash,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  ImportedTransaction copyWithCompanion(ImportedTransactionsCompanion data) {
+    return ImportedTransaction(
+      id: data.id.present ? data.id.value : this.id,
+      sourceId: data.sourceId.present ? data.sourceId.value : this.sourceId,
+      date: data.date.present ? data.date.value : this.date,
+      amountCents:
+          data.amountCents.present ? data.amountCents.value : this.amountCents,
+      direction: data.direction.present ? data.direction.value : this.direction,
+      description:
+          data.description.present ? data.description.value : this.description,
+      category: data.category.present ? data.category.value : this.category,
+      currency: data.currency.present ? data.currency.value : this.currency,
+      rawDescription:
+          data.rawDescription.present
+              ? data.rawDescription.value
+              : this.rawDescription,
+      importHash:
+          data.importHash.present ? data.importHash.value : this.importHash,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ImportedTransaction(')
+          ..write('id: $id, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('date: $date, ')
+          ..write('amountCents: $amountCents, ')
+          ..write('direction: $direction, ')
+          ..write('description: $description, ')
+          ..write('category: $category, ')
+          ..write('currency: $currency, ')
+          ..write('rawDescription: $rawDescription, ')
+          ..write('importHash: $importHash, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    sourceId,
+    date,
+    amountCents,
+    direction,
+    description,
+    category,
+    currency,
+    rawDescription,
+    importHash,
+    createdAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ImportedTransaction &&
+          other.id == this.id &&
+          other.sourceId == this.sourceId &&
+          other.date == this.date &&
+          other.amountCents == this.amountCents &&
+          other.direction == this.direction &&
+          other.description == this.description &&
+          other.category == this.category &&
+          other.currency == this.currency &&
+          other.rawDescription == this.rawDescription &&
+          other.importHash == this.importHash &&
+          other.createdAt == this.createdAt);
+}
+
+class ImportedTransactionsCompanion
+    extends UpdateCompanion<ImportedTransaction> {
+  final Value<int> id;
+  final Value<int> sourceId;
+  final Value<DateTime> date;
+  final Value<int> amountCents;
+  final Value<String> direction;
+  final Value<String> description;
+  final Value<String?> category;
+  final Value<String> currency;
+  final Value<String> rawDescription;
+  final Value<String> importHash;
+  final Value<DateTime> createdAt;
+  const ImportedTransactionsCompanion({
+    this.id = const Value.absent(),
+    this.sourceId = const Value.absent(),
+    this.date = const Value.absent(),
+    this.amountCents = const Value.absent(),
+    this.direction = const Value.absent(),
+    this.description = const Value.absent(),
+    this.category = const Value.absent(),
+    this.currency = const Value.absent(),
+    this.rawDescription = const Value.absent(),
+    this.importHash = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  });
+  ImportedTransactionsCompanion.insert({
+    this.id = const Value.absent(),
+    required int sourceId,
+    required DateTime date,
+    required int amountCents,
+    required String direction,
+    required String description,
+    this.category = const Value.absent(),
+    required String currency,
+    required String rawDescription,
+    required String importHash,
+    this.createdAt = const Value.absent(),
+  }) : sourceId = Value(sourceId),
+       date = Value(date),
+       amountCents = Value(amountCents),
+       direction = Value(direction),
+       description = Value(description),
+       currency = Value(currency),
+       rawDescription = Value(rawDescription),
+       importHash = Value(importHash);
+  static Insertable<ImportedTransaction> custom({
+    Expression<int>? id,
+    Expression<int>? sourceId,
+    Expression<DateTime>? date,
+    Expression<int>? amountCents,
+    Expression<String>? direction,
+    Expression<String>? description,
+    Expression<String>? category,
+    Expression<String>? currency,
+    Expression<String>? rawDescription,
+    Expression<String>? importHash,
+    Expression<DateTime>? createdAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (sourceId != null) 'source_id': sourceId,
+      if (date != null) 'date': date,
+      if (amountCents != null) 'amount_cents': amountCents,
+      if (direction != null) 'direction': direction,
+      if (description != null) 'description': description,
+      if (category != null) 'category': category,
+      if (currency != null) 'currency': currency,
+      if (rawDescription != null) 'raw_description': rawDescription,
+      if (importHash != null) 'import_hash': importHash,
+      if (createdAt != null) 'created_at': createdAt,
+    });
+  }
+
+  ImportedTransactionsCompanion copyWith({
+    Value<int>? id,
+    Value<int>? sourceId,
+    Value<DateTime>? date,
+    Value<int>? amountCents,
+    Value<String>? direction,
+    Value<String>? description,
+    Value<String?>? category,
+    Value<String>? currency,
+    Value<String>? rawDescription,
+    Value<String>? importHash,
+    Value<DateTime>? createdAt,
+  }) {
+    return ImportedTransactionsCompanion(
+      id: id ?? this.id,
+      sourceId: sourceId ?? this.sourceId,
+      date: date ?? this.date,
+      amountCents: amountCents ?? this.amountCents,
+      direction: direction ?? this.direction,
+      description: description ?? this.description,
+      category: category ?? this.category,
+      currency: currency ?? this.currency,
+      rawDescription: rawDescription ?? this.rawDescription,
+      importHash: importHash ?? this.importHash,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (sourceId.present) {
+      map['source_id'] = Variable<int>(sourceId.value);
+    }
+    if (date.present) {
+      map['date'] = Variable<DateTime>(date.value);
+    }
+    if (amountCents.present) {
+      map['amount_cents'] = Variable<int>(amountCents.value);
+    }
+    if (direction.present) {
+      map['direction'] = Variable<String>(direction.value);
+    }
+    if (description.present) {
+      map['description'] = Variable<String>(description.value);
+    }
+    if (category.present) {
+      map['category'] = Variable<String>(category.value);
+    }
+    if (currency.present) {
+      map['currency'] = Variable<String>(currency.value);
+    }
+    if (rawDescription.present) {
+      map['raw_description'] = Variable<String>(rawDescription.value);
+    }
+    if (importHash.present) {
+      map['import_hash'] = Variable<String>(importHash.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ImportedTransactionsCompanion(')
+          ..write('id: $id, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('date: $date, ')
+          ..write('amountCents: $amountCents, ')
+          ..write('direction: $direction, ')
+          ..write('description: $description, ')
+          ..write('category: $category, ')
+          ..write('currency: $currency, ')
+          ..write('rawDescription: $rawDescription, ')
+          ..write('importHash: $importHash, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -3140,6 +4223,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $AiConversationsTable aiConversations = $AiConversationsTable(
     this,
   );
+  late final $ImportSourcesTable importSources = $ImportSourcesTable(this);
+  late final $ImportedTransactionsTable importedTransactions =
+      $ImportedTransactionsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -3153,6 +4239,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     btcPriceCache,
     btcPriceHistory,
     aiConversations,
+    importSources,
+    importedTransactions,
   ];
 }
 
@@ -5329,6 +6417,809 @@ typedef $$AiConversationsTableProcessedTableManager =
       AiConversation,
       PrefetchHooks Function()
     >;
+typedef $$ImportSourcesTableCreateCompanionBuilder =
+    ImportSourcesCompanion Function({
+      Value<int> id,
+      required String name,
+      required String type,
+      required String currency,
+      Value<String?> columnMapping,
+      Value<DateTime> createdAt,
+    });
+typedef $$ImportSourcesTableUpdateCompanionBuilder =
+    ImportSourcesCompanion Function({
+      Value<int> id,
+      Value<String> name,
+      Value<String> type,
+      Value<String> currency,
+      Value<String?> columnMapping,
+      Value<DateTime> createdAt,
+    });
+
+final class $$ImportSourcesTableReferences
+    extends BaseReferences<_$AppDatabase, $ImportSourcesTable, ImportSource> {
+  $$ImportSourcesTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static MultiTypedResultKey<
+    $ImportedTransactionsTable,
+    List<ImportedTransaction>
+  >
+  _importedTransactionsRefsTable(_$AppDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.importedTransactions,
+        aliasName: $_aliasNameGenerator(
+          db.importSources.id,
+          db.importedTransactions.sourceId,
+        ),
+      );
+
+  $$ImportedTransactionsTableProcessedTableManager
+  get importedTransactionsRefs {
+    final manager = $$ImportedTransactionsTableTableManager(
+      $_db,
+      $_db.importedTransactions,
+    ).filter((f) => f.sourceId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _importedTransactionsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
+
+class $$ImportSourcesTableFilterComposer
+    extends Composer<_$AppDatabase, $ImportSourcesTable> {
+  $$ImportSourcesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get type => $composableBuilder(
+    column: $table.type,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get currency => $composableBuilder(
+    column: $table.currency,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get columnMapping => $composableBuilder(
+    column: $table.columnMapping,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  Expression<bool> importedTransactionsRefs(
+    Expression<bool> Function($$ImportedTransactionsTableFilterComposer f) f,
+  ) {
+    final $$ImportedTransactionsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.importedTransactions,
+      getReferencedColumn: (t) => t.sourceId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ImportedTransactionsTableFilterComposer(
+            $db: $db,
+            $table: $db.importedTransactions,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$ImportSourcesTableOrderingComposer
+    extends Composer<_$AppDatabase, $ImportSourcesTable> {
+  $$ImportSourcesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get type => $composableBuilder(
+    column: $table.type,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get currency => $composableBuilder(
+    column: $table.currency,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get columnMapping => $composableBuilder(
+    column: $table.columnMapping,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ImportSourcesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ImportSourcesTable> {
+  $$ImportSourcesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get type =>
+      $composableBuilder(column: $table.type, builder: (column) => column);
+
+  GeneratedColumn<String> get currency =>
+      $composableBuilder(column: $table.currency, builder: (column) => column);
+
+  GeneratedColumn<String> get columnMapping => $composableBuilder(
+    column: $table.columnMapping,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  Expression<T> importedTransactionsRefs<T extends Object>(
+    Expression<T> Function($$ImportedTransactionsTableAnnotationComposer a) f,
+  ) {
+    final $$ImportedTransactionsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.importedTransactions,
+          getReferencedColumn: (t) => t.sourceId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$ImportedTransactionsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.importedTransactions,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
+}
+
+class $$ImportSourcesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $ImportSourcesTable,
+          ImportSource,
+          $$ImportSourcesTableFilterComposer,
+          $$ImportSourcesTableOrderingComposer,
+          $$ImportSourcesTableAnnotationComposer,
+          $$ImportSourcesTableCreateCompanionBuilder,
+          $$ImportSourcesTableUpdateCompanionBuilder,
+          (ImportSource, $$ImportSourcesTableReferences),
+          ImportSource,
+          PrefetchHooks Function({bool importedTransactionsRefs})
+        > {
+  $$ImportSourcesTableTableManager(_$AppDatabase db, $ImportSourcesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer:
+              () => $$ImportSourcesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer:
+              () =>
+                  $$ImportSourcesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer:
+              () => $$ImportSourcesTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String> type = const Value.absent(),
+                Value<String> currency = const Value.absent(),
+                Value<String?> columnMapping = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => ImportSourcesCompanion(
+                id: id,
+                name: name,
+                type: type,
+                currency: currency,
+                columnMapping: columnMapping,
+                createdAt: createdAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String name,
+                required String type,
+                required String currency,
+                Value<String?> columnMapping = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => ImportSourcesCompanion.insert(
+                id: id,
+                name: name,
+                type: type,
+                currency: currency,
+                columnMapping: columnMapping,
+                createdAt: createdAt,
+              ),
+          withReferenceMapper:
+              (p0) =>
+                  p0
+                      .map(
+                        (e) => (
+                          e.readTable(table),
+                          $$ImportSourcesTableReferences(db, table, e),
+                        ),
+                      )
+                      .toList(),
+          prefetchHooksCallback: ({importedTransactionsRefs = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [
+                if (importedTransactionsRefs) db.importedTransactions,
+              ],
+              addJoins: null,
+              getPrefetchedDataCallback: (items) async {
+                return [
+                  if (importedTransactionsRefs)
+                    await $_getPrefetchedData<
+                      ImportSource,
+                      $ImportSourcesTable,
+                      ImportedTransaction
+                    >(
+                      currentTable: table,
+                      referencedTable: $$ImportSourcesTableReferences
+                          ._importedTransactionsRefsTable(db),
+                      managerFromTypedResult:
+                          (p0) =>
+                              $$ImportSourcesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).importedTransactionsRefs,
+                      referencedItemsForCurrentItem:
+                          (item, referencedItems) => referencedItems.where(
+                            (e) => e.sourceId == item.id,
+                          ),
+                      typedResults: items,
+                    ),
+                ];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$ImportSourcesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $ImportSourcesTable,
+      ImportSource,
+      $$ImportSourcesTableFilterComposer,
+      $$ImportSourcesTableOrderingComposer,
+      $$ImportSourcesTableAnnotationComposer,
+      $$ImportSourcesTableCreateCompanionBuilder,
+      $$ImportSourcesTableUpdateCompanionBuilder,
+      (ImportSource, $$ImportSourcesTableReferences),
+      ImportSource,
+      PrefetchHooks Function({bool importedTransactionsRefs})
+    >;
+typedef $$ImportedTransactionsTableCreateCompanionBuilder =
+    ImportedTransactionsCompanion Function({
+      Value<int> id,
+      required int sourceId,
+      required DateTime date,
+      required int amountCents,
+      required String direction,
+      required String description,
+      Value<String?> category,
+      required String currency,
+      required String rawDescription,
+      required String importHash,
+      Value<DateTime> createdAt,
+    });
+typedef $$ImportedTransactionsTableUpdateCompanionBuilder =
+    ImportedTransactionsCompanion Function({
+      Value<int> id,
+      Value<int> sourceId,
+      Value<DateTime> date,
+      Value<int> amountCents,
+      Value<String> direction,
+      Value<String> description,
+      Value<String?> category,
+      Value<String> currency,
+      Value<String> rawDescription,
+      Value<String> importHash,
+      Value<DateTime> createdAt,
+    });
+
+final class $$ImportedTransactionsTableReferences
+    extends
+        BaseReferences<
+          _$AppDatabase,
+          $ImportedTransactionsTable,
+          ImportedTransaction
+        > {
+  $$ImportedTransactionsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $ImportSourcesTable _sourceIdTable(_$AppDatabase db) =>
+      db.importSources.createAlias(
+        $_aliasNameGenerator(
+          db.importedTransactions.sourceId,
+          db.importSources.id,
+        ),
+      );
+
+  $$ImportSourcesTableProcessedTableManager get sourceId {
+    final $_column = $_itemColumn<int>('source_id')!;
+
+    final manager = $$ImportSourcesTableTableManager(
+      $_db,
+      $_db.importSources,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_sourceIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$ImportedTransactionsTableFilterComposer
+    extends Composer<_$AppDatabase, $ImportedTransactionsTable> {
+  $$ImportedTransactionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get date => $composableBuilder(
+    column: $table.date,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get amountCents => $composableBuilder(
+    column: $table.amountCents,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get direction => $composableBuilder(
+    column: $table.direction,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get category => $composableBuilder(
+    column: $table.category,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get currency => $composableBuilder(
+    column: $table.currency,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get rawDescription => $composableBuilder(
+    column: $table.rawDescription,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get importHash => $composableBuilder(
+    column: $table.importHash,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$ImportSourcesTableFilterComposer get sourceId {
+    final $$ImportSourcesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.sourceId,
+      referencedTable: $db.importSources,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ImportSourcesTableFilterComposer(
+            $db: $db,
+            $table: $db.importSources,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ImportedTransactionsTableOrderingComposer
+    extends Composer<_$AppDatabase, $ImportedTransactionsTable> {
+  $$ImportedTransactionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get date => $composableBuilder(
+    column: $table.date,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get amountCents => $composableBuilder(
+    column: $table.amountCents,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get direction => $composableBuilder(
+    column: $table.direction,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get category => $composableBuilder(
+    column: $table.category,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get currency => $composableBuilder(
+    column: $table.currency,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get rawDescription => $composableBuilder(
+    column: $table.rawDescription,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get importHash => $composableBuilder(
+    column: $table.importHash,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$ImportSourcesTableOrderingComposer get sourceId {
+    final $$ImportSourcesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.sourceId,
+      referencedTable: $db.importSources,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ImportSourcesTableOrderingComposer(
+            $db: $db,
+            $table: $db.importSources,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ImportedTransactionsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ImportedTransactionsTable> {
+  $$ImportedTransactionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get date =>
+      $composableBuilder(column: $table.date, builder: (column) => column);
+
+  GeneratedColumn<int> get amountCents => $composableBuilder(
+    column: $table.amountCents,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get direction =>
+      $composableBuilder(column: $table.direction, builder: (column) => column);
+
+  GeneratedColumn<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get category =>
+      $composableBuilder(column: $table.category, builder: (column) => column);
+
+  GeneratedColumn<String> get currency =>
+      $composableBuilder(column: $table.currency, builder: (column) => column);
+
+  GeneratedColumn<String> get rawDescription => $composableBuilder(
+    column: $table.rawDescription,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get importHash => $composableBuilder(
+    column: $table.importHash,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  $$ImportSourcesTableAnnotationComposer get sourceId {
+    final $$ImportSourcesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.sourceId,
+      referencedTable: $db.importSources,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ImportSourcesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.importSources,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ImportedTransactionsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $ImportedTransactionsTable,
+          ImportedTransaction,
+          $$ImportedTransactionsTableFilterComposer,
+          $$ImportedTransactionsTableOrderingComposer,
+          $$ImportedTransactionsTableAnnotationComposer,
+          $$ImportedTransactionsTableCreateCompanionBuilder,
+          $$ImportedTransactionsTableUpdateCompanionBuilder,
+          (ImportedTransaction, $$ImportedTransactionsTableReferences),
+          ImportedTransaction,
+          PrefetchHooks Function({bool sourceId})
+        > {
+  $$ImportedTransactionsTableTableManager(
+    _$AppDatabase db,
+    $ImportedTransactionsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer:
+              () => $$ImportedTransactionsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer:
+              () => $$ImportedTransactionsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer:
+              () => $$ImportedTransactionsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int> sourceId = const Value.absent(),
+                Value<DateTime> date = const Value.absent(),
+                Value<int> amountCents = const Value.absent(),
+                Value<String> direction = const Value.absent(),
+                Value<String> description = const Value.absent(),
+                Value<String?> category = const Value.absent(),
+                Value<String> currency = const Value.absent(),
+                Value<String> rawDescription = const Value.absent(),
+                Value<String> importHash = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => ImportedTransactionsCompanion(
+                id: id,
+                sourceId: sourceId,
+                date: date,
+                amountCents: amountCents,
+                direction: direction,
+                description: description,
+                category: category,
+                currency: currency,
+                rawDescription: rawDescription,
+                importHash: importHash,
+                createdAt: createdAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required int sourceId,
+                required DateTime date,
+                required int amountCents,
+                required String direction,
+                required String description,
+                Value<String?> category = const Value.absent(),
+                required String currency,
+                required String rawDescription,
+                required String importHash,
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => ImportedTransactionsCompanion.insert(
+                id: id,
+                sourceId: sourceId,
+                date: date,
+                amountCents: amountCents,
+                direction: direction,
+                description: description,
+                category: category,
+                currency: currency,
+                rawDescription: rawDescription,
+                importHash: importHash,
+                createdAt: createdAt,
+              ),
+          withReferenceMapper:
+              (p0) =>
+                  p0
+                      .map(
+                        (e) => (
+                          e.readTable(table),
+                          $$ImportedTransactionsTableReferences(db, table, e),
+                        ),
+                      )
+                      .toList(),
+          prefetchHooksCallback: ({sourceId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins: <
+                T extends TableManagerState<
+                  dynamic,
+                  dynamic,
+                  dynamic,
+                  dynamic,
+                  dynamic,
+                  dynamic,
+                  dynamic,
+                  dynamic,
+                  dynamic,
+                  dynamic,
+                  dynamic
+                >
+              >(state) {
+                if (sourceId) {
+                  state =
+                      state.withJoin(
+                            currentTable: table,
+                            currentColumn: table.sourceId,
+                            referencedTable:
+                                $$ImportedTransactionsTableReferences
+                                    ._sourceIdTable(db),
+                            referencedColumn:
+                                $$ImportedTransactionsTableReferences
+                                    ._sourceIdTable(db)
+                                    .id,
+                          )
+                          as T;
+                }
+
+                return state;
+              },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$ImportedTransactionsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $ImportedTransactionsTable,
+      ImportedTransaction,
+      $$ImportedTransactionsTableFilterComposer,
+      $$ImportedTransactionsTableOrderingComposer,
+      $$ImportedTransactionsTableAnnotationComposer,
+      $$ImportedTransactionsTableCreateCompanionBuilder,
+      $$ImportedTransactionsTableUpdateCompanionBuilder,
+      (ImportedTransaction, $$ImportedTransactionsTableReferences),
+      ImportedTransaction,
+      PrefetchHooks Function({bool sourceId})
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -5349,4 +7240,8 @@ class $AppDatabaseManager {
       $$BtcPriceHistoryTableTableManager(_db, _db.btcPriceHistory);
   $$AiConversationsTableTableManager get aiConversations =>
       $$AiConversationsTableTableManager(_db, _db.aiConversations);
+  $$ImportSourcesTableTableManager get importSources =>
+      $$ImportSourcesTableTableManager(_db, _db.importSources);
+  $$ImportedTransactionsTableTableManager get importedTransactions =>
+      $$ImportedTransactionsTableTableManager(_db, _db.importedTransactions);
 }

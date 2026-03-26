@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../core/database/database.dart';
 import '../../shared/theme/app_colors.dart';
@@ -6,7 +7,6 @@ import '../../shared/widgets/empty_state.dart';
 import '../../shared/widgets/btc_price_chip.dart';
 import 'widgets/transaction_list_item.dart';
 import 'widgets/add_transaction_sheet.dart';
-import 'widgets/csv_import_sheet.dart';
 import 'widgets/add_wallet_sheet.dart';
 import '../../main.dart' as app;
 
@@ -79,19 +79,6 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     );
   }
 
-  void _openCsvImport() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => CsvImportSheet(
-        csvImportService: app.csvImportService,
-        walletService: app.walletService,
-        btcPriceService: app.btcPriceService,
-      ),
-    );
-  }
-
   void _openAddWallet() {
     showModalBottomSheet(
       context: context,
@@ -129,7 +116,13 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Transactions'),
+        title: const FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text('Transactions'),
+        ),
+        centerTitle: false,
+        titleSpacing: 0,
         actions: [
           BtcPriceChip(service: app.btcPriceService),
           const SizedBox(width: 4),
@@ -140,17 +133,23 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
               icon: const Icon(Icons.filter_list_outlined),
               onPressed: _openFilterSheet,
               tooltip: 'Filter',
+              padding: const EdgeInsets.all(8),
+              visualDensity: VisualDensity.compact,
             ),
           ),
           IconButton(
             icon: const Icon(Icons.account_balance_wallet_outlined),
             onPressed: _openAddWallet,
             tooltip: 'Add xpub wallet',
+            padding: const EdgeInsets.all(8),
+            visualDensity: VisualDensity.compact,
           ),
           IconButton(
             icon: const Icon(Icons.upload_file_outlined),
-            onPressed: _openCsvImport,
-            tooltip: 'Import CSV',
+            onPressed: () => context.push('/import'),
+            tooltip: 'Import',
+            padding: const EdgeInsets.all(8),
+            visualDensity: VisualDensity.compact,
           ),
         ],
       ),

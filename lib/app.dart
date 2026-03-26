@@ -9,6 +9,7 @@ import 'features/ai_chat/ai_chat_screen.dart';
 import 'features/settings/settings_screen.dart';
 import 'features/onboarding/onboarding_screen.dart';
 import 'features/analytics/analytics_screen.dart';
+import 'screens/import/import_file_screen.dart';
 import 'main.dart' as app;
 import 'shared/constants/app_constants.dart';
 import 'shared/theme/app_theme.dart';
@@ -85,6 +86,10 @@ final _router = GoRouter(
       path: '/analytics',
       pageBuilder: (ctx, state) => _fadePage(state, const AnalyticsScreen()),
     ),
+    GoRoute(
+      path: '/import',
+      pageBuilder: (ctx, state) => _fadePage(state, const ImportFileScreen()),
+    ),
   ],
 );
 
@@ -118,7 +123,9 @@ class _AppShellState extends State<AppShell> {
     super.dispose();
   }
 
-  void _onAiEnabledChanged() => setState(() {});
+  void _onAiEnabledChanged() {
+    if (mounted) setState(() {});
+  }
 
   List<String> get _tabPaths => app.aiEnabledNotifier.value
       ? _allTabPaths
@@ -126,9 +133,10 @@ class _AppShellState extends State<AppShell> {
 
   @override
   Widget build(BuildContext context) {
-    final location = GoRouterState.of(context).uri.path;
-    final currentIndex = _indexForLocation(location);
     final aiEnabled = app.aiEnabledNotifier.value;
+    // GoRouterState.of must use this widget's own context (scoped to ShellRoute).
+    final location = GoRouterState.of(context).uri.path;
+    final currentIndex = _indexForLocation(location, _tabPaths);
 
     final destinations = <NavigationDestination>[
       const NavigationDestination(
@@ -169,9 +177,9 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
-  int _indexForLocation(String location) {
-    for (var i = 0; i < _tabPaths.length; i++) {
-      if (location.startsWith(_tabPaths[i])) return i;
+  static int _indexForLocation(String location, List<String> tabPaths) {
+    for (var i = 0; i < tabPaths.length; i++) {
+      if (location.startsWith(tabPaths[i])) return i;
     }
     return 0;
   }

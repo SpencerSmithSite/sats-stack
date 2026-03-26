@@ -9,6 +9,8 @@ import 'tables/settings_table.dart';
 import 'tables/btc_price_cache_table.dart';
 import 'tables/btc_price_history_table.dart';
 import 'tables/ai_conversations_table.dart';
+import 'tables/import_sources_table.dart';
+import 'tables/import_transactions_table.dart';
 
 part 'database.g.dart';
 
@@ -21,12 +23,14 @@ part 'database.g.dart';
   BtcPriceCache,
   BtcPriceHistory,
   AiConversations,
+  ImportSources,
+  ImportedTransactions,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -43,6 +47,10 @@ class AppDatabase extends _$AppDatabase {
           if (from < 3) {
             await m.createTable(btcPriceHistory);
           }
+          if (from < 4) {
+            await m.createTable(importSources);
+            await m.createTable(importedTransactions);
+          }
         },
       );
 
@@ -50,6 +58,8 @@ class AppDatabase extends _$AppDatabase {
   Future<void> resetAndReseed() async {
     await transaction(() async {
       await delete(aiConversations).go();
+      await delete(importedTransactions).go();
+      await delete(importSources).go();
       await delete(budgets).go();
       await delete(transactions).go();
       await delete(wallets).go();

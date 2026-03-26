@@ -14,9 +14,11 @@ class OllamaService {
 
   String _baseUrl = AppConstants.defaultOllamaUrl;
   String? _selectedModel;
+  bool _isConnected = false;
 
   String get baseUrl => _baseUrl;
   String? get selectedModel => _selectedModel;
+  bool get isConnected => _isConnected;
 
   // ── Config (persisted in AppSettings) ───────────────────────────────────────
 
@@ -25,6 +27,7 @@ class OllamaService {
     final map = {for (final r in rows) r.key: r.value};
     _baseUrl = map[AppConstants.settingOllamaUrl] ?? AppConstants.defaultOllamaUrl;
     _selectedModel = map[AppConstants.settingOllamaModel];
+    _isConnected = map[AppConstants.settingOllamaConnected] == 'true';
   }
 
   Future<void> saveSettings({String? url, String? model}) async {
@@ -36,6 +39,11 @@ class OllamaService {
       _selectedModel = model;
       await _upsertSetting(AppConstants.settingOllamaModel, model);
     }
+  }
+
+  Future<void> setConnected(bool value) async {
+    _isConnected = value;
+    await _upsertSetting(AppConstants.settingOllamaConnected, value.toString());
   }
 
   Future<void> _upsertSetting(String key, String value) {
