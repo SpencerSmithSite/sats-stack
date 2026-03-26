@@ -27,4 +27,5 @@ abstract final class AppConstants {
   // JSON-encoded map of all fetched currency prices e.g. '{"USD":97000,"EUR":89000}'
   static const settingBtcAllPrices = 'btc_all_prices';
   static const settingShowBtcPrice = 'show_btc_price';
+  static const settingOllamaConnected = 'ollama_connected';
 }

@@ -190,9 +190,6 @@ class _AiChatScreenState extends State<AiChatScreen> {
         models: _models,
         onSave: (url, model) async {
           await app.ollamaService.saveSettings(url: url, model: model);
-          app.aiEnabledNotifier.value = PlatformUtils.isDesktop ||
-              (app.ollamaService.baseUrl != AppConstants.defaultOllamaUrl &&
-                  app.ollamaService.baseUrl.isNotEmpty);
           if (mounted) setState(() {});
         },
         onRefresh: () async {

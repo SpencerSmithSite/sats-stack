@@ -125,14 +125,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _saveOllama() async {
-    await app.ollamaService.saveSettings(
-      url: _ollamaUrlCtrl.text.trim(),
-      model: _selectedModel,
-    );
-    // Update the AI-enabled notifier so the nav tab appears/disappears reactively.
-    app.aiEnabledNotifier.value = PlatformUtils.isDesktop ||
-        (app.ollamaService.baseUrl != AppConstants.defaultOllamaUrl &&
-            app.ollamaService.baseUrl.isNotEmpty);
+    final url = _ollamaUrlCtrl.text.trim();
+    await app.ollamaService.saveSettings(url: url, model: _selectedModel);
+    // If the user cleared the URL, mark as disconnected.
+    if (url.isEmpty) {
+      await app.ollamaService.setConnected(false);
+      app.aiEnabledNotifier.value = PlatformUtils.isDesktop;
+    }
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Ollama settings saved')),
@@ -151,6 +150,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (!mounted) return;
     if (ok) {
       final models = await app.ollamaService.listModels();
+      await app.ollamaService.setConnected(true);
+      app.aiEnabledNotifier.value = true;
       if (mounted) {
         setState(() {
           _models = models;
@@ -159,6 +160,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         });
       }
     } else {
+      await app.ollamaService.setConnected(false);
+      app.aiEnabledNotifier.value = PlatformUtils.isDesktop;
       setState(() {
         _testingConnection = false;
         _connectionStatus = 'Could not reach Ollama at ${_ollamaUrlCtrl.text.trim()}';

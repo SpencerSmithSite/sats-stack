@@ -14,6 +14,7 @@ import 'core/services/xpub_service.dart';
 import 'core/services/budget_service.dart';
 import 'core/services/notification_service.dart';
 import 'core/services/ollama_service.dart';
+import 'core/services/import_service.dart';
 import 'shared/utils/platform_utils.dart';
 
 late AppDatabase db;
@@ -26,6 +27,7 @@ late CsvImportService csvImportService;
 late XpubService xpubService;
 late BudgetService budgetService;
 late OllamaService ollamaService;
+late ImportService importService;
 late NotificationService notificationService;
 late ValueNotifier<ThemeMode> themeModeNotifier;
 late ValueNotifier<String> currencyNotifier;
@@ -45,11 +47,11 @@ void main() async {
   budgetService = BudgetService(db);
   ollamaService = OllamaService(db);
   await ollamaService.loadSettings();
-  // AI is enabled on desktop always; on mobile only when a non-localhost URL is saved.
+  importService = ImportService(db, ollamaService);
+  // AI is enabled on desktop always; on mobile only when a successful connection
+  // has been verified (persisted as ollama_connected in AppSettings).
   aiEnabledNotifier = ValueNotifier(
-    PlatformUtils.isDesktop ||
-        (ollamaService.baseUrl != AppConstants.defaultOllamaUrl &&
-            ollamaService.baseUrl.isNotEmpty),
+    PlatformUtils.isDesktop || ollamaService.isConnected,
   );
   await xpubService.loadSettings();
   // btcPriceService.loadSettings() is called inside initialize() below.
