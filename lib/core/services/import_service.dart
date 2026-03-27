@@ -9,6 +9,7 @@ import 'package:syncfusion_flutter_pdf/pdf.dart';
 import '../database/database.dart';
 import 'ollama_service.dart';
 import '../../data/institution_profiles.dart';
+import '../../shared/utils/hash_utils.dart';
 
 // ── Models ────────────────────────────────────────────────────────────────────
 
@@ -598,7 +599,12 @@ FILE CONTENT:
     required List<ParsedTransaction> transactions,
     required int sourceId,
     required String sourceName,
+    double? btcPrice,
   }) async {
+    // Look up the default wallet to use as FK for main transactions table
+    final wallets = await db.select(db.wallets).get();
+    final walletId = wallets.isNotEmpty ? wallets.first.id : null;
+
     // Load all existing hashes for this source to detect duplicates
     final existingRows = await (db.select(db.importedTransactions)
           ..where((t) => t.sourceId.equals(sourceId)))
@@ -642,6 +648,51 @@ FILE CONTENT:
         if (endDate == null || tx.date.isAfter(endDate)) endDate = tx.date;
       } catch (_) {
         duplicatesSkipped++;
+        continue;
+      }
+
+      // Also write into the main transactions table so the Transactions screen
+      // can display imported data alongside manual and xpub entries.
+      if (walletId != null) {
+        final isBitcoin = tx.currency == 'BTC' || tx.currency == 'SATS';
+        // fiatCurrency must be exactly 3 chars; SATS → BTC, others kept as-is
+        final fiatCurrency = tx.currency == 'SATS'
+            ? 'BTC'
+            : (tx.currency.length == 3 ? tx.currency : 'USD');
+        // signed: credit = positive, debit = negative
+        final signedFiat = tx.direction == 'credit' ? tx.amount : -tx.amount;
+        int amountSats;
+        if (isBitcoin) {
+          amountSats = tx.direction == 'credit' ? cents : -cents;
+        } else if (btcPrice != null && btcPrice > 0) {
+          amountSats = (signedFiat / btcPrice * 100000000).round();
+        } else {
+          amountSats = 0;
+        }
+        final dedupHash = HashUtils.transactionDedupHash(
+          date: tx.date,
+          amount: tx.amount,
+          description: tx.rawDescription,
+        );
+        try {
+          await db.into(db.transactions).insert(
+            TransactionsCompanion.insert(
+              walletId: walletId,
+              date: tx.date,
+              description: tx.description,
+              amountFiat: signedFiat,
+              amountSats: amountSats,
+              fiatCurrency: fiatCurrency,
+              category: Value(tx.category),
+              source: 'csv',
+              isBitcoin: Value(isBitcoin),
+              dedupHash: dedupHash,
+            ),
+            mode: InsertMode.insertOrIgnore,
+          );
+        } catch (_) {
+          // Unique constraint violation — transaction already exists in main table
+        }
       }
     }
 
@@ -752,6 +803,9 @@ FILE CONTENT:
     return null;
   }
 
+  // 2-digit year: 00–29 → 2000–2029, 30–99 → 1930–1999 (standard bank convention)
+  int _expandYear(int yy) => yy <= 29 ? 2000 + yy : 1900 + yy;
+
   DateTime? _parseDate(String raw) {
     raw = raw.trim().replaceAll('"', '');
     if (raw.isEmpty) return null;
@@ -762,12 +816,26 @@ FILE CONTENT:
       return DateTime.tryParse(
           '${iso.group(1)}-${iso.group(2)}-${iso.group(3)}');
     }
-    // MM/DD/YYYY (US)
+    // YYYY/MM/DD
+    final isoSlash = RegExp(r'^(\d{4})/(\d{2})/(\d{2})').firstMatch(raw);
+    if (isoSlash != null) {
+      return DateTime.tryParse(
+          '${isoSlash.group(1)}-${isoSlash.group(2)}-${isoSlash.group(3)}');
+    }
+    // MM/DD/YYYY (US, 4-digit year)
     final us = RegExp(r'^(\d{1,2})/(\d{1,2})/(\d{4})').firstMatch(raw);
     if (us != null) {
       final mo = int.parse(us.group(1)!);
       final dy = int.parse(us.group(2)!);
       final yr = int.parse(us.group(3)!);
+      if (mo <= 12 && dy <= 31) return DateTime(yr, mo, dy);
+    }
+    // M/D/YY, M/DD/YY, MM/DD/YY (US 2-digit year — not followed by another digit)
+    final us2 = RegExp(r'^(\d{1,2})/(\d{1,2})/(\d{2})(?!\d)').firstMatch(raw);
+    if (us2 != null) {
+      final mo = int.parse(us2.group(1)!);
+      final dy = int.parse(us2.group(2)!);
+      final yr = _expandYear(int.parse(us2.group(3)!));
       if (mo <= 12 && dy <= 31) return DateTime(yr, mo, dy);
     }
     // DD/MM/YYYY or DD-MM-YYYY (UK)
@@ -827,21 +895,34 @@ FILE CONTENT:
             '${m.group(3)}-${m.group(1)!.padLeft(2, '0')}-${m.group(2)!.padLeft(2, '0')}');
       }
     }
+    if (format == 'MM/DD/YY') {
+      final m =
+          RegExp(r'^(\d{1,2})/(\d{1,2})/(\d{2})(?!\d)').firstMatch(raw);
+      if (m != null) {
+        final yr = _expandYear(int.parse(m.group(3)!));
+        return DateTime(yr, int.parse(m.group(1)!), int.parse(m.group(2)!));
+      }
+    }
     return _parseDate(raw);
   }
 
   double? _parseAmount(String raw) {
     if (raw.trim().isEmpty) return null;
-    final cleaned = raw
+    var s = raw
         .trim()
         .replaceAll('"', '')
-        .replaceAll(',', '')
         .replaceAll(r'$', '')
         .replaceAll('£', '')
         .replaceAll('€', '')
-        .replaceAll('₿', '')
-        .replaceAll(' ', '');
-    return double.tryParse(cleaned);
+        .replaceAll('₿', '');
+    // Parenthetical negatives: (4.50) → -4.50
+    final paren = RegExp(r'^\(([0-9,. ]+)\)$').firstMatch(s);
+    if (paren != null) s = '-${paren.group(1)}';
+    // Strip thousands separators and spaces
+    s = s.replaceAll(',', '').replaceAll(' ', '');
+    // Trailing minus sign: 4.50- → -4.50
+    if (s.endsWith('-')) s = '-${s.substring(0, s.length - 1)}';
+    return double.tryParse(s);
   }
 
   static const _categoryKeywords = <String, List<String>>{

@@ -40,6 +40,7 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen> {
         transactions: _txns,
         sourceId: widget.sourceId,
         sourceName: widget.sourceName,
+        btcPrice: app.btcPriceService.priceNotifier.value,
       );
       if (mounted) {
         Navigator.of(context).pushReplacement(
@@ -282,13 +283,23 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen> {
                     Text(
                       widget.result.isPdfNoAi
                           ? 'PDF import requires Ollama to be connected and a model selected. Connect Ollama in Settings → Servers.'
-                          : 'Could not parse this file automatically.',
+                          : widget.result.tierUsed == ImportTier.manual
+                              ? 'No transactions could be extracted with the current column mapping — go back and check your column assignments.'
+                              : 'Could not parse this file automatically.',
                       textAlign: TextAlign.center,
                       style: Theme.of(context)
                           .textTheme
                           .bodyMedium
                           ?.copyWith(color: cs.onSurfaceVariant),
                     ),
+                    if (widget.result.tierUsed == ImportTier.manual) ...[
+                      const SizedBox(height: 16),
+                      OutlinedButton.icon(
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.arrow_back),
+                        label: const Text('Back to Column Mapper'),
+                      ),
+                    ],
                   ],
                 ),
               ),
