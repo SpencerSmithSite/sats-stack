@@ -30,6 +30,7 @@ class _ImportColumnMapperScreenState extends State<ImportColumnMapperScreen> {
 
   static const _dateFormats = [
     'MM/DD/YYYY',
+    'MM/DD/YY',
     'DD/MM/YYYY',
     'YYYY-MM-DD',
     'MM-DD-YYYY',
@@ -61,6 +62,26 @@ class _ImportColumnMapperScreenState extends State<ImportColumnMapperScreen> {
     _assignments = List.filled(_headers.length, 'skip');
   }
 
+  // Inspects preview rows for the given column and auto-selects the date format.
+  // Must be called inside setState (mutates _mapping.dateFormat directly).
+  void _detectDateFormat(int colIndex) {
+    final values = _previewRows
+        .map((r) => colIndex < r.length ? r[colIndex].trim() : '')
+        .where((v) => v.isNotEmpty)
+        .take(3)
+        .toList();
+    if (values.isEmpty) return;
+    if (values.every((v) => RegExp(r'^\d{4}-\d{2}-\d{2}').hasMatch(v))) {
+      _mapping.dateFormat = 'YYYY-MM-DD';
+    } else if (values
+        .every((v) => RegExp(r'^\d{1,2}/\d{1,2}/\d{2}(?!\d)').hasMatch(v))) {
+      _mapping.dateFormat = 'MM/DD/YY';
+    } else if (values
+        .every((v) => RegExp(r'^\d{1,2}/\d{1,2}/\d{4}').hasMatch(v))) {
+      _mapping.dateFormat = 'MM/DD/YYYY';
+    }
+  }
+
   void _onAssign(int colIndex, String assignment) {
     setState(() {
       // Clear any previous column with this assignment (except 'skip')
@@ -71,6 +92,7 @@ class _ImportColumnMapperScreenState extends State<ImportColumnMapperScreen> {
       }
       _assignments[colIndex] = assignment;
       _rebuildMapping();
+      if (assignment == 'date') _detectDateFormat(colIndex);
     });
   }
 
