@@ -136,7 +136,11 @@ class ImportService {
 
   // ── Import progress / cancellation ───────────────────────────────────────
 
-  final _tokenController = StreamController<String>.broadcast();
+  // sync: true delivers each token to the listener immediately when add() is
+  // called, rather than scheduling a microtask. Without this, all tokens are
+  // queued and delivered after the await-for loop exits, causing the entire
+  // model output to appear at once instead of progressively.
+  final _tokenController = StreamController<String>.broadcast(sync: true);
   http.Client? _activeImportClient;
   bool _importCancelled = false;
 
@@ -403,15 +407,17 @@ FILE CONTENT:
       onStageChange
           ?.call('Sending to ${ollama.selectedModel ?? 'AI'} for analysis…');
       await Future.delayed(const Duration(milliseconds: 60));
-      onStageChange?.call('Analyzing transactions… this may take a minute');
+      onStageChange?.call('AI is thinking…');
 
       final buffer = StringBuffer();
       await for (final token in ollama.chat(messages, client: client)) {
         if (_importCancelled) break;
         buffer.write(token);
-        _tokenController.add(token);
+        _tokenController.add(token); // sync: true — delivered immediately to UI
       }
       _checkCancelled();
+
+      onStageChange?.call('Processing results…');
 
       final jsonArray = _extractJsonArray(buffer.toString().trim());
       if (jsonArray == null) return null;
@@ -445,8 +451,6 @@ FILE CONTENT:
           .whereType<ParsedTransaction>()
           .toList();
 
-      onStageChange
-          ?.call('Processing ${parsed.length} transactions found…');
       return parsed;
     } on ImportCancelledException {
       rethrow;
