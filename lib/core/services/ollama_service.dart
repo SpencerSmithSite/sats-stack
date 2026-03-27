@@ -123,13 +123,22 @@ Keep responses focused and practical. When suggesting actions, quantify them in 
 
   /// Streams response tokens. [messages] must include the system prompt as
   /// the first entry with role 'system'.
-  Stream<String> chat(List<Map<String, String>> messages) async* {
+  ///
+  /// If [client] is provided, it is used for the request but NOT closed on
+  /// completion — the caller is responsible for its lifecycle. This allows
+  /// the caller to cancel the request by closing the client. If omitted, an
+  /// owned client is created and closed automatically.
+  Stream<String> chat(
+    List<Map<String, String>> messages, {
+    http.Client? client,
+  }) async* {
     final model = _selectedModel;
     if (model == null || model.isEmpty) {
       throw StateError('No model selected');
     }
 
-    final client = http.Client();
+    final ownedClient = client == null;
+    final c = client ?? http.Client();
     try {
       final request = http.Request('POST', Uri.parse('$_baseUrl/api/chat'));
       request.headers['Content-Type'] = 'application/json';
@@ -140,7 +149,7 @@ Keep responses focused and practical. When suggesting actions, quantify them in 
       });
 
       final streamedResponse =
-          await client.send(request).timeout(const Duration(seconds: 30));
+          await c.send(request).timeout(const Duration(seconds: 30));
 
       if (streamedResponse.statusCode != 200) {
         throw Exception('Ollama returned ${streamedResponse.statusCode}');
@@ -165,7 +174,7 @@ Keep responses focused and practical. When suggesting actions, quantify them in 
         }
       }
     } finally {
-      client.close();
+      if (ownedClient) c.close();
     }
   }
 
