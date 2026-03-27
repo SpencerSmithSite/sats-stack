@@ -155,22 +155,19 @@ Keep responses focused and practical. When suggesting actions, quantify them in 
         throw Exception('Ollama returned ${streamedResponse.statusCode}');
       }
 
-      String buffer = '';
-      await for (final bytes in streamedResponse.stream) {
-        buffer += utf8.decode(bytes);
-        final lines = buffer.split('\n');
-        buffer = lines.last; // keep incomplete last line
-        for (final line in lines.take(lines.length - 1)) {
-          if (line.trim().isEmpty) continue;
-          try {
-            final data = jsonDecode(line) as Map<String, dynamic>;
-            if (data['done'] == true) return;
-            final token =
-                (data['message'] as Map<String, dynamic>?)?['content'] as String? ?? '';
-            if (token.isNotEmpty) yield token;
-          } catch (_) {
-            // Malformed JSON line — skip
-          }
+      await for (final line in streamedResponse.stream
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())) {
+        if (line.trim().isEmpty) continue;
+        try {
+          final data = jsonDecode(line) as Map<String, dynamic>;
+          if (data['done'] == true) return;
+          // /api/chat response: chunk["message"]["content"]
+          final token =
+              (data['message'] as Map<String, dynamic>?)?['content'] as String? ?? '';
+          if (token.isNotEmpty) yield token;
+        } catch (_) {
+          // Malformed JSON line — skip
         }
       }
     } finally {
