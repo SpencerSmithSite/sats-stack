@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -18,8 +20,32 @@ class ImportFileScreen extends StatefulWidget {
 
 class _ImportFileScreenState extends State<ImportFileScreen> {
   bool _ollamaBannerDismissed = false;
+
+  // Processing state
   bool _isProcessing = false;
-  String _processingMessage = '';
+  String _currentStage = '';
+  String _aiOutput = '';
+  bool _showCancel = false;
+
+  // Timers & subscriptions
+  Timer? _cancelTimer;
+  Timer? _timeoutTimer;
+  StreamSubscription<String>? _tokenSub;
+  final _tokenScrollController = ScrollController();
+
+  // Stored for timeout "Map manually" fallback
+  String? _processingFilePath;
+  String? _processingFileName;
+  ImportSource? _processingSource;
+
+  @override
+  void dispose() {
+    _cancelTimer?.cancel();
+    _timeoutTimer?.cancel();
+    _tokenSub?.cancel();
+    _tokenScrollController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -99,25 +125,13 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
           ),
 
           // Full-screen processing overlay
-          if (_isProcessing)
-            Container(
-              color: Colors.black54,
-              child: Center(
-                child: Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(32),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const CircularProgressIndicator(),
-                        const SizedBox(height: 20),
-                        Text(_processingMessage),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
+          if (_isProcessing) _ImportProgressOverlay(
+            stage: _currentStage,
+            aiOutput: _aiOutput,
+            showCancel: _showCancel,
+            scrollController: _tokenScrollController,
+            onCancel: _cancelImport,
+          ),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -187,6 +201,11 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
       if (!proceed) return;
     }
 
+    // Store for timeout fallback
+    _processingFilePath = file.path;
+    _processingFileName = file.name;
+    _processingSource = source;
+
     await _processFile(
         filePath: file.path!, fileName: file.name, source: source);
   }
@@ -225,16 +244,35 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
   }) async {
     setState(() {
       _isProcessing = true;
-      _processingMessage = 'Reading file…';
+      _currentStage = 'Reading your statement…';
+      _aiOutput = '';
+      _showCancel = false;
     });
 
-    // Brief pause so the UI renders the overlay before we block
-    await Future.delayed(const Duration(milliseconds: 80));
+    // Subscribe to live AI token stream
+    _tokenSub = app.importService.importTokenStream.listen((token) {
+      if (!mounted) return;
+      setState(() => _aiOutput += token);
+      // Auto-scroll to bottom
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_tokenScrollController.hasClients) {
+          _tokenScrollController.animateTo(
+            _tokenScrollController.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 80),
+            curve: Curves.easeOut,
+          );
+        }
+      });
+    });
 
-    setState(() {
-      _processingMessage = fileName.toLowerCase().endsWith('.pdf')
-          ? 'Extracting PDF text…'
-          : 'Analyzing with AI…';
+    // Show Cancel after 5 seconds
+    _cancelTimer = Timer(const Duration(seconds: 5), () {
+      if (mounted && _isProcessing) setState(() => _showCancel = true);
+    });
+
+    // Timeout after 5 minutes
+    _timeoutTimer = Timer(const Duration(minutes: 5), () {
+      if (mounted && _isProcessing) _handleTimeout(source);
     });
 
     ImportResult result;
@@ -243,9 +281,15 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
         filePath: filePath,
         fileName: fileName,
         sourceId: source.id,
+        onStageChange: (stage) {
+          if (mounted) setState(() => _currentStage = stage);
+        },
       );
+    } on ImportCancelledException {
+      _cleanupProcessing();
+      return;
     } catch (e) {
-      setState(() => _isProcessing = false);
+      _cleanupProcessing();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error reading file: $e')),
@@ -254,7 +298,7 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
       return;
     }
 
-    setState(() => _isProcessing = false);
+    _cleanupProcessing();
     if (!mounted) return;
 
     if (result.needsManualMapping) {
@@ -279,9 +323,207 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
       );
     }
   }
+
+  void _cleanupProcessing() {
+    _cancelTimer?.cancel();
+    _timeoutTimer?.cancel();
+    _tokenSub?.cancel();
+    _cancelTimer = null;
+    _timeoutTimer = null;
+    _tokenSub = null;
+    if (mounted) {
+      setState(() {
+        _isProcessing = false;
+        _showCancel = false;
+        _aiOutput = '';
+        _currentStage = '';
+      });
+    }
+  }
+
+  void _cancelImport() {
+    app.importService.cancelImport();
+    _cleanupProcessing();
+  }
+
+  void _handleTimeout(ImportSource source) {
+    app.importService.cancelImport();
+    _cleanupProcessing();
+    if (!mounted) return;
+
+    final isCsv = (_processingFileName ?? '').toLowerCase().endsWith('.csv');
+
+    showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Taking longer than expected'),
+        content: const Text(
+          'This is taking longer than expected.\n\n'
+          'Try a smaller file, a faster model, or check that '
+          'your Ollama server is responding.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'dismiss'),
+            child: const Text('Try Again'),
+          ),
+          if (isCsv)
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, 'manual'),
+              child: const Text('Map Columns Manually'),
+            ),
+        ],
+      ),
+    ).then((action) async {
+      if (action == 'manual' &&
+          _processingFilePath != null &&
+          _processingFileName != null &&
+          _processingSource != null) {
+        final result = await app.importService.readCsvForManualMapping(
+          _processingFilePath!,
+          _processingFileName!,
+        );
+        if (mounted) {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => ImportColumnMapperScreen(
+                result: result,
+                sourceId: _processingSource!.id,
+                sourceName: _processingSource!.name,
+              ),
+            ),
+          );
+        }
+      }
+    });
+  }
 }
 
 // ── Sub-widgets ───────────────────────────────────────────────────────────────
+
+class _ImportProgressOverlay extends StatelessWidget {
+  const _ImportProgressOverlay({
+    required this.stage,
+    required this.aiOutput,
+    required this.showCancel,
+    required this.scrollController,
+    required this.onCancel,
+  });
+
+  final String stage;
+  final String aiOutput;
+  final bool showCancel;
+  final ScrollController scrollController;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final hasOutput = aiOutput.isNotEmpty;
+
+    return Positioned.fill(
+      child: Container(
+        color: Colors.black.withOpacity(0.6),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 500),
+            child: Card(
+              margin: const EdgeInsets.symmetric(horizontal: 32),
+              child: Padding(
+                padding: const EdgeInsets.all(28),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Header row
+                    Row(
+                      children: [
+                        SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: cs.primary,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          'Importing…',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // Indeterminate linear bar
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: const LinearProgressIndicator(minHeight: 4),
+                    ),
+
+                    const SizedBox(height: 14),
+
+                    // Stage label
+                    Text(
+                      stage,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodyMedium
+                          ?.copyWith(color: cs.onSurfaceVariant),
+                    ),
+
+                    // Live AI token output
+                    if (hasOutput) ...[
+                      const SizedBox(height: 16),
+                      Container(
+                        height: 130,
+                        decoration: BoxDecoration(
+                          color: cs.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                              color: cs.outlineVariant.withOpacity(0.5)),
+                        ),
+                        child: SingleChildScrollView(
+                          controller: scrollController,
+                          padding: const EdgeInsets.all(10),
+                          child: Text(
+                            // Show last 3 000 chars so the widget stays bounded
+                            aiOutput.length > 3000
+                                ? aiOutput.substring(
+                                    aiOutput.length - 3000)
+                                : aiOutput,
+                            style: TextStyle(
+                              fontFamily: 'monospace',
+                              fontSize: 11,
+                              color: cs.primary,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+
+                    // Cancel button (delayed)
+                    if (showCancel) ...[
+                      const SizedBox(height: 20),
+                      Center(
+                        child: TextButton(
+                          onPressed: onCancel,
+                          child: const Text('Cancel'),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class _AiConnectedBanner extends StatelessWidget {
   const _AiConnectedBanner();

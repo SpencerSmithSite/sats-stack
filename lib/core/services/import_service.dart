@@ -1,15 +1,22 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 import 'package:csv/csv.dart';
 import 'package:drift/drift.dart' show Value, InsertMode, OrderingTerm;
+import 'package:http/http.dart' as http;
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 
 import '../database/database.dart';
 import 'ollama_service.dart';
 import '../../data/institution_profiles.dart';
 import '../../shared/utils/hash_utils.dart';
+
+/// Thrown when [ImportService.cancelImport] is called during an active import.
+class ImportCancelledException implements Exception {
+  const ImportCancelledException();
+}
 
 // ── Models ────────────────────────────────────────────────────────────────────
 
@@ -127,15 +134,47 @@ class ImportService {
   final AppDatabase db;
   final OllamaService ollama;
 
+  // ── Import progress / cancellation ───────────────────────────────────────
+
+  final _tokenController = StreamController<String>.broadcast();
+  http.Client? _activeImportClient;
+  bool _importCancelled = false;
+
+  /// Stream of raw AI response tokens emitted during Tier 1 Ollama parsing.
+  /// Subscribe while an import is running to show live model output.
+  Stream<String> get importTokenStream => _tokenController.stream;
+
+  /// Aborts the in-flight Ollama request and signals the import to stop.
+  void cancelImport() {
+    _importCancelled = true;
+    _activeImportClient?.close();
+    _activeImportClient = null;
+  }
+
+  void _resetImportState() {
+    _importCancelled = false;
+    _activeImportClient = null;
+  }
+
+  void _checkCancelled() {
+    if (_importCancelled) throw const ImportCancelledException();
+  }
+
   // ── Public entry point ───────────────────────────────────────────────────
 
   /// Tries tiers in order: saved mapping → Ollama → rules → manual mapping signal.
   /// For PDFs: extracts text then tries Ollama; falls back to isPdfNoAi.
+  ///
+  /// [onStageChange] is called with a human-readable string at each processing
+  /// stage so the UI can show meaningful progress. Throws [ImportCancelledException]
+  /// if [cancelImport] is called during processing.
   Future<ImportResult> importFile({
     required String filePath,
     required String fileName,
     required int sourceId,
+    void Function(String stage)? onStageChange,
   }) async {
+    _resetImportState();
     final lname = fileName.toLowerCase();
     final fileType = lname.endsWith('.pdf')
         ? ImportFileType.pdf
@@ -144,17 +183,53 @@ class ImportService {
             : ImportFileType.unknown;
 
     if (fileType == ImportFileType.pdf) {
-      return _handlePdf(filePath, fileName, sourceId);
+      return _handlePdf(filePath, fileName, sourceId,
+          onStageChange: onStageChange);
     }
 
-    return _handleCsv(filePath, fileName, sourceId);
+    return _handleCsv(filePath, fileName, sourceId,
+        onStageChange: onStageChange);
+  }
+
+  /// Reads a CSV file and returns an [ImportResult] ready for the manual
+  /// column mapper screen. Used when falling back from a timeout.
+  Future<ImportResult> readCsvForManualMapping(
+      String filePath, String fileName) async {
+    try {
+      final content = await File(filePath).readAsString();
+      final allRows = _parseCsvRows(content);
+      return ImportResult(
+        transactions: [],
+        needsManualMapping: true,
+        fileType: ImportFileType.csv,
+        fileName: fileName,
+        rawCsvContent: content,
+        csvRows: allRows,
+        csvHeaders: allRows.isNotEmpty ? allRows[0] : [],
+      );
+    } catch (_) {
+      return ImportResult(
+          transactions: [], fileType: ImportFileType.csv, fileName: fileName);
+    }
   }
 
   // ── PDF flow ─────────────────────────────────────────────────────────────
 
   Future<ImportResult> _handlePdf(
-      String filePath, String fileName, int sourceId) async {
+    String filePath,
+    String fileName,
+    int sourceId, {
+    void Function(String)? onStageChange,
+  }) async {
+    onStageChange?.call('Reading your statement…');
+    // Let the UI render the first stage before blocking on I/O
+    await Future.delayed(const Duration(milliseconds: 60));
+    _checkCancelled();
+
+    onStageChange?.call('Extracting text from PDF…');
     final text = await extractPdfText(filePath);
+    _checkCancelled();
+
     if (text == null || text.trim().isEmpty) {
       return ImportResult(
         transactions: [],
@@ -166,6 +241,8 @@ class ImportService {
 
     final ollamaReady =
         await ollama.isAvailable() && (ollama.selectedModel?.isNotEmpty ?? false);
+    _checkCancelled();
+
     if (!ollamaReady) {
       return ImportResult(
         transactions: [],
@@ -175,7 +252,10 @@ class ImportService {
       );
     }
 
-    final txns = await parseWithOllama(text);
+    final txns =
+        await parseWithOllama(text, onStageChange: onStageChange);
+    _checkCancelled();
+
     return ImportResult(
       transactions: txns ?? [],
       tierUsed: txns != null ? ImportTier.ollama : null,
@@ -188,7 +268,15 @@ class ImportService {
   // ── CSV flow ─────────────────────────────────────────────────────────────
 
   Future<ImportResult> _handleCsv(
-      String filePath, String fileName, int sourceId) async {
+    String filePath,
+    String fileName,
+    int sourceId, {
+    void Function(String)? onStageChange,
+  }) async {
+    onStageChange?.call('Reading your statement…');
+    await Future.delayed(const Duration(milliseconds: 60));
+    _checkCancelled();
+
     final String content;
     try {
       content = await File(filePath).readAsString();
@@ -196,6 +284,7 @@ class ImportService {
       return ImportResult(
           transactions: [], fileType: ImportFileType.csv, fileName: fileName);
     }
+    _checkCancelled();
 
     final allRows = _parseCsvRows(content);
     if (allRows.isEmpty) {
@@ -207,6 +296,8 @@ class ImportService {
     final source = await (db.select(db.importSources)
           ..where((t) => t.id.equals(sourceId)))
         .getSingleOrNull();
+    _checkCancelled();
+
     if (source?.columnMapping != null) {
       try {
         final mapping =
@@ -224,12 +315,17 @@ class ImportService {
         // Corrupted mapping — fall through
       }
     }
+    _checkCancelled();
 
     // --- Tier 1: Ollama ---
     final ollamaReady =
         await ollama.isAvailable() && (ollama.selectedModel?.isNotEmpty ?? false);
+    _checkCancelled();
+
     if (ollamaReady) {
-      final txns = await parseWithOllama(content);
+      final txns =
+          await parseWithOllama(content, onStageChange: onStageChange);
+      _checkCancelled();
       if (txns != null && txns.isNotEmpty) {
         return ImportResult(
           transactions: txns,
@@ -241,7 +337,10 @@ class ImportService {
     }
 
     // --- Tier 2: Rule-based ---
+    onStageChange?.call('Applying smart rules…');
     final txns = await parseWithRules(content);
+    _checkCancelled();
+
     if (txns != null && txns.isNotEmpty) {
       return ImportResult(
         transactions: txns,
@@ -266,7 +365,13 @@ class ImportService {
 
   // ── Tier 1: Ollama ────────────────────────────────────────────────────────
 
-  Future<List<ParsedTransaction>?> parseWithOllama(String content) async {
+  Future<List<ParsedTransaction>?> parseWithOllama(
+    String content, {
+    void Function(String)? onStageChange,
+  }) async {
+    final client = http.Client();
+    _activeImportClient = client;
+
     try {
       const maxLen = 100000;
       final truncated =
@@ -295,15 +400,23 @@ FILE CONTENT:
         {'role': 'user', 'content': '$prefix$truncated'},
       ];
 
+      onStageChange
+          ?.call('Sending to ${ollama.selectedModel ?? 'AI'} for analysis…');
+      await Future.delayed(const Duration(milliseconds: 60));
+      onStageChange?.call('Analyzing transactions… this may take a minute');
+
       final buffer = StringBuffer();
-      await for (final token in ollama.chat(messages)) {
+      await for (final token in ollama.chat(messages, client: client)) {
+        if (_importCancelled) break;
         buffer.write(token);
+        _tokenController.add(token);
       }
+      _checkCancelled();
 
       final jsonArray = _extractJsonArray(buffer.toString().trim());
       if (jsonArray == null) return null;
 
-      return jsonArray
+      final parsed = jsonArray
           .map((item) {
             try {
               final map = item as Map<String, dynamic>;
@@ -331,8 +444,18 @@ FILE CONTENT:
           })
           .whereType<ParsedTransaction>()
           .toList();
+
+      onStageChange
+          ?.call('Processing ${parsed.length} transactions found…');
+      return parsed;
+    } on ImportCancelledException {
+      rethrow;
     } catch (_) {
+      if (_importCancelled) throw const ImportCancelledException();
       return null;
+    } finally {
+      _activeImportClient = null;
+      client.close();
     }
   }
 
