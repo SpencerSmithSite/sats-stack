@@ -275,6 +275,10 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
       if (mounted && _isProcessing) _handleTimeout(source);
     });
 
+    // Yield to the event loop so the overlay renders and the token stream
+    // subscription is fully active before any import work begins.
+    await Future.microtask(() {});
+
     ImportResult result;
     try {
       result = await app.importService.importFile(
