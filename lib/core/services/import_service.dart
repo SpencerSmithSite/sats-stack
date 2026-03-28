@@ -21,9 +21,9 @@ class ImportCancelledException implements Exception {
 
 // ── Models ────────────────────────────────────────────────────────────────────
 
-enum ImportTier { ollama, rules, manual, pdfExtracted }
+enum ImportTier { ollama, rules, manual, pdfExtracted, pdfHeuristic, image }
 
-enum ImportFileType { csv, pdf, unknown }
+enum ImportFileType { csv, pdf, image, unknown }
 
 class ParsedTransaction {
   ParsedTransaction({
@@ -92,6 +92,7 @@ class ImportResult {
     this.needsManualMapping = false,
     this.isPdfNoAi = false,
     this.pdfAiNotReady = false,
+    this.pdfScanned = false,
     this.rawCsvContent,
     this.csvRows,
     this.csvHeaders,
@@ -102,8 +103,12 @@ class ImportResult {
   final bool needsManualMapping;
   /// True when PDF had no text to extract, or AI ran but returned no transactions.
   final bool isPdfNoAi;
-  /// True when PDF text was extracted but no AI provider was connected/configured.
+  /// True when PDF text was extracted but no AI provider was connected/configured,
+  /// and heuristic detection also failed to find enough transactions.
   final bool pdfAiNotReady;
+  /// True when the PDF appears to be a scanned/image-only document (text layer
+  /// extracted fewer than 50 characters).
+  final bool pdfScanned;
   final ImportFileType fileType;
   final String fileName;
   final String? rawCsvContent;
@@ -200,6 +205,22 @@ class ImportService {
         onStageChange: onStageChange);
   }
 
+  /// Entry point for image import (camera or photo library).
+  /// Sends the image to the active AI provider using the vision API and parses
+  /// the returned JSON into [ParsedTransaction]s.
+  Future<ImportResult> importImage({
+    required String imagePath,
+    required int sourceId,
+    void Function(String stage)? onStageChange,
+  }) async {
+    _resetImportState();
+    final fileName = imagePath.contains('/')
+        ? imagePath.split('/').last
+        : imagePath.split('\\').last;
+    return _handleImage(imagePath, fileName, sourceId,
+        onStageChange: onStageChange);
+  }
+
   /// Reads a CSV file and returns an [ImportResult] ready for the manual
   /// column mapper screen. Used when falling back from a timeout.
   Future<ImportResult> readCsvForManualMapping(
@@ -239,12 +260,12 @@ class ImportService {
     final text = await extractPdfText(filePath);
     _checkCancelled();
 
-    if (text == null || text.trim().isEmpty) {
+    if (text == null || text.trim().length < 50) {
       return ImportResult(
         transactions: [],
         fileType: ImportFileType.pdf,
         fileName: fileName,
-        isPdfNoAi: true,
+        pdfScanned: true,
       );
     }
 
@@ -253,6 +274,17 @@ class ImportService {
     _checkCancelled();
 
     if (!ollamaReady) {
+      onStageChange?.call('Attempting heuristic detection…');
+      await Future.delayed(const Duration(milliseconds: 60));
+      final heuristicTxns = _parseTransactionsFromPdfText(text);
+      if (heuristicTxns.length >= 3) {
+        return ImportResult(
+          transactions: heuristicTxns,
+          tierUsed: ImportTier.pdfHeuristic,
+          fileType: ImportFileType.pdf,
+          fileName: fileName,
+        );
+      }
       return ImportResult(
         transactions: [],
         fileType: ImportFileType.pdf,
@@ -272,6 +304,128 @@ class ImportService {
       fileType: ImportFileType.pdf,
       fileName: fileName,
     );
+  }
+
+  // ── Image flow ───────────────────────────────────────────────────────────
+
+  Future<ImportResult> _handleImage(
+    String imagePath,
+    String fileName,
+    int sourceId, {
+    void Function(String)? onStageChange,
+  }) async {
+    onStageChange?.call('Preparing image…');
+    await Future.delayed(const Duration(milliseconds: 60));
+    _checkCancelled();
+
+    // Read bytes and base64-encode
+    final imageBytes = await File(imagePath).readAsBytes();
+    final lower = imagePath.toLowerCase();
+    final mimeType = lower.endsWith('.png') ? 'image/png' : 'image/jpeg';
+    final base64Image = base64Encode(imageBytes);
+    _checkCancelled();
+
+    const prompt = '''You are a financial data extraction assistant. This image shows a bank statement, credit card statement, or financial document. Extract every transaction you can see and return them as a JSON array.
+
+Each transaction must have these exact fields:
+- "date": ISO 8601 date string (YYYY-MM-DD)
+- "amount": positive decimal number (always positive)
+- "direction": "debit" (money leaving) or "credit" (money arriving)
+- "description": merchant or transaction description
+- "currency": 3-letter currency code (USD, EUR, GBP, BTC, etc.)
+
+Rules:
+- Skip any header rows, totals, opening/closing balances, or non-transaction rows
+- If a row has separate debit and credit columns, use the non-zero value and set direction accordingly
+- If you cannot confidently read a value, skip that transaction
+- Return ONLY the JSON array, no explanation, no markdown, no code fences''';
+
+    final client = http.Client();
+    _activeImportClient = client;
+
+    try {
+      onStageChange?.call('Sending to ${ollama.selectedModel ?? 'AI'}…');
+      await Future.delayed(const Duration(milliseconds: 60));
+      onStageChange?.call('AI is reading your statement…');
+
+      final buffer = StringBuffer();
+      var tokenCount = 0;
+      await for (final token in ollama.chatWithImage(
+        prompt,
+        base64Image,
+        mimeType: mimeType,
+        client: client,
+      )) {
+        if (_importCancelled) break;
+        buffer.write(token);
+        _tokenController.add(token);
+        tokenCount++;
+        if (tokenCount % 5 == 0) await Future<void>.delayed(Duration.zero);
+      }
+      _checkCancelled();
+
+      onStageChange?.call('Processing results…');
+
+      final jsonArray = _extractJsonArray(buffer.toString().trim());
+      if (jsonArray == null) {
+        return ImportResult(
+          transactions: [],
+          fileType: ImportFileType.image,
+          fileName: fileName,
+          isPdfNoAi: true,
+        );
+      }
+
+      final parsed = jsonArray
+          .map((item) {
+            try {
+              final map = item as Map<String, dynamic>;
+              final date = DateTime.tryParse((map['date'] as String?) ?? '');
+              if (date == null) return null;
+              final amount = (map['amount'] as num?)?.toDouble();
+              if (amount == null) return null;
+              final direction =
+                  ((map['direction'] as String?) ?? 'debit').toLowerCase();
+              final description = (map['description'] as String?) ?? '';
+              final currency =
+                  ((map['currency'] as String?) ?? 'USD').toUpperCase();
+              return ParsedTransaction(
+                date: date,
+                amount: amount.abs(),
+                direction: direction == 'credit' ? 'credit' : 'debit',
+                description: description,
+                rawDescription: description,
+                currency: currency,
+                category: _autoCategory(description),
+              );
+            } catch (_) {
+              return null;
+            }
+          })
+          .whereType<ParsedTransaction>()
+          .toList();
+
+      return ImportResult(
+        transactions: parsed,
+        tierUsed: parsed.isNotEmpty ? ImportTier.image : null,
+        isPdfNoAi: parsed.isEmpty,
+        fileType: ImportFileType.image,
+        fileName: fileName,
+      );
+    } on ImportCancelledException {
+      rethrow;
+    } catch (_) {
+      if (_importCancelled) throw const ImportCancelledException();
+      return ImportResult(
+        transactions: [],
+        fileType: ImportFileType.image,
+        fileName: fileName,
+        isPdfNoAi: true,
+      );
+    } finally {
+      _activeImportClient = null;
+      client.close();
+    }
   }
 
   // ── CSV flow ─────────────────────────────────────────────────────────────
@@ -890,6 +1044,143 @@ FILE CONTENT:
             ..where((t) => t.sourceId.equals(sourceId))
             ..orderBy([(t) => OrderingTerm.desc(t.date)]))
           .get();
+
+  // ── Heuristic PDF parser (no-AI fallback) ────────────────────────────────
+
+  /// Parses transactions from plain-text PDF content using pattern matching.
+  /// Returns an empty list when fewer than 3 rows are found (low confidence).
+  List<ParsedTransaction> _parseTransactionsFromPdfText(String text) {
+    final lines = text.split(RegExp(r'\r?\n'));
+
+    // Date patterns tried in order — take the first match per line.
+    final datePats = <RegExp>[
+      RegExp(r'\d{4}-\d{2}-\d{2}'),
+      RegExp(r'\d{1,2}/\d{1,2}/\d{4}'),
+      RegExp(r'\d{1,2}/\d{1,2}/\d{2}(?!\d)'),
+      RegExp(
+          r'\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{4}',
+          caseSensitive: false),
+      RegExp(
+          r'(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}\s+\d{4}',
+          caseSensitive: false),
+    ];
+
+    // Matches currency amounts; requires decimal, thousands-comma, or currency
+    // prefix — avoids matching plain integers like years or reference numbers.
+    final amtPat = RegExp(
+      r'[$£€][\d,]+(?:\.\d{1,2})?'           // $1,234 or £50.00
+      r'|[-+]?\(?\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?\)?' // 1,234 or 1,234.56
+      r'|[-+]?\(?\d+\.\d{1,2}\)?[-]?',       // 12.50 or -12.50 or (12.50)
+    );
+
+    // Noise tokens stripped from descriptions.
+    final noisePat = RegExp(
+      r'\b(?:ACH|POS|REF#?\w*|TXN\w*)\b',
+      caseSensitive: false,
+    );
+
+    String columnCtx = 'debit'; // updated when column headers are detected
+    final result = <ParsedTransaction>[];
+
+    for (int i = 0; i < lines.length; i++) {
+      final line = lines[i].trim();
+      if (line.isEmpty) continue;
+
+      // Update column context from header-like lines.
+      final lower = line.toLowerCase();
+      final hasDebit =
+          lower.contains('withdrawal') || lower.contains('debit');
+      final hasCredit =
+          lower.contains('deposit') || lower.contains('credit');
+      if (hasDebit && !hasCredit) columnCtx = 'debit';
+      if (hasCredit && !hasDebit) columnCtx = 'credit';
+
+      // Find the first date match on this line.
+      RegExpMatch? dateMatch;
+      for (final pat in datePats) {
+        dateMatch = pat.firstMatch(line);
+        if (dateMatch != null) break;
+      }
+      if (dateMatch == null) continue;
+
+      final date = _parseDate(dateMatch.group(0)!);
+      if (date == null) continue;
+
+      // Find amounts outside the date region.
+      final amtMatches = amtPat
+          .allMatches(line)
+          .where((m) =>
+              m.end <= dateMatch!.start || m.start >= dateMatch.end)
+          .toList();
+
+      double amount;
+      String direction;
+
+      if (amtMatches.isEmpty) {
+        // Look ahead up to 2 lines for an amount.
+        double? lookAhead;
+        for (int j = 1; j <= 2 && (i + j) < lines.length; j++) {
+          for (final m in amtPat.allMatches(lines[i + j].trim())) {
+            final p = _parseAmount(m.group(0)!);
+            if (p != null && p.abs() > 0.001) {
+              lookAhead = p;
+              break;
+            }
+          }
+          if (lookAhead != null) break;
+        }
+        if (lookAhead == null) continue;
+        amount = lookAhead.abs();
+        direction = lookAhead < 0 ? 'debit' : columnCtx;
+      } else if (amtMatches.length >= 2) {
+        // Two-column format: first column = withdrawals, second = deposits.
+        // Whichever is non-zero is the transaction amount.
+        final a = _parseAmount(amtMatches[0].group(0)!);
+        final b = _parseAmount(amtMatches[1].group(0)!);
+        if (a != null && a.abs() > 0.001) {
+          amount = a.abs();
+          direction = 'debit';
+        } else if (b != null && b.abs() > 0.001) {
+          amount = b.abs();
+          direction = 'credit';
+        } else {
+          continue;
+        }
+      } else {
+        final p = _parseAmount(amtMatches[0].group(0)!);
+        if (p == null || p.abs() < 0.001) continue;
+        amount = p.abs();
+        direction = p < 0 ? 'debit' : columnCtx;
+      }
+
+      // Extract description: text between end of date and start of first amount.
+      String desc;
+      if (amtMatches.isNotEmpty && amtMatches.first.start > dateMatch.end) {
+        desc = line.substring(dateMatch.end, amtMatches.first.start);
+      } else {
+        // Amounts precede date or no clear boundary — strip amounts from rest.
+        desc = line.substring(dateMatch.end).replaceAll(amtPat, '');
+      }
+
+      desc = desc.replaceAll(noisePat, '');
+      desc = desc.replaceAll(RegExp(r'[–—•*|:\t]+'), ' ');
+      desc = desc.trim().replaceAll(RegExp(r'\s{2,}'), ' ');
+
+      if (desc.length < 2) continue;
+
+      result.add(ParsedTransaction(
+        date: date,
+        amount: amount,
+        direction: direction,
+        description: desc,
+        rawDescription: desc,
+        currency: 'USD',
+        category: _autoCategory(desc),
+      ));
+    }
+
+    return result;
+  }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 

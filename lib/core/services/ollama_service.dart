@@ -436,6 +436,167 @@ Keep responses focused and practical. When suggesting actions, quantify them in 
     }
   }
 
+  // ── Vision chat ───────────────────────────────────────────────────────────
+
+  /// Returns true if [modelName] suggests the model supports vision/image input.
+  static bool looksLikeVisionModel(String? modelName) {
+    if (modelName == null || modelName.isEmpty) return false;
+    final lower = modelName.toLowerCase();
+    return lower.contains('vision') ||
+        lower.contains('llava') ||
+        lower.contains('moondream') ||
+        lower.contains('bakllava') ||
+        lower.contains('vl');
+  }
+
+  /// Streams response tokens from the active provider for a vision (image+text)
+  /// request. [base64Image] is raw base64-encoded image data (no data: prefix).
+  Stream<String> chatWithImage(
+    String prompt,
+    String base64Image, {
+    String mimeType = 'image/jpeg',
+    http.Client? client,
+  }) async* {
+    switch (_activeProvider) {
+      case AiProvider.ollama:
+        yield* _ollamaChatWithImage(prompt, base64Image, client: client);
+      case AiProvider.lmStudio:
+        yield* _openAiChatWithImage(
+          prompt, base64Image,
+          mimeType: mimeType,
+          baseUrl: _lmStudioBaseUrl,
+          model: _lmStudioSelectedModel,
+          apiKey: '',
+          client: client,
+        );
+      case AiProvider.maple:
+        yield* _openAiChatWithImage(
+          prompt, base64Image,
+          mimeType: mimeType,
+          baseUrl: _mapleBaseUrl,
+          model: _mapleSelectedModel,
+          apiKey: _mapleApiKey,
+          client: client,
+        );
+    }
+  }
+
+  Stream<String> _ollamaChatWithImage(
+    String prompt,
+    String base64Image, {
+    http.Client? client,
+  }) async* {
+    final model = _selectedModel;
+    if (model == null || model.isEmpty) {
+      throw StateError('No Ollama model selected');
+    }
+
+    final ownedClient = client == null;
+    final c = client ?? http.Client();
+    try {
+      final request = http.Request('POST', Uri.parse('$_baseUrl/api/chat'));
+      request.headers['Content-Type'] = 'application/json';
+      request.body = jsonEncode({
+        'model': model,
+        'messages': [
+          {
+            'role': 'user',
+            'content': prompt,
+            'images': [base64Image],
+          }
+        ],
+        'stream': true,
+      });
+
+      final streamedResponse =
+          await c.send(request).timeout(const Duration(seconds: 60));
+      if (streamedResponse.statusCode != 200) {
+        throw Exception('Ollama returned ${streamedResponse.statusCode}');
+      }
+
+      await for (final line in streamedResponse.stream
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())) {
+        if (line.trim().isEmpty) continue;
+        try {
+          final data = jsonDecode(line) as Map<String, dynamic>;
+          if (data['done'] == true) return;
+          final token =
+              (data['message'] as Map<String, dynamic>?)?['content'] as String? ?? '';
+          if (token.isNotEmpty) yield token;
+        } catch (_) {}
+      }
+    } finally {
+      if (ownedClient) c.close();
+    }
+  }
+
+  Stream<String> _openAiChatWithImage(
+    String prompt,
+    String base64Image, {
+    String mimeType = 'image/jpeg',
+    required String baseUrl,
+    required String? model,
+    required String apiKey,
+    http.Client? client,
+  }) async* {
+    if (model == null || model.isEmpty) {
+      throw StateError('No model selected');
+    }
+
+    final ownedClient = client == null;
+    final c = client ?? http.Client();
+    try {
+      final request =
+          http.Request('POST', Uri.parse('$baseUrl/chat/completions'));
+      request.headers['Content-Type'] = 'application/json';
+      if (apiKey.isNotEmpty) request.headers['Authorization'] = 'Bearer $apiKey';
+      request.body = jsonEncode({
+        'model': model,
+        'messages': [
+          {
+            'role': 'user',
+            'content': [
+              {
+                'type': 'image_url',
+                'image_url': {'url': 'data:$mimeType;base64,$base64Image'},
+              },
+              {
+                'type': 'text',
+                'text': prompt,
+              },
+            ],
+          }
+        ],
+        'stream': true,
+      });
+
+      final streamedResponse =
+          await c.send(request).timeout(const Duration(seconds: 60));
+      if (streamedResponse.statusCode != 200) {
+        throw Exception('Server returned ${streamedResponse.statusCode}');
+      }
+
+      await for (final line in streamedResponse.stream
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())) {
+        if (line.trim().isEmpty) continue;
+        if (line == 'data: [DONE]') return;
+        if (!line.startsWith('data: ')) continue;
+        try {
+          final data = jsonDecode(line.substring(6)) as Map<String, dynamic>;
+          final choices = data['choices'] as List?;
+          if (choices == null || choices.isEmpty) continue;
+          final delta = choices[0]['delta'] as Map<String, dynamic>?;
+          final token = delta?['content'] as String? ?? '';
+          if (token.isNotEmpty) yield token;
+        } catch (_) {}
+      }
+    } finally {
+      if (ownedClient) c.close();
+    }
+  }
+
   // ── Monthly insight ───────────────────────────────────────────────────────
 
   Future<String?> loadCachedInsight() async {

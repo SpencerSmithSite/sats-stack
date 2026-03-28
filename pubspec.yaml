@@ -36,6 +36,7 @@ dependencies:
 
   # File Picking
   file_picker: ^10.3.10
+  image_picker: ^1.1.0
 
   # Local Storage
   shared_preferences: ^2.5.3

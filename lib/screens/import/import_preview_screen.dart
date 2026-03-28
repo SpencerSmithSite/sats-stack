@@ -206,6 +206,34 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen> {
                               ?.copyWith(color: cs.primary),
                         ),
                       ],
+                      if (widget.result.tierUsed ==
+                          ImportTier.pdfHeuristic) ...[
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.warning_amber_rounded,
+                                  size: 16, color: Colors.orange),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  'Transactions extracted without AI — please review carefully before importing.',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(color: Colors.orange),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -281,19 +309,32 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen> {
                         style: Theme.of(context).textTheme.titleMedium),
                     const SizedBox(height: 8),
                     Text(
-                      widget.result.pdfAiNotReady
-                          ? 'PDF import requires an AI provider to be connected with a model selected. Configure your AI provider in Settings → Servers.'
-                          : widget.result.isPdfNoAi
-                              ? 'The AI could not extract any transactions from this PDF. Try a different model or check that the PDF contains readable transaction data.'
-                              : widget.result.tierUsed == ImportTier.manual
-                                  ? 'No transactions could be extracted with the current column mapping — go back and check your column assignments.'
-                                  : 'Could not parse this file automatically.',
+                      widget.result.pdfScanned
+                          ? 'This appears to be a scanned PDF with no text layer. Connect an AI provider with vision support to import scanned documents, or export as CSV from your bank\'s website.'
+                          : widget.result.pdfAiNotReady
+                              ? 'Heuristic detection couldn\'t find enough transactions. Connect an AI provider for accurate PDF import, or export as CSV from your bank\'s website.'
+                              : widget.result.isPdfNoAi
+                              ? widget.result.fileType == ImportFileType.image
+                                  ? 'The AI could not extract any transactions from this image. Make sure your model supports vision (e.g. llava, llama3.2-vision) and the image clearly shows transaction data.'
+                                  : 'The AI could not extract any transactions from this PDF. Try a different model or check that the PDF contains readable transaction data.'
+                                  : widget.result.tierUsed == ImportTier.manual
+                                      ? 'No transactions could be extracted with the current column mapping — go back and check your column assignments.'
+                                      : 'Could not parse this file automatically.',
                       textAlign: TextAlign.center,
                       style: Theme.of(context)
                           .textTheme
                           .bodyMedium
                           ?.copyWith(color: cs.onSurfaceVariant),
                     ),
+                    if (widget.result.pdfScanned ||
+                        widget.result.pdfAiNotReady) ...[
+                      const SizedBox(height: 16),
+                      OutlinedButton.icon(
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.settings_outlined),
+                        label: const Text('Connect AI Provider'),
+                      ),
+                    ],
                     if (widget.result.tierUsed == ImportTier.manual) ...[
                       const SizedBox(height: 16),
                       OutlinedButton.icon(
@@ -347,6 +388,8 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen> {
         ImportTier.rules => 'Smart Rules',
         ImportTier.manual => 'Saved Mapping',
         ImportTier.pdfExtracted => 'PDF + AI',
+        ImportTier.pdfHeuristic => 'PDF Heuristics',
+        ImportTier.image => 'Image + AI',
       };
 
   String _formatAmount(double amount, String currency) {

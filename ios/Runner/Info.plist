@@ -47,8 +47,10 @@
 				</array>
 			</dict>
 		</dict>
+		<key>NSCameraUsageDescription</key>
+		<string>Sats Stack needs camera access to scan financial statements and receipts.</string>
 		<key>NSPhotoLibraryUsageDescription</key>
-		<string>Sats Stack uses photo library access to import files.</string>
+		<string>Sats Stack needs photo library access to import images of financial statements.</string>
 		<key>UIApplicationSupportsIndirectInputEvents</key>
 		<true/>
 		<key>UILaunchStoryboardName</key>
