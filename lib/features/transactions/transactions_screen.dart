@@ -8,6 +8,7 @@ import '../../shared/widgets/btc_price_chip.dart';
 import 'widgets/transaction_list_item.dart';
 import 'widgets/add_transaction_sheet.dart';
 import 'widgets/add_wallet_sheet.dart';
+import 'widgets/transaction_edit_sheet.dart';
 import '../../main.dart' as app;
 
 class TransactionsScreen extends StatefulWidget {
@@ -541,9 +542,7 @@ class _TransactionRow extends StatelessWidget {
         return TransactionListItem(
           transaction: transaction,
           category: category,
-          onTap: transaction.source == 'manual'
-              ? () => _openEditSheet(context, transaction)
-              : null,
+          onTap: () => _openEditSheet(context, transaction),
           onLongPress: () => _confirmDelete(context),
         );
       },
@@ -555,13 +554,7 @@ class _TransactionRow extends StatelessWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => AddTransactionSheet(
-        transactionService: app.transactionService,
-        categoryService: app.categoryService,
-        walletService: app.walletService,
-        btcPriceService: app.btcPriceService,
-        existing: tx,
-      ),
+      builder: (_) => TransactionEditSheet.forExisting(tx),
     );
   }
 

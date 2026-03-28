@@ -196,13 +196,20 @@ class ImportService {
             ? ImportFileType.csv
             : ImportFileType.unknown;
 
+    ImportResult result;
     if (fileType == ImportFileType.pdf) {
-      return _handlePdf(filePath, fileName, sourceId,
+      result = await _handlePdf(filePath, fileName, sourceId,
+          onStageChange: onStageChange);
+    } else {
+      result = await _handleCsv(filePath, fileName, sourceId,
           onStageChange: onStageChange);
     }
 
-    return _handleCsv(filePath, fileName, sourceId,
-        onStageChange: onStageChange);
+    // Apply user-defined category mappings from previous imports
+    if (result.transactions.isNotEmpty) {
+      await _applyDescriptionMappings(result.transactions, sourceId);
+    }
+    return result;
   }
 
   /// Entry point for image import (camera or photo library).
@@ -217,8 +224,12 @@ class ImportService {
     final fileName = imagePath.contains('/')
         ? imagePath.split('/').last
         : imagePath.split('\\').last;
-    return _handleImage(imagePath, fileName, sourceId,
+    final result = await _handleImage(imagePath, fileName, sourceId,
         onStageChange: onStageChange);
+    if (result.transactions.isNotEmpty) {
+      await _applyDescriptionMappings(result.transactions, sourceId);
+    }
+    return result;
   }
 
   /// Reads a CSV file and returns an [ImportResult] ready for the manual
@@ -990,6 +1001,9 @@ FILE CONTENT:
       }
     }
 
+    // Persist description → category mappings for future imports
+    await _saveDescriptionMappings(toInsert, sourceId);
+
     return ImportSummary(
       imported: imported,
       duplicatesSkipped: duplicatesSkipped,
@@ -999,6 +1013,48 @@ FILE CONTENT:
       startDate: startDate,
       endDate: endDate,
     );
+  }
+
+  // ── Description → Category mappings ─────────────────────────────────────
+
+  /// Pre-fills [transactions] categories from previously saved mappings for
+  /// [sourceId].  Only overwrites the auto-category if a saved mapping exists.
+  Future<void> _applyDescriptionMappings(
+      List<ParsedTransaction> transactions, int sourceId) async {
+    final rows = await (db.select(db.descriptionCategoryMappings)
+          ..where((t) => t.sourceId.equals(sourceId)))
+        .get();
+    if (rows.isEmpty) return;
+    final map = {for (final r in rows) r.description: r.category};
+    for (final tx in transactions) {
+      final key = tx.description.toLowerCase().trim();
+      final saved = map[key];
+      if (saved != null) tx.category = saved;
+    }
+  }
+
+  /// Persists a description → category mapping for every included transaction
+  /// that has a category set.  Uses delete-then-insert to upsert.
+  Future<void> _saveDescriptionMappings(
+      List<ParsedTransaction> transactions, int sourceId) async {
+    for (final tx in transactions) {
+      if (!tx.include) continue;
+      final cat = tx.category;
+      if (cat == null || cat.isEmpty) continue;
+      final key = tx.description.toLowerCase().trim();
+      if (key.isEmpty) continue;
+      await (db.delete(db.descriptionCategoryMappings)
+            ..where((t) => t.sourceId.equals(sourceId))
+            ..where((t) => t.description.equals(key)))
+          .go();
+      await db.into(db.descriptionCategoryMappings).insert(
+        DescriptionCategoryMappingsCompanion.insert(
+          description: key,
+          sourceId: sourceId,
+          category: cat,
+        ),
+      );
+    }
   }
 
   // ── Save / update column mapping on a source ─────────────────────────────
