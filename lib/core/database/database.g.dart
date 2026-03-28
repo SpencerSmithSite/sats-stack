@@ -4208,6 +4208,328 @@ class ImportedTransactionsCompanion
   }
 }
 
+class $DescriptionCategoryMappingsTable extends DescriptionCategoryMappings
+    with
+        TableInfo<
+          $DescriptionCategoryMappingsTable,
+          DescriptionCategoryMapping
+        > {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DescriptionCategoryMappingsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _descriptionMeta = const VerificationMeta(
+    'description',
+  );
+  @override
+  late final GeneratedColumn<String> description = GeneratedColumn<String>(
+    'description',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sourceIdMeta = const VerificationMeta(
+    'sourceId',
+  );
+  @override
+  late final GeneratedColumn<int> sourceId = GeneratedColumn<int>(
+    'source_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES import_sources (id)',
+    ),
+  );
+  static const VerificationMeta _categoryMeta = const VerificationMeta(
+    'category',
+  );
+  @override
+  late final GeneratedColumn<String> category = GeneratedColumn<String>(
+    'category',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [id, description, sourceId, category];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'description_category_mappings';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<DescriptionCategoryMapping> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('description')) {
+      context.handle(
+        _descriptionMeta,
+        description.isAcceptableOrUnknown(
+          data['description']!,
+          _descriptionMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_descriptionMeta);
+    }
+    if (data.containsKey('source_id')) {
+      context.handle(
+        _sourceIdMeta,
+        sourceId.isAcceptableOrUnknown(data['source_id']!, _sourceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sourceIdMeta);
+    }
+    if (data.containsKey('category')) {
+      context.handle(
+        _categoryMeta,
+        category.isAcceptableOrUnknown(data['category']!, _categoryMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_categoryMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  DescriptionCategoryMapping map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return DescriptionCategoryMapping(
+      id:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}id'],
+          )!,
+      description:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}description'],
+          )!,
+      sourceId:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}source_id'],
+          )!,
+      category:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}category'],
+          )!,
+    );
+  }
+
+  @override
+  $DescriptionCategoryMappingsTable createAlias(String alias) {
+    return $DescriptionCategoryMappingsTable(attachedDatabase, alias);
+  }
+}
+
+class DescriptionCategoryMapping extends DataClass
+    implements Insertable<DescriptionCategoryMapping> {
+  final int id;
+  final String description;
+  final int sourceId;
+  final String category;
+  const DescriptionCategoryMapping({
+    required this.id,
+    required this.description,
+    required this.sourceId,
+    required this.category,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['description'] = Variable<String>(description);
+    map['source_id'] = Variable<int>(sourceId);
+    map['category'] = Variable<String>(category);
+    return map;
+  }
+
+  DescriptionCategoryMappingsCompanion toCompanion(bool nullToAbsent) {
+    return DescriptionCategoryMappingsCompanion(
+      id: Value(id),
+      description: Value(description),
+      sourceId: Value(sourceId),
+      category: Value(category),
+    );
+  }
+
+  factory DescriptionCategoryMapping.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return DescriptionCategoryMapping(
+      id: serializer.fromJson<int>(json['id']),
+      description: serializer.fromJson<String>(json['description']),
+      sourceId: serializer.fromJson<int>(json['sourceId']),
+      category: serializer.fromJson<String>(json['category']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'description': serializer.toJson<String>(description),
+      'sourceId': serializer.toJson<int>(sourceId),
+      'category': serializer.toJson<String>(category),
+    };
+  }
+
+  DescriptionCategoryMapping copyWith({
+    int? id,
+    String? description,
+    int? sourceId,
+    String? category,
+  }) => DescriptionCategoryMapping(
+    id: id ?? this.id,
+    description: description ?? this.description,
+    sourceId: sourceId ?? this.sourceId,
+    category: category ?? this.category,
+  );
+  DescriptionCategoryMapping copyWithCompanion(
+    DescriptionCategoryMappingsCompanion data,
+  ) {
+    return DescriptionCategoryMapping(
+      id: data.id.present ? data.id.value : this.id,
+      description:
+          data.description.present ? data.description.value : this.description,
+      sourceId: data.sourceId.present ? data.sourceId.value : this.sourceId,
+      category: data.category.present ? data.category.value : this.category,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DescriptionCategoryMapping(')
+          ..write('id: $id, ')
+          ..write('description: $description, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('category: $category')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, description, sourceId, category);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is DescriptionCategoryMapping &&
+          other.id == this.id &&
+          other.description == this.description &&
+          other.sourceId == this.sourceId &&
+          other.category == this.category);
+}
+
+class DescriptionCategoryMappingsCompanion
+    extends UpdateCompanion<DescriptionCategoryMapping> {
+  final Value<int> id;
+  final Value<String> description;
+  final Value<int> sourceId;
+  final Value<String> category;
+  const DescriptionCategoryMappingsCompanion({
+    this.id = const Value.absent(),
+    this.description = const Value.absent(),
+    this.sourceId = const Value.absent(),
+    this.category = const Value.absent(),
+  });
+  DescriptionCategoryMappingsCompanion.insert({
+    this.id = const Value.absent(),
+    required String description,
+    required int sourceId,
+    required String category,
+  }) : description = Value(description),
+       sourceId = Value(sourceId),
+       category = Value(category);
+  static Insertable<DescriptionCategoryMapping> custom({
+    Expression<int>? id,
+    Expression<String>? description,
+    Expression<int>? sourceId,
+    Expression<String>? category,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (description != null) 'description': description,
+      if (sourceId != null) 'source_id': sourceId,
+      if (category != null) 'category': category,
+    });
+  }
+
+  DescriptionCategoryMappingsCompanion copyWith({
+    Value<int>? id,
+    Value<String>? description,
+    Value<int>? sourceId,
+    Value<String>? category,
+  }) {
+    return DescriptionCategoryMappingsCompanion(
+      id: id ?? this.id,
+      description: description ?? this.description,
+      sourceId: sourceId ?? this.sourceId,
+      category: category ?? this.category,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (description.present) {
+      map['description'] = Variable<String>(description.value);
+    }
+    if (sourceId.present) {
+      map['source_id'] = Variable<int>(sourceId.value);
+    }
+    if (category.present) {
+      map['category'] = Variable<String>(category.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DescriptionCategoryMappingsCompanion(')
+          ..write('id: $id, ')
+          ..write('description: $description, ')
+          ..write('sourceId: $sourceId, ')
+          ..write('category: $category')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -4226,6 +4548,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $ImportSourcesTable importSources = $ImportSourcesTable(this);
   late final $ImportedTransactionsTable importedTransactions =
       $ImportedTransactionsTable(this);
+  late final $DescriptionCategoryMappingsTable descriptionCategoryMappings =
+      $DescriptionCategoryMappingsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -4241,6 +4565,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     aiConversations,
     importSources,
     importedTransactions,
+    descriptionCategoryMappings,
   ];
 }
 
@@ -6471,6 +6796,34 @@ final class $$ImportSourcesTableReferences
       manager.$state.copyWith(prefetchedData: cache),
     );
   }
+
+  static MultiTypedResultKey<
+    $DescriptionCategoryMappingsTable,
+    List<DescriptionCategoryMapping>
+  >
+  _descriptionCategoryMappingsRefsTable(_$AppDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.descriptionCategoryMappings,
+        aliasName: $_aliasNameGenerator(
+          db.importSources.id,
+          db.descriptionCategoryMappings.sourceId,
+        ),
+      );
+
+  $$DescriptionCategoryMappingsTableProcessedTableManager
+  get descriptionCategoryMappingsRefs {
+    final manager = $$DescriptionCategoryMappingsTableTableManager(
+      $_db,
+      $_db.descriptionCategoryMappings,
+    ).filter((f) => f.sourceId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _descriptionCategoryMappingsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
 }
 
 class $$ImportSourcesTableFilterComposer
@@ -6534,6 +6887,35 @@ class $$ImportSourcesTableFilterComposer
                 $removeJoinBuilderFromRootComposer,
           ),
     );
+    return f(composer);
+  }
+
+  Expression<bool> descriptionCategoryMappingsRefs(
+    Expression<bool> Function(
+      $$DescriptionCategoryMappingsTableFilterComposer f,
+    )
+    f,
+  ) {
+    final $$DescriptionCategoryMappingsTableFilterComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.descriptionCategoryMappings,
+          getReferencedColumn: (t) => t.sourceId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$DescriptionCategoryMappingsTableFilterComposer(
+                $db: $db,
+                $table: $db.descriptionCategoryMappings,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
     return f(composer);
   }
 }
@@ -6632,6 +7014,35 @@ class $$ImportSourcesTableAnnotationComposer
         );
     return f(composer);
   }
+
+  Expression<T> descriptionCategoryMappingsRefs<T extends Object>(
+    Expression<T> Function(
+      $$DescriptionCategoryMappingsTableAnnotationComposer a,
+    )
+    f,
+  ) {
+    final $$DescriptionCategoryMappingsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.descriptionCategoryMappings,
+          getReferencedColumn: (t) => t.sourceId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$DescriptionCategoryMappingsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.descriptionCategoryMappings,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
 }
 
 class $$ImportSourcesTableTableManager
@@ -6647,7 +7058,10 @@ class $$ImportSourcesTableTableManager
           $$ImportSourcesTableUpdateCompanionBuilder,
           (ImportSource, $$ImportSourcesTableReferences),
           ImportSource,
-          PrefetchHooks Function({bool importedTransactionsRefs})
+          PrefetchHooks Function({
+            bool importedTransactionsRefs,
+            bool descriptionCategoryMappingsRefs,
+          })
         > {
   $$ImportSourcesTableTableManager(_$AppDatabase db, $ImportSourcesTable table)
     : super(
@@ -6706,11 +7120,16 @@ class $$ImportSourcesTableTableManager
                         ),
                       )
                       .toList(),
-          prefetchHooksCallback: ({importedTransactionsRefs = false}) {
+          prefetchHooksCallback: ({
+            importedTransactionsRefs = false,
+            descriptionCategoryMappingsRefs = false,
+          }) {
             return PrefetchHooks(
               db: db,
               explicitlyWatchedTables: [
                 if (importedTransactionsRefs) db.importedTransactions,
+                if (descriptionCategoryMappingsRefs)
+                  db.descriptionCategoryMappings,
               ],
               addJoins: null,
               getPrefetchedDataCallback: (items) async {
@@ -6737,6 +7156,28 @@ class $$ImportSourcesTableTableManager
                           ),
                       typedResults: items,
                     ),
+                  if (descriptionCategoryMappingsRefs)
+                    await $_getPrefetchedData<
+                      ImportSource,
+                      $ImportSourcesTable,
+                      DescriptionCategoryMapping
+                    >(
+                      currentTable: table,
+                      referencedTable: $$ImportSourcesTableReferences
+                          ._descriptionCategoryMappingsRefsTable(db),
+                      managerFromTypedResult:
+                          (p0) =>
+                              $$ImportSourcesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).descriptionCategoryMappingsRefs,
+                      referencedItemsForCurrentItem:
+                          (item, referencedItems) => referencedItems.where(
+                            (e) => e.sourceId == item.id,
+                          ),
+                      typedResults: items,
+                    ),
                 ];
               },
             );
@@ -6757,7 +7198,10 @@ typedef $$ImportSourcesTableProcessedTableManager =
       $$ImportSourcesTableUpdateCompanionBuilder,
       (ImportSource, $$ImportSourcesTableReferences),
       ImportSource,
-      PrefetchHooks Function({bool importedTransactionsRefs})
+      PrefetchHooks Function({
+        bool importedTransactionsRefs,
+        bool descriptionCategoryMappingsRefs,
+      })
     >;
 typedef $$ImportedTransactionsTableCreateCompanionBuilder =
     ImportedTransactionsCompanion Function({
@@ -7220,6 +7664,338 @@ typedef $$ImportedTransactionsTableProcessedTableManager =
       ImportedTransaction,
       PrefetchHooks Function({bool sourceId})
     >;
+typedef $$DescriptionCategoryMappingsTableCreateCompanionBuilder =
+    DescriptionCategoryMappingsCompanion Function({
+      Value<int> id,
+      required String description,
+      required int sourceId,
+      required String category,
+    });
+typedef $$DescriptionCategoryMappingsTableUpdateCompanionBuilder =
+    DescriptionCategoryMappingsCompanion Function({
+      Value<int> id,
+      Value<String> description,
+      Value<int> sourceId,
+      Value<String> category,
+    });
+
+final class $$DescriptionCategoryMappingsTableReferences
+    extends
+        BaseReferences<
+          _$AppDatabase,
+          $DescriptionCategoryMappingsTable,
+          DescriptionCategoryMapping
+        > {
+  $$DescriptionCategoryMappingsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $ImportSourcesTable _sourceIdTable(_$AppDatabase db) =>
+      db.importSources.createAlias(
+        $_aliasNameGenerator(
+          db.descriptionCategoryMappings.sourceId,
+          db.importSources.id,
+        ),
+      );
+
+  $$ImportSourcesTableProcessedTableManager get sourceId {
+    final $_column = $_itemColumn<int>('source_id')!;
+
+    final manager = $$ImportSourcesTableTableManager(
+      $_db,
+      $_db.importSources,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_sourceIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$DescriptionCategoryMappingsTableFilterComposer
+    extends Composer<_$AppDatabase, $DescriptionCategoryMappingsTable> {
+  $$DescriptionCategoryMappingsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get category => $composableBuilder(
+    column: $table.category,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$ImportSourcesTableFilterComposer get sourceId {
+    final $$ImportSourcesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.sourceId,
+      referencedTable: $db.importSources,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ImportSourcesTableFilterComposer(
+            $db: $db,
+            $table: $db.importSources,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$DescriptionCategoryMappingsTableOrderingComposer
+    extends Composer<_$AppDatabase, $DescriptionCategoryMappingsTable> {
+  $$DescriptionCategoryMappingsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get category => $composableBuilder(
+    column: $table.category,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$ImportSourcesTableOrderingComposer get sourceId {
+    final $$ImportSourcesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.sourceId,
+      referencedTable: $db.importSources,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ImportSourcesTableOrderingComposer(
+            $db: $db,
+            $table: $db.importSources,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$DescriptionCategoryMappingsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $DescriptionCategoryMappingsTable> {
+  $$DescriptionCategoryMappingsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get category =>
+      $composableBuilder(column: $table.category, builder: (column) => column);
+
+  $$ImportSourcesTableAnnotationComposer get sourceId {
+    final $$ImportSourcesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.sourceId,
+      referencedTable: $db.importSources,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ImportSourcesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.importSources,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$DescriptionCategoryMappingsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $DescriptionCategoryMappingsTable,
+          DescriptionCategoryMapping,
+          $$DescriptionCategoryMappingsTableFilterComposer,
+          $$DescriptionCategoryMappingsTableOrderingComposer,
+          $$DescriptionCategoryMappingsTableAnnotationComposer,
+          $$DescriptionCategoryMappingsTableCreateCompanionBuilder,
+          $$DescriptionCategoryMappingsTableUpdateCompanionBuilder,
+          (
+            DescriptionCategoryMapping,
+            $$DescriptionCategoryMappingsTableReferences,
+          ),
+          DescriptionCategoryMapping,
+          PrefetchHooks Function({bool sourceId})
+        > {
+  $$DescriptionCategoryMappingsTableTableManager(
+    _$AppDatabase db,
+    $DescriptionCategoryMappingsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer:
+              () => $$DescriptionCategoryMappingsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer:
+              () => $$DescriptionCategoryMappingsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer:
+              () => $$DescriptionCategoryMappingsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> description = const Value.absent(),
+                Value<int> sourceId = const Value.absent(),
+                Value<String> category = const Value.absent(),
+              }) => DescriptionCategoryMappingsCompanion(
+                id: id,
+                description: description,
+                sourceId: sourceId,
+                category: category,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String description,
+                required int sourceId,
+                required String category,
+              }) => DescriptionCategoryMappingsCompanion.insert(
+                id: id,
+                description: description,
+                sourceId: sourceId,
+                category: category,
+              ),
+          withReferenceMapper:
+              (p0) =>
+                  p0
+                      .map(
+                        (e) => (
+                          e.readTable(table),
+                          $$DescriptionCategoryMappingsTableReferences(
+                            db,
+                            table,
+                            e,
+                          ),
+                        ),
+                      )
+                      .toList(),
+          prefetchHooksCallback: ({sourceId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins: <
+                T extends TableManagerState<
+                  dynamic,
+                  dynamic,
+                  dynamic,
+                  dynamic,
+                  dynamic,
+                  dynamic,
+                  dynamic,
+                  dynamic,
+                  dynamic,
+                  dynamic,
+                  dynamic
+                >
+              >(state) {
+                if (sourceId) {
+                  state =
+                      state.withJoin(
+                            currentTable: table,
+                            currentColumn: table.sourceId,
+                            referencedTable:
+                                $$DescriptionCategoryMappingsTableReferences
+                                    ._sourceIdTable(db),
+                            referencedColumn:
+                                $$DescriptionCategoryMappingsTableReferences
+                                    ._sourceIdTable(db)
+                                    .id,
+                          )
+                          as T;
+                }
+
+                return state;
+              },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$DescriptionCategoryMappingsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $DescriptionCategoryMappingsTable,
+      DescriptionCategoryMapping,
+      $$DescriptionCategoryMappingsTableFilterComposer,
+      $$DescriptionCategoryMappingsTableOrderingComposer,
+      $$DescriptionCategoryMappingsTableAnnotationComposer,
+      $$DescriptionCategoryMappingsTableCreateCompanionBuilder,
+      $$DescriptionCategoryMappingsTableUpdateCompanionBuilder,
+      (
+        DescriptionCategoryMapping,
+        $$DescriptionCategoryMappingsTableReferences,
+      ),
+      DescriptionCategoryMapping,
+      PrefetchHooks Function({bool sourceId})
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -7244,4 +8020,10 @@ class $AppDatabaseManager {
       $$ImportSourcesTableTableManager(_db, _db.importSources);
   $$ImportedTransactionsTableTableManager get importedTransactions =>
       $$ImportedTransactionsTableTableManager(_db, _db.importedTransactions);
+  $$DescriptionCategoryMappingsTableTableManager
+  get descriptionCategoryMappings =>
+      $$DescriptionCategoryMappingsTableTableManager(
+        _db,
+        _db.descriptionCategoryMappings,
+      );
 }

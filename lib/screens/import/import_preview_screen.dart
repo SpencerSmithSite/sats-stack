@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/services/import_service.dart';
+import '../../features/transactions/widgets/transaction_edit_sheet.dart';
 import '../../main.dart' as app;
 import 'import_summary_screen.dart';
 
@@ -23,6 +24,7 @@ class ImportPreviewScreen extends StatefulWidget {
 
 class _ImportPreviewScreenState extends State<ImportPreviewScreen> {
   late List<ParsedTransaction> _txns;
+  final Set<ParsedTransaction> _editedTxns = {};
   bool _importing = false;
 
   @override
@@ -56,84 +58,14 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen> {
 
   void _editTransaction(int index) {
     final tx = _txns[index];
-    final amountCtrl =
-        TextEditingController(text: tx.amount.toStringAsFixed(2));
-    final descCtrl = TextEditingController(text: tx.description);
-    String direction = tx.direction;
-    DateTime date = tx.date;
-
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (ctx) {
-        return StatefulBuilder(builder: (ctx, setLocal) {
-          return Padding(
-            padding: EdgeInsets.only(
-              left: 20,
-              right: 20,
-              top: 20,
-              bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text('Edit Transaction',
-                    style: Theme.of(ctx).textTheme.titleMedium),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: descCtrl,
-                  decoration: const InputDecoration(labelText: 'Description'),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: amountCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true),
-                  decoration: const InputDecoration(labelText: 'Amount'),
-                ),
-                const SizedBox(height: 12),
-                SegmentedButton<String>(
-                  segments: const [
-                    ButtonSegment(value: 'debit', label: Text('Debit')),
-                    ButtonSegment(value: 'credit', label: Text('Credit')),
-                  ],
-                  selected: {direction},
-                  onSelectionChanged: (s) =>
-                      setLocal(() => direction = s.first),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.pop(ctx),
-                        child: const Text('Cancel'),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: FilledButton(
-                        onPressed: () {
-                          setState(() {
-                            _txns[index]
-                              ..amount = double.tryParse(amountCtrl.text) ??
-                                  tx.amount
-                              ..description = descCtrl.text.trim()
-                              ..direction = direction
-                              ..date = date;
-                          });
-                          Navigator.pop(ctx);
-                        },
-                        child: const Text('Save'),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          );
-        });
-      },
+      backgroundColor: Colors.transparent,
+      builder: (_) => TransactionEditSheet.forParsed(
+        tx,
+        onSaved: () => setState(() => _editedTxns.add(tx)),
+      ),
     );
   }
 
@@ -266,25 +198,36 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen> {
                                 .bodySmall
                                 ?.copyWith(color: cs.onSurfaceVariant),
                           ),
-                          trailing: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.end,
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text(
-                                '${isCredit ? '+' : '-'}${_formatAmount(tx.amount, tx.currency)}',
-                                style: TextStyle(
-                                  color: isCredit
-                                      ? const Color(0xFF1D9E75)
-                                      : cs.error,
-                                  fontWeight: FontWeight.w600,
+                              if (_editedTxns.contains(tx))
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 4),
+                                  child: Icon(Icons.edit_outlined,
+                                      size: 14, color: cs.primary),
                                 ),
-                              ),
-                              Text(
-                                tx.currency,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .labelSmall
-                                    ?.copyWith(color: cs.onSurfaceVariant),
+                              Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    '${isCredit ? '+' : '-'}${_formatAmount(tx.amount, tx.currency)}',
+                                    style: TextStyle(
+                                      color: isCredit
+                                          ? const Color(0xFF1D9E75)
+                                          : cs.error,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  Text(
+                                    tx.currency,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelSmall
+                                        ?.copyWith(color: cs.onSurfaceVariant),
+                                  ),
+                                ],
                               ),
                             ],
                           ),

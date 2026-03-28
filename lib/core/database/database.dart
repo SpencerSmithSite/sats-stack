@@ -11,6 +11,7 @@ import 'tables/btc_price_history_table.dart';
 import 'tables/ai_conversations_table.dart';
 import 'tables/import_sources_table.dart';
 import 'tables/import_transactions_table.dart';
+import 'tables/description_category_mappings_table.dart';
 
 part 'database.g.dart';
 
@@ -25,12 +26,13 @@ part 'database.g.dart';
   AiConversations,
   ImportSources,
   ImportedTransactions,
+  DescriptionCategoryMappings,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -51,6 +53,9 @@ class AppDatabase extends _$AppDatabase {
             await m.createTable(importSources);
             await m.createTable(importedTransactions);
           }
+          if (from < 5) {
+            await m.createTable(descriptionCategoryMappings);
+          }
         },
       );
 
@@ -59,6 +64,7 @@ class AppDatabase extends _$AppDatabase {
     await transaction(() async {
       await delete(aiConversations).go();
       await delete(importedTransactions).go();
+      await delete(descriptionCategoryMappings).go();
       await delete(importSources).go();
       await delete(budgets).go();
       await delete(transactions).go();
