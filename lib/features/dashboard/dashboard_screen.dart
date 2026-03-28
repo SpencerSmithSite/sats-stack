@@ -114,9 +114,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ],
       ),
-      body: StreamBuilder<DashboardData>(
-        stream: app.dashboardService.watchDashboard(_selectedMonth),
-        builder: (context, snapshot) {
+      body: ValueListenableBuilder<double>(
+        valueListenable: app.inflationRateNotifier,
+        builder: (context, inflationRate, _) =>
+            StreamBuilder<DashboardData>(
+          stream: app.dashboardService
+              .watchDashboard(_selectedMonth, inflationRate: inflationRate),
+          builder: (context, snapshot) {
           if (snapshot.hasError) {
             return _ErrorState(message: snapshot.error.toString());
           }
@@ -137,6 +141,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       currency: currency,
                       categoryService: app.categoryService,
                       selectedMonth: _selectedMonth,
+                      inflationRate: inflationRate,
                       cachedInsight: _cachedInsight,
                       isGeneratingInsight: _isGeneratingInsight,
                       onRefreshInsight: _generateInsight,
@@ -148,6 +153,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           );
         },
       ),
+        ),
     );
   }
 }
@@ -190,6 +196,7 @@ class _DashboardContent extends StatelessWidget {
     required this.currency,
     required this.categoryService,
     required this.selectedMonth,
+    required this.inflationRate,
     this.cachedInsight,
     this.isGeneratingInsight = false,
     this.onRefreshInsight,
@@ -200,6 +207,7 @@ class _DashboardContent extends StatelessWidget {
   final String currency;
   final CategoryService categoryService;
   final DateTime selectedMonth;
+  final double inflationRate;
   final String? cachedInsight;
   final bool isGeneratingInsight;
   final VoidCallback? onRefreshInsight;
@@ -277,7 +285,7 @@ class _DashboardContent extends StatelessWidget {
                 child: MetricTile(
                   label: 'Inflation Cost',
                   value: CurrencyUtils.format(data.inflationCostFiat, currency),
-                  subValue: 'per month @ 3.5%',
+                  subValue: 'per month @ ${inflationRate % 1 == 0 ? inflationRate.toStringAsFixed(0) : inflationRate.toString()}%',
                   valueColor: AppColors.danger,
                   icon: Icons.trending_down_outlined,
                   iconColor: AppColors.danger,
