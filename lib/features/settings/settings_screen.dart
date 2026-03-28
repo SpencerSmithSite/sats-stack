@@ -9,6 +9,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../../core/database/database.dart';
+import '../../core/models/ai_provider.dart';
 import '../../main.dart' as app;
 import '../../shared/constants/app_constants.dart';
 import '../../shared/theme/app_colors.dart';
@@ -29,12 +30,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _showBtcPrice = true;
   String _appVersion = '';
 
-  // Ollama
+  // AI — active provider (mirrors persisted state)
+  AiProvider _selectedProvider = AiProvider.ollama;
+
+  // AI — Ollama
   late TextEditingController _ollamaUrlCtrl;
   List<String> _models = [];
   String? _selectedModel;
   bool _testingConnection = false;
   String? _connectionStatus;
+
+  // AI — LM Studio
+  late TextEditingController _lmStudioUrlCtrl;
+  List<String> _lmStudioModels = [];
+  String? _lmStudioSelectedModel;
+  bool _testingLmStudio = false;
+  String? _lmStudioStatus;
+
+  // AI — Maple
+  late TextEditingController _mapleUrlCtrl;
+  late TextEditingController _mapleApiKeyCtrl;
+  List<String> _mapleModels = [];
+  String? _mapleSelectedModel;
+  bool _testingMaple = false;
+  String? _mapleStatus;
 
   // Bitcoin servers
   late TextEditingController _esploraUrlCtrl;
@@ -47,9 +66,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _themeMode = app.themeModeNotifier.value;
     _currency = app.currencyNotifier.value;
     _showBtcPrice = app.showBtcPriceNotifier.value;
-    _ollamaUrlCtrl =
-        TextEditingController(text: app.ollamaService.baseUrl);
-    _selectedModel = app.ollamaService.selectedModel;
+
+    // AI provider
+    _selectedProvider = app.ollamaService.activeProvider;
+
+    // Ollama
+    _ollamaUrlCtrl = TextEditingController(text: app.ollamaService.baseUrl);
+    _selectedModel = app.ollamaService.ollamaSelectedModel;
+
+    // LM Studio
+    _lmStudioUrlCtrl =
+        TextEditingController(text: app.ollamaService.lmStudioBaseUrl);
+    _lmStudioSelectedModel = app.ollamaService.lmStudioSelectedModel;
+
+    // Maple
+    _mapleUrlCtrl = TextEditingController(text: app.ollamaService.mapleBaseUrl);
+    _mapleApiKeyCtrl =
+        TextEditingController(text: app.ollamaService.mapleApiKey);
+    _mapleSelectedModel = app.ollamaService.mapleSelectedModel;
+
     // Use empty string when the default server is active so the field shows
     // the placeholder hint instead of the literal mempool.space URL.
     final storedUrl = app.xpubService.esploraBaseUrl;
@@ -63,13 +98,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void dispose() {
     _ollamaUrlCtrl.dispose();
+    _lmStudioUrlCtrl.dispose();
+    _mapleUrlCtrl.dispose();
+    _mapleApiKeyCtrl.dispose();
     _esploraUrlCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _loadModels() async {
-    final models = await app.ollamaService.listModels();
-    if (mounted) setState(() => _models = models);
+    // Load models for the active provider on open.
+    switch (_selectedProvider) {
+      case AiProvider.ollama:
+        final models = await app.ollamaService.listModels();
+        if (mounted) setState(() => _models = models);
+      case AiProvider.lmStudio:
+        final models = await app.ollamaService.listModels();
+        if (mounted) setState(() => _lmStudioModels = models);
+      case AiProvider.maple:
+        final models = await app.ollamaService.listModels();
+        if (mounted) setState(() => _mapleModels = models);
+    }
   }
 
   Future<void> _loadVersion() async {
@@ -124,10 +172,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
         );
   }
 
+  Future<void> _onProviderChanged(AiProvider provider) async {
+    setState(() => _selectedProvider = provider);
+    await app.ollamaService.setActiveProvider(provider);
+    app.aiEnabledNotifier.value =
+        PlatformUtils.isDesktop || app.ollamaService.isConnected;
+  }
+
+  // ── Ollama ──────────────────────────────────────────────────────────────
+
   Future<void> _saveOllama() async {
     final url = _ollamaUrlCtrl.text.trim();
     await app.ollamaService.saveSettings(url: url, model: _selectedModel);
-    // If the user cleared the URL, mark as disconnected.
     if (url.isEmpty) {
       await app.ollamaService.setConnected(false);
       app.aiEnabledNotifier.value = PlatformUtils.isDesktop;
@@ -144,7 +200,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _testingConnection = true;
       _connectionStatus = null;
     });
-    // Save URL first so isAvailable() uses the current field value
     await app.ollamaService.saveSettings(url: _ollamaUrlCtrl.text.trim());
     final ok = await app.ollamaService.isAvailable();
     if (!mounted) return;
@@ -164,7 +219,104 @@ class _SettingsScreenState extends State<SettingsScreen> {
       app.aiEnabledNotifier.value = PlatformUtils.isDesktop;
       setState(() {
         _testingConnection = false;
-        _connectionStatus = 'Could not reach Ollama at ${_ollamaUrlCtrl.text.trim()}';
+        _connectionStatus =
+            'Could not reach Ollama at ${_ollamaUrlCtrl.text.trim()}';
+      });
+    }
+  }
+
+  // ── LM Studio ───────────────────────────────────────────────────────────
+
+  Future<void> _saveLmStudio() async {
+    final url = _lmStudioUrlCtrl.text.trim();
+    await app.ollamaService
+        .saveLmStudioSettings(url: url, model: _lmStudioSelectedModel);
+    if (url.isEmpty) {
+      await app.ollamaService.setConnected(false);
+      app.aiEnabledNotifier.value = PlatformUtils.isDesktop;
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('LM Studio settings saved')),
+      );
+    }
+  }
+
+  Future<void> _testLmStudioConnection() async {
+    setState(() {
+      _testingLmStudio = true;
+      _lmStudioStatus = null;
+    });
+    final url = _lmStudioUrlCtrl.text.trim();
+    await app.ollamaService.saveLmStudioSettings(url: url);
+    final ok = await app.ollamaService.isAvailable();
+    if (!mounted) return;
+    if (ok) {
+      final models = await app.ollamaService.listModels();
+      await app.ollamaService.setConnected(true);
+      app.aiEnabledNotifier.value = true;
+      if (mounted) {
+        setState(() {
+          _lmStudioModels = models;
+          _testingLmStudio = false;
+          _lmStudioStatus = 'Connected — ${models.length} model(s) found';
+        });
+      }
+    } else {
+      await app.ollamaService.setConnected(false);
+      app.aiEnabledNotifier.value = PlatformUtils.isDesktop;
+      setState(() {
+        _testingLmStudio = false;
+        _lmStudioStatus = 'Could not reach LM Studio at $url';
+      });
+    }
+  }
+
+  // ── Maple ───────────────────────────────────────────────────────────────
+
+  Future<void> _saveMaple() async {
+    final url = _mapleUrlCtrl.text.trim();
+    final key = _mapleApiKeyCtrl.text.trim();
+    await app.ollamaService
+        .saveMapleSettings(url: url, model: _mapleSelectedModel, apiKey: key);
+    if (url.isEmpty) {
+      await app.ollamaService.setConnected(false);
+      app.aiEnabledNotifier.value = PlatformUtils.isDesktop;
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Maple settings saved')),
+      );
+    }
+  }
+
+  Future<void> _testMapleConnection() async {
+    setState(() {
+      _testingMaple = true;
+      _mapleStatus = null;
+    });
+    final url = _mapleUrlCtrl.text.trim();
+    final key = _mapleApiKeyCtrl.text.trim();
+    await app.ollamaService.saveMapleSettings(url: url, apiKey: key);
+    final ok = await app.ollamaService.isAvailable();
+    if (!mounted) return;
+    if (ok) {
+      final models = await app.ollamaService.listModels();
+      await app.ollamaService.setConnected(true);
+      app.aiEnabledNotifier.value = true;
+      if (mounted) {
+        setState(() {
+          _mapleModels = models;
+          _testingMaple = false;
+          _mapleStatus = 'Connected — ${models.length} model(s) found';
+        });
+      }
+    } else {
+      await app.ollamaService.setConnected(false);
+      app.aiEnabledNotifier.value = PlatformUtils.isDesktop;
+      setState(() {
+        _testingMaple = false;
+        _mapleStatus = 'Could not reach Maple at $url';
       });
     }
   }
@@ -478,100 +630,270 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             children: [
               ...[
-                _SectionHeader(
-                  PlatformUtils.isDesktop ? 'AI — Ollama' : 'AI — Remote Ollama Server',
-                ),
+                const _SectionHeader('AI Provider'),
                 Padding(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (!PlatformUtils.isDesktop)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: _Banner(
-                            icon: Icons.cloud_outlined,
-                            iconColor: const Color(0xFF6AC86A),
-                            child: Text(
-                              'Connect to an Ollama instance running on your home server or VPS. '
-                              'The AI tab will appear once a server URL is saved.',
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: const Color(0xFF6AC86A),
-                                    height: 1.5,
-                                  ),
-                            ),
+                      // Provider selector
+                      SegmentedButton<AiProvider>(
+                        segments: const [
+                          ButtonSegment(
+                            value: AiProvider.ollama,
+                            label: Text('Ollama'),
                           ),
-                        ),
-                      TextField(
-                        controller: _ollamaUrlCtrl,
-                        decoration: InputDecoration(
-                          labelText: 'Ollama base URL',
-                          hintText: PlatformUtils.isDesktop
-                              ? 'http://localhost:11434'
-                              : 'http://your-server:11434',
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      if (_models.isNotEmpty)
-                        DropdownButtonFormField<String>(
-                          value: _models.contains(_selectedModel)
-                              ? _selectedModel
-                              : null,
-                          decoration:
-                              const InputDecoration(labelText: 'Model'),
-                          hint: const Text('Select model'),
-                          items: _models
-                              .map((m) =>
-                                  DropdownMenuItem(value: m, child: Text(m)))
-                              .toList(),
-                          onChanged: (v) =>
-                              setState(() => _selectedModel = v),
-                        )
-                      else
-                        Text(
-                          'No models loaded — test the connection first.',
-                          style: theme.textTheme.bodySmall
-                              ?.copyWith(color: AppColors.textSecondary),
-                        ),
-                      const SizedBox(height: 12),
-                      if (_connectionStatus != null)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: Text(
-                            _connectionStatus!,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color:
-                                  _connectionStatus!.startsWith('Connected')
-                                      ? AppColors.success
-                                      : AppColors.danger,
-                            ),
+                          ButtonSegment(
+                            value: AiProvider.lmStudio,
+                            label: Text('LM Studio'),
                           ),
-                        ),
-                      Row(
-                        children: [
-                          OutlinedButton.icon(
-                            onPressed: _testingConnection
-                                ? null
-                                : _testConnection,
-                            icon: _testingConnection
-                                ? const SizedBox(
-                                    width: 14,
-                                    height: 14,
-                                    child: CircularProgressIndicator(
-                                        strokeWidth: 2),
-                                  )
-                                : const Icon(
-                                    Icons.wifi_tethering_outlined, size: 18),
-                            label: const Text('Test connection'),
-                          ),
-                          const SizedBox(width: 8),
-                          FilledButton(
-                            onPressed: _saveOllama,
-                            child: const Text('Save'),
+                          ButtonSegment(
+                            value: AiProvider.maple,
+                            label: Text('Maple'),
                           ),
                         ],
+                        selected: {_selectedProvider},
+                        onSelectionChanged: (s) =>
+                            _onProviderChanged(s.first),
+                        style: const ButtonStyle(
+                            visualDensity: VisualDensity.compact),
                       ),
+                      const SizedBox(height: 10),
+                      Text(
+                        _providerDescription(_selectedProvider),
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: AppColors.textSecondary),
+                      ),
+                      const SizedBox(height: 14),
+
+                      // ── Ollama fields ───────────────────────────────
+                      if (_selectedProvider == AiProvider.ollama) ...[
+                        TextField(
+                          controller: _ollamaUrlCtrl,
+                          decoration: InputDecoration(
+                            labelText: 'Ollama base URL',
+                            hintText: PlatformUtils.isDesktop
+                                ? 'http://localhost:11434'
+                                : 'http://your-server:11434',
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        if (_models.isNotEmpty)
+                          DropdownButtonFormField<String>(
+                            value: _models.contains(_selectedModel)
+                                ? _selectedModel
+                                : null,
+                            decoration:
+                                const InputDecoration(labelText: 'Model'),
+                            hint: const Text('Select model'),
+                            items: _models
+                                .map((m) => DropdownMenuItem(
+                                    value: m, child: Text(m)))
+                                .toList(),
+                            onChanged: (v) =>
+                                setState(() => _selectedModel = v),
+                          )
+                        else
+                          Text(
+                            'No models loaded — test the connection first.',
+                            style: theme.textTheme.bodySmall
+                                ?.copyWith(color: AppColors.textSecondary),
+                          ),
+                        const SizedBox(height: 12),
+                        if (_connectionStatus != null)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Text(
+                              _connectionStatus!,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: _connectionStatus!
+                                        .startsWith('Connected')
+                                    ? AppColors.success
+                                    : AppColors.danger,
+                              ),
+                            ),
+                          ),
+                        Row(
+                          children: [
+                            OutlinedButton.icon(
+                              onPressed: _testingConnection
+                                  ? null
+                                  : _testConnection,
+                              icon: _testingConnection
+                                  ? const SizedBox(
+                                      width: 14,
+                                      height: 14,
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2),
+                                    )
+                                  : const Icon(
+                                      Icons.wifi_tethering_outlined,
+                                      size: 18),
+                              label: const Text('Test connection'),
+                            ),
+                            const SizedBox(width: 8),
+                            FilledButton(
+                              onPressed: _saveOllama,
+                              child: const Text('Save'),
+                            ),
+                          ],
+                        ),
+                      ],
+
+                      // ── LM Studio fields ────────────────────────────
+                      if (_selectedProvider == AiProvider.lmStudio) ...[
+                        TextField(
+                          controller: _lmStudioUrlCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'LM Studio base URL',
+                            hintText: 'http://localhost:1234/v1',
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        if (_lmStudioModels.isNotEmpty)
+                          DropdownButtonFormField<String>(
+                            value: _lmStudioModels
+                                    .contains(_lmStudioSelectedModel)
+                                ? _lmStudioSelectedModel
+                                : null,
+                            decoration:
+                                const InputDecoration(labelText: 'Model'),
+                            hint: const Text('Select model'),
+                            items: _lmStudioModels
+                                .map((m) => DropdownMenuItem(
+                                    value: m, child: Text(m)))
+                                .toList(),
+                            onChanged: (v) =>
+                                setState(() => _lmStudioSelectedModel = v),
+                          )
+                        else
+                          Text(
+                            'No models loaded — test the connection first.',
+                            style: theme.textTheme.bodySmall
+                                ?.copyWith(color: AppColors.textSecondary),
+                          ),
+                        const SizedBox(height: 12),
+                        if (_lmStudioStatus != null)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Text(
+                              _lmStudioStatus!,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color:
+                                    _lmStudioStatus!.startsWith('Connected')
+                                        ? AppColors.success
+                                        : AppColors.danger,
+                              ),
+                            ),
+                          ),
+                        Row(
+                          children: [
+                            OutlinedButton.icon(
+                              onPressed: _testingLmStudio
+                                  ? null
+                                  : _testLmStudioConnection,
+                              icon: _testingLmStudio
+                                  ? const SizedBox(
+                                      width: 14,
+                                      height: 14,
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2),
+                                    )
+                                  : const Icon(
+                                      Icons.wifi_tethering_outlined,
+                                      size: 18),
+                              label: const Text('Test connection'),
+                            ),
+                            const SizedBox(width: 8),
+                            FilledButton(
+                              onPressed: _saveLmStudio,
+                              child: const Text('Save'),
+                            ),
+                          ],
+                        ),
+                      ],
+
+                      // ── Maple fields ────────────────────────────────
+                      if (_selectedProvider == AiProvider.maple) ...[
+                        TextField(
+                          controller: _mapleUrlCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Maple proxy URL',
+                            hintText: 'http://localhost:8080/v1',
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _mapleApiKeyCtrl,
+                          obscureText: true,
+                          decoration: const InputDecoration(
+                            labelText: 'API key',
+                            hintText: 'maple_sk_...',
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        if (_mapleModels.isNotEmpty)
+                          DropdownButtonFormField<String>(
+                            value:
+                                _mapleModels.contains(_mapleSelectedModel)
+                                    ? _mapleSelectedModel
+                                    : null,
+                            decoration:
+                                const InputDecoration(labelText: 'Model'),
+                            hint: const Text('Select model'),
+                            items: _mapleModels
+                                .map((m) => DropdownMenuItem(
+                                    value: m, child: Text(m)))
+                                .toList(),
+                            onChanged: (v) =>
+                                setState(() => _mapleSelectedModel = v),
+                          )
+                        else
+                          Text(
+                            'No models loaded — test the connection first.',
+                            style: theme.textTheme.bodySmall
+                                ?.copyWith(color: AppColors.textSecondary),
+                          ),
+                        const SizedBox(height: 12),
+                        if (_mapleStatus != null)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Text(
+                              _mapleStatus!,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: _mapleStatus!.startsWith('Connected')
+                                    ? AppColors.success
+                                    : AppColors.danger,
+                              ),
+                            ),
+                          ),
+                        Row(
+                          children: [
+                            OutlinedButton.icon(
+                              onPressed: _testingMaple
+                                  ? null
+                                  : _testMapleConnection,
+                              icon: _testingMaple
+                                  ? const SizedBox(
+                                      width: 14,
+                                      height: 14,
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2),
+                                    )
+                                  : const Icon(
+                                      Icons.wifi_tethering_outlined,
+                                      size: 18),
+                              label: const Text('Test connection'),
+                            ),
+                            const SizedBox(width: 8),
+                            FilledButton(
+                              onPressed: _saveMaple,
+                              child: const Text('Save'),
+                            ),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -718,6 +1040,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
   }
+
+  String _providerDescription(AiProvider provider) => switch (provider) {
+        AiProvider.ollama =>
+          'Self-hosted, runs on your own server or home network.',
+        AiProvider.lmStudio =>
+          'Fully local, runs models directly on this device. No data leaves.',
+        AiProvider.maple =>
+          'End-to-end encrypted cloud inference — fast, private, zero retention.',
+      };
 
   String _themeName(ThemeMode mode) => switch (mode) {
         ThemeMode.light => 'Light',

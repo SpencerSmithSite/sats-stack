@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../main.dart' as app;
+import '../../core/models/ai_provider.dart';
 import '../../shared/constants/app_constants.dart';
 import '../../shared/theme/app_colors.dart';
 import '../../shared/utils/currency_utils.dart';
@@ -22,8 +23,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   // Config chosen during onboarding
   String _currency = 'USD';
   ThemeMode _themeMode = ThemeMode.dark;
+  AiProvider _aiProvider = AiProvider.ollama;
   late final TextEditingController _esploraCtrl;
-  late final TextEditingController _ollamaCtrl;
+  late final TextEditingController _aiUrlCtrl;
+  late final TextEditingController _mapleApiKeyCtrl;
 
   static const _pageCount = 8;
 
@@ -74,13 +77,27 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     await app.xpubService.saveSettings(url: _esploraCtrl.text.trim());
     await app.btcPriceService.loadSettings();
 
-    // Save Ollama/AI server
-    final ollamaUrl = _ollamaCtrl.text.trim();
-    if (ollamaUrl.isNotEmpty) {
-      await app.ollamaService.saveSettings(url: ollamaUrl);
-      app.aiEnabledNotifier.value = PlatformUtils.isDesktop ||
-          (ollamaUrl != AppConstants.defaultOllamaUrl);
+    // Save AI provider selection + connection details
+    await app.ollamaService.setActiveProvider(_aiProvider);
+    final trimmedUrl = _aiUrlCtrl.text.trim();
+    final trimmedKey = _mapleApiKeyCtrl.text.trim();
+    switch (_aiProvider) {
+      case AiProvider.ollama:
+        await app.ollamaService.saveSettings(
+          url: trimmedUrl.isNotEmpty ? trimmedUrl : AppConstants.defaultOllamaUrl,
+        );
+      case AiProvider.lmStudio:
+        await app.ollamaService.saveLmStudioSettings(
+          url: trimmedUrl.isNotEmpty ? trimmedUrl : AppConstants.defaultLmStudioUrl,
+        );
+      case AiProvider.maple:
+        await app.ollamaService.saveMapleSettings(
+          url: trimmedUrl.isNotEmpty ? trimmedUrl : AppConstants.defaultMapleUrl,
+          apiKey: trimmedKey.isNotEmpty ? trimmedKey : null,
+        );
     }
+    app.aiEnabledNotifier.value =
+        PlatformUtils.isDesktop || app.ollamaService.isConnected;
 
     // Mark onboarding complete
     await app.db.into(app.db.appSettings).insertOnConflictUpdate(
@@ -97,14 +114,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   void initState() {
     super.initState();
     _esploraCtrl = TextEditingController();
-    _ollamaCtrl = TextEditingController();
+    _aiUrlCtrl = TextEditingController(text: AppConstants.defaultOllamaUrl);
+    _mapleApiKeyCtrl = TextEditingController();
   }
 
   @override
   void dispose() {
     _controller.dispose();
     _esploraCtrl.dispose();
-    _ollamaCtrl.dispose();
+    _aiUrlCtrl.dispose();
+    _mapleApiKeyCtrl.dispose();
     super.dispose();
   }
 
@@ -134,7 +153,19 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     },
                   ),
                   _BitcoinServerPage(controller: _esploraCtrl),
-                  _AiServerPage(controller: _ollamaCtrl),
+                  _AiProviderPage(
+                    selected: _aiProvider,
+                    onChanged: (p) {
+                      setState(() => _aiProvider = p);
+                      _aiUrlCtrl.text = switch (p) {
+                        AiProvider.ollama => AppConstants.defaultOllamaUrl,
+                        AiProvider.lmStudio => AppConstants.defaultLmStudioUrl,
+                        AiProvider.maple => AppConstants.defaultMapleUrl,
+                      };
+                    },
+                    urlController: _aiUrlCtrl,
+                    apiKeyController: _mapleApiKeyCtrl,
+                  ),
                   const _ReadyPage(),
                 ],
               ),
@@ -295,7 +326,7 @@ class _TourPage extends StatelessWidget {
       icon: Icons.auto_awesome_outlined,
       label: 'AI Analyst',
       description:
-          'Ask questions about your finances in natural language. Runs locally via Ollama — no data ever leaves your device.',
+          'Ask questions about your finances in natural language. Connect Ollama, LM Studio, or Maple — you choose how private.',
     ),
   ];
 
@@ -403,11 +434,10 @@ class _CurrencyPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 36, vertical: 48),
+      padding: const EdgeInsets.fromLTRB(36, 48, 36, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Spacer(),
           Text(
             'Pick your\ncurrency.',
             style: theme.textTheme.displaySmall?.copyWith(
@@ -424,80 +454,85 @@ class _CurrencyPage extends StatelessWidget {
               height: 1.5,
             ),
           ),
-          const SizedBox(height: 32),
-          ...CurrencyUtils.supported.map((code) {
-            final info = _currencies.firstWhere(
-              (c) => c.code == code,
-              orElse: () => (code: code, name: code, symbol: code),
-            );
-            final isSelected = selected == code;
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: GestureDetector(
-                onTap: () => onChanged(code),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 18, vertical: 14),
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? AppColors.bitcoinOrange.withAlpha(26)
-                        : theme.colorScheme.surface,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: isSelected
-                          ? AppColors.bitcoinOrange
-                          : theme.colorScheme.outlineVariant.withAlpha(80),
-                      width: isSelected ? 1.5 : 1,
+          const SizedBox(height: 24),
+          Expanded(
+            child: ListView.builder(
+              itemCount: CurrencyUtils.supported.length,
+              itemBuilder: (context, index) {
+                final code = CurrencyUtils.supported[index];
+                final info = _currencies.firstWhere(
+                  (c) => c.code == code,
+                  orElse: () => (code: code, name: code, symbol: code),
+                );
+                final isSelected = selected == code;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: GestureDetector(
+                    onTap: () => onChanged(code),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 18, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? AppColors.bitcoinOrange.withAlpha(26)
+                            : theme.colorScheme.surface,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isSelected
+                              ? AppColors.bitcoinOrange
+                              : theme.colorScheme.outlineVariant.withAlpha(80),
+                          width: isSelected ? 1.5 : 1,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            width: 36,
+                            child: Text(
+                              info.symbol,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                color: isSelected
+                                    ? AppColors.bitcoinOrange
+                                    : AppColors.textSecondary,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  info.name,
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                Text(
+                                  code,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (isSelected)
+                            const Icon(
+                              Icons.check_circle,
+                              color: AppColors.bitcoinOrange,
+                              size: 20,
+                            ),
+                        ],
+                      ),
                     ),
                   ),
-                  child: Row(
-                    children: [
-                      SizedBox(
-                        width: 36,
-                        child: Text(
-                          info.symbol,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            color: isSelected
-                                ? AppColors.bitcoinOrange
-                                : AppColors.textSecondary,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              info.name,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            Text(
-                              code,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (isSelected)
-                        const Icon(
-                          Icons.check_circle,
-                          color: AppColors.bitcoinOrange,
-                          size: 20,
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          }),
-          const Spacer(flex: 2),
+                );
+              },
+            ),
+          ),
         ],
       ),
     );
@@ -513,15 +548,20 @@ class _ThemePage extends StatelessWidget {
   final ThemeMode selected;
   final ValueChanged<ThemeMode> onChanged;
 
+  static const _themeOptions = [
+    (ThemeMode.dark, 'Dark', Icons.dark_mode_outlined, false, false),
+    (ThemeMode.light, 'Light', Icons.light_mode_outlined, true, false),
+    (ThemeMode.system, 'System', Icons.brightness_auto_outlined, false, true),
+  ];
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 36, vertical: 48),
+      padding: const EdgeInsets.fromLTRB(36, 48, 36, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Spacer(),
           Text(
             'Choose your\nlook.',
             style: theme.textTheme.displaySmall?.copyWith(
@@ -537,34 +577,30 @@ class _ThemePage extends StatelessWidget {
               color: AppColors.textSecondary,
             ),
           ),
-          const SizedBox(height: 32),
-          _ThemeCard(
-            mode: ThemeMode.dark,
-            label: 'Dark',
-            icon: Icons.dark_mode_outlined,
-            preview: const _ThemePreview(isDark: true),
-            selected: selected,
-            onTap: onChanged,
+          const SizedBox(height: 24),
+          Expanded(
+            child: ListView.builder(
+              itemCount: _themeOptions.length,
+              itemBuilder: (context, index) {
+                final (mode, label, icon, isLight, isSystem) =
+                    _themeOptions[index];
+                final Widget preview = isSystem
+                    ? const _ThemePreviewSystem()
+                    : _ThemePreview(isDark: !isLight);
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _ThemeCard(
+                    mode: mode,
+                    label: label,
+                    icon: icon,
+                    preview: preview,
+                    selected: selected,
+                    onTap: onChanged,
+                  ),
+                );
+              },
+            ),
           ),
-          const SizedBox(height: 12),
-          _ThemeCard(
-            mode: ThemeMode.light,
-            label: 'Light',
-            icon: Icons.light_mode_outlined,
-            preview: const _ThemePreview(isDark: false),
-            selected: selected,
-            onTap: onChanged,
-          ),
-          const SizedBox(height: 12),
-          _ThemeCard(
-            mode: ThemeMode.system,
-            label: 'System',
-            icon: Icons.brightness_auto_outlined,
-            preview: const _ThemePreviewSystem(),
-            selected: selected,
-            onTap: onChanged,
-          ),
-          const Spacer(flex: 2),
         ],
       ),
     );
@@ -858,103 +894,331 @@ class _BitcoinServerPage extends StatelessWidget {
   }
 }
 
-class _AiServerPage extends StatelessWidget {
-  const _AiServerPage({required this.controller});
-  final TextEditingController controller;
+class _AiProviderPage extends StatelessWidget {
+  const _AiProviderPage({
+    required this.selected,
+    required this.onChanged,
+    required this.urlController,
+    required this.apiKeyController,
+  });
+
+  final AiProvider selected;
+  final ValueChanged<AiProvider> onChanged;
+  final TextEditingController urlController;
+  final TextEditingController apiKeyController;
+
+  static const _providers = [
+    (
+      provider: AiProvider.ollama,
+      label: 'Ollama',
+      subtitle: 'Self-hosted',
+      description:
+          'Runs on your own machine or home server. Install Ollama and pull any model — nothing leaves your network.',
+      icon: Icons.computer_outlined,
+    ),
+    (
+      provider: AiProvider.lmStudio,
+      label: 'LM Studio',
+      subtitle: 'Fully local',
+      description:
+          'Runs models directly on this device using LM Studio. 100% private — no network required after model download.',
+      icon: Icons.storage_outlined,
+    ),
+    (
+      provider: AiProvider.maple,
+      label: 'Maple',
+      subtitle: 'Encrypted cloud',
+      description:
+          'End-to-end encrypted inference in hardware-isolated secure enclaves. Fast, private, zero data retention.',
+      icon: Icons.shield_outlined,
+    ),
+  ];
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDesktop = PlatformUtils.isDesktop;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 36, vertical: 48),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Spacer(),
-          Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: AppColors.bitcoinOrange.withAlpha(26),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.auto_awesome_outlined,
-                    color: AppColors.bitcoinOrange, size: 22),
+      padding: const EdgeInsets.fromLTRB(36, 48, 36, 24),
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Choose your\nAI assistant.',
+              style: theme.textTheme.displaySmall?.copyWith(
+                fontWeight: FontWeight.w800,
+                letterSpacing: -1.5,
+                height: 1.2,
               ),
-              const SizedBox(width: 16),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Pick a provider and configure the connection below.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: AppColors.textSecondary,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 24),
+            ..._providers.map((item) {
+              final isSelected = selected == item.provider;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: GestureDetector(
+                  onTap: () => onChanged(item.provider),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? AppColors.bitcoinOrange.withAlpha(26)
+                          : theme.colorScheme.surface,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isSelected
+                            ? AppColors.bitcoinOrange
+                            : theme.colorScheme.outlineVariant.withAlpha(80),
+                        width: isSelected ? 1.5 : 1,
+                      ),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? AppColors.bitcoinOrange.withAlpha(40)
+                                : AppColors.bitcoinOrange.withAlpha(20),
+                            borderRadius: BorderRadius.circular(9),
+                          ),
+                          child: Icon(
+                            item.icon,
+                            color: AppColors.bitcoinOrange,
+                            size: 18,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Text(
+                                    item.label,
+                                    style: theme.textTheme.titleSmall?.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 7),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 5, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: theme
+                                          .colorScheme.surfaceContainerHighest,
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      item.subtitle,
+                                      style:
+                                          theme.textTheme.labelSmall?.copyWith(
+                                        color: AppColors.textSecondary,
+                                        fontSize: 10,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                item.description,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: AppColors.textSecondary,
+                                  height: 1.4,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        if (isSelected)
+                          const Icon(
+                            Icons.check_circle,
+                            color: AppColors.bitcoinOrange,
+                            size: 20,
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }),
+            const SizedBox(height: 8),
+            // Per-provider config section
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 250),
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: SizeTransition(
+                  sizeFactor: animation,
+                  axisAlignment: -1,
+                  child: child,
+                ),
+              ),
+              child: _ProviderConfigSection(
+                key: ValueKey(selected),
+                provider: selected,
+                urlController: urlController,
+                apiKeyController: apiKeyController,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ProviderConfigSection extends StatelessWidget {
+  const _ProviderConfigSection({
+    super.key,
+    required this.provider,
+    required this.urlController,
+    required this.apiKeyController,
+  });
+
+  final AiProvider provider;
+  final TextEditingController urlController;
+  final TextEditingController apiKeyController;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    // Per-provider hint config
+    final (urlHint, urlHelper, urlLabel, note, noteIsWarning) = switch (provider) {
+      AiProvider.ollama => (
+          AppConstants.defaultOllamaUrl,
+          'Default port — change only if you customised Ollama\'s port',
+          'Ollama server URL',
+          PlatformUtils.isDesktop
+              ? 'Make sure Ollama is running: ollama serve'
+              : 'On iPhone/iPad, localhost won\'t reach a Mac. Use your Mac\'s local network IP — e.g. http://192.168.1.x:11434',
+          !PlatformUtils.isDesktop,
+        ),
+      AiProvider.lmStudio => (
+          AppConstants.defaultLmStudioUrl,
+          'Default port — requires LM Studio\'s Local Server to be running',
+          'LM Studio server URL',
+          PlatformUtils.isDesktop
+              ? 'In LM Studio, open the Local Server tab and click Start Server before connecting.'
+              : 'On iPhone/iPad, localhost won\'t reach a Mac. Use your Mac\'s local network IP — e.g. http://192.168.1.x:1234/v1',
+          !PlatformUtils.isDesktop,
+        ),
+      AiProvider.maple => (
+          AppConstants.defaultMapleUrl,
+          'Your Maple server URL (cloud or self-hosted)',
+          'Maple server URL',
+          'Your API key is required to authenticate with the Maple server.',
+          false,
+        ),
+    };
+
+    const accentInfo = Color(0xFF6AC86A);
+    const accentWarn = Color(0xFFF7931A);
+
+    final noteColor = noteIsWarning ? accentWarn : accentInfo;
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          controller: urlController,
+          autocorrect: false,
+          keyboardType: TextInputType.url,
+          decoration: InputDecoration(
+            labelText: urlLabel,
+            hintText: urlHint,
+            helperText: urlHelper,
+            helperMaxLines: 2,
+          ),
+        ),
+        if (provider == AiProvider.maple) ...[
+          const SizedBox(height: 16),
+          TextField(
+            controller: apiKeyController,
+            autocorrect: false,
+            obscureText: true,
+            decoration: const InputDecoration(
+              labelText: 'API key',
+              hintText: 'sk-…',
+              helperText: 'Required — get your key from your Maple dashboard',
+            ),
+          ),
+        ],
+        const SizedBox(height: 14),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: noteColor.withOpacity(isDark ? 0.10 : 0.07),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+                color: noteColor.withOpacity(isDark ? 0.32 : 0.20)),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                noteIsWarning ? Icons.warning_amber_rounded : Icons.info_outline,
+                size: 15,
+                color: noteColor,
+              ),
+              const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'AI analyst',
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.5,
+                  note,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: noteColor,
+                    height: 1.5,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 20),
-          Text(
-            isDesktop
-                ? 'Sats Stack can connect to a local Ollama instance to give you AI-powered insights about your finances — all on-device, no data sent to the cloud.'
-                : 'Connect to an Ollama instance running on your home server or VPS to get AI-powered financial insights.',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: AppColors.textSecondary,
-              height: 1.6,
-            ),
+        ),
+        const SizedBox(height: 10),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: accentInfo.withOpacity(isDark ? 0.10 : 0.07),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+                color: accentInfo.withOpacity(isDark ? 0.32 : 0.20)),
           ),
-          const SizedBox(height: 28),
-          TextField(
-            controller: controller,
-            autocorrect: false,
-            keyboardType: TextInputType.url,
-            decoration: InputDecoration(
-              labelText: 'Ollama server URL',
-              hintText: isDesktop
-                  ? 'http://localhost:11434'
-                  : 'http://your-server:11434',
-              helperText: isDesktop
-                  ? 'Leave blank to use localhost:11434 (default)'
-                  : 'Required to enable the AI tab on mobile',
-            ),
-          ),
-          const SizedBox(height: 20),
-          Builder(builder: (context) {
-            const accent = Color(0xFF6AB0E8);
-            final isDark = Theme.of(context).brightness == Brightness.dark;
-            return Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: accent.withOpacity(isDark ? 0.12 : 0.08),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                  color: accent.withOpacity(isDark ? 0.35 : 0.20)),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(Icons.info_outline, size: 16, color: accent),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    isDesktop
-                        ? 'Ollama must be running locally. You can install it at ollama.com.'
-                        : 'The AI tab will appear once a valid server URL is saved. You can update this in Settings → Servers.',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: accent,
-                      height: 1.5,
-                    ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.check_circle_outline, size: 15, color: accentInfo),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'You can test the connection and change these settings later in Settings → Servers.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: accentInfo,
+                    height: 1.5,
                   ),
                 ),
-              ],
-            ),
-          );
-          }),
-          const Spacer(flex: 2),
-        ],
+              ),
+            ],
+          ),
+        ),
+      ],
       ),
     );
   }

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+
 import 'package:crypto/crypto.dart';
 import 'package:csv/csv.dart';
 import 'package:drift/drift.dart' show Value, InsertMode, OrderingTerm;
@@ -90,6 +91,7 @@ class ImportResult {
     this.tierUsed,
     this.needsManualMapping = false,
     this.isPdfNoAi = false,
+    this.pdfAiNotReady = false,
     this.rawCsvContent,
     this.csvRows,
     this.csvHeaders,
@@ -98,7 +100,10 @@ class ImportResult {
   final List<ParsedTransaction> transactions;
   final ImportTier? tierUsed;
   final bool needsManualMapping;
+  /// True when PDF had no text to extract, or AI ran but returned no transactions.
   final bool isPdfNoAi;
+  /// True when PDF text was extracted but no AI provider was connected/configured.
+  final bool pdfAiNotReady;
   final ImportFileType fileType;
   final String fileName;
   final String? rawCsvContent;
@@ -252,7 +257,7 @@ class ImportService {
         transactions: [],
         fileType: ImportFileType.pdf,
         fileName: fileName,
-        isPdfNoAi: true,
+        pdfAiNotReady: true,
       );
     }
 
@@ -410,10 +415,18 @@ FILE CONTENT:
       onStageChange?.call('AI is thinking…');
 
       final buffer = StringBuffer();
+      var tokenCount = 0;
       await for (final token in ollama.chat(messages, client: client)) {
         if (_importCancelled) break;
         buffer.write(token);
         _tokenController.add(token); // sync: true — delivered immediately to UI
+        tokenCount++;
+        // Yield to the event loop every 5 tokens. Without this, Dart's
+        // microtask queue processes all tokens before Flutter can schedule
+        // a frame, so the UI only redraws once after generation completes.
+        if (tokenCount % 5 == 0) {
+          await Future<void>.delayed(Duration.zero);
+        }
       }
       _checkCancelled();
 

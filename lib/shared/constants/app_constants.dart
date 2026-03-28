@@ -28,4 +28,20 @@ abstract final class AppConstants {
   static const settingBtcAllPrices = 'btc_all_prices';
   static const settingShowBtcPrice = 'show_btc_price';
   static const settingOllamaConnected = 'ollama_connected';
+
+  // AI provider selection
+  static const settingAiProvider = 'ai_provider';
+
+  // LM Studio settings
+  static const defaultLmStudioUrl = 'http://localhost:1234/v1';
+  static const settingLmStudioUrl = 'lm_studio_url';
+  static const settingLmStudioModel = 'lm_studio_model';
+  static const settingLmStudioConnected = 'lm_studio_connected';
+
+  // Maple settings
+  static const defaultMapleUrl = 'http://localhost:8080/v1';
+  static const settingMapleUrl = 'maple_url';
+  static const settingMapleModel = 'maple_model';
+  static const settingMapleApiKey = 'maple_api_key';
+  static const settingMapleConnected = 'maple_connected';
 }

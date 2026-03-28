@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../core/models/ai_provider.dart';
 import '../../shared/constants/app_constants.dart';
 import '../../shared/theme/app_colors.dart';
 import '../../shared/theme/app_text_styles.dart';
@@ -73,9 +74,9 @@ class _AiChatScreenState extends State<AiChatScreen> {
     final models = await app.ollamaService.listModels();
     if (!mounted) return;
 
-    // Auto-select first model if none saved
+    // Auto-select first model if none saved for the active provider
     if (app.ollamaService.selectedModel == null && models.isNotEmpty) {
-      await app.ollamaService.saveSettings(model: models.first);
+      await app.ollamaService.saveModelForActiveProvider(models.first);
     }
 
     final prompt = await _buildSystemPrompt();
@@ -180,16 +181,30 @@ class _AiChatScreenState extends State<AiChatScreen> {
   }
 
   void _openSettings() {
+    final provider = app.ollamaService.activeProvider;
+    final currentUrl = switch (provider) {
+      AiProvider.ollama => app.ollamaService.baseUrl,
+      AiProvider.lmStudio => app.ollamaService.lmStudioBaseUrl,
+      AiProvider.maple => app.ollamaService.mapleBaseUrl,
+    };
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _OllamaSettingsSheet(
-        currentUrl: app.ollamaService.baseUrl,
+      builder: (_) => _AiSettingsSheet(
+        provider: provider,
+        currentUrl: currentUrl,
         currentModel: app.ollamaService.selectedModel,
         models: _models,
         onSave: (url, model) async {
-          await app.ollamaService.saveSettings(url: url, model: model);
+          switch (provider) {
+            case AiProvider.ollama:
+              await app.ollamaService.saveSettings(url: url, model: model);
+            case AiProvider.lmStudio:
+              await app.ollamaService.saveLmStudioSettings(url: url, model: model);
+            case AiProvider.maple:
+              await app.ollamaService.saveMapleSettings(url: url, model: model);
+          }
           if (mounted) setState(() {});
         },
         onRefresh: () async {
@@ -213,7 +228,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
                     models: _models,
                     selected: app.ollamaService.selectedModel,
                     onChanged: (m) async {
-                      await app.ollamaService.saveSettings(model: m);
+                      await app.ollamaService.saveModelForActiveProvider(m);
                       setState(() {});
                     },
                   )
@@ -222,7 +237,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
           IconButton(
             icon: const Icon(Icons.settings_outlined),
             onPressed: _openSettings,
-            tooltip: 'Ollama settings',
+            tooltip: 'AI settings',
           ),
         ],
       ),
@@ -596,6 +611,14 @@ class _OfflineState extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDesktop = PlatformUtils.isDesktop;
+    final provider = app.ollamaService.activeProvider;
+    final providerName = switch (provider) {
+      AiProvider.ollama => 'Ollama',
+      AiProvider.lmStudio => 'LM Studio',
+      AiProvider.maple => 'Maple',
+    };
+    final isLocal =
+        provider == AiProvider.ollama || provider == AiProvider.lmStudio;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -603,27 +626,33 @@ class _OfflineState extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              isDesktop ? Icons.computer_outlined : Icons.cloud_off_outlined,
+              isLocal && isDesktop
+                  ? Icons.computer_outlined
+                  : Icons.cloud_off_outlined,
               size: 56,
               color: AppColors.textSecondary,
             ),
             const SizedBox(height: 16),
             Text(
-              isDesktop ? 'Ollama not running' : 'Cannot reach Ollama server',
+              'Cannot reach $providerName',
               style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 8),
             Text(
-              isDesktop
+              provider == AiProvider.ollama && isDesktop
                   ? 'Install Ollama and pull a model, then tap Retry.\n\nollama pull llama3.2'
-                  : 'Check that your remote server URL is correct and the server is reachable, then tap Retry.',
+                  : provider == AiProvider.lmStudio
+                      ? 'Make sure LM Studio is running with server mode enabled, then tap Retry.'
+                      : provider == AiProvider.maple
+                          ? 'Check that your Maple proxy URL and API key are correct in Settings.'
+                          : 'Check that your server URL is correct and reachable, then tap Retry.',
               textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: AppColors.textSecondary,
                 height: 1.6,
               ),
             ),
-            if (isDesktop) ...[
+            if (provider == AiProvider.ollama && isDesktop) ...[
               const SizedBox(height: 8),
               Text(
                 AppConstants.defaultOllamaUrl,
@@ -711,10 +740,11 @@ class _ModelSelector extends StatelessWidget {
   }
 }
 
-// ── Ollama settings sheet ─────────────────────────────────────────────────────
+// ── AI settings sheet ─────────────────────────────────────────────────────────
 
-class _OllamaSettingsSheet extends StatefulWidget {
-  const _OllamaSettingsSheet({
+class _AiSettingsSheet extends StatefulWidget {
+  const _AiSettingsSheet({
+    required this.provider,
     required this.currentUrl,
     required this.currentModel,
     required this.models,
@@ -722,6 +752,7 @@ class _OllamaSettingsSheet extends StatefulWidget {
     required this.onRefresh,
   });
 
+  final AiProvider provider;
   final String currentUrl;
   final String? currentModel;
   final List<String> models;
@@ -729,10 +760,10 @@ class _OllamaSettingsSheet extends StatefulWidget {
   final Future<void> Function() onRefresh;
 
   @override
-  State<_OllamaSettingsSheet> createState() => _OllamaSettingsSheetState();
+  State<_AiSettingsSheet> createState() => _AiSettingsSheetState();
 }
 
-class _OllamaSettingsSheetState extends State<_OllamaSettingsSheet> {
+class _AiSettingsSheetState extends State<_AiSettingsSheet> {
   late final TextEditingController _urlCtrl;
   String? _selectedModel;
   bool _testing = false;
@@ -751,6 +782,18 @@ class _OllamaSettingsSheetState extends State<_OllamaSettingsSheet> {
     super.dispose();
   }
 
+  String _providerLabel(AiProvider p) => switch (p) {
+        AiProvider.ollama => 'Ollama',
+        AiProvider.lmStudio => 'LM Studio',
+        AiProvider.maple => 'Maple',
+      };
+
+  String _providerUrlHint(AiProvider p) => switch (p) {
+        AiProvider.ollama => 'http://localhost:11434',
+        AiProvider.lmStudio => AppConstants.defaultLmStudioUrl,
+        AiProvider.maple => AppConstants.defaultMapleUrl,
+      };
+
   Future<void> _testAndSave() async {
     setState(() { _testing = true; _testResult = null; });
     await widget.onSave(_urlCtrl.text.trim(), _selectedModel);
@@ -759,7 +802,9 @@ class _OllamaSettingsSheetState extends State<_OllamaSettingsSheet> {
     if (mounted) {
       setState(() {
         _testing = false;
-        _testResult = ok ? 'Connected ✓' : 'Cannot reach Ollama at that URL';
+        _testResult = ok
+            ? 'Connected ✓'
+            : 'Cannot reach ${_providerLabel(widget.provider)} at that URL';
       });
     }
   }
@@ -794,16 +839,16 @@ class _OllamaSettingsSheetState extends State<_OllamaSettingsSheet> {
                   ),
                 ),
                 Text(
-                  'Ollama Settings',
+                  '${_providerLabel(widget.provider)} Settings',
                   style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 20),
                 TextField(
                   controller: _urlCtrl,
                   autocorrect: false,
-                  decoration: const InputDecoration(
-                    labelText: 'Ollama URL',
-                    hintText: 'http://localhost:11434',
+                  decoration: InputDecoration(
+                    labelText: '${_providerLabel(widget.provider)} URL',
+                    hintText: _providerUrlHint(widget.provider),
                   ),
                   style: AppTextStyles.monoSmall.copyWith(color: theme.colorScheme.onSurface),
                 ),

@@ -19,7 +19,7 @@ class ImportFileScreen extends StatefulWidget {
 }
 
 class _ImportFileScreenState extends State<ImportFileScreen> {
-  bool _ollamaBannerDismissed = false;
+  bool _aiBannerDismissed = false;
 
   // Processing state
   bool _isProcessing = false;
@@ -77,13 +77,13 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
                           child: _AiConnectedBanner(),
                         );
                       }
-                      if (_ollamaBannerDismissed) {
+                      if (_aiBannerDismissed) {
                         return const SliverToBoxAdapter(child: SizedBox.shrink());
                       }
                       return SliverToBoxAdapter(
-                        child: _OllamaBanner(
+                        child: _AiBanner(
                           onDismiss: () =>
-                              setState(() => _ollamaBannerDismissed = true),
+                              setState(() => _aiBannerDismissed = true),
                           onConnect: () => context.push('/settings'),
                         ),
                       );
@@ -193,10 +193,10 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
     if (file.path == null) return;
 
     final isPdf = file.name.toLowerCase().endsWith('.pdf');
-    final ollamaConnected = app.aiEnabledNotifier.value;
+    final aiConnected = app.aiEnabledNotifier.value;
 
-    // For PDFs without Ollama, prompt before proceeding
-    if (isPdf && !ollamaConnected) {
+    // For PDFs without an AI provider, prompt before proceeding
+    if (isPdf && !aiConnected) {
       final proceed = await _showPdfNoAiDialog();
       if (!proceed) return;
     }
@@ -214,9 +214,9 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
     final result = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('PDF without Ollama'),
+        title: const Text('No AI provider connected'),
         content: const Text(
-          'PDF import works best with Ollama connected. Without it, '
+          'PDF import works best with an AI provider connected. Without it, '
           'only text-layer PDFs can be parsed and results may be incomplete.',
         ),
         actions: [
@@ -225,7 +225,7 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
               Navigator.pop(ctx, false);
               context.push('/settings');
             },
-            child: const Text('Connect Ollama'),
+            child: const Text('Connect AI'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
@@ -365,7 +365,7 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
         content: const Text(
           'This is taking longer than expected.\n\n'
           'Try a smaller file, a faster model, or check that '
-          'your Ollama server is responding.',
+          'your AI provider is responding.',
         ),
         actions: [
           TextButton(
@@ -560,8 +560,8 @@ class _AiConnectedBanner extends StatelessWidget {
   }
 }
 
-class _OllamaBanner extends StatelessWidget {
-  const _OllamaBanner({required this.onDismiss, required this.onConnect});
+class _AiBanner extends StatelessWidget {
+  const _AiBanner({required this.onDismiss, required this.onConnect});
 
   final VoidCallback onDismiss;
   final VoidCallback onConnect;
@@ -584,7 +584,7 @@ class _OllamaBanner extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'Connect Ollama for AI-powered imports — any bank format, any layout.',
+              'Connect an AI provider for AI-powered imports — any bank format, any layout.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ),
