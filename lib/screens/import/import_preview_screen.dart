@@ -281,11 +281,13 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen> {
                         style: Theme.of(context).textTheme.titleMedium),
                     const SizedBox(height: 8),
                     Text(
-                      widget.result.isPdfNoAi
-                          ? 'PDF import requires Ollama to be connected and a model selected. Connect Ollama in Settings → Servers.'
-                          : widget.result.tierUsed == ImportTier.manual
-                              ? 'No transactions could be extracted with the current column mapping — go back and check your column assignments.'
-                              : 'Could not parse this file automatically.',
+                      widget.result.pdfAiNotReady
+                          ? 'PDF import requires an AI provider to be connected with a model selected. Configure your AI provider in Settings → Servers.'
+                          : widget.result.isPdfNoAi
+                              ? 'The AI could not extract any transactions from this PDF. Try a different model or check that the PDF contains readable transaction data.'
+                              : widget.result.tierUsed == ImportTier.manual
+                                  ? 'No transactions could be extracted with the current column mapping — go back and check your column assignments.'
+                                  : 'Could not parse this file automatically.',
                       textAlign: TextAlign.center,
                       style: Theme.of(context)
                           .textTheme
