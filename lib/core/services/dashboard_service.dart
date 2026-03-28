@@ -14,9 +14,10 @@ class DashboardService {
 
   /// Emits a fresh [DashboardData] whenever any transaction changes.
   /// The [month] parameter controls which month's aggregates are returned.
-  Stream<DashboardData> watchDashboard(DateTime month) {
+  Stream<DashboardData> watchDashboard(DateTime month,
+      {double inflationRate = 3.5}) {
     return _db.select(_db.transactions).watch().asyncMap(
-          (txns) => _compute(txns, month),
+          (txns) => _compute(txns, month, inflationRate: inflationRate),
         );
   }
 
@@ -244,8 +245,9 @@ class DashboardService {
 
   Future<DashboardData> _compute(
     List<Transaction> allTxns,
-    DateTime month,
-  ) async {
+    DateTime month, {
+    double inflationRate = 3.5,
+  }) async {
     final firstDay = DateTime(month.year, month.month, 1);
     final lastDay = DateTime(month.year, month.month + 1, 0, 23, 59, 59);
 
@@ -266,7 +268,7 @@ class DashboardService {
 
     final surplus = income - spending;
     final leakRate = income > 0 ? (spending / income * 100).clamp(0.0, 100.0) : 0.0;
-    const annualInflationRate = 0.035;
+    final annualInflationRate = inflationRate / 100;
     final inflationCost = income * annualInflationRate / 12;
 
     // ── Spending by category (this month's expenses only) ───────────────────

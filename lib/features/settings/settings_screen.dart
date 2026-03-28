@@ -29,6 +29,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _currency = 'USD';
   bool _showBtcPrice = true;
   String _appVersion = '';
+  String? _inflationRateError;
+  late TextEditingController _inflationRateCtrl;
 
   // AI — active provider (mirrors persisted state)
   AiProvider _selectedProvider = AiProvider.ollama;
@@ -66,6 +68,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _themeMode = app.themeModeNotifier.value;
     _currency = app.currencyNotifier.value;
     _showBtcPrice = app.showBtcPriceNotifier.value;
+    _inflationRateCtrl = TextEditingController(
+        text: app.inflationRateNotifier.value.toString());
 
     // AI provider
     _selectedProvider = app.ollamaService.activeProvider;
@@ -97,6 +101,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   void dispose() {
+    _inflationRateCtrl.dispose();
     _ollamaUrlCtrl.dispose();
     _lmStudioUrlCtrl.dispose();
     _mapleUrlCtrl.dispose();
@@ -128,6 +133,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
     } catch (_) {
       // Plugin not available in this build configuration — version stays hidden.
+    }
+  }
+
+  Future<void> _saveInflationRate() async {
+    final raw = double.tryParse(_inflationRateCtrl.text.trim());
+    if (raw == null || raw < 0 || raw > 100) {
+      setState(() =>
+          _inflationRateError = 'Please enter a value between 0 and 100');
+      return;
+    }
+    setState(() => _inflationRateError = null);
+    app.inflationRateNotifier.value = raw;
+    await app.db.into(app.db.appSettings).insertOnConflictUpdate(
+          AppSettingsCompanion.insert(
+            key: AppConstants.settingInflationRate,
+            value: raw.toString(),
+          ),
+        );
+    if (mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Inflation rate saved')));
     }
   }
 
@@ -616,6 +642,57 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   backgroundColor: Colors.transparent,
                   builder: (_) =>
                       CategoriesSheet(categoryService: app.categoryService),
+                ),
+              ),
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const _SectionHeader('Expected Inflation Rate'),
+                    const SizedBox(height: 8),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _inflationRateCtrl,
+                            keyboardType: const TextInputType.numberWithOptions(
+                                decimal: true),
+                            decoration: InputDecoration(
+                              suffixText: '%',
+                              errorText: _inflationRateError,
+                              isDense: true,
+                              border: const OutlineInputBorder(),
+                            ),
+                            onChanged: (_) {
+                              if (_inflationRateError != null) {
+                                setState(() => _inflationRateError = null);
+                              }
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        FilledButton(
+                          onPressed: _saveInflationRate,
+                          style: FilledButton.styleFrom(
+                              visualDensity: VisualDensity.compact),
+                          child: const Text('Save'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Used to calculate the real purchasing power loss of '
+                      'your fiat holdings over time.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurfaceVariant,
+                          ),
+                    ),
+                  ],
                 ),
               ),
             ],

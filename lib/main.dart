@@ -33,6 +33,7 @@ late ValueNotifier<ThemeMode> themeModeNotifier;
 late ValueNotifier<String> currencyNotifier;
 late ValueNotifier<bool> showBtcPriceNotifier;
 late ValueNotifier<bool> aiEnabledNotifier;
+late ValueNotifier<double> inflationRateNotifier;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -82,6 +83,16 @@ void main() async {
       .get();
   final showPrice = showPriceRows.isEmpty || showPriceRows.first.value != 'false';
   showBtcPriceNotifier = ValueNotifier(showPrice);
+
+  // Load persisted inflation rate (default: 3.5%)
+  final inflationRows = await (db.select(db.appSettings)
+        ..where((t) => t.key.equals(AppConstants.settingInflationRate)))
+      .get();
+  final savedInflation = inflationRows.isNotEmpty
+      ? double.tryParse(inflationRows.first.value) ??
+          AppConstants.defaultInflationRate
+      : AppConstants.defaultInflationRate;
+  inflationRateNotifier = ValueNotifier(savedInflation);
 
   // Initialise local notifications (owned by NotificationService).
   notificationService = NotificationService();
