@@ -3,10 +3,13 @@ import 'dart:async';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../core/database/database.dart';
 import '../../core/services/import_service.dart';
+import '../../core/services/ollama_service.dart';
 import '../../main.dart' as app;
+import '../../shared/utils/platform_utils.dart';
 import 'import_column_mapper_screen.dart';
 import 'import_preview_screen.dart';
 import 'import_source_setup_screen.dart';
@@ -37,6 +40,9 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
   String? _processingFilePath;
   String? _processingFileName;
   ImportSource? _processingSource;
+
+  // Image picking
+  final _imagePicker = ImagePicker();
 
   @override
   void dispose() {
@@ -114,6 +120,7 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
                         itemBuilder: (context, i) => _SourceCard(
                           source: sources[i],
                           onImport: () => _pickFile(sources[i]),
+                          onImportImage: () => _pickImageForSource(sources[i]),
                           onDelete: () => _deleteSource(sources[i]),
                         ),
                       ),
@@ -402,6 +409,231 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
       }
     });
   }
+
+  // ── Image import ──────────────────────────────────────────────────────────
+
+  Future<void> _pickImageForSource(ImportSource importSource) async {
+    // Require AI before picking
+    if (!app.aiEnabledNotifier.value) {
+      await _showImageNoAiDialog();
+      return;
+    }
+
+    // Warn if model likely doesn't support vision
+    final model = app.ollamaService.selectedModel;
+    if (!OllamaService.looksLikeVisionModel(model)) {
+      final action = await _showVisionWarningDialog(model ?? 'unknown');
+      if (action == 'settings') {
+        if (mounted) context.push('/settings');
+        return;
+      }
+      if (action != 'continue') return;
+    }
+
+    // Pick image: bottom sheet on mobile, direct gallery on desktop
+    if (PlatformUtils.isMobile) {
+      final imageSource = await _showImageSourceSheet();
+      if (imageSource == null) return;
+      await _doPickImage(imageSource, importSource);
+    } else {
+      await _doPickImage(ImageSource.gallery, importSource);
+    }
+  }
+
+  Future<ImageSource?> _showImageSourceSheet() async {
+    return showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Theme.of(ctx).colorScheme.outlineVariant,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Take Photo'),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Choose from Library'),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _doPickImage(ImageSource imageSource, ImportSource importSource) async {
+    final XFile? image = await _imagePicker.pickImage(
+      source: imageSource,
+      maxWidth: 2048,
+      maxHeight: 2048,
+      imageQuality: 85,
+    );
+    if (image == null) return;
+    await _processImage(
+      filePath: image.path,
+      fileName: image.name,
+      source: importSource,
+    );
+  }
+
+  Future<void> _processImage({
+    required String filePath,
+    required String fileName,
+    required ImportSource source,
+  }) async {
+    setState(() {
+      _isProcessing = true;
+      _currentStage = 'Preparing image…';
+      _aiOutput = '';
+      _showCancel = false;
+    });
+
+    _tokenSub = app.importService.importTokenStream.listen((token) {
+      if (!mounted) return;
+      setState(() => _aiOutput += token);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_tokenScrollController.hasClients) {
+          _tokenScrollController.animateTo(
+            _tokenScrollController.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 80),
+            curve: Curves.easeOut,
+          );
+        }
+      });
+    });
+
+    _cancelTimer = Timer(const Duration(seconds: 5), () {
+      if (mounted && _isProcessing) setState(() => _showCancel = true);
+    });
+    _timeoutTimer = Timer(const Duration(minutes: 5), () {
+      if (mounted && _isProcessing) _handleImageTimeout();
+    });
+
+    await Future.microtask(() {});
+
+    ImportResult result;
+    try {
+      result = await app.importService.importImage(
+        imagePath: filePath,
+        sourceId: source.id,
+        onStageChange: (stage) {
+          if (mounted) setState(() => _currentStage = stage);
+        },
+      );
+    } on ImportCancelledException {
+      _cleanupProcessing();
+      return;
+    } catch (e) {
+      _cleanupProcessing();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error processing image: $e')),
+        );
+      }
+      return;
+    }
+
+    _cleanupProcessing();
+    if (!mounted) return;
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ImportPreviewScreen(
+          result: result,
+          sourceId: source.id,
+          sourceName: source.name,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showImageNoAiDialog() async {
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('AI required'),
+        content: const Text(
+          'Image import requires an AI provider with vision support. '
+          'Connect Ollama, LM Studio, or Maple in Settings.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              context.push('/settings');
+            },
+            child: const Text('Connect AI'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Returns 'settings', 'continue', or null (dismissed).
+  Future<String?> _showVisionWarningDialog(String modelName) async {
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Vision not supported'),
+        content: Text(
+          'Your current model ($modelName) may not support image analysis. '
+          'For best results, switch to a vision-capable model such as '
+          'llama3.2-vision or llava in Settings.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'settings'),
+            child: const Text('Go to Settings'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, 'continue'),
+            child: const Text('Try Anyway'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _handleImageTimeout() {
+    app.importService.cancelImport();
+    _cleanupProcessing();
+    if (!mounted) return;
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Taking longer than expected'),
+        content: const Text(
+          'The AI is taking longer than expected to analyze the image.\n\n'
+          'Try a smaller image, a faster vision model, or check that '
+          'your AI provider is responding.',
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 // ── Sub-widgets ───────────────────────────────────────────────────────────────
@@ -653,11 +885,13 @@ class _SourceCard extends StatelessWidget {
   const _SourceCard({
     required this.source,
     required this.onImport,
+    required this.onImportImage,
     required this.onDelete,
   });
 
   final ImportSource source;
   final VoidCallback onImport;
+  final VoidCallback onImportImage;
   final VoidCallback onDelete;
 
   @override
@@ -699,6 +933,12 @@ class _SourceCard extends StatelessWidget {
             IconButton(
               icon: const Icon(Icons.more_vert),
               onPressed: () => _showMenu(context),
+              visualDensity: VisualDensity.compact,
+            ),
+            IconButton(
+              icon: const Icon(Icons.photo_camera_outlined),
+              tooltip: 'Import from photo',
+              onPressed: onImportImage,
               visualDensity: VisualDensity.compact,
             ),
             FilledButton.icon(
