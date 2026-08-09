@@ -95,9 +95,21 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           url: trimmedUrl.isNotEmpty ? trimmedUrl : AppConstants.defaultMapleUrl,
           apiKey: trimmedKey.isNotEmpty ? trimmedKey : null,
         );
+      case AiProvider.appleIntelligence:
+      case AiProvider.geminiNano:
+      case AiProvider.localModel:
+        // Nothing to persist beyond the provider choice itself, which
+        // `setActiveProvider` above already wrote. The downloadable model still
+        // has to be fetched — Settings is where that happens, since it needs
+        // progress and a size the onboarding flow has no room for.
+        break;
     }
-    app.aiEnabledNotifier.value =
-        PlatformUtils.isDesktop || app.ollamaService.isConnected;
+    // An on-device backend enables AI on mobile without any server, which the
+    // old `isDesktop || isConnected` test could not express: those devices are
+    // not desktops and have nothing to connect to.
+    app.aiEnabledNotifier.value = PlatformUtils.isDesktop ||
+        _aiProvider.isOnDevice ||
+        app.ollamaService.isConnected;
 
     // Mark onboarding complete
     await app.db.into(app.db.appSettings).insertOnConflictUpdate(
@@ -157,11 +169,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     selected: _aiProvider,
                     onChanged: (p) {
                       setState(() => _aiProvider = p);
-                      _aiUrlCtrl.text = switch (p) {
-                        AiProvider.ollama => AppConstants.defaultOllamaUrl,
-                        AiProvider.lmStudio => AppConstants.defaultLmStudioUrl,
-                        AiProvider.maple => AppConstants.defaultMapleUrl,
-                      };
+                      // Empty for the on-device backends, which have no server
+                      // — the page hides the URL field rather than prefilling
+                      // it with something meaningless.
+                      _aiUrlCtrl.text = p.defaultUrl ?? '';
                     },
                     urlController: _aiUrlCtrl,
                     apiKeyController: _mapleApiKeyCtrl,
@@ -1082,6 +1093,56 @@ class _AiProviderPage extends StatelessWidget {
   }
 }
 
+/// The bordered info/warning strip used across the AI configuration pages.
+///
+/// Extracted so the on-device backends, which have no fields to show, can still
+/// say something in the same visual language as the rest of the step rather
+/// than leaving the page blank.
+class _NoteBanner extends StatelessWidget {
+  const _NoteBanner({
+    required this.isDark,
+    required this.isWarning,
+    required this.text,
+  });
+
+  final bool isDark;
+  final bool isWarning;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = isWarning ? const Color(0xFFF7931A) : const Color(0xFF6AC86A);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withOpacity(isDark ? 0.10 : 0.07),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(isDark ? 0.32 : 0.20)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            isWarning ? Icons.warning_amber_rounded : Icons.info_outline,
+            size: 15,
+            color: color,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: color, height: 1.5),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ProviderConfigSection extends StatelessWidget {
   const _ProviderConfigSection({
     super.key,
@@ -1098,6 +1159,31 @@ class _ProviderConfigSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+
+    // The on-device backends have no server and no key. Rather than render an
+    // empty URL box that would be ignored, say what will happen instead — and
+    // for the downloadable model, say plainly that a download is still needed,
+    // since selecting it here is not the same as having it.
+    if (provider.isOnDevice) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: _NoteBanner(
+          isDark: isDark,
+          isWarning: provider == AiProvider.localModel,
+          text: switch (provider) {
+            AiProvider.appleIntelligence =>
+              'Nothing to configure. Sats Stack will use the model already on '
+                  'this device, and your figures never leave it.',
+            AiProvider.geminiNano =>
+              'Nothing to configure. Sats Stack will use the model built into '
+                  'this phone, and your figures never leave it.',
+            _ => 'You will need to download a model before this works. Sats '
+                'Stack will offer one sized to this device in Settings → '
+                'Servers.',
+          },
+        ),
+      );
+    }
 
     // Per-provider hint config
     final (urlHint, urlHelper, urlLabel, note, noteIsWarning) = switch (provider) {
@@ -1126,6 +1212,8 @@ class _ProviderConfigSection extends StatelessWidget {
           'Your API key is required to authenticate with the Maple server.',
           false,
         ),
+      // Unreachable: the on-device backends return above, before this switch.
+      _ => ('', '', '', '', false),
     };
 
     const accentInfo = Color(0xFF6AC86A);

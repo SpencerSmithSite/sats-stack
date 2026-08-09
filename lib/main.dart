@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_gemma/flutter_gemma.dart';
+import 'package:flutter_gemma_litertlm/flutter_gemma_litertlm.dart';
 
 import 'app.dart';
 import 'screens/splash_screen.dart';
@@ -37,6 +39,30 @@ late ValueNotifier<double> inflationRateNotifier;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Required before any downloadable-model call, and the engine must be passed
+  // in explicitly — adding `flutter_gemma_litertlm` to pubspec.yaml is NOT
+  // enough. `flutter_gemma` is only a core since 1.0 and registers nothing on
+  // its own.
+  //
+  // The two failure modes are distinct and both were hit in testing:
+  //   - omit this call entirely  → install fails, "FlutterGemma not initialized"
+  //   - call it with no engines  → install SUCCEEDS, then the first question
+  //                                fails with "No inference engine can handle
+  //                                this model (ModelFileType.litertlm) …
+  //                                Registered engines: ."
+  // The second is the nastier one: a 2.7 GB download completes and looks
+  // healthy, and only generation reveals the model can never run.
+  //
+  // Guarded because the plugin has no implementation on every platform this app
+  // builds for, and a throw here would take the whole app down at launch over a
+  // feature the user may never touch.
+  try {
+    await FlutterGemma.initialize(inferenceEngines: [LiteRtLmEngine()]);
+  } catch (e) {
+    debugPrint('flutter_gemma unavailable on this platform: $e');
+  }
+
   db = AppDatabase();
   transactionService = TransactionService(db);
   categoryService = CategoryService(db);
