@@ -5,6 +5,7 @@ import 'package:sats_stack/core/services/inference/gemini_nano_backend.dart';
 import 'package:sats_stack/core/services/inference/inference_backend.dart';
 import 'package:sats_stack/core/services/inference/platform_llm_backend.dart';
 import 'package:sats_stack/core/services/inference/local_model_backend.dart';
+import 'package:sats_stack/core/services/ollama_service.dart';
 
 void main() {
   group('AiProvider persistence', () {
@@ -154,6 +155,90 @@ void main() {
         {'role': 'user', 'content': 'Hi'},
       ]);
       expect(flat.system, isNull);
+    });
+  });
+
+  group('System prompt sizing', () {
+    // Enough categories that a small budget genuinely has to drop some. With
+    // the nine seeded categories the app ships, the budget never binds — the
+    // framing text dwarfs the data — so the sizing only matters once the
+    // prompt grows. These tests exist to keep it correct when it does.
+    final spending = {
+      for (var i = 0; i < 100; i++) 'Category number $i': (100 - i) * 100.0,
+    };
+
+    String build(int budget) => OllamaService.composeSystemPrompt(
+          totalStackSats: 5000000,
+          btcPrice: 65000,
+          monthlyIncome: 6000,
+          monthlySpending: 4000,
+          monthlySurplus: 2000,
+          spendingByCategory: spending,
+          stackGoalSats: 21000000,
+          budgetChars: budget,
+        );
+
+    int categoryCount(String prompt) =>
+        RegExp(r'^  - ', multiLine: true).allMatches(prompt).length;
+
+    test('the prompt fits the budget it is given', () {
+      // The whole point: Apple Intelligence and Gemini Nano get ~4000, and
+      // overfilling a small window degrades the answer rather than erroring.
+      for (final budget in [3000, 4000, 6000, 8000, 12000, 24000]) {
+        expect(build(budget).length, lessThanOrEqualTo(budget),
+            reason: 'overflowed a ${budget}-char budget');
+      }
+    });
+
+    test('a smaller budget sends fewer categories, not a truncated one', () {
+      final small = build(3000);
+      final large = build(24000);
+
+      expect(categoryCount(small), lessThan(categoryCount(large)));
+      // Whole lines only — never a category cut mid-word.
+      for (final line in small.split('\n').where((l) => l.startsWith('  - '))) {
+        expect(line, matches(RegExp(r'^  - .+: \$\d+$')));
+      }
+    });
+
+    test('categories are dropped largest-value-last', () {
+      // An over-tight budget must still carry the spending that matters most.
+      final small = build(3000);
+      expect(small, contains('Category number 0:'),
+          reason: 'the largest category must survive any budget');
+      expect(small, isNot(contains('Category number 99:')),
+          reason: 'the smallest is the first to go');
+      // And the boundary is a real cut, not everything squeaking in.
+      expect(categoryCount(small), lessThan(spending.length));
+    });
+
+    test('the headline figures survive even an absurd budget', () {
+      // A prompt missing the actual numbers is useless at any size, so these
+      // are never dropped — the budget only flexes the category list.
+      final tiny = build(200);
+      expect(tiny, contains('5000000 sats'));
+      expect(tiny, contains('Monthly surplus'));
+      expect(categoryCount(tiny), 1,
+          reason: 'one category is kept rather than an empty heading');
+    });
+
+    test('no categories means no orphaned bullet', () {
+      final none = OllamaService.composeSystemPrompt(
+        totalStackSats: 0,
+        btcPrice: 65000,
+        monthlyIncome: 0,
+        monthlySpending: 0,
+        monthlySurplus: 0,
+        spendingByCategory: const {},
+        budgetChars: 4000,
+      );
+      expect(categoryCount(none), 0);
+      expect(none, contains('Monthly surplus'));
+    });
+
+    test('a large budget includes everything available', () {
+      expect(categoryCount(build(24000)), spending.length,
+          reason: 'a hosted model should get the full picture');
     });
   });
 

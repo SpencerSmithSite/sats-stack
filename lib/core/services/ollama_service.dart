@@ -375,38 +375,25 @@ class OllamaService {
   /// than as a failure to fetch.
   Future<List<String>> listModels() => backend.availableModels();
 
-  Future<List<String>> _ollamaListModels(String url) async {
-    try {
-      final response = await http
-          .get(Uri.parse('$url/api/tags'))
-          .timeout(const Duration(seconds: 8));
-      if (response.statusCode != 200) return [];
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      final models = (data['models'] as List<dynamic>?) ?? [];
-      return models.map((m) => m['name'] as String).toList();
-    } catch (_) {
-      return [];
-    }
-  }
-
-  Future<List<String>> _openAiListModels(String url, String apiKey) async {
-    try {
-      final headers = <String, String>{'Content-Type': 'application/json'};
-      if (apiKey.isNotEmpty) headers['Authorization'] = 'Bearer $apiKey';
-      final response = await http
-          .get(Uri.parse('$url/models'), headers: headers)
-          .timeout(const Duration(seconds: 8));
-      if (response.statusCode != 200) return [];
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      final models = (data['data'] as List<dynamic>?) ?? [];
-      return models.map((m) => m['id'] as String).toList();
-    } catch (_) {
-      return [];
-    }
-  }
-
   // ── System prompt ─────────────────────────────────────────────────────────
 
+  /// Builds the system prompt, sized to what the active backend can take.
+  ///
+  /// [budgetChars] defaults to the selected backend's [contextBudgetChars],
+  /// which varies by an order of magnitude — roughly 3–4k for Apple
+  /// Intelligence, Gemini Nano and the smallest downloaded model, against 24k
+  /// for a hosted one. Overfilling a small window degrades the answer rather
+  /// than erroring, so this sends *fewer* spending categories on those backends
+  /// rather than a truncated ledger.
+  ///
+  /// The framing and the headline figures are always included: a prompt missing
+  /// the user's actual numbers is useless at any size, and together they are
+  /// well under even the smallest budget. Only the category list flexes, and it
+  /// is built up line by line so the result is a whole number of categories
+  /// rather than a sentence cut mid-word.
+  ///
+  /// Pass [budgetChars] explicitly only to test the sizing, or to build a
+  /// prompt for a backend other than the active one.
   String buildSystemPrompt({
     required int totalStackSats,
     required double btcPrice,
@@ -415,19 +402,44 @@ class OllamaService {
     required double monthlySurplus,
     required Map<String, double> spendingByCategory,
     int? stackGoalSats,
+    int? budgetChars,
+  }) =>
+      composeSystemPrompt(
+        totalStackSats: totalStackSats,
+        btcPrice: btcPrice,
+        monthlyIncome: monthlyIncome,
+        monthlySpending: monthlySpending,
+        monthlySurplus: monthlySurplus,
+        spendingByCategory: spendingByCategory,
+        stackGoalSats: stackGoalSats,
+        budgetChars: budgetChars ?? contextBudgetChars,
+      );
+
+  /// The prompt builder itself — a pure function of its inputs.
+  ///
+  /// Static because it needs nothing from the service but the budget, and
+  /// because `OllamaService` requires an `AppDatabase`, which cannot be
+  /// constructed under `flutter test`. Keeping the logic here means the sizing
+  /// rules are testable without a database or a device.
+  static String composeSystemPrompt({
+    required int totalStackSats,
+    required double btcPrice,
+    required double monthlyIncome,
+    required double monthlySpending,
+    required double monthlySurplus,
+    required Map<String, double> spendingByCategory,
+    required int budgetChars,
+    int? stackGoalSats,
   }) {
+    final budget = budgetChars;
     final now = DateTime.now();
     final fiatValue = btcPrice > 0 ? (totalStackSats / 1e8 * btcPrice) : 0.0;
-    final top3 = (spendingByCategory.entries.toList()
-          ..sort((a, b) => b.value.compareTo(a.value)))
-        .take(3)
-        .map((e) => '  - ${e.key}: \$${e.value.toStringAsFixed(0)}')
-        .join('\n');
     final goalLine = stackGoalSats != null && stackGoalSats > 0
         ? 'Stack goal: $stackGoalSats sats (${(totalStackSats / stackGoalSats * 100).toStringAsFixed(1)}% reached)\n'
         : '';
 
-    return '''You are a Bitcoin-native personal finance analyst embedded in Sats Stack, a privacy-first budgeting app. You give concise, actionable advice grounded in the user's real financial data. You think in sats. You are bullish on Bitcoin and understand sound money principles.
+    final head =
+        '''You are a Bitcoin-native personal finance analyst embedded in Sats Stack, a privacy-first budgeting app. You give concise, actionable advice grounded in the user's real financial data. You think in sats. You are bullish on Bitcoin and understand sound money principles.
 
 Current date: ${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}
 BTC price: \$${btcPrice.toStringAsFixed(0)} USD
@@ -438,9 +450,36 @@ ${goalLine}Monthly income:   \$${monthlyIncome.toStringAsFixed(0)}
 Monthly spending: \$${monthlySpending.toStringAsFixed(0)}
 Monthly surplus:  \$${monthlySurplus.toStringAsFixed(0)}
 Top spending categories this month:
-$top3
+''';
 
-Keep responses focused and practical. When suggesting actions, quantify them in both fiat and sats. Do not repeat the user's data back verbatim — use it to inform your advice.''';
+    const tail =
+        '\n\nKeep responses focused and practical. When suggesting actions, '
+        'quantify them in both fiat and sats. Do not repeat the user\'s data '
+        'back verbatim — use it to inform your advice.';
+
+    final ranked = spendingByCategory.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    final lines = <String>[];
+    var used = head.length + tail.length;
+    for (final e in ranked) {
+      final line = '  - ${e.key}: \$${e.value.toStringAsFixed(0)}';
+      // +1 for the newline joining it to the previous line.
+      final cost = line.length + (lines.isEmpty ? 0 : 1);
+      if (used + cost > budget) break;
+      lines.add(line);
+      used += cost;
+    }
+
+    // Largest-first means an over-tight budget still yields the category that
+    // matters most, and never an empty list where the user has spending — a
+    // heading with nothing under it reads as "no data" to a small model.
+    if (lines.isEmpty && ranked.isNotEmpty) {
+      lines.add('  - ${ranked.first.key}: '
+          '\$${ranked.first.value.toStringAsFixed(0)}');
+    }
+
+    return '$head${lines.join('\n')}$tail';
   }
 
   // ── Streaming chat ────────────────────────────────────────────────────────
@@ -454,111 +493,6 @@ Keep responses focused and practical. When suggesting actions, quantify them in 
     http.Client? client,
   }) =>
       backend.chat(messages, client: client);
-
-  Stream<String> _ollamaChat(
-    List<Map<String, String>> messages, {
-    http.Client? client,
-  }) async* {
-    final model = _selectedModel;
-    if (model == null || model.isEmpty) {
-      throw StateError('No Ollama model selected');
-    }
-
-    final ownedClient = client == null;
-    final c = client ?? http.Client();
-    try {
-      final request = http.Request('POST', Uri.parse('$_baseUrl/api/chat'));
-      request.headers['Content-Type'] = 'application/json';
-      request.body = jsonEncode({
-        'model': model,
-        'messages': messages,
-        'stream': true,
-      });
-
-      final streamedResponse =
-          await c.send(request).timeout(const Duration(seconds: 30));
-
-      if (streamedResponse.statusCode != 200) {
-        throw Exception('Ollama returned ${streamedResponse.statusCode}');
-      }
-
-      await for (final line in streamedResponse.stream
-          .transform(utf8.decoder)
-          .transform(const LineSplitter())) {
-        if (line.trim().isEmpty) continue;
-        try {
-          final data = jsonDecode(line) as Map<String, dynamic>;
-          if (data['done'] == true) return;
-          final token =
-              (data['message'] as Map<String, dynamic>?)?['content'] as String? ?? '';
-          if (token.isNotEmpty) yield token;
-        } catch (_) {
-          // Malformed JSON line — skip
-        }
-      }
-    } finally {
-      if (ownedClient) c.close();
-    }
-  }
-
-  /// OpenAI-compatible SSE streaming chat (LM Studio and Maple).
-  Stream<String> _openAiChat(
-    List<Map<String, String>> messages, {
-    required String baseUrl,
-    required String? model,
-    required String apiKey,
-    http.Client? client,
-  }) async* {
-    if (model == null || model.isEmpty) {
-      throw StateError('No model selected');
-    }
-
-    final ownedClient = client == null;
-    final c = client ?? http.Client();
-    try {
-      final request =
-          http.Request('POST', Uri.parse('$baseUrl/chat/completions'));
-      request.headers['Content-Type'] = 'application/json';
-      if (apiKey.isNotEmpty) {
-        request.headers['Authorization'] = 'Bearer $apiKey';
-      }
-      request.body = jsonEncode({
-        'model': model,
-        'messages': messages,
-        'stream': true,
-      });
-
-      final streamedResponse =
-          await c.send(request).timeout(const Duration(seconds: 30));
-
-      if (streamedResponse.statusCode != 200) {
-        throw Exception('Server returned ${streamedResponse.statusCode}');
-      }
-
-      await for (final line in streamedResponse.stream
-          .transform(utf8.decoder)
-          .transform(const LineSplitter())) {
-        if (line.trim().isEmpty) continue;
-        if (line == 'data: [DONE]') return;
-        if (!line.startsWith('data: ')) continue;
-
-        try {
-          final jsonStr = line.substring(6); // strip 'data: ' prefix
-          final data = jsonDecode(jsonStr) as Map<String, dynamic>;
-          final choices = data['choices'] as List?;
-          if (choices == null || choices.isEmpty) continue;
-
-          final delta = choices[0]['delta'] as Map<String, dynamic>?;
-          final token = delta?['content'] as String? ?? '';
-          if (token.isNotEmpty) yield token;
-        } catch (_) {
-          // Malformed SSE line — skip
-        }
-      }
-    } finally {
-      if (ownedClient) c.close();
-    }
-  }
 
   // ── Vision chat ───────────────────────────────────────────────────────────
 
