@@ -1,3 +1,6 @@
+<img width="833" height="663" alt="image" src="https://github.com/user-attachments/assets/b00517e0-c16c-4b08-bebb-552bce9170ef" />
+<img width="833" height="648" alt="image" src="https://github.com/user-attachments/assets/4b6601c5-229e-4933-aad5-33295237d48c" />
+
 # Sats Stack
 
 A local-first, Bitcoin-native personal finance app built with Flutter. No cloud. No accounts. No tracking.
