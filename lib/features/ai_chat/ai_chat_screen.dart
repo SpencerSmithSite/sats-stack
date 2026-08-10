@@ -186,6 +186,12 @@ class _AiChatScreenState extends State<AiChatScreen> {
       AiProvider.ollama => app.ollamaService.baseUrl,
       AiProvider.lmStudio => app.ollamaService.lmStudioBaseUrl,
       AiProvider.maple => app.ollamaService.mapleBaseUrl,
+      // On-device backends have no server. The sheet hides its URL field when
+      // this is empty rather than showing a box that would be ignored.
+      AiProvider.appleIntelligence ||
+      AiProvider.geminiNano ||
+      AiProvider.localModel =>
+        '',
     };
     showModalBottomSheet(
       context: context,
@@ -204,6 +210,12 @@ class _AiChatScreenState extends State<AiChatScreen> {
               await app.ollamaService.saveLmStudioSettings(url: url, model: model);
             case AiProvider.maple:
               await app.ollamaService.saveMapleSettings(url: url, model: model);
+            case AiProvider.appleIntelligence:
+            case AiProvider.geminiNano:
+            case AiProvider.localModel:
+              // Nothing to save: no URL, and the model is either fixed by the
+              // OS or chosen in Settings, not here.
+              break;
           }
           if (mounted) setState(() {});
         },
@@ -612,11 +624,7 @@ class _OfflineState extends StatelessWidget {
     final theme = Theme.of(context);
     final isDesktop = PlatformUtils.isDesktop;
     final provider = app.ollamaService.activeProvider;
-    final providerName = switch (provider) {
-      AiProvider.ollama => 'Ollama',
-      AiProvider.lmStudio => 'LM Studio',
-      AiProvider.maple => 'Maple',
-    };
+    final providerName = provider.label;
     final isLocal =
         provider == AiProvider.ollama || provider == AiProvider.lmStudio;
     return Center(
@@ -782,17 +790,9 @@ class _AiSettingsSheetState extends State<_AiSettingsSheet> {
     super.dispose();
   }
 
-  String _providerLabel(AiProvider p) => switch (p) {
-        AiProvider.ollama => 'Ollama',
-        AiProvider.lmStudio => 'LM Studio',
-        AiProvider.maple => 'Maple',
-      };
+  String _providerLabel(AiProvider p) => p.label;
 
-  String _providerUrlHint(AiProvider p) => switch (p) {
-        AiProvider.ollama => 'http://localhost:11434',
-        AiProvider.lmStudio => AppConstants.defaultLmStudioUrl,
-        AiProvider.maple => AppConstants.defaultMapleUrl,
-      };
+  String _providerUrlHint(AiProvider p) => p.defaultUrl ?? '';
 
   Future<void> _testAndSave() async {
     setState(() { _testing = true; _testResult = null; });

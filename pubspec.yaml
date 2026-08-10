@@ -54,6 +54,24 @@ dependencies:
   # PDF text extraction
   syncfusion_flutter_pdf: ^28.1.0
 
+  # Runs a downloaded small language model on-device, for devices with no
+  # built-in one. Chosen over the alternatives on maintenance rather than
+  # features: `fllama`, `llama_cpp_dart` and `cactus` have all gone many months
+  # between releases, and an unmaintained dependency in the generation path is
+  # a liability.
+  flutter_gemma: ^1.4.2
+
+  # The engine that actually runs the weights. `flutter_gemma` is only a core
+  # since 1.0 and registers no engine on its own — without this, every download
+  # succeeds and then fails at the first question with "FlutterGemma not
+  # initialized".
+  #
+  # LiteRT-LM rather than the MediaPipe engine because it is the only one
+  # covering desktop as well as phones: it reads `.litertlm` on Android, iOS,
+  # macOS, Windows and Linux, where MediaPipe reads `.task` on Android and iOS
+  # alone.
+  flutter_gemma_litertlm: ^1.3.1
+
 flutter:
   uses-material-design: true
   assets:
@@ -66,6 +84,11 @@ flutter:
 
 dev_dependencies:
   flutter_test:
+    sdk: flutter
+  # Runs tests against a real Flutter engine on a real device, which is the only
+  # way to exercise the platform channels the on-device AI backends depend on —
+  # `flutter test` has no engine, so a MethodChannel there always returns null.
+  integration_test:
     sdk: flutter
   flutter_lints: ^5.0.0
   drift_dev: ^2.23.0

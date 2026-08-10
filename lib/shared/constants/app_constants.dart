@@ -46,4 +46,12 @@ abstract final class AppConstants {
   static const settingMapleModel = 'maple_model';
   static const settingMapleApiKey = 'maple_api_key';
   static const settingMapleConnected = 'maple_connected';
+
+  // On-device model settings
+  //
+  // Only the downloadable backend needs one: which model in the Qwen catalogue
+  // the user chose. Apple Intelligence and Gemini Nano each ship exactly one
+  // model that the OS owns, so there is nothing to persist for them beyond the
+  // provider selection itself.
+  static const settingLocalModelId = 'local_model_id';
 }

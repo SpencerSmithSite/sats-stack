@@ -10,12 +10,17 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../core/database/database.dart';
 import '../../core/models/ai_provider.dart';
+import '../../core/services/inference/gemini_nano_backend.dart';
+import '../../core/services/inference/inference_backend.dart';
+import '../../core/services/inference/local_model_backend.dart';
+import '../../core/services/inference/platform_llm_backend.dart';
 import '../../main.dart' as app;
 import '../../shared/constants/app_constants.dart';
 import '../../shared/theme/app_colors.dart';
 import '../../shared/utils/currency_utils.dart';
 import '../../shared/utils/platform_utils.dart';
 import 'widgets/categories_sheet.dart';
+import 'widgets/on_device_ai_section.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -73,6 +78,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     // AI provider
     _selectedProvider = app.ollamaService.activeProvider;
+    // Which on-device backends this hardware can offer, and — if one is already
+    // selected — whether it can answer right now.
+    _loadPlatformAvailability();
+    if (_selectedProvider.isOnDevice) _refreshOnDeviceStatus();
 
     // Ollama
     _ollamaUrlCtrl = TextEditingController(text: app.ollamaService.baseUrl);
@@ -122,6 +131,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
       case AiProvider.maple:
         final models = await app.ollamaService.listModels();
         if (mounted) setState(() => _mapleModels = models);
+      case AiProvider.appleIntelligence:
+      case AiProvider.geminiNano:
+      case AiProvider.localModel:
+        // No model list to fetch: Apple and Google each ship one model the OS
+        // owns, and the downloadable catalogue is a fixed list rendered by
+        // `_LocalModelSection` rather than something queried from a server.
+        // Ask instead whether the backend can answer, which is the equivalent
+        // question for these.
+        await app.ollamaService.refreshOnDeviceReadiness();
+        if (mounted) setState(() {});
     }
   }
 
@@ -201,8 +220,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _onProviderChanged(AiProvider provider) async {
     setState(() => _selectedProvider = provider);
     await app.ollamaService.setActiveProvider(provider);
-    app.aiEnabledNotifier.value =
-        PlatformUtils.isDesktop || app.ollamaService.isConnected;
+    // An on-device backend enables AI on mobile with no server at all, which
+    // the old `isDesktop || isConnected` test could not express.
+    app.aiEnabledNotifier.value = PlatformUtils.isDesktop ||
+        provider.isOnDevice ||
+        app.ollamaService.isConnected;
+    if (provider.isOnDevice) await _refreshOnDeviceStatus();
+  }
+
+  /// Last availability report for the selected on-device backend, so the status
+  /// panel can show the OS's own reason rather than a generic failure.
+  BackendStatus? _onDeviceStatus;
+
+  Future<void> _refreshOnDeviceStatus() async {
+    final status = await app.ollamaService.checkStatus();
+    if (mounted) setState(() => _onDeviceStatus = status);
   }
 
   // ── Ollama ──────────────────────────────────────────────────────────────
@@ -714,27 +746,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Provider selector
-                      SegmentedButton<AiProvider>(
-                        segments: const [
-                          ButtonSegment(
-                            value: AiProvider.ollama,
-                            label: Text('Ollama'),
-                          ),
-                          ButtonSegment(
-                            value: AiProvider.lmStudio,
-                            label: Text('LM Studio'),
-                          ),
-                          ButtonSegment(
-                            value: AiProvider.maple,
-                            label: Text('Maple'),
-                          ),
+                      // Provider selector.
+                      //
+                      // A Wrap of chips rather than the SegmentedButton this
+                      // replaced: three segments fitted, six do not, and a
+                      // segmented control has no way to hide the options a
+                      // device cannot use. `_offeredProviders` does that
+                      // filtering — a phone that can never run Apple
+                      // Intelligence is not helped by a permanently dead row.
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          for (final p in _offeredProviders)
+                            ChoiceChip(
+                              label: Text(p.label),
+                              selected: _selectedProvider == p,
+                              onSelected: (_) => _onProviderChanged(p),
+                              visualDensity: VisualDensity.compact,
+                            ),
                         ],
-                        selected: {_selectedProvider},
-                        onSelectionChanged: (s) =>
-                            _onProviderChanged(s.first),
-                        style: const ButtonStyle(
-                            visualDensity: VisualDensity.compact),
                       ),
                       const SizedBox(height: 10),
                       Text(
@@ -742,6 +773,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         style: theme.textTheme.bodySmall
                             ?.copyWith(color: AppColors.textSecondary),
                       ),
+                      // The one claim in this app that must never be wrong. A
+                      // hosted backend sends the user's complete financial
+                      // picture to a third party, and that cannot sit under a
+                      // blanket "local-first" promise unqualified.
+                      if (!_selectedProvider.isPrivate) ...[
+                        const SizedBox(height: 8),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(Icons.cloud_outlined,
+                                size: 15, color: Color(0xFFF7931A)),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                'Your transactions and balances are sent to '
+                                'this server to answer each question.',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: const Color(0xFFF7931A),
+                                  height: 1.4,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                       const SizedBox(height: 14),
 
                       // ── Ollama fields ───────────────────────────────
@@ -974,6 +1030,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ],
                   ),
                 ),
+
+                // ── On-device backends ──────────────────────────────────
+                //
+                // Rendered outside the padded Column above because each owns
+                // its own layout: a status panel for the platform models, and
+                // a full download catalogue for the local one.
+                if (_selectedProvider == AiProvider.appleIntelligence ||
+                    _selectedProvider == AiProvider.geminiNano)
+                  PlatformModelStatus(
+                    detail: _onDeviceStatus?.detail ??
+                        'Checking with the system…',
+                    isReady: _onDeviceStatus?.available ?? false,
+                    onRecheck: _refreshOnDeviceStatus,
+                  ),
+                // Offered whenever Nano is supported but not yet fetched —
+                // this is the only place the download can be started from.
+                if (_selectedProvider == AiProvider.geminiNano &&
+                    !(_onDeviceStatus?.available ?? true))
+                  GeminiNanoDownloadSection(
+                    onFinished: _refreshOnDeviceStatus,
+                  ),
+                if (_selectedProvider == AiProvider.localModel)
+                  LocalModelSection(onChanged: _refreshOnDeviceStatus),
+
                 const Divider(indent: 16, endIndent: 16),
               ],
               _SectionHeader('Bitcoin'),
@@ -1118,6 +1198,49 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  /// Which backends to put in the picker on this device.
+  ///
+  /// The server-backed three are always offered — they depend on something the
+  /// user sets up, not on the hardware. The on-device three are conditional,
+  /// and the condition is asked of the platform rather than inferred from a
+  /// version number: an iPhone 15 Pro on iOS 26 qualifies for Apple
+  /// Intelligence while an iPhone 14 on a newer iOS does not.
+  ///
+  /// A backend already selected stays listed even if it has since become
+  /// unavailable, so the picker cannot show an empty selection — the status
+  /// panel below explains the problem instead.
+  List<AiProvider> get _offeredProviders => [
+        AiProvider.ollama,
+        AiProvider.lmStudio,
+        AiProvider.maple,
+        if ((_appleLlm?.state.worthOffering ?? false) ||
+            _selectedProvider == AiProvider.appleIntelligence)
+          AiProvider.appleIntelligence,
+        if ((_nano?.state.worthOffering ?? false) ||
+            _selectedProvider == AiProvider.geminiNano)
+          AiProvider.geminiNano,
+        if (LocalModelChoice.runsHere) AiProvider.localModel,
+      ];
+
+  PlatformLlmAvailability? _appleLlm;
+  GeminiNanoAvailability? _nano;
+
+  /// Ask both platform backends once on open, so the picker knows what to show
+  /// before the user touches anything.
+  Future<void> _loadPlatformAvailability() async {
+    final apple = PlatformLlmBackend.bridgedHere
+        ? await PlatformLlmBackend.availability()
+        : null;
+    final nano =
+        GeminiNanoBackend.bridgedHere ? await GeminiNanoBackend.availability() : null;
+    if (mounted) {
+      setState(() {
+        _appleLlm = apple;
+        _nano = nano;
+      });
+    }
+  }
+
   String _providerDescription(AiProvider provider) => switch (provider) {
         AiProvider.ollama =>
           'Self-hosted, runs on your own server or home network.',
@@ -1125,6 +1248,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           'Fully local, runs models directly on this device. No data leaves.',
         AiProvider.maple =>
           'End-to-end encrypted cloud inference — fast, private, zero retention.',
+        AiProvider.appleIntelligence =>
+          'The model already on this Mac or iPhone. No download, no key.',
+        AiProvider.geminiNano =>
+          'The model built into this phone, run by Android. No key.',
+        AiProvider.localModel =>
+          'A small open model you download once, then run offline anywhere.',
       };
 
   String _themeName(ThemeMode mode) => switch (mode) {
