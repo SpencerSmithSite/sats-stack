@@ -7,11 +7,13 @@ import 'package:http/http.dart' as http;
 import '../database/database.dart';
 import '../models/ai_provider.dart';
 import '../../shared/constants/app_constants.dart';
+import 'inference/cloud_backend.dart';
 import 'inference/gemini_nano_backend.dart';
 import 'inference/inference_backend.dart';
 import 'inference/local_model_backend.dart';
 import 'inference/platform_llm_backend.dart';
 import 'inference/remote_backends.dart';
+import 'secure_key_store.dart';
 
 /// Owns the user's AI configuration and hands out the selected backend.
 ///
@@ -22,9 +24,14 @@ import 'inference/remote_backends.dart';
 /// each of those now delegates to whichever backend is selected rather than
 /// switching on a provider enum.
 class OllamaService {
-  OllamaService(this._db);
+  OllamaService(this._db, {SecureKeyStore keyStore = const SecureKeyStore()})
+      : _keyStore = keyStore;
 
   final AppDatabase _db;
+
+  /// Where API keys live. Injectable so tests can substitute a store that does
+  /// not need a platform keychain.
+  final SecureKeyStore _keyStore;
 
   // ── Ollama fields ─────────────────────────────────────────────────────────
 
@@ -44,6 +51,23 @@ class OllamaService {
   String? _mapleSelectedModel;
   String _mapleApiKey = '';
   bool _mapleConnected = false;
+
+  /// The keychain entry name Maple's key uses. Not a [CloudProvider] — Maple is
+  /// configured like a server, with its own URL — but its key is a credential
+  /// like any other and belongs in the same store.
+  static const String _mapleKeyId = 'maple';
+
+  // ── Hosted provider fields ────────────────────────────────────────────────
+
+  /// Per-provider model, key and last verified connection state, keyed by
+  /// [CloudProvider.id].
+  ///
+  /// Maps rather than four sets of fields: the four providers differ only in
+  /// their wire format, which `CloudBackend` owns, so duplicating the storage
+  /// four times would only create four places to forget to update.
+  final Map<String, String> _cloudModels = {};
+  final Map<String, String> _cloudKeys = {};
+  final Map<String, bool> _cloudConnected = {};
 
   // ── On-device fields ──────────────────────────────────────────────────────
 
@@ -101,7 +125,33 @@ class OllamaService {
         AiProvider.appleIntelligence => const PlatformLlmBackend(),
         AiProvider.geminiNano => const GeminiNanoBackend(),
         AiProvider.localModel => LocalModelBackend(choice: localModel),
+        AiProvider.claude ||
+        AiProvider.chatGpt ||
+        AiProvider.gemini ||
+        AiProvider.grok =>
+          cloudBackendFor(_activeProvider.cloudProvider!),
       };
+
+  /// The backend for a hosted provider, whether or not it is the active one.
+  ///
+  /// Settings needs this to fetch a model list for a provider the user is
+  /// configuring but has not switched to yet.
+  CloudBackend cloudBackendFor(CloudProvider provider) => CloudBackend(
+        provider: provider,
+        model: cloudModel(provider),
+        apiKey: cloudApiKey(provider),
+      );
+
+  /// The chosen model for a hosted provider, falling back to its default.
+  String cloudModel(CloudProvider provider) =>
+      _cloudModels[provider.id] ?? provider.defaultModel;
+
+  /// The saved API key for a hosted provider, or an empty string.
+  String cloudApiKey(CloudProvider provider) => _cloudKeys[provider.id] ?? '';
+
+  /// Whether a hosted provider's key was accepted the last time it was checked.
+  bool cloudConnected(CloudProvider provider) =>
+      _cloudConnected[provider.id] ?? false;
 
   /// How much financial context the active backend can usefully take.
   ///
@@ -131,6 +181,11 @@ class OllamaService {
         AiProvider.maple => _mapleSelectedModel,
         AiProvider.localModel => localModel.name,
         AiProvider.appleIntelligence || AiProvider.geminiNano => null,
+        AiProvider.claude ||
+        AiProvider.chatGpt ||
+        AiProvider.gemini ||
+        AiProvider.grok =>
+          cloudModel(_activeProvider.cloudProvider!),
       };
 
   // Per-provider model getters (used by settings screen to show all providers).
@@ -154,6 +209,11 @@ class OllamaService {
         AiProvider.geminiNano ||
         AiProvider.localModel =>
           _onDeviceReady,
+        AiProvider.claude ||
+        AiProvider.chatGpt ||
+        AiProvider.gemini ||
+        AiProvider.grok =>
+          cloudConnected(_activeProvider.cloudProvider!),
       };
 
   bool _onDeviceReady = false;
@@ -195,8 +255,20 @@ class OllamaService {
     // Maple
     _mapleBaseUrl = map[AppConstants.settingMapleUrl] ?? AppConstants.defaultMapleUrl;
     _mapleSelectedModel = map[AppConstants.settingMapleModel];
-    _mapleApiKey = map[AppConstants.settingMapleApiKey] ?? '';
     _mapleConnected = map[AppConstants.settingMapleConnected] == 'true';
+    _mapleApiKey = await _keyStore.read(_mapleKeyId);
+
+    // Hosted providers. Models and connection state come from settings; the
+    // keys come from the keychain.
+    for (final p in CloudProvider.values) {
+      final model = map[AppConstants.cloudModelKey(p.id)];
+      if (model != null && model.isNotEmpty) _cloudModels[p.id] = model;
+      _cloudConnected[p.id] =
+          map[AppConstants.cloudConnectedKey(p.id)] == 'true';
+      _cloudKeys[p.id] = await _keyStore.read(p.id);
+    }
+
+    await _migrateMapleKeyToKeychain(map);
 
     // Active provider
     _activeProvider = AiProvider.fromKey(map[AppConstants.settingAiProvider]);
@@ -213,6 +285,36 @@ class OllamaService {
     if (_activeProvider.isOnDevice) {
       unawaited(refreshOnDeviceReadiness());
     }
+  }
+
+  /// Move a Maple key written by an earlier build out of the settings table.
+  ///
+  /// Earlier builds stored it as plaintext in `AppSettings`, which Settings →
+  /// Data exports wholesale. Migrating on load rather than in a schema
+  /// migration because the destination is the keychain, not another table — a
+  /// Drift migration cannot reach it, and this has to survive a restore from a
+  /// backup taken before the move.
+  ///
+  /// The row is deleted only after the keychain write is confirmed. If the
+  /// keychain is unavailable the plaintext value is left where it is and kept
+  /// in memory, so the user's Maple setup keeps working and the migration
+  /// simply retries next launch. Deleting first would lose the key outright.
+  Future<void> _migrateMapleKeyToKeychain(Map<String, String> settings) async {
+    final legacy = settings[AppConstants.settingMapleApiKey];
+    if (legacy == null || legacy.isEmpty) return;
+
+    if (_mapleApiKey.isEmpty) {
+      final stored = await _keyStore.write(_mapleKeyId, legacy);
+      if (!stored) {
+        _mapleApiKey = legacy;
+        return;
+      }
+      _mapleApiKey = legacy;
+    }
+
+    await (_db.delete(_db.appSettings)
+          ..where((t) => t.key.equals(AppConstants.settingMapleApiKey)))
+        .go();
   }
 
   /// Persist the downloadable-model choice.
@@ -246,7 +348,15 @@ class OllamaService {
   }
 
   /// Persist Maple settings.
-  Future<void> saveMapleSettings({String? url, String? model, String? apiKey}) async {
+  ///
+  /// Returns false if an API key was supplied and the keychain refused it —
+  /// the caller should tell the user rather than letting a key that will not
+  /// survive the next launch look saved.
+  Future<bool> saveMapleSettings({
+    String? url,
+    String? model,
+    String? apiKey,
+  }) async {
     if (url != null) {
       _mapleBaseUrl = url;
       await _upsertSetting(AppConstants.settingMapleUrl, url);
@@ -257,8 +367,49 @@ class OllamaService {
     }
     if (apiKey != null) {
       _mapleApiKey = apiKey;
-      await _upsertSetting(AppConstants.settingMapleApiKey, apiKey);
+      return _keyStore.write(_mapleKeyId, apiKey);
     }
+    return true;
+  }
+
+  /// Persist a hosted provider's model and/or API key.
+  ///
+  /// Returns false if an API key was supplied and the keychain refused it. The
+  /// value is still held in memory so the session keeps working, but it will
+  /// not be there next launch and the user needs to know that.
+  Future<bool> saveCloudSettings(
+    CloudProvider provider, {
+    String? model,
+    String? apiKey,
+  }) async {
+    if (model != null && model.isNotEmpty) {
+      _cloudModels[provider.id] = model;
+      await _upsertSetting(AppConstants.cloudModelKey(provider.id), model);
+    }
+    if (apiKey != null) {
+      final trimmed = apiKey.trim();
+      _cloudKeys[provider.id] = trimmed;
+      // A key that changed invalidates whatever the last check concluded.
+      _cloudConnected[provider.id] = false;
+      await _upsertSetting(
+        AppConstants.cloudConnectedKey(provider.id),
+        'false',
+      );
+      return _keyStore.write(provider.id, trimmed);
+    }
+    return true;
+  }
+
+  /// Forget every stored API key. Called by Settings → Danger Zone → Reset all
+  /// data, where credentials surviving a reset would be a surprise.
+  Future<void> clearAllApiKeys() async {
+    for (final p in CloudProvider.values) {
+      await _keyStore.delete(p.id);
+      _cloudKeys[p.id] = '';
+      _cloudConnected[p.id] = false;
+    }
+    await _keyStore.delete(_mapleKeyId);
+    _mapleApiKey = '';
   }
 
   /// Save the model for whichever provider is currently active.
@@ -280,6 +431,14 @@ class OllamaService {
             (m) => m.name == model,
             orElse: () => localModel,
           ),
+        );
+      case AiProvider.claude:
+      case AiProvider.chatGpt:
+      case AiProvider.gemini:
+      case AiProvider.grok:
+        await saveCloudSettings(
+          _activeProvider.cloudProvider!,
+          model: model,
         );
       case AiProvider.appleIntelligence:
       case AiProvider.geminiNano:
@@ -312,6 +471,16 @@ class OllamaService {
         _mapleConnected = value;
         await _upsertSetting(
             AppConstants.settingMapleConnected, value.toString());
+      case AiProvider.claude:
+      case AiProvider.chatGpt:
+      case AiProvider.gemini:
+      case AiProvider.grok:
+        final p = _activeProvider.cloudProvider!;
+        _cloudConnected[p.id] = value;
+        await _upsertSetting(
+          AppConstants.cloudConnectedKey(p.id),
+          value.toString(),
+        );
       case AiProvider.appleIntelligence:
       case AiProvider.geminiNano:
       case AiProvider.localModel:
@@ -341,30 +510,6 @@ class OllamaService {
   /// say what is wrong: "Apple Intelligence is switched off. Turn it on in
   /// Settings" is actionable in a way that a greyed-out row is not.
   Future<BackendStatus> checkStatus() => backend.checkStatus();
-
-  Future<bool> _ollamaIsAvailable(String url) async {
-    try {
-      final response = await http
-          .get(Uri.parse('$url/api/tags'))
-          .timeout(const Duration(seconds: 5));
-      return response.statusCode == 200;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  Future<bool> _openAiIsAvailable(String url, String apiKey) async {
-    try {
-      final headers = <String, String>{};
-      if (apiKey.isNotEmpty) headers['Authorization'] = 'Bearer $apiKey';
-      final response = await http
-          .get(Uri.parse('$url/models'), headers: headers)
-          .timeout(const Duration(seconds: 5));
-      return response.statusCode == 200;
-    } catch (_) {
-      return false;
-    }
-  }
 
   // ── Models ────────────────────────────────────────────────────────────────
 
@@ -534,6 +679,18 @@ Top spending categories this month:
           baseUrl: _mapleBaseUrl,
           model: _mapleSelectedModel,
           apiKey: _mapleApiKey,
+          client: client,
+        );
+      case AiProvider.claude:
+      case AiProvider.chatGpt:
+      case AiProvider.gemini:
+      case AiProvider.grok:
+        // Every hosted provider reads images, and they are by some margin the
+        // best thing to point the receipt import at.
+        yield* cloudBackendFor(_activeProvider.cloudProvider!).chatWithImage(
+          prompt,
+          base64Image,
+          mimeType: mimeType,
           client: client,
         );
       case AiProvider.appleIntelligence:

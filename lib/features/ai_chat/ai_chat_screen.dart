@@ -186,11 +186,17 @@ class _AiChatScreenState extends State<AiChatScreen> {
       AiProvider.ollama => app.ollamaService.baseUrl,
       AiProvider.lmStudio => app.ollamaService.lmStudioBaseUrl,
       AiProvider.maple => app.ollamaService.mapleBaseUrl,
-      // On-device backends have no server. The sheet hides its URL field when
-      // this is empty rather than showing a box that would be ignored.
+      // On-device backends have no server, and a hosted service has one fixed
+      // endpoint the user must not be invited to edit. The sheet hides its URL
+      // field when this is empty rather than showing a box that would be
+      // ignored — or, worse, one they could mistype and send their finances to.
       AiProvider.appleIntelligence ||
       AiProvider.geminiNano ||
-      AiProvider.localModel =>
+      AiProvider.localModel ||
+      AiProvider.claude ||
+      AiProvider.chatGpt ||
+      AiProvider.gemini ||
+      AiProvider.grok =>
         '',
     };
     showModalBottomSheet(
@@ -210,6 +216,14 @@ class _AiChatScreenState extends State<AiChatScreen> {
               await app.ollamaService.saveLmStudioSettings(url: url, model: model);
             case AiProvider.maple:
               await app.ollamaService.saveMapleSettings(url: url, model: model);
+            case AiProvider.claude:
+            case AiProvider.chatGpt:
+            case AiProvider.gemini:
+            case AiProvider.grok:
+              // The model is the only editable part; the endpoint is fixed and
+              // the API key is entered in Settings, never here.
+              await app.ollamaService
+                  .saveCloudSettings(provider.cloudProvider!, model: model);
             case AiProvider.appleIntelligence:
             case AiProvider.geminiNano:
             case AiProvider.localModel:

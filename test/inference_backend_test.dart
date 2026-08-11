@@ -27,18 +27,35 @@ void main() {
       expect(keys.length, AiProvider.values.length);
     });
 
-    test('only the hosted backend is marked as leaving the device', () {
-      // The one claim in the app that must never be wrong.
-      expect(AiProvider.maple.isPrivate, isFalse);
-      for (final p in AiProvider.values.where((p) => p != AiProvider.maple)) {
-        expect(p.isPrivate, isTrue, reason: '${p.name} should be private');
+    test('exactly the hosted backends are marked as leaving the device', () {
+      // The one claim in the app that must never be wrong. Stated as "privacy
+      // and having a named recipient are opposites" rather than by listing the
+      // hosted providers, so adding a backend cannot pass this test by being
+      // forgotten — a new value with no `dataRecipient` that claims privacy it
+      // does not have will fail here.
+      for (final p in AiProvider.values) {
+        expect(p.isPrivate, p.dataRecipient == null,
+            reason: '${p.name}: isPrivate must match having a data recipient');
       }
+      expect(
+        AiProvider.values.where((p) => !p.isPrivate).toSet(),
+        {
+          AiProvider.maple,
+          AiProvider.claude,
+          AiProvider.chatGpt,
+          AiProvider.gemini,
+          AiProvider.grok,
+        },
+      );
     });
 
-    test('on-device backends have no server URL to configure', () {
+    test('only a backend with a server the user runs offers a URL field', () {
+      // Null hides the URL box. On-device backends have nothing to point at,
+      // and a hosted service has one fixed endpoint the user must not be able
+      // to mistype their finances into.
       for (final p in AiProvider.values) {
-        expect(p.defaultUrl == null, p.isOnDevice,
-            reason: '${p.name}: defaultUrl and isOnDevice must agree');
+        expect(p.defaultUrl == null, p.isOnDevice || p.needsApiKey,
+            reason: '${p.name}: defaultUrl disagrees with how it is configured');
       }
     });
   });

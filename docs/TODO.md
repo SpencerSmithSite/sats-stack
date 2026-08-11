@@ -5,7 +5,41 @@ this file — see [AGENT_ACCESS_PLAN.md](AGENT_ACCESS_PLAN.md).
 
 ---
 
-## 1. Cloud LLM providers — Claude, ChatGPT, Gemini, Grok
+## ✅ 1. Cloud LLM providers — Claude, ChatGPT, Gemini, Grok
+
+**Status: done.** `CloudProvider` + `CloudBackend` in
+[`lib/core/services/inference/cloud_backend.dart`](../lib/core/services/inference/cloud_backend.dart),
+four new `AiProvider` values, key storage moved to the keychain, Settings and
+onboarding both reworked around a grouped chooser. What follows is the original
+plan, kept because the notes explain *why* the shape is what it is.
+
+**Two things landed differently from the plan:**
+
+- **Model lists are fetched live**, not hardcoded. All four providers expose a
+  models endpoint, so the picker queries it and falls back to a static list when
+  there is no key or no network. A hardcoded list starts going stale the day it
+  ships — which is exactly what happened to Council's.
+- **macOS uses the file-based keychain**, not the data-protection one
+  (`useDataProtectionKeyChain: false`). The data-protection keychain needs a
+  `keychain-access-groups` entitlement, which needs the macOS bundle id
+  (`com.satsstack.satsStack`) registered with Apple and a real provisioning
+  profile — the target is currently ad-hoc signed. Until that is done, writes to
+  the data-protection keychain fail at runtime with `errSecMissingEntitlement`.
+  See the comment in `secure_key_store.dart`. **iOS is unaffected** — it is
+  properly signed and uses the default.
+
+### Follow-up worth doing
+
+- **Register the macOS bundle id** and switch to the data-protection keychain.
+  Needed anyway for any kind of macOS distribution.
+- **Verify a real request against each provider.** Every wire format is unit
+  tested against the documented shape, but nothing here has been run against a
+  live endpoint with a real key — that needs four paid accounts.
+
+---
+
+<details>
+<summary>Original plan (for the reasoning)</summary>
 
 **Status:** not started · **Effort:** medium
 
@@ -54,9 +88,21 @@ this work, and migrate the existing Maple key out of the database. Council
 already does this: keys go to secure storage, everything else stays in ordinary
 preferences.
 
+</details>
+
 ---
 
-## 2. Onboarding — reflect the full backend list
+## ✅ 2. Onboarding — reflect the full backend list
+
+**Status: done.** The AI step is now a grouped, device-filtered chooser built on
+`AiBackendCatalogue`
+([`lib/core/models/ai_backend_group.dart`](../lib/core/models/ai_backend_group.dart)),
+which Settings shares so the two cannot drift. On a device with a built-in model
+the step preselects it and says so; the availability probe starts in `initState`
+so the right option is already selected by the time the user pages to it.
+
+<details>
+<summary>Original plan</summary>
 
 **Status:** not started · **Effort:** small–medium · **Depends on:** #1
 
@@ -80,6 +126,8 @@ providers. It needs to become a real backend chooser:
 `_ProviderConfigSection` in `onboarding_screen.dart` already branches on
 `provider.isOnDevice` to hide the URL field and show a contextual note; extend
 that rather than starting over.
+
+</details>
 
 ---
 
@@ -111,4 +159,6 @@ Untracked and **not** committed, because two of them do not compile:
   `lib/features/transactions/widgets/manage_wallets_sheet.dart`,
   `test/scripthash_test.dart` — appear complete but are untracked.
 
-Adding `flutter_secure_storage` for item #1 would resolve half of the first two.
+`flutter_secure_storage` is now a dependency (item #1), so the missing-package
+half of the first two is resolved. Both still need their `AppConstants` keys
+added before they will compile.
