@@ -9,16 +9,18 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../../core/database/database.dart';
+import '../../core/models/ai_backend_group.dart';
 import '../../core/models/ai_provider.dart';
+import '../../core/services/inference/cloud_backend.dart';
 import '../../core/services/inference/gemini_nano_backend.dart';
 import '../../core/services/inference/inference_backend.dart';
-import '../../core/services/inference/local_model_backend.dart';
 import '../../core/services/inference/platform_llm_backend.dart';
 import '../../main.dart' as app;
 import '../../shared/constants/app_constants.dart';
 import '../../shared/theme/app_colors.dart';
 import '../../shared/utils/currency_utils.dart';
 import '../../shared/utils/platform_utils.dart';
+import '../../shared/widgets/ai_privacy_disclosure.dart';
 import 'widgets/categories_sheet.dart';
 import 'widgets/on_device_ai_section.dart';
 
@@ -62,6 +64,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _testingMaple = false;
   String? _mapleStatus;
 
+  // AI — hosted providers (Claude, ChatGPT, Gemini, Grok)
+  //
+  // Keyed by `CloudProvider.id` rather than four sets of fields, because the
+  // four differ only in their wire format and that is `CloudBackend`'s problem,
+  // not this screen's.
+  final Map<String, TextEditingController> _cloudKeyCtrls = {};
+  final Map<String, List<String>> _cloudModels = {};
+  final Map<String, String> _cloudSelectedModel = {};
+  final Map<String, bool> _cloudKeyVisible = {};
+  String? _testingCloudId;
+  String? _cloudStatus;
+
   // Bitcoin servers
   late TextEditingController _esploraUrlCtrl;
   bool _testingEsplora = false;
@@ -98,6 +112,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
         TextEditingController(text: app.ollamaService.mapleApiKey);
     _mapleSelectedModel = app.ollamaService.mapleSelectedModel;
 
+    // Hosted providers. The key field is seeded from the keychain so an already
+    // configured provider does not look empty, and the model list starts as the
+    // static fallback so the dropdown is useful before any key is entered.
+    for (final p in CloudProvider.values) {
+      _cloudKeyCtrls[p.id] =
+          TextEditingController(text: app.ollamaService.cloudApiKey(p));
+      _cloudModels[p.id] = p.fallbackModels;
+      _cloudSelectedModel[p.id] = app.ollamaService.cloudModel(p);
+      _cloudKeyVisible[p.id] = false;
+    }
+
     // Use empty string when the default server is active so the field shows
     // the placeholder hint instead of the literal mempool.space URL.
     final storedUrl = app.xpubService.esploraBaseUrl;
@@ -115,6 +140,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _lmStudioUrlCtrl.dispose();
     _mapleUrlCtrl.dispose();
     _mapleApiKeyCtrl.dispose();
+    for (final c in _cloudKeyCtrls.values) {
+      c.dispose();
+    }
     _esploraUrlCtrl.dispose();
     super.dispose();
   }
@@ -131,6 +159,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
       case AiProvider.maple:
         final models = await app.ollamaService.listModels();
         if (mounted) setState(() => _mapleModels = models);
+      case AiProvider.claude:
+      case AiProvider.chatGpt:
+      case AiProvider.gemini:
+      case AiProvider.grok:
+        // Fetched live from the provider so a model released after this build
+        // still shows up. Falls back to the static list inside the backend, so
+        // this is safe to call with no key and no network.
+        final p = _selectedProvider.cloudProvider!;
+        final models = await app.ollamaService.listModels();
+        if (mounted) setState(() => _cloudModels[p.id] = models);
       case AiProvider.appleIntelligence:
       case AiProvider.geminiNano:
       case AiProvider.localModel:
@@ -218,14 +256,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _onProviderChanged(AiProvider provider) async {
-    setState(() => _selectedProvider = provider);
+    setState(() {
+      _selectedProvider = provider;
+      // Belongs to whichever provider was selected when it was written.
+      _cloudStatus = null;
+    });
     await app.ollamaService.setActiveProvider(provider);
     // An on-device backend enables AI on mobile with no server at all, which
-    // the old `isDesktop || isConnected` test could not express.
+    // the old `isDesktop || isConnected` test could not express. A hosted
+    // provider does the same once its key is in place — it needs no local
+    // server either, so the tab must appear on a phone.
     app.aiEnabledNotifier.value = PlatformUtils.isDesktop ||
         provider.isOnDevice ||
         app.ollamaService.isConnected;
     if (provider.isOnDevice) await _refreshOnDeviceStatus();
+    if (provider.needsApiKey) await _loadModels();
   }
 
   /// Last availability report for the selected on-device backend, so the status
@@ -326,6 +371,70 @@ class _SettingsScreenState extends State<SettingsScreen> {
       setState(() {
         _testingLmStudio = false;
         _lmStudioStatus = 'Could not reach LM Studio at $url';
+      });
+    }
+  }
+
+  // ── Hosted providers ────────────────────────────────────────────────────
+
+  /// Save the key and model for [p].
+  ///
+  /// The key goes to the keychain, which can refuse — a locked device, a
+  /// keyring daemon that is not running. That has to be surfaced rather than
+  /// swallowed: the backend keeps working for this session either way, so a
+  /// silent failure looks like success until the next launch, when the provider
+  /// mysteriously has no key.
+  Future<void> _saveCloud(CloudProvider p) async {
+    final key = _cloudKeyCtrls[p.id]!.text.trim();
+    final stored = await app.ollamaService.saveCloudSettings(
+      p,
+      model: _cloudSelectedModel[p.id],
+      apiKey: key,
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          stored
+              ? '${p.label} settings saved'
+              : 'Saved for this session only — this device would not let the '
+                  'app store the key securely.',
+        ),
+        backgroundColor: stored ? null : AppColors.danger,
+      ),
+    );
+  }
+
+  Future<void> _testCloudConnection(CloudProvider p) async {
+    setState(() {
+      _testingCloudId = p.id;
+      _cloudStatus = null;
+    });
+    await app.ollamaService.saveCloudSettings(
+      p,
+      apiKey: _cloudKeyCtrls[p.id]!.text.trim(),
+    );
+
+    final status = await app.ollamaService.checkStatus();
+    if (!mounted) return;
+
+    if (status.available) {
+      final models = await app.ollamaService.listModels();
+      await app.ollamaService.setConnected(true);
+      app.aiEnabledNotifier.value = true;
+      if (!mounted) return;
+      setState(() {
+        _cloudModels[p.id] = models;
+        _testingCloudId = null;
+        _cloudStatus = 'Connected — ${models.length} model(s) available';
+      });
+    } else {
+      await app.ollamaService.setConnected(false);
+      app.aiEnabledNotifier.value = PlatformUtils.isDesktop;
+      if (!mounted) return;
+      setState(() {
+        _testingCloudId = null;
+        _cloudStatus = status.detail ?? 'Could not reach ${p.host}.';
       });
     }
   }
@@ -555,7 +664,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (ctx) => AlertDialog(
         title: const Text('Reset all data?'),
         content: const Text(
-          'This will permanently delete all transactions, wallets, budgets, AI conversations, and settings.\n\nThis cannot be undone.',
+          'This will permanently delete all transactions, wallets, budgets, AI conversations, settings, and any saved AI API keys.\n\nThis cannot be undone.',
         ),
         actions: [
           TextButton(
@@ -574,6 +683,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (confirmed != true || !mounted) return;
 
     await app.db.resetAndReseed();
+    // API keys live in the keychain, so `resetAndReseed` cannot reach them.
+    // Leaving a user's credentials behind after "delete everything" would be a
+    // genuine surprise — and on a shared or resold device, a real leak.
+    await app.ollamaService.clearAllApiKeys();
     app.themeModeNotifier.value = ThemeMode.dark;
 
     if (mounted) context.go('/onboarding');
@@ -746,28 +859,51 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // Pin the column to the full available width.
+                      //
+                      // Without this it sizes to its widest child, so the whole
+                      // picker slides horizontally as the selection changes:
+                      // a backend whose fields are narrow (the chips alone)
+                      // centres the block, while one with a full-width privacy
+                      // banner left-aligns it.
+                      const SizedBox(width: double.infinity),
                       // Provider selector.
                       //
-                      // A Wrap of chips rather than the SegmentedButton this
-                      // replaced: three segments fitted, six do not, and a
-                      // segmented control has no way to hide the options a
-                      // device cannot use. `_offeredProviders` does that
-                      // filtering — a phone that can never run Apple
-                      // Intelligence is not helped by a permanently dead row.
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          for (final p in _offeredProviders)
-                            ChoiceChip(
-                              label: Text(p.label),
-                              selected: _selectedProvider == p,
-                              onSelected: (_) => _onProviderChanged(p),
-                              visualDensity: VisualDensity.compact,
+                      // Chips grouped by how the backend runs rather than one
+                      // flat Wrap: ten options in a single row of chips is a
+                      // wall, and the distinction that actually matters when
+                      // choosing — on my device, my server, or someone else's
+                      // — is invisible in a flat list. `_catalogue` also hides
+                      // the options this hardware cannot use, since a phone
+                      // that can never run Apple Intelligence is not helped by
+                      // a permanently dead row.
+                      for (final group in _catalogue.nonEmptyGroups) ...[
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Text(
+                            group.title.toUpperCase(),
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: AppColors.textSecondary,
+                              letterSpacing: 0.8,
+                              fontWeight: FontWeight.w600,
                             ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
+                          ),
+                        ),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            for (final p in _catalogue.providersIn(group))
+                              ChoiceChip(
+                                label: Text(p.label),
+                                selected: _selectedProvider == p,
+                                onSelected: (_) => _onProviderChanged(p),
+                                visualDensity: VisualDensity.compact,
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                      ],
                       Text(
                         _providerDescription(_selectedProvider),
                         style: theme.textTheme.bodySmall
@@ -779,24 +915,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       // blanket "local-first" promise unqualified.
                       if (!_selectedProvider.isPrivate) ...[
                         const SizedBox(height: 8),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Icon(Icons.cloud_outlined,
-                                size: 15, color: Color(0xFFF7931A)),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                'Your transactions and balances are sent to '
-                                'this server to answer each question.',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: const Color(0xFFF7931A),
-                                  height: 1.4,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
+                        AiPrivacyDisclosure(provider: _selectedProvider),
                       ],
                       const SizedBox(height: 14),
 
@@ -1027,6 +1146,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ],
                         ),
                       ],
+
+                      // ── Hosted provider fields ──────────────────────
+                      //
+                      // One block for all four. They differ only in their
+                      // endpoint and model list, both of which come off
+                      // `CloudProvider`, so there is nothing per-provider to
+                      // branch on here.
+                      if (_selectedProvider.cloudProvider case final cloud?)
+                        ..._cloudFields(theme, cloud),
                     ],
                   ),
                 ),
@@ -1209,18 +1337,103 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// A backend already selected stays listed even if it has since become
   /// unavailable, so the picker cannot show an empty selection — the status
   /// panel below explains the problem instead.
-  List<AiProvider> get _offeredProviders => [
-        AiProvider.ollama,
-        AiProvider.lmStudio,
-        AiProvider.maple,
-        if ((_appleLlm?.state.worthOffering ?? false) ||
-            _selectedProvider == AiProvider.appleIntelligence)
-          AiProvider.appleIntelligence,
-        if ((_nano?.state.worthOffering ?? false) ||
-            _selectedProvider == AiProvider.geminiNano)
-          AiProvider.geminiNano,
-        if (LocalModelChoice.runsHere) AiProvider.localModel,
-      ];
+  /// Key field, model picker and connection test for a hosted provider.
+  List<Widget> _cloudFields(ThemeData theme, CloudProvider cloud) {
+    final ctrl = _cloudKeyCtrls[cloud.id]!;
+    final models = _cloudModels[cloud.id] ?? cloud.fallbackModels;
+    final selected = _cloudSelectedModel[cloud.id];
+    final visible = _cloudKeyVisible[cloud.id] ?? false;
+    final testing = _testingCloudId == cloud.id;
+    // Advisory only. A key whose prefix has changed is still a valid key, and
+    // refusing it would be far worse than accepting one that turns out to be
+    // wrong — the connection test is what actually decides.
+    final looksWrong = ctrl.text.trim().isNotEmpty &&
+        !ctrl.text.trim().startsWith(cloud.keyPrefix);
+
+    return [
+      TextField(
+        controller: ctrl,
+        obscureText: !visible,
+        autocorrect: false,
+        enableSuggestions: false,
+        onChanged: (_) => setState(() {}),
+        decoration: InputDecoration(
+          labelText: '${cloud.label} API key',
+          hintText: '${cloud.keyPrefix}…',
+          helperText: looksWrong
+              ? '${cloud.label} keys usually start with "${cloud.keyPrefix}".'
+              : 'Stored in this device\'s keychain, not in the app database.',
+          helperMaxLines: 2,
+          suffixIcon: IconButton(
+            icon: Icon(
+              visible ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+              size: 19,
+            ),
+            tooltip: visible ? 'Hide key' : 'Show key',
+            onPressed: () =>
+                setState(() => _cloudKeyVisible[cloud.id] = !visible),
+          ),
+        ),
+      ),
+      ApiKeyHelpLink(provider: _selectedProvider),
+      const SizedBox(height: 4),
+      DropdownButtonFormField<String>(
+        // The saved model may not be in the live list — deprecated, or only
+        // available on a different tier — so fall back to showing no selection
+        // rather than throwing on a value the dropdown has no item for.
+        initialValue: models.contains(selected) ? selected : null,
+        decoration: const InputDecoration(labelText: 'Model'),
+        hint: Text(selected ?? cloud.defaultModel),
+        items: models
+            .map((m) => DropdownMenuItem(value: m, child: Text(m)))
+            .toList(),
+        onChanged: (v) {
+          if (v == null) return;
+          setState(() => _cloudSelectedModel[cloud.id] = v);
+        },
+      ),
+      const SizedBox(height: 12),
+      if (_cloudStatus != null)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Text(
+            _cloudStatus!,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: _cloudStatus!.startsWith('Connected')
+                  ? AppColors.success
+                  : AppColors.danger,
+            ),
+          ),
+        ),
+      Row(
+        children: [
+          OutlinedButton.icon(
+            onPressed: testing ? null : () => _testCloudConnection(cloud),
+            icon: testing
+                ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.wifi_tethering_outlined, size: 18),
+            label: const Text('Test key'),
+          ),
+          const SizedBox(width: 8),
+          FilledButton(
+            onPressed: () => _saveCloud(cloud),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    ];
+  }
+
+  AiBackendCatalogue get _catalogue => AiBackendCatalogue(
+        appleIntelligenceOffered: _appleLlm?.state.worthOffering ?? false,
+        geminiNanoOffered: _nano?.state.worthOffering ?? false,
+        downloadableOffered: AiBackendCatalogue.downloadableRunsHere,
+        keepSelected: _selectedProvider,
+      );
 
   PlatformLlmAvailability? _appleLlm;
   GeminiNanoAvailability? _nano;
@@ -1246,14 +1459,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
           'Self-hosted, runs on your own server or home network.',
         AiProvider.lmStudio =>
           'Fully local, runs models directly on this device. No data leaves.',
+        // Deliberately not "private, zero retention" as this once read. Maple
+        // may well be both, but the app cannot verify either, and a claim it
+        // cannot stand behind does not belong next to a backend that is, by
+        // construction, off-device.
         AiProvider.maple =>
-          'End-to-end encrypted cloud inference — fast, private, zero retention.',
+          'A hosted OpenAI-compatible endpoint you point at yourself.',
         AiProvider.appleIntelligence =>
           'The model already on this Mac or iPhone. No download, no key.',
         AiProvider.geminiNano =>
           'The model built into this phone, run by Android. No key.',
         AiProvider.localModel =>
           'A small open model you download once, then run offline anywhere.',
+        AiProvider.claude ||
+        AiProvider.chatGpt ||
+        AiProvider.gemini ||
+        AiProvider.grok =>
+          'By far the most capable option, using your own '
+              '${provider.cloudProvider!.company} API key. You pay '
+              '${provider.cloudProvider!.company} directly for what you use.',
       };
 
   String _themeName(ThemeMode mode) => switch (mode) {

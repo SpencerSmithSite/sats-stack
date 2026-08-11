@@ -44,8 +44,24 @@ abstract final class AppConstants {
   static const defaultMapleUrl = 'http://localhost:8080/v1';
   static const settingMapleUrl = 'maple_url';
   static const settingMapleModel = 'maple_model';
+
+  /// Legacy location of the Maple API key.
+  ///
+  /// Read once at startup and migrated into `SecureKeyStore`, then the row is
+  /// deleted. Kept as a constant only so the migration can find it; nothing
+  /// writes here any more.
   static const settingMapleApiKey = 'maple_api_key';
   static const settingMapleConnected = 'maple_connected';
+
+  // Hosted AI providers (Claude, ChatGPT, Gemini, Grok)
+  //
+  // Only the model choice and the last verified connection state live here.
+  // The API key does NOT — it goes to `SecureKeyStore`, because this table is
+  // ordinary SQLite that Settings → Data exports wholesale. Keyed by the
+  // `CloudProvider.id` so a new provider needs no new constant.
+  static String cloudModelKey(String providerId) => 'cloud_model_$providerId';
+  static String cloudConnectedKey(String providerId) =>
+      'cloud_connected_$providerId';
 
   // On-device model settings
   //

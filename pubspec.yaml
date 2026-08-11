@@ -42,11 +42,22 @@ dependencies:
   shared_preferences: ^2.5.3
   path_provider: ^2.1.5
 
+  # API keys for the hosted AI providers. Keychain on Apple platforms, the
+  # EncryptedSharedPreferences-backed store on Android — anywhere but the app's
+  # own SQLite file, which is exported in plaintext by Settings → Data and is
+  # the same file the agent-access plan proposes handing to an MCP server.
+  flutter_secure_storage: ^9.2.2
+
   # Formatting
   intl: ^0.19.0
 
   # App metadata
   package_info_plus: ^8.0.0
+
+  # Opens each hosted provider's "create an API key" page in the browser.
+  # "Where do I get this?" is the first question every time a key field appears,
+  # and the answer is a different URL per provider.
+  url_launcher: ^6.3.0
 
   # Local Notifications
   flutter_local_notifications: ^19.5.0

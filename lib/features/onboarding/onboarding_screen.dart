@@ -2,11 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../main.dart' as app;
+import '../../core/models/ai_backend_group.dart';
 import '../../core/models/ai_provider.dart';
+import '../../core/services/inference/cloud_backend.dart';
+import '../../core/services/inference/gemini_nano_backend.dart';
+import '../../core/services/inference/platform_llm_backend.dart';
 import '../../shared/constants/app_constants.dart';
 import '../../shared/theme/app_colors.dart';
 import '../../shared/utils/currency_utils.dart';
 import '../../shared/utils/platform_utils.dart';
+import '../../shared/widgets/ai_privacy_disclosure.dart';
 import '../../core/database/database.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -27,6 +32,23 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   late final TextEditingController _esploraCtrl;
   late final TextEditingController _aiUrlCtrl;
   late final TextEditingController _mapleApiKeyCtrl;
+
+  /// API key field per hosted provider, keyed by [CloudProvider.id].
+  final Map<String, TextEditingController> _cloudKeyCtrls = {
+    for (final p in CloudProvider.values) p.id: TextEditingController(),
+  };
+
+  /// What this device can offer. Starts empty and is replaced once the platform
+  /// has answered, so no on-device row is shown and then withdrawn.
+  AiBackendCatalogue _catalogue = const AiBackendCatalogue.checking();
+
+  /// Whether the user has picked a backend themselves.
+  ///
+  /// Until they have, the selection tracks [AiBackendCatalogue.suggestedDefault]
+  /// so a device with a built-in model lands on it. After they have, their
+  /// choice is theirs — the availability check completing must not silently
+  /// move the selection out from under them.
+  bool _aiProviderTouched = false;
 
   static const _pageCount = 8;
 
@@ -95,6 +117,19 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           url: trimmedUrl.isNotEmpty ? trimmedUrl : AppConstants.defaultMapleUrl,
           apiKey: trimmedKey.isNotEmpty ? trimmedKey : null,
         );
+      case AiProvider.claude:
+      case AiProvider.chatGpt:
+      case AiProvider.gemini:
+      case AiProvider.grok:
+        final cloud = _aiProvider.cloudProvider!;
+        final cloudKey = _cloudKeyCtrls[cloud.id]!.text.trim();
+        // Only written when there is something to write: passing an empty key
+        // would clear a key an earlier run had saved, and someone re-running
+        // onboarding from Settings → About should not lose their credentials
+        // by walking past this page.
+        if (cloudKey.isNotEmpty) {
+          await app.ollamaService.saveCloudSettings(cloud, apiKey: cloudKey);
+        }
       case AiProvider.appleIntelligence:
       case AiProvider.geminiNano:
       case AiProvider.localModel:
@@ -106,9 +141,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     }
     // An on-device backend enables AI on mobile without any server, which the
     // old `isDesktop || isConnected` test could not express: those devices are
-    // not desktops and have nothing to connect to.
+    // not desktops and have nothing to connect to. A hosted provider with a key
+    // is the same situation — no local server, but perfectly able to answer.
     app.aiEnabledNotifier.value = PlatformUtils.isDesktop ||
         _aiProvider.isOnDevice ||
+        (_aiProvider.needsApiKey &&
+            _cloudKeyCtrls[_aiProvider.cloudProvider!.id]!.text
+                .trim()
+                .isNotEmpty) ||
         app.ollamaService.isConnected;
 
     // Mark onboarding complete
@@ -128,6 +168,34 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     _esploraCtrl = TextEditingController();
     _aiUrlCtrl = TextEditingController(text: AppConstants.defaultOllamaUrl);
     _mapleApiKeyCtrl = TextEditingController();
+    _loadPlatformAvailability();
+  }
+
+  /// Ask both platform backends what this hardware can do.
+  ///
+  /// Started in `initState` rather than when the AI page scrolls into view:
+  /// there are six pages before it, which is far more time than the check
+  /// needs, so by the time the user arrives the right option is already
+  /// selected instead of appearing a beat later.
+  Future<void> _loadPlatformAvailability() async {
+    final apple = PlatformLlmBackend.bridgedHere
+        ? await PlatformLlmBackend.availability()
+        : null;
+    final nano = GeminiNanoBackend.bridgedHere
+        ? await GeminiNanoBackend.availability()
+        : null;
+    if (!mounted) return;
+    setState(() {
+      _catalogue = AiBackendCatalogue(
+        appleIntelligenceOffered: apple?.state.worthOffering ?? false,
+        geminiNanoOffered: nano?.state.worthOffering ?? false,
+        downloadableOffered: AiBackendCatalogue.downloadableRunsHere,
+      );
+      if (!_aiProviderTouched) {
+        _aiProvider = _catalogue.suggestedDefault;
+        _aiUrlCtrl.text = _aiProvider.defaultUrl ?? '';
+      }
+    });
   }
 
   @override
@@ -136,6 +204,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     _esploraCtrl.dispose();
     _aiUrlCtrl.dispose();
     _mapleApiKeyCtrl.dispose();
+    for (final c in _cloudKeyCtrls.values) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -166,16 +237,22 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   ),
                   _BitcoinServerPage(controller: _esploraCtrl),
                   _AiProviderPage(
+                    catalogue: _catalogue,
                     selected: _aiProvider,
                     onChanged: (p) {
-                      setState(() => _aiProvider = p);
-                      // Empty for the on-device backends, which have no server
-                      // — the page hides the URL field rather than prefilling
-                      // it with something meaningless.
+                      setState(() {
+                        _aiProvider = p;
+                        _aiProviderTouched = true;
+                      });
+                      // Empty for the on-device and hosted backends, neither of
+                      // which has a server the user should be pointing at — the
+                      // page hides the URL field rather than prefilling it with
+                      // something meaningless.
                       _aiUrlCtrl.text = p.defaultUrl ?? '';
                     },
                     urlController: _aiUrlCtrl,
                     apiKeyController: _mapleApiKeyCtrl,
+                    cloudKeyControllers: _cloudKeyCtrls,
                   ),
                   const _ReadyPage(),
                 ],
@@ -905,45 +982,99 @@ class _BitcoinServerPage extends StatelessWidget {
   }
 }
 
+/// The backend chooser.
+///
+/// Ten options grouped three ways rather than one flat list of cards. The
+/// grouping is not cosmetic: "on this device" versus "hosted" is the single
+/// most consequential thing about the choice, and burying it in the body text
+/// of ten similar-looking cards means nobody reads it. Which rows appear at all
+/// comes from [AiBackendCatalogue], so a phone that can never run Apple
+/// Intelligence is not offered it.
 class _AiProviderPage extends StatelessWidget {
   const _AiProviderPage({
+    required this.catalogue,
     required this.selected,
     required this.onChanged,
     required this.urlController,
     required this.apiKeyController,
+    required this.cloudKeyControllers,
   });
 
+  final AiBackendCatalogue catalogue;
   final AiProvider selected;
   final ValueChanged<AiProvider> onChanged;
   final TextEditingController urlController;
   final TextEditingController apiKeyController;
+  final Map<String, TextEditingController> cloudKeyControllers;
 
-  static const _providers = [
-    (
-      provider: AiProvider.ollama,
-      label: 'Ollama',
-      subtitle: 'Self-hosted',
-      description:
-          'Runs on your own machine or home server. Install Ollama and pull any model — nothing leaves your network.',
-      icon: Icons.computer_outlined,
-    ),
-    (
-      provider: AiProvider.lmStudio,
-      label: 'LM Studio',
-      subtitle: 'Fully local',
-      description:
-          'Runs models directly on this device using LM Studio. 100% private — no network required after model download.',
-      icon: Icons.storage_outlined,
-    ),
-    (
-      provider: AiProvider.maple,
-      label: 'Maple',
-      subtitle: 'Encrypted cloud',
-      description:
-          'End-to-end encrypted inference in hardware-isolated secure enclaves. Fast, private, zero data retention.',
-      icon: Icons.shield_outlined,
-    ),
-  ];
+  /// The one-line pitch and icon for a row.
+  ///
+  /// Derived from the provider rather than held in a parallel list, so adding a
+  /// backend cannot leave a card with no description — the switch would not
+  /// compile.
+  static ({String subtitle, String description, IconData icon}) _card(
+    AiProvider provider,
+  ) =>
+      switch (provider) {
+        AiProvider.appleIntelligence => (
+            subtitle: 'Built in',
+            description:
+                'The model already on this Mac or iPhone. No key, no download, '
+                    'no network — and your figures never leave the device.',
+            icon: Icons.auto_awesome_outlined,
+          ),
+        AiProvider.geminiNano => (
+            subtitle: 'Built in',
+            description:
+                'The model built into this phone, run by Android. No key and '
+                    'no account — your figures never leave the device.',
+            icon: Icons.auto_awesome_outlined,
+          ),
+        AiProvider.localModel => (
+            subtitle: 'Download once',
+            description:
+                'A small open model you download once, then run offline '
+                    'anywhere. Sats Stack picks a size that fits this device.',
+            icon: Icons.download_outlined,
+          ),
+        AiProvider.ollama => (
+            subtitle: 'Self-hosted',
+            description:
+                'Runs on your own machine or home server. Install Ollama and '
+                    'pull any model — nothing leaves your network.',
+            icon: Icons.computer_outlined,
+          ),
+        AiProvider.lmStudio => (
+            subtitle: 'Self-hosted',
+            description:
+                'Runs models on this machine through LM Studio\'s local '
+                    'server. Nothing leaves your network.',
+            icon: Icons.storage_outlined,
+          ),
+        AiProvider.maple => (
+            subtitle: 'Bring your own',
+            description:
+                'A hosted OpenAI-compatible endpoint you point at yourself.',
+            icon: Icons.shield_outlined,
+          ),
+        // Named by company and default model rather than by how good they are.
+        // All four are strong, so a superlative repeated on four adjacent cards
+        // reads as filler and helps nobody choose; what actually decides it is
+        // which account the user already has. The group heading above already
+        // carries both the "powerful" and the "your data goes there" halves.
+        AiProvider.claude ||
+        AiProvider.chatGpt ||
+        AiProvider.gemini ||
+        AiProvider.grok =>
+          (
+            subtitle: 'Your API key',
+            description: '${provider.cloudProvider!.company}\'s models, using '
+                'a key you provide. Defaults to '
+                '${provider.cloudProvider!.defaultModel} — you pay '
+                '${provider.cloudProvider!.company} directly for what you use.',
+            icon: Icons.cloud_outlined,
+          ),
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -964,110 +1095,48 @@ class _AiProviderPage extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             Text(
-              'Pick a provider and configure the connection below.',
+              catalogue.hasZeroConfigOption
+                  ? 'This device has a model built in, so it is ready now. You '
+                      'can point Sats Stack somewhere else instead.'
+                  : 'Pick where answers come from. You can change this later '
+                      'in Settings → Servers.',
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: AppColors.textSecondary,
                 height: 1.5,
               ),
             ),
             const SizedBox(height: 24),
-            ..._providers.map((item) {
-              final isSelected = selected == item.provider;
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: GestureDetector(
-                  onTap: () => onChanged(item.provider),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 180),
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? AppColors.bitcoinOrange.withAlpha(26)
-                          : theme.colorScheme.surface,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: isSelected
-                            ? AppColors.bitcoinOrange
-                            : theme.colorScheme.outlineVariant.withAlpha(80),
-                        width: isSelected ? 1.5 : 1,
-                      ),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: isSelected
-                                ? AppColors.bitcoinOrange.withAlpha(40)
-                                : AppColors.bitcoinOrange.withAlpha(20),
-                            borderRadius: BorderRadius.circular(9),
-                          ),
-                          child: Icon(
-                            item.icon,
-                            color: AppColors.bitcoinOrange,
-                            size: 18,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Text(
-                                    item.label,
-                                    style: theme.textTheme.titleSmall?.copyWith(
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 7),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 5, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: theme
-                                          .colorScheme.surfaceContainerHighest,
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: Text(
-                                      item.subtitle,
-                                      style:
-                                          theme.textTheme.labelSmall?.copyWith(
-                                        color: AppColors.textSecondary,
-                                        fontSize: 10,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                item.description,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: AppColors.textSecondary,
-                                  height: 1.4,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        if (isSelected)
-                          const Icon(
-                            Icons.check_circle,
-                            color: AppColors.bitcoinOrange,
-                            size: 20,
-                          ),
-                      ],
-                    ),
+            for (final group in catalogue.nonEmptyGroups) ...[
+              Padding(
+                padding: const EdgeInsets.only(bottom: 2),
+                child: Text(
+                  group.title.toUpperCase(),
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: AppColors.textSecondary,
+                    letterSpacing: 0.9,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
-              );
-            }),
-            const SizedBox(height: 8),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Text(
+                  group.blurb,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: AppColors.textSecondary,
+                    height: 1.4,
+                  ),
+                ),
+              ),
+              for (final provider in catalogue.providersIn(group))
+                _ProviderCard(
+                  provider: provider,
+                  info: _card(provider),
+                  isSelected: selected == provider,
+                  onTap: () => onChanged(provider),
+                ),
+              const SizedBox(height: 14),
+            ],
             // Per-provider config section
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 250),
@@ -1084,9 +1153,121 @@ class _AiProviderPage extends StatelessWidget {
                 provider: selected,
                 urlController: urlController,
                 apiKeyController: apiKeyController,
+                cloudKeyControllers: cloudKeyControllers,
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// One selectable backend row.
+class _ProviderCard extends StatelessWidget {
+  const _ProviderCard({
+    required this.provider,
+    required this.info,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final AiProvider provider;
+  final ({String subtitle, String description, IconData icon}) info;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? AppColors.bitcoinOrange.withAlpha(26)
+                : theme.colorScheme.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected
+                  ? AppColors.bitcoinOrange
+                  : theme.colorScheme.outlineVariant.withAlpha(80),
+              width: isSelected ? 1.5 : 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? AppColors.bitcoinOrange.withAlpha(40)
+                      : AppColors.bitcoinOrange.withAlpha(20),
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: Icon(
+                  info.icon,
+                  color: AppColors.bitcoinOrange,
+                  size: 18,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            provider.label,
+                            style: theme.textTheme.titleSmall
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                        const SizedBox(width: 7),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 5, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            info.subtitle,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: AppColors.textSecondary,
+                              fontSize: 10,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      info.description,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: AppColors.textSecondary,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (isSelected)
+                const Icon(
+                  Icons.check_circle,
+                  color: AppColors.bitcoinOrange,
+                  size: 20,
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -1149,16 +1330,56 @@ class _ProviderConfigSection extends StatelessWidget {
     required this.provider,
     required this.urlController,
     required this.apiKeyController,
+    required this.cloudKeyControllers,
   });
 
   final AiProvider provider;
   final TextEditingController urlController;
   final TextEditingController apiKeyController;
+  final Map<String, TextEditingController> cloudKeyControllers;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+
+    // A hosted provider needs a key and nothing else — the endpoint is fixed,
+    // and the model has a sensible default that Settings can change later. The
+    // disclosure comes first, above the field: someone who would not accept it
+    // should learn that before typing out a credential.
+    if (provider.cloudProvider case final cloud?) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            AiPrivacyDisclosure(provider: provider),
+            const SizedBox(height: 14),
+            TextField(
+              controller: cloudKeyControllers[cloud.id],
+              autocorrect: false,
+              enableSuggestions: false,
+              obscureText: true,
+              decoration: InputDecoration(
+                labelText: '${cloud.label} API key',
+                hintText: '${cloud.keyPrefix}…',
+                helperText: 'Stored in this device\'s keychain. You can also '
+                    'add it later in Settings → Servers.',
+                helperMaxLines: 2,
+              ),
+            ),
+            ApiKeyHelpLink(provider: provider),
+            const SizedBox(height: 10),
+            _NoteBanner(
+              isDark: isDark,
+              isWarning: false,
+              text: 'Defaults to ${cloud.defaultModel}. You can pick a '
+                  'different model in Settings → Servers.',
+            ),
+          ],
+        ),
+      );
+    }
 
     // The on-device backends have no server and no key. Rather than render an
     // empty URL box that would be ignored, say what will happen instead — and
@@ -1249,6 +1470,13 @@ class _ProviderConfigSection extends StatelessWidget {
               helperText: 'Required — get your key from your Maple dashboard',
             ),
           ),
+        ],
+        // Maple is hosted like the four major providers, so the same disclosure
+        // applies. Driven off `isPrivate` rather than named explicitly, so a
+        // backend added to this branch later cannot quietly skip it.
+        if (!provider.isPrivate) ...[
+          const SizedBox(height: 14),
+          AiPrivacyDisclosure(provider: provider, compact: true),
         ],
         const SizedBox(height: 14),
         Container(
