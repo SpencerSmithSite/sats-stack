@@ -190,4 +190,81 @@ void main() {
       expect(first, hasLength(6));
     });
   });
+
+  group('a deleted instance stays deleted', () {
+    test('deleting the latest instance does not bring it back', () async {
+      final wallet = await db.select(db.wallets).getSingle();
+      final anchor = DateTime(2026, 1, 15);
+
+      // Create the series and let it catch up to June.
+      await db.into(db.transactions).insert(TransactionsCompanion.insert(
+            walletId: wallet.id,
+            date: anchor,
+            description: 'Rent',
+            amountSats: -500000,
+            amountFiat: -1200,
+            fiatCurrency: 'USD',
+            source: 'manual',
+            dedupHash: 'rent-anchor',
+            recurringPeriod: const Value('monthly'),
+            recurringAnchorDate: Value(anchor),
+          ));
+      await service.generateDueRecurring(now: DateTime(2026, 6, 20));
+
+      final before = await (db.select(db.transactions)
+            ..where((t) => t.recurringPeriod.isNotNull()))
+          .get();
+      expect(before, hasLength(6)); // Jan anchor + Feb–Jun
+
+      // The user long-presses the newest Rent row and deletes it.
+      final newest = before.reduce((a, b) => a.date.isAfter(b.date) ? a : b);
+      expect(newest.date, DateTime(2026, 6, 15));
+      await service.deleteById(newest.id);
+
+      // Next launch. The resume point used to be the latest surviving row, so
+      // June was recomputed with an identical hash and reappeared.
+      await service.generateDueRecurring(now: DateTime(2026, 6, 20));
+
+      final after = await (db.select(db.transactions)
+            ..where((t) => t.recurringPeriod.isNotNull()))
+          .get();
+      expect(after, hasLength(5));
+      expect(after.map((t) => t.date), isNot(contains(DateTime(2026, 6, 15))));
+    });
+
+    test('later periods still generate after a deletion', () async {
+      final wallet = await db.select(db.wallets).getSingle();
+      final anchor = DateTime(2026, 1, 15);
+      await db.into(db.transactions).insert(TransactionsCompanion.insert(
+            walletId: wallet.id,
+            date: anchor,
+            description: 'Rent',
+            amountSats: -500000,
+            amountFiat: -1200,
+            fiatCurrency: 'USD',
+            source: 'manual',
+            dedupHash: 'rent-anchor-2',
+            recurringPeriod: const Value('monthly'),
+            recurringAnchorDate: Value(anchor),
+          ));
+      await service.generateDueRecurring(now: DateTime(2026, 3, 20));
+
+      final march = await (db.select(db.transactions)
+            ..where((t) => t.date.equals(DateTime(2026, 3, 15))))
+          .getSingle();
+      await service.deleteById(march.id);
+
+      // Time moves on: April and May are new, March is not.
+      await service.generateDueRecurring(now: DateTime(2026, 5, 20));
+
+      final dates = (await (db.select(db.transactions)
+                ..where((t) => t.recurringPeriod.isNotNull()))
+              .get())
+          .map((t) => t.date)
+          .toSet();
+      expect(dates, contains(DateTime(2026, 4, 15)));
+      expect(dates, contains(DateTime(2026, 5, 15)));
+      expect(dates, isNot(contains(DateTime(2026, 3, 15))));
+    });
+  });
 }

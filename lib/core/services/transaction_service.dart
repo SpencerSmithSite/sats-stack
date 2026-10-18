@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 import '../database/database.dart';
+import '../../shared/constants/app_constants.dart';
 import '../../shared/utils/hash_utils.dart';
 
 class TransactionService {
@@ -80,9 +81,24 @@ class TransactionService {
         // Dates are always derived from the anchor rather than by stepping
         // from the previous instance, so a clamped month (Jan 31 → Feb 28)
         // doesn't pull every later month back to the 28th.
-        var n = _occurrenceIndex(anchor, template.date, period) + 1;
+        //
+        // The resume point is the high-water mark, never just the latest
+        // surviving row: deleting the most recent instance used to lower it
+        // and the next launch brought that row straight back.
+        final cursorKey = AppConstants.recurringCursorKey(period, anchor);
+        final cursorRow = await (_db.select(_db.appSettings)
+              ..where((t) => t.key.equals(cursorKey)))
+            .getSingleOrNull();
+        final generatedThrough = int.tryParse(cursorRow?.value ?? '') ?? -1;
+        final latestSurviving = _occurrenceIndex(anchor, template.date, period);
+
+        var n = (generatedThrough > latestSurviving
+                ? generatedThrough
+                : latestSurviving) +
+            1;
         if (n < 1) n = 1;
         var nextDue = _occurrence(anchor, period, n);
+        final startedAt = n;
 
         // Compare calendar days: an instance due today is generated today even
         // when the series carries a time of day.
@@ -117,6 +133,19 @@ class TransactionService {
 
           n++;
           nextDue = _occurrence(anchor, period, n);
+        }
+
+        // n is now the first occurrence *not* generated, so n - 1 is the mark.
+        // Written even when nothing was due, so a series created today records
+        // its anchor and a deletion cannot rewind past it.
+        final mark = n - 1;
+        if (mark > generatedThrough || startedAt == n) {
+          await _db.into(_db.appSettings).insertOnConflictUpdate(
+                AppSettingsCompanion.insert(
+                  key: cursorKey,
+                  value: mark.toString(),
+                ),
+              );
         }
       }
     });

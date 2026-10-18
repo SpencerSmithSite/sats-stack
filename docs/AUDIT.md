@@ -338,12 +338,6 @@ numbers were accurate on 2026-10-17 and most files have moved since.
 
 ### P2 — worth doing, not urgent
 
-- `BudgetService.watchProgress` double-fires on first listen — `onListen` sets
-  up two watches that each emit immediately *and* calls `update()` — and
-  `onCancel` cancels the subscriptions without closing the controller.
-  `watchPerWallet` still re-scans all transactions once per wallet.
-- `generateDueRecurring` resurrects a *deleted latest* instance, because the
-  resume point is the latest surviving row. Persist a per-series index.
 - Price service: `switchCurrency` deliberately clears the in-flight guard
   (`btc_price_service.dart:104`), so two fetches can interleave and persist a
   partial map; a partial mempool response clears `_allPrices` before checking;
@@ -414,6 +408,29 @@ Addressed 2026-10-18.
   `_saveDescriptionMappings` deleted and inserted per row, awaited; it now
   collapses in memory and writes one batch of upserts against the new unique
   index.
+
+### Aggregates read once, and a deleted instance stays deleted
+
+Addressed 2026-10-18.
+
+- `BudgetService.watchProgress` ran its whole aggregate three times on first
+  listen (two watches that each emit immediately, plus an explicit call) and
+  once per row during a burst of inserts. Reads are now coalesced into a
+  microtask and serialised, and `onCancel` closes the controller — without
+  which `controller.isClosed` was always false, so every guard on it was dead
+  and the controller itself was never released. `getProgress` filters the month
+  in SQL against the v7 `date` index instead of reading every transaction ever
+  recorded, and resolves categories through two maps rather than a linear scan
+  per row.
+- `_computePerWallet` grouped transactions by wallet with a `where` inside the
+  wallet loop, making it O(wallets × transactions) on the UI isolate; it now
+  groups in one pass.
+- `generateDueRecurring` no longer resurrects a deleted instance. The resume
+  point was the latest *surviving* row, so deleting the newest one lowered it
+  and the next launch recreated that row identically — while deleting a middle
+  instance did not, which made it inconsistent too. A per-series high-water
+  mark in `AppSettings` (`AppConstants.recurringCursorKey`) only moves forward.
+  Both cases are tested.
 
 ### Test gaps
 Month-boundary aggregation, `getProgress` after a category rename, the v6

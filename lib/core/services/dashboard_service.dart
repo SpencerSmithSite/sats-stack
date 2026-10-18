@@ -51,10 +51,17 @@ class DashboardService {
     final wallets = await _db.select(_db.wallets).get();
     final range = DateRange.month(month);
 
+    // Grouped in one pass. Filtering `allTxns` inside the wallet loop made
+    // this O(wallets × transactions), re-walking the whole history once per
+    // wallet on every change — on the UI isolate.
+    final byWallet = <int, List<Transaction>>{};
+    for (final t in allTxns) {
+      (byWallet[t.walletId] ??= <Transaction>[]).add(t);
+    }
+
     final result = <WalletSummary>[];
     for (final wallet in wallets) {
-      final walletTxns =
-          allTxns.where((t) => t.walletId == wallet.id).toList();
+      final walletTxns = byWallet[wallet.id] ?? const <Transaction>[];
 
       final totalSats = walletTxns
           .where((t) => t.isBitcoin)

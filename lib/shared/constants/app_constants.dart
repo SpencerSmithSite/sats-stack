@@ -71,6 +71,16 @@ abstract final class AppConstants {
   // provider selection itself.
   static const settingLocalModelId = 'local_model_id';
 
+  /// How far a recurring series has been generated — a high-water mark.
+  ///
+  /// Without it, the resume point is the latest *surviving* instance, so
+  /// deleting the most recent one lowers it and the next launch recreates the
+  /// row the user just deleted (its hash is derived from the anchor and the
+  /// due date, so it comes back identical). Deleting a middle instance never
+  /// had that problem, which made the behaviour inconsistent as well as wrong.
+  static String recurringCursorKey(String period, DateTime anchor) =>
+      'recurring_cursor_${period}_${anchor.millisecondsSinceEpoch}';
+
   /// Whether the user has agreed to let a named third party read their
   /// statements for the AI import tier.
   ///

@@ -1,5 +1,7 @@
 import 'dart:async';
-import 'package:drift/drift.dart' show Value;
+// Comparison operators on columns (`isBiggerOrEqualValue`) come from drift
+// extensions, which a `show` clause would hide.
+import 'package:drift/drift.dart';
 import '../database/database.dart';
 import '../models/budget_progress.dart';
 import '../../shared/utils/date_range.dart';
@@ -56,24 +58,61 @@ class BudgetService {
   // ── Progress stream (reacts to budget + transaction changes) ─────────────────
 
   /// Emits a fresh [BudgetProgress] list whenever budgets or transactions change.
+  ///
+  /// Reads are coalesced and serialised. Both watches emit immediately on
+  /// listen and a single insert notifies both, so the previous version — two
+  /// listeners plus an explicit call, each firing [getProgress] straight away —
+  /// ran the whole aggregate three times for one change, and a burst of
+  /// inserts ran it once per row.
   Stream<List<BudgetProgress>> watchProgress(DateTime month) {
-    StreamSubscription? budgetSub, txnSub;
+    StreamSubscription<void>? budgetSub, txnSub;
     late StreamController<List<BudgetProgress>> controller;
 
-    void update() async {
-      if (controller.isClosed) return;
-      controller.add(await getProgress(month));
+    var queued = false; // a read is scheduled for the next microtask
+    var reading = false; // a read is in flight
+    var again = false; // something changed while that read was in flight
+
+    Future<void> read() async {
+      if (reading) {
+        again = true;
+        return;
+      }
+      reading = true;
+      try {
+        do {
+          again = false;
+          final progress = await getProgress(month);
+          if (controller.isClosed) return;
+          controller.add(progress);
+        } while (again);
+      } finally {
+        reading = false;
+      }
+    }
+
+    void schedule() {
+      if (queued || controller.isClosed) return;
+      queued = true;
+      // A microtask, so the two immediate emissions on listen collapse into
+      // one read rather than two.
+      scheduleMicrotask(() {
+        queued = false;
+        read();
+      });
     }
 
     controller = StreamController<List<BudgetProgress>>(
       onListen: () {
-        budgetSub = _db.select(_db.budgets).watch().listen((_) => update());
-        txnSub = _db.select(_db.transactions).watch().listen((_) => update());
-        update();
+        budgetSub = _db.select(_db.budgets).watch().listen((_) => schedule());
+        txnSub = _db.select(_db.transactions).watch().listen((_) => schedule());
       },
-      onCancel: () {
-        budgetSub?.cancel();
-        txnSub?.cancel();
+      onCancel: () async {
+        await budgetSub?.cancel();
+        await txnSub?.cancel();
+        // Closing matters: `controller.isClosed` guards every add above, and
+        // without this it was always false — a dead guard on a controller that
+        // was never released.
+        await controller.close();
       },
     );
 
@@ -81,25 +120,32 @@ class BudgetService {
   }
 
   Future<List<BudgetProgress>> getProgress(DateTime month) async {
-    final budgets = await _db.select(_db.budgets).get();
-    final categories = await _db.select(_db.categories).get();
-    final allTxns = await _db.select(_db.transactions).get();
-
     final range = DateRange.month(month);
 
+    final budgets = await _db.select(_db.budgets).get();
+    final categories = await _db.select(_db.categories).get();
+    // Filtered in SQL, against the v7 index on `date`. This used to read every
+    // transaction ever recorded to total up one month, on every change, and it
+    // runs on the UI isolate.
+    final monthTxns = await (_db.select(_db.transactions)
+          ..where((t) => t.date.isBiggerOrEqualValue(range.start))
+          ..where((t) => t.date.isSmallerThanValue(range.end))
+          ..where((t) => t.amountFiat.isSmallerThanValue(0)))
+        .get();
+
+    final categoryIdByName = {for (final c in categories) c.name: c.id};
+    final categoryById = {for (final c in categories) c.id: c};
+
     final monthSpend = <int, double>{};
-    for (final t in allTxns) {
-      if (t.amountFiat >= 0) continue;
-      if (!range.contains(t.date)) continue;
-      final cat = categories.where((c) => c.name == t.category).firstOrNull;
-      if (cat != null) {
-        monthSpend[cat.id] = (monthSpend[cat.id] ?? 0) + t.amountFiat.abs();
-      }
+    for (final t in monthTxns) {
+      final id = categoryIdByName[t.category];
+      if (id == null) continue;
+      monthSpend[id] = (monthSpend[id] ?? 0) + t.amountFiat.abs();
     }
 
     final result = <BudgetProgress>[];
     for (final budget in budgets) {
-      final cat = categories.where((c) => c.id == budget.categoryId).firstOrNull;
+      final cat = categoryById[budget.categoryId];
       if (cat == null) continue;
       result.add(BudgetProgress(
         budget: budget,
