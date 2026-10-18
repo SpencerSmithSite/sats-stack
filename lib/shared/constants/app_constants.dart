@@ -102,6 +102,13 @@ abstract final class AppConstants {
   static const settingElectrumPort = 'electrum_port';
   static const settingElectrumSsl = 'electrum_ssl';
 
+  /// SHA-256 of the self-signed Electrum certificate the user chose to trust.
+  ///
+  /// Empty means "verify normally". Without a pin the client accepted any
+  /// certificate at all, which let anyone on the network read the full set of
+  /// addresses a wallet scan asks about.
+  static const settingElectrumCertPin = 'electrum_cert_pin';
+
   /// Electrum's standard plaintext TCP port. The SSL port is 50002, which the
   /// user has to enter themselves when they turn SSL on.
   static const defaultElectrumPort = 50001;

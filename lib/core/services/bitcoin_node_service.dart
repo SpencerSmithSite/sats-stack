@@ -96,10 +96,37 @@ class BitcoinNodeService {
         )
         .timeout(const Duration(seconds: 15));
 
-    final body = jsonDecode(response.body) as Map<String, dynamic>;
-    if (body['error'] != null) {
-      final err = body['error'] as Map<String, dynamic>;
-      throw Exception(err['message'] ?? body['error'].toString());
+    // Status first. Bitcoin Core answers a bad cookie or credential with 401
+    // and a non-JSON body, so decoding first turned "wrong password" into
+    // `FormatException: Unexpected character` — and a 403 from rpcallowip into
+    // the same thing.
+    switch (response.statusCode) {
+      case 200:
+        break;
+      case 401:
+      case 403:
+        throw Exception(
+          'The node rejected these credentials. Check the RPC user and '
+          'password, and that this device is allowed by rpcallowip.',
+        );
+      case 404:
+        throw Exception(
+          'No JSON-RPC endpoint at $_rpcUrl — check the URL and port.',
+        );
+      default:
+        throw Exception('The node returned HTTP ${response.statusCode}.');
+    }
+
+    final Map<String, dynamic> body;
+    try {
+      body = jsonDecode(response.body) as Map<String, dynamic>;
+    } on FormatException {
+      throw Exception('$_rpcUrl did not return JSON — is this a Bitcoin node?');
+    }
+    final error = body['error'];
+    if (error != null) {
+      throw Exception(
+          error is Map<String, dynamic> ? error['message'] ?? error : error);
     }
     return body['result'];
   }

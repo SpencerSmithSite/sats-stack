@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
+
 import '../database/database.dart';
 import '../../shared/constants/app_constants.dart';
 
@@ -45,21 +47,32 @@ class ElectrumService {
           ..where((t) => t.key.equals(AppConstants.settingElectrumSsl)))
         .get();
     if (sslRows.isNotEmpty) _ssl = sslRows.first.value == 'true';
+
+    final pinRows = await (_db.select(_db.appSettings)
+          ..where((t) => t.key.equals(AppConstants.settingElectrumCertPin)))
+        .get();
+    if (pinRows.isNotEmpty) _pinnedFingerprint = pinRows.first.value;
   }
 
+  /// [certificateFingerprint] is the self-signed certificate the user agreed
+  /// to trust, from [fetchCertificateFingerprint]. Empty clears the pin, so
+  /// only a CA-verified certificate is accepted.
   Future<void> saveSettings({
     required String host,
     required int port,
     required bool ssl,
+    String certificateFingerprint = '',
   }) async {
     _host = host.trim();
     _port = port;
     _ssl = ssl;
+    _pinnedFingerprint = certificateFingerprint;
 
     final entries = {
       AppConstants.settingElectrumHost: _host,
       AppConstants.settingElectrumPort: port.toString(),
       AppConstants.settingElectrumSsl: ssl.toString(),
+      AppConstants.settingElectrumCertPin: _pinnedFingerprint,
     };
     for (final e in entries.entries) {
       await _db.into(_db.appSettings).insertOnConflictUpdate(
@@ -67,6 +80,41 @@ class ElectrumService {
       );
     }
   }
+
+  /// SHA-256 of the certificate the user chose to trust, or empty.
+  String _pinnedFingerprint = '';
+
+  String get pinnedFingerprint => _pinnedFingerprint;
+
+  /// The fingerprint of whatever certificate [host]:[port] presents, for the
+  /// "trust this server?" prompt. Null when the host verifies normally or
+  /// cannot be reached.
+  Future<String?> fetchCertificateFingerprint() async {
+    X509Certificate? seen;
+    try {
+      final probe = await SecureSocket.connect(
+        _host,
+        _port,
+        onBadCertificate: (certificate) {
+          seen = certificate;
+          return false; // never actually proceed on an unverified probe
+        },
+        timeout: const Duration(seconds: 10),
+      );
+      probe.destroy();
+      return null; // verified by a real CA — nothing to pin
+    } catch (_) {
+      final certificate = seen;
+      return certificate == null ? null : _fingerprintOf(certificate);
+    }
+  }
+
+  bool _isPinned(X509Certificate certificate) =>
+      _pinnedFingerprint.isNotEmpty &&
+      _fingerprintOf(certificate) == _pinnedFingerprint;
+
+  static String _fingerprintOf(X509Certificate certificate) =>
+      sha256.convert(certificate.der).toString();
 
   // ── Session factory ───────────────────────────────────────────────────────
 
@@ -77,7 +125,15 @@ class ElectrumService {
       socket = await SecureSocket.connect(
         _host,
         _port,
-        onBadCertificate: (_) => true, // allow self-signed certificates
+        // Certificates are verified. Accepting any of them — which this did,
+        // for the convenience of self-signed servers — means anyone on the
+        // network can sit in the middle of the connection and collect the
+        // user's entire derived address set, which deanonymises their whole
+        // wallet, while returning empty history so nothing looks wrong.
+        //
+        // A self-signed server is still usable: the user pins its fingerprint
+        // once, and only that certificate is accepted afterwards.
+        onBadCertificate: (certificate) => _isPinned(certificate),
         timeout: const Duration(seconds: 10),
       );
     } else {
@@ -244,7 +300,16 @@ class ElectrumSession {
     final completer = Completer<dynamic>();
     _pending[id] = completer;
     _socket.writeln(jsonEncode({'id': id, 'method': method, 'params': params}));
-    return completer.future.timeout(const Duration(seconds: 30));
+    // The timeout has to remove the entry itself: applying it to the returned
+    // future left the completer in `_pending` for the life of the socket, so a
+    // long scan against a slow server accumulated one per timed-out request.
+    return completer.future.timeout(
+      const Duration(seconds: 30),
+      onTimeout: () {
+        _pending.remove(id);
+        throw TimeoutException('$method timed out', const Duration(seconds: 30));
+      },
+    );
   }
 
   /// Closes the socket connection.
