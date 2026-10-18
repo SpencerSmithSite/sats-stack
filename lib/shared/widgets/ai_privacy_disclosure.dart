@@ -20,19 +20,26 @@ class AiPrivacyDisclosure extends StatelessWidget {
     super.key,
     required this.provider,
     this.compact = false,
+    this.recipient,
   });
 
   final AiProvider provider;
+
+  /// Overrides [AiProvider.dataRecipient].
+  ///
+  /// Ollama and LM Studio have no fixed recipient — it is whatever host the
+  /// user typed — so the caller supplies it (see
+  /// `OllamaService.activeDataRecipient`). Null falls back to the provider's
+  /// own, which is right for the hosted four.
+  final String? recipient;
 
   /// Drops the "what this means" detail, for places with no room for it.
   final bool compact;
 
   @override
   Widget build(BuildContext context) {
-    final recipient = provider.dataRecipient;
-    if (provider.isPrivate || recipient == null) {
-      return const SizedBox.shrink();
-    }
+    final recipient = this.recipient ?? provider.dataRecipient;
+    if (recipient == null) return const SizedBox.shrink();
 
     final theme = Theme.of(context);
     const accent = AppColors.bitcoinOrange;
@@ -64,10 +71,17 @@ class AiPrivacyDisclosure extends StatelessWidget {
                 Text(
                   // Named, not "a server". A disclosure that does not say who
                   // receives the data is not a disclosure.
-                  'To answer a question, ${provider.label} is sent your balances, '
-                  'spending totals and category breakdown. These go to '
-                  '$recipient, under their privacy policy and retention terms — '
-                  'not this app\'s.',
+                  //
+                  // It lists all three things that can be sent, because all
+                  // three exist: a chat question, a monthly insight, and a
+                  // statement handed to the import parser. An earlier version
+                  // mentioned only questions, which read as a promise that the
+                  // other two did not happen.
+                  'When you ask a question, generate an insight, or have a '
+                  'statement read, ${provider.label} receives what that needs — '
+                  'your balances and spending totals, or the contents of the '
+                  'statement itself. It goes to $recipient, under their privacy '
+                  'policy and retention terms — not this app\'s.',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: AppColors.textSecondary,
                     height: 1.45,
@@ -76,8 +90,13 @@ class AiPrivacyDisclosure extends StatelessWidget {
                 if (!compact) ...[
                   const SizedBox(height: 6),
                   Text(
-                    'Nothing is sent until you ask a question, and your wallet '
-                    'keys and xpubs are never included.',
+                    // True of every path: the monthly insight is only ever
+                    // generated on an explicit tap for a provider like this
+                    // one, and the import parser asks before it uploads a
+                    // statement. Keep it that way, or change this sentence.
+                    'Nothing is sent unless you ask for it — no background '
+                    'analysis, and nothing on launch. Your wallet keys and '
+                    'xpubs are never included.',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: AppColors.textSecondary,
                       height: 1.45,

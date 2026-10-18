@@ -30,6 +30,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String? _cachedInsight;
   bool _isGeneratingInsight = false;
 
+  /// Who would receive this month's figures, or null when the active backend
+  /// keeps them on the device (or on the user's own server).
+  String? _insightRecipient;
+
   @override
   void initState() {
     super.initState();
@@ -38,11 +42,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _initInsight() async {
     _cachedInsight = await app.ollamaService.loadCachedInsight();
+    // A hosted provider is told nothing unless the user asks. Generating this
+    // automatically meant that selecting Claude in Settings and opening the
+    // Dashboard uploaded the month's income, spending, surplus, stack total
+    // and full category breakdown to a third party with no user action and no
+    // disclosure — while the disclosure widget promised the opposite.
+    final offDevice = app.ollamaService.sendsDataOffDevice;
+    _insightRecipient = offDevice ? app.ollamaService.activeDataRecipient : null;
     if (mounted) setState(() {});
+    if (offDevice) return;
     final stale = await app.ollamaService.isInsightStale();
     if (stale) _generateInsight();
   }
 
+  /// Generates on an explicit tap. For a hosted provider this is the only way
+  /// an insight is ever generated.
   Future<void> _generateInsight() async {
     if (_isGeneratingInsight) return;
     final available = await app.ollamaService.isAvailable();
@@ -145,6 +159,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       cachedInsight: _cachedInsight,
                       isGeneratingInsight: _isGeneratingInsight,
                       onRefreshInsight: _generateInsight,
+                      insightRecipient: _insightRecipient,
                     ),
                   );
                 },
@@ -200,6 +215,7 @@ class _DashboardContent extends StatelessWidget {
     this.cachedInsight,
     this.isGeneratingInsight = false,
     this.onRefreshInsight,
+    this.insightRecipient,
   });
 
   final DashboardData data;
@@ -211,6 +227,10 @@ class _DashboardContent extends StatelessWidget {
   final String? cachedInsight;
   final bool isGeneratingInsight;
   final VoidCallback? onRefreshInsight;
+
+  /// Named third party that would receive the figures, or null when the
+  /// insight is generated without anything leaving the device.
+  final String? insightRecipient;
 
   @override
   Widget build(BuildContext context) {
@@ -396,10 +416,18 @@ class _DashboardContent extends StatelessWidget {
         const SizedBox(height: 20),
 
         // ── AI insight card ────────────────────────────────────────────────
-        AiInsightCard(
-          cachedInsight: cachedInsight,
-          isGenerating: isGeneratingInsight,
-          onRefresh: onRefreshInsight,
+        // Listens, rather than reading the notifier once: enabling AI in
+        // Settings and coming back used to leave the card in its old state
+        // until the Dashboard was rebuilt from scratch.
+        ValueListenableBuilder<bool>(
+          valueListenable: app.aiEnabledNotifier,
+          builder: (_, aiEnabled, __) => AiInsightCard(
+            aiEnabled: aiEnabled,
+            cachedInsight: cachedInsight,
+            isGenerating: isGeneratingInsight,
+            onRefresh: onRefreshInsight,
+            offDeviceRecipient: insightRecipient,
+          ),
         ),
         const SizedBox(height: 8),
       ],

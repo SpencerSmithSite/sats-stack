@@ -569,18 +569,24 @@ class CloudBackend implements InferenceBackend {
     int status,
     String body,
   ) {
-    try {
-      final decoded = jsonDecode(body);
-      final message = decoded is Map
-          ? (decoded['error'] is Map
-              ? decoded['error']['message']
-              : decoded['message'])
-          : null;
-      if (message is String && message.isNotEmpty) {
-        return '${provider.label}: $message';
+    // Never the provider's own text for an auth failure. OpenAI answers a 401
+    // with `Incorrect API key provided: sk-proj-ab****XYZ` — a partial copy of
+    // the user's key, which the chat screen then prints verbatim and into any
+    // screenshot or bug report. The canned string below says the same thing.
+    if (status != 401 && status != 403) {
+      try {
+        final decoded = jsonDecode(body);
+        final message = decoded is Map
+            ? (decoded['error'] is Map
+                ? decoded['error']['message']
+                : decoded['message'])
+            : null;
+        if (message is String && message.isNotEmpty) {
+          return '${provider.label}: $message';
+        }
+      } on FormatException {
+        // Not JSON — fall through to the status mapping.
       }
-    } on FormatException {
-      // Not JSON — fall through to the status mapping.
     }
 
     return switch (status) {

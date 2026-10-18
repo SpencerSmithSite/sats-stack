@@ -1,20 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../../../main.dart' as app;
 
 /// Shows the latest AI insight if available, otherwise a static Bitcoiner tip.
-/// On mobile, AI features are disabled so this always shows a tip.
+///
+/// When the active backend would send the month's figures to a third party,
+/// the insight is never generated on its own: the card offers a button that
+/// names the recipient, and nothing is sent until it is pressed.
 class AiInsightCard extends StatelessWidget {
   const AiInsightCard({
     super.key,
+    this.aiEnabled = false,
     this.cachedInsight,
     this.isGenerating = false,
     this.onRefresh,
+    this.offDeviceRecipient,
   });
+
+  /// Whether an AI backend is configured at all. Passed in rather than read
+  /// from the global notifier so the card rebuilds when it changes.
+  final bool aiEnabled;
 
   final String? cachedInsight;
   final bool isGenerating;
   final VoidCallback? onRefresh;
+
+  /// Named third party that would receive the figures, or null when generating
+  /// sends nothing off the device.
+  final String? offDeviceRecipient;
 
   // Rotating tips shown when no AI insight is available
   static const _tips = [
@@ -31,15 +43,22 @@ class AiInsightCard extends StatelessWidget {
     return _tips[dayOfYear % _tips.length];
   }
 
+  bool get _hasInsight => cachedInsight != null && cachedInsight!.isNotEmpty;
+
+  /// True when there is nothing to show yet and generating would mean sending
+  /// the figures to a third party — so the user is asked rather than charged
+  /// and uploaded behind their back.
+  bool get _needsConsentToGenerate =>
+      aiEnabled && offDeviceRecipient != null && !_hasInsight && !isGenerating;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDesktop = app.aiEnabledNotifier.value;
 
     const accent = Color(0xFF6AB0E8);
     final isDark = theme.brightness == Brightness.dark;
-    final bgColor = accent.withOpacity(isDark ? 0.12 : 0.08);
-    final borderColor = accent.withOpacity(isDark ? 0.35 : 0.20);
+    final bgColor = accent.withValues(alpha: isDark ? 0.12 : 0.08);
+    final borderColor = accent.withValues(alpha: isDark ? 0.35 : 0.20);
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -55,13 +74,13 @@ class AiInsightCard extends StatelessWidget {
           Row(
             children: [
               Icon(
-                isDesktop ? Icons.auto_awesome : Icons.lightbulb_outline,
+                aiEnabled ? Icons.auto_awesome : Icons.lightbulb_outline,
                 size: 14,
                 color: accent,
               ),
               const SizedBox(width: 6),
               Text(
-                isDesktop ? 'AI Insight' : 'Tip',
+                aiEnabled ? 'AI Insight' : 'Tip',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: accent,
                   fontWeight: FontWeight.w600,
@@ -69,7 +88,7 @@ class AiInsightCard extends StatelessWidget {
                 ),
               ),
               const Spacer(),
-              if (isDesktop && onRefresh != null)
+              if (aiEnabled && onRefresh != null && !_needsConsentToGenerate)
                 GestureDetector(
                   onTap: isGenerating ? null : onRefresh,
                   child: isGenerating
@@ -86,11 +105,11 @@ class AiInsightCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
-          isGenerating && (cachedInsight == null || cachedInsight!.isEmpty)
+          isGenerating && !_hasInsight
               ? Text(
                   'Generating insight…',
                   style: TextStyle(
-                    color: accent.withOpacity(0.6),
+                    color: accent.withValues(alpha: 0.6),
                     fontSize: 14,
                     fontStyle: FontStyle.italic,
                   ),
@@ -102,7 +121,32 @@ class AiInsightCard extends StatelessWidget {
                     height: 1.5,
                   ),
                 ),
-          if (isDesktop) ...[
+          if (_needsConsentToGenerate) ...[
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                onPressed: onRefresh,
+                icon: const Icon(Icons.auto_awesome, size: 15),
+                label: const Text('Generate an insight'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: accent,
+                  side: BorderSide(color: accent.withValues(alpha: 0.5)),
+                  visualDensity: VisualDensity.compact,
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Sends this month\'s totals and category breakdown to '
+              '$offDeviceRecipient.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                height: 1.4,
+              ),
+            ),
+          ],
+          if (aiEnabled) ...[
             const SizedBox(height: 12),
             GestureDetector(
               onTap: () => context.go('/ai'),

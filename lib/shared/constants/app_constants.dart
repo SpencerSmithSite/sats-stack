@@ -71,6 +71,16 @@ abstract final class AppConstants {
   // provider selection itself.
   static const settingLocalModelId = 'local_model_id';
 
+  /// Whether the user has agreed to let a named third party read their
+  /// statements for the AI import tier.
+  ///
+  /// Keyed by `AiProvider.key` so switching provider asks again — consent to
+  /// Anthropic reading a bank statement is not consent for OpenAI to. Only
+  /// recorded for providers that actually send data off the device; a private
+  /// backend needs no consent because nothing leaves.
+  static String aiImportConsentKey(String providerKey) =>
+      'ai_import_consent_$providerKey';
+
   // Bitcoin data source — where wallet history is read from
   //
   // `settingElectrumUrl` above predates this and is the Mempool/Esplora base

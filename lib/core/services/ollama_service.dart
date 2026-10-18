@@ -93,18 +93,28 @@ class OllamaService {
   /// configuration edit takes effect without anything having to invalidate a
   /// cached instance.
   InferenceBackend get backend => switch (_activeProvider) {
-        AiProvider.ollama =>
-          OllamaBackend(baseUrl: _baseUrl, model: _selectedModel),
+        AiProvider.ollama => OllamaBackend(
+            baseUrl: _baseUrl,
+            model: _selectedModel,
+            isPrivate: isLocalEndpoint(_baseUrl),
+          ),
         AiProvider.lmStudio => OpenAiCompatBackend(
             id: OpenAiCompatBackend.lmStudioId,
             displayName: 'LM Studio',
-            description:
-                'A model running in LM Studio on this machine. Nothing leaves '
-                'your device.',
+            description: isLocalEndpoint(_lmStudioBaseUrl)
+                ? 'A model running in LM Studio on this machine. Nothing '
+                    'leaves your device.'
+                : 'LM Studio on the server you configured. Your financial '
+                    'figures are sent there to answer each question.',
             baseUrl: _lmStudioBaseUrl,
             model: _lmStudioSelectedModel,
             apiKey: '',
-            isPrivate: true,
+            // Derived from the URL, not hardcoded. The field is free text, so
+            // "Nothing leaves your device" was a claim the app could not back:
+            // a user pointing it at a VPS got the reassurance anyway, and this
+            // flag now decides whether insights generate automatically and
+            // whether statements are uploaded without asking.
+            isPrivate: isLocalEndpoint(_lmStudioBaseUrl),
             contextBudgetChars: 12000,
           ),
         AiProvider.maple => OpenAiCompatBackend(
@@ -162,6 +172,57 @@ class OllamaService {
 
   /// Whether the active backend keeps everything on this device.
   bool get sendsDataOffDevice => !backend.isPrivate;
+
+  /// Who receives the user's figures when [sendsDataOffDevice] is true, phrased
+  /// for a sentence. Null when nothing leaves.
+  ///
+  /// `AiProvider.dataRecipient` covers the hosted providers, which have a fixed
+  /// endpoint. Ollama and LM Studio do not: their URL is whatever the user
+  /// typed, so the recipient is that host — known only here.
+  String? get activeDataRecipient {
+    final fixed = _activeProvider.dataRecipient;
+    if (fixed != null) return fixed;
+    final url = switch (_activeProvider) {
+      AiProvider.ollama => _baseUrl,
+      AiProvider.lmStudio => _lmStudioBaseUrl,
+      _ => null,
+    };
+    if (url == null || isLocalEndpoint(url)) return null;
+    final host = Uri.tryParse(url)?.host;
+    return host == null || host.isEmpty
+        ? 'the server you configured'
+        : 'the server you configured ($host)';
+  }
+
+  /// Whether [url] is this device or a machine on the user's own network.
+  ///
+  /// Loopback, `.local`, link-local and the RFC 1918 private ranges count:
+  /// those are hardware the user controls, so "nothing leaves your device" is
+  /// close enough to true to say. A public hostname is not, however much the
+  /// user trusts the box — it crosses the internet to get there.
+  static bool isLocalEndpoint(String url) {
+    final host = Uri.tryParse(url)?.host ?? '';
+    // Unparseable or empty means the field is unset and a localhost default is
+    // in force; treating that as local matches what actually happens.
+    if (host.isEmpty) return true;
+    if (host == 'localhost' ||
+        host == '::1' ||
+        host.endsWith('.local') ||
+        host.endsWith('.localhost')) {
+      return true;
+    }
+    final v4 = RegExp(r'^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$')
+        .firstMatch(host);
+    if (v4 == null) return false;
+    final a = int.parse(v4.group(1)!);
+    final b = int.parse(v4.group(2)!);
+    if (a == 127 || a == 10) return true; // loopback, private
+    if (a == 0) return true; // 0.0.0.0
+    if (a == 192 && b == 168) return true; // private
+    if (a == 172 && b >= 16 && b <= 31) return true; // private
+    if (a == 169 && b == 254) return true; // link-local
+    return false;
+  }
 
   /// Base URL of the Ollama server (used for Ollama-specific settings UI).
   String get baseUrl => _baseUrl;

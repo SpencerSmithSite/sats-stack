@@ -11,11 +11,20 @@ import '../../shared/utils/currency_utils.dart';
 class NotificationService {
   final _plugin = FlutterLocalNotificationsPlugin();
 
-  /// Notification IDs already shown this session — keyed by category×2 (warning)
-  /// or category×2+1 (overspend).
+  /// Notification IDs already shown this session.
   final _shown = <int>{};
 
   bool _initialized = false;
+
+  /// Permission is asked for once, on the first notification, rather than on
+  /// every one. Null until asked.
+  bool? _permissionGranted;
+
+  /// Budget IDs start above this so they cannot collide with
+  /// [_stackGoalId]: `categoryId * 2 + 1` hit 9999 exactly at category 4999,
+  /// which would have silently replaced the goal notification.
+  static const _budgetIdBase = 100000;
+  static const _stackGoalId = 9999;
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
@@ -23,6 +32,17 @@ class NotificationService {
     try {
       await _plugin.initialize(
         const InitializationSettings(
+          // iOS was missing entirely, so on the TestFlight build the plugin
+          // was never configured for it: no permission was ever requested and
+          // no budget or stack-goal notification could appear at all.
+          iOS: DarwinInitializationSettings(
+            // Asked on the first notification instead of at launch — a
+            // permission prompt during onboarding, before the user has set a
+            // single budget, is the one most people decline.
+            requestAlertPermission: false,
+            requestBadgePermission: false,
+            requestSoundPermission: false,
+          ),
           macOS: DarwinInitializationSettings(
             requestAlertPermission: false,
             requestBadgePermission: false,
@@ -46,7 +66,7 @@ class NotificationService {
     required double budgetAmount,
     required String currency,
   }) async {
-    final id = categoryId * 2;
+    final id = _budgetIdBase + categoryId * 2;
     if (_shown.contains(id)) return;
     _shown.add(id);
 
@@ -69,7 +89,7 @@ class NotificationService {
     required double budgetAmount,
     required String currency,
   }) async {
-    final id = categoryId * 2 + 1;
+    final id = _budgetIdBase + categoryId * 2 + 1;
     if (_shown.contains(id)) return;
     _shown.add(id);
 
@@ -91,7 +111,7 @@ class NotificationService {
     required String currency,
     double? btcPrice,
   }) async {
-    const id = 9999;
+    const id = _stackGoalId;
     if (_shown.contains(id)) return;
     _shown.add(id);
 
@@ -112,6 +132,51 @@ class NotificationService {
       .toString()
       .replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},');
 
+  /// Asks for notification permission the first time there is something to
+  /// show, and remembers the answer for the session.
+  ///
+  /// Every platform the app ships on needs asking, and each has its own
+  /// implementation class: only macOS was handled, so iOS never prompted and
+  /// Android 13+ (which made POST_NOTIFICATIONS a runtime permission) never
+  /// did either. A false answer is honoured rather than retried per
+  /// notification.
+  Future<bool> _ensurePermission() async {
+    final cached = _permissionGranted;
+    if (cached != null) return cached;
+
+    final ios = _plugin.resolvePlatformSpecificImplementation<
+        IOSFlutterLocalNotificationsPlugin>();
+    if (ios != null) {
+      return _permissionGranted = await ios.requestPermissions(
+            alert: true,
+            badge: false,
+            sound: true,
+          ) ??
+          false;
+    }
+
+    final macOS = _plugin.resolvePlatformSpecificImplementation<
+        MacOSFlutterLocalNotificationsPlugin>();
+    if (macOS != null) {
+      return _permissionGranted = await macOS.requestPermissions(
+            alert: true,
+            badge: false,
+            sound: true,
+          ) ??
+          false;
+    }
+
+    final android = _plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    if (android != null) {
+      return _permissionGranted =
+          await android.requestNotificationsPermission() ?? false;
+    }
+
+    // Linux and Windows need no runtime grant.
+    return _permissionGranted = true;
+  }
+
   Future<void> _show({
     required int id,
     required String title,
@@ -119,17 +184,18 @@ class NotificationService {
   }) async {
     if (!_initialized) return;
     try {
-      // Request permission lazily on the first notification attempt.
-      await _plugin
-          .resolvePlatformSpecificImplementation<
-              MacOSFlutterLocalNotificationsPlugin>()
-          ?.requestPermissions(alert: true, badge: false, sound: true);
+      if (!await _ensurePermission()) return;
 
       await _plugin.show(
         id,
         title,
         body,
         const NotificationDetails(
+          iOS: DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: false,
+            presentSound: true,
+          ),
           macOS: DarwinNotificationDetails(
             presentAlert: true,
             presentBadge: false,

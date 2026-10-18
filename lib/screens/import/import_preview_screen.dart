@@ -248,11 +248,25 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen> {
                     Icon(Icons.search_off_rounded,
                         size: 56, color: cs.onSurfaceVariant),
                     const SizedBox(height: 16),
-                    Text('No transactions found',
+                    Text(
+                        widget.result.aiConsentDeclined
+                            ? 'Nothing was sent'
+                            : 'No transactions found',
                         style: Theme.of(context).textTheme.titleMedium),
                     const SizedBox(height: 8),
                     Text(
-                      widget.result.pdfScanned
+                      widget.result.aiConsentDeclined
+                          ? widget.result.fileType == ImportFileType.image
+                              ? 'A photo of a statement can only be read by an '
+                                  'AI model, and you chose not to send it. '
+                                  "Nothing left your device. Export a CSV from "
+                                  "your bank, or pick an on-device AI provider "
+                                  'in Settings → AI.'
+                              : 'This statement needs an AI model to read, and '
+                                  'you chose not to send it. Nothing left your '
+                                  'device — try a CSV export, or pick an '
+                                  'on-device AI provider in Settings → AI.'
+                          : widget.result.pdfScanned
                           ? 'This appears to be a scanned PDF with no text layer. Connect an AI provider with vision support to import scanned documents, or export as CSV from your bank\'s website.'
                           : widget.result.pdfAiNotReady
                               ? 'Heuristic detection couldn\'t find enough transactions. Connect an AI provider for accurate PDF import, or export as CSV from your bank\'s website.'
@@ -270,7 +284,8 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen> {
                           ?.copyWith(color: cs.onSurfaceVariant),
                     ),
                     if (widget.result.pdfScanned ||
-                        widget.result.pdfAiNotReady) ...[
+                        widget.result.pdfAiNotReady ||
+                        widget.result.aiConsentDeclined) ...[
                       const SizedBox(height: 16),
                       OutlinedButton.icon(
                         onPressed: () => Navigator.of(context).pop(),

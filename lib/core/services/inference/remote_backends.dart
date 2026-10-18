@@ -11,12 +11,26 @@ import 'inference_backend.dart';
 /// localhost or a box on their LAN. That is a different claim from a hosted
 /// service, and the picker says so.
 class OllamaBackend implements InferenceBackend {
-  OllamaBackend({required this.baseUrl, required this.model});
+  OllamaBackend({
+    required this.baseUrl,
+    required this.model,
+    this.isPrivate = true,
+  });
 
   static const String backendId = 'ollama';
 
   final String baseUrl;
   final String? model;
+
+  /// False when [baseUrl] points somewhere off the user's own network.
+  ///
+  /// Decided by the caller, which is the only place that knows the URL —
+  /// see `OllamaService.isLocalEndpoint`. A LAN address is hardware the user
+  /// controls; a public host is not, and the app must not claim otherwise,
+  /// because this flag now gates automatic insight generation and the AI
+  /// statement parser.
+  @override
+  final bool isPrivate;
 
   @override
   String get id => backendId;
@@ -25,12 +39,11 @@ class OllamaBackend implements InferenceBackend {
   String get displayName => 'Ollama';
 
   @override
-  String get description =>
-      'A model running on your own machine or one on your network. Nothing '
-      'leaves hardware you control.';
-
-  @override
-  bool get isPrivate => true;
+  String get description => isPrivate
+      ? 'A model running on your own machine or one on your network. Nothing '
+          'leaves hardware you control.'
+      : 'A model running on the server you configured. Your financial figures '
+          'are sent there to answer each question.';
 
   /// Generous: Ollama hosts are usually desktops running 7B+ models with a
   /// context window far larger than anything on-device.

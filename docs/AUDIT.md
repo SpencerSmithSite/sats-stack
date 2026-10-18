@@ -95,78 +95,114 @@ Also fixed in the same file:
 - Imported rows no longer land on an arbitrary wallet (`wallets.first` was
   unordered and could be an xpub wallet).
 
+### Privacy — the disclosure now matches the code
+
+Addressed 2026-10-18. The audit found the enum labels all factually correct;
+what was wrong was the call sites, and one claim the code did not keep.
+
+- **The monthly insight no longer generates by itself for a provider that would
+  receive it.** `dashboard_screen.dart` auto-generated it from `initState`, so
+  selecting Claude in Settings and opening the Dashboard uploaded the month's
+  income, spending, surplus, stack total and full category breakdown to a third
+  party with no user action — and swallowed any error. It now generates
+  automatically only when the backend keeps the data on hardware the user
+  controls; otherwise `AiInsightCard` offers a button naming the recipient, and
+  nothing is sent until it is pressed.
+- **Statements are no longer handed to a third party without asking.** The AI
+  tier is tried *first* for every CSV and PDF, so with a hosted provider
+  selected the raw file went to it before anything local was attempted, and no
+  screen in the import flow said so. `ImportService` now gates that tier on
+  consent recorded per provider (`AppConstants.aiImportConsentKey`), the import
+  screen asks with the disclosure inside the dialog, and declining falls
+  through to the local tiers — rules for a CSV, heuristics for a PDF. A photo
+  of a statement has no local route, so declining ends the import with
+  "Nothing was sent" rather than a parse failure.
+- **"Nothing is sent until you ask" is now true**, and the disclosure says it
+  for all three paths — question, insight, statement — instead of mentioning
+  only questions and so implying the other two do not happen.
+- **LM Studio and Ollama no longer claim privacy they cannot deliver.**
+  `isPrivate` was hardcoded true for LM Studio next to the words "Nothing
+  leaves your device", while its base URL is free text the user can point
+  anywhere. Both backends now derive the claim from the configured host
+  (`OllamaService.isLocalEndpoint`: loopback, `.local`, link-local and the
+  RFC 1918 ranges), and a remote self-hosted server is disclosed by host name.
+  That flag is what now gates automatic insight generation and the AI import
+  tier, so its accuracy matters more than its wording.
+- **A 401 body no longer reaches the screen.** `describeError` preferred the
+  provider's own message for every status, and OpenAI's 401 contains
+  `Incorrect API key provided: sk-proj-ab****XYZ` — a partial copy of the
+  user's key, printed verbatim by the chat screen and into any screenshot.
+  Auth failures now use the canned string.
+
+Covered by `test/ai_privacy_test.dart`: the local/remote host classification,
+the enum invariant, and that consent defaults to no, is remembered, and does
+not carry from one provider to another.
+
+### The legacy import pipeline is gone
+
+`CsvImportService` and `CsvImportSheet` are deleted (~850 lines). Nothing
+constructed the sheet — `/import` routes to `ImportFileScreen` and
+`ImportService` — so the entire second pipeline was unreachable, and with it
+went the silent 100-row cap, the rejection of 2-digit years, a `_parseAmount`
+with no decimal-comma, DR/CR or parenthetical-negative handling, a third
+divergent category colour map, a duplicate `_autoCategory`, a hardcoded
+`fiatCurrency: 'USD'`, and seven missing `mounted` guards.
+
+### Notifications work on iOS
+
+`InitializationSettings` passed no `iOS:` block and only the macOS permission
+plugin was resolved, so on the TestFlight build no permission was ever asked
+for and no notification could appear. All three platforms are now asked
+(including Android 13+, where `POST_NOTIFICATIONS` became a runtime
+permission), once per session rather than per notification;
+`UNUserNotificationCenter.current().delegate` is set in `AppDelegate` so a
+notification raised while the app is in the foreground is not swallowed; budget
+IDs are offset so `categoryId * 2 + 1` can no longer collide with the
+stack-goal ID at category 4999; and `BudgetProgress.isOverBudget` guards a zero
+budget, which used to produce "you've exceeded your $0 Food budget by $47".
+Verified with `flutter build ios --no-codesign`.
+
 ---
 
 ## Not fixed — highest value first
 
-### P0
-
-1. **AI · the privacy disclosure is contradicted by the code.**
-   `ai_privacy_disclosure.dart:79` says "Nothing is sent until you ask a
-   question", but `dashboard_screen.dart:36-44` auto-generates the monthly
-   insight in `initState`, POSTing the full financial snapshot (stack total,
-   income, spending, surplus, category breakdown) to whatever backend is
-   active — including a hosted one — with no user action, and swallowing
-   failures. Gate auto-generation on `backend.isPrivate`, or require an
-   explicit per-provider opt-in, and fix the sentence.
-   *CLAUDE.md calls this the one claim in the app that must never be wrong.*
-
-2. **AI · raw statements go off-device with no disclosure.**
-   `import_service.dart:550-552` sends up to 100,000 characters of the raw
-   statement to the active backend; there is no privacy text anywhere in
-   `lib/screens/import/`. The raw file is more sensitive than the chat context
-   (account numbers, every line item, balances). Show `AiPrivacyDisclosure`
-   with a one-time confirm before the first off-device import.
-
-3. **Import · `CsvImportService` silently caps every import at 100 rows.**
-   `csv_import_service.dart:47,197`. Rows 101+ are never parsed, never counted
-   as duplicates, never reported. A 2,400-row statement imports 100 rows and
-   the sheet says "100 rows". Note there are **two divergent import pipelines**
-   (`CsvImportService` + `CsvImportSheet`, and `ImportService` + `screens/import/`),
-   both reachable from `main.dart`; the legacy one also lacks 2-digit-year
-   support (`:141,150` require `(\d{4})`, so a Chase `01/02/25` export drops
-   100% of rows), parenthetical negatives and trailing minus. **The cheapest
-   real fix is to delete it and route `CsvImportSheet` through `ImportService`**,
-   which now has all of it.
-
 ### P1
 
-4. **Data · `fiatCurrency` is hardcoded `'USD'` on every manual and legacy-CSV
-   entry** — `add_transaction_sheet.dart:213`, `csv_import_service.dart:324` —
-   while `transaction_list_item.dart:113` renders using the stored value. A GBP
+1. **Data · `fiatCurrency` is hardcoded `'USD'` on every manual entry** —
+   `add_transaction_sheet.dart:213` — while `transaction_list_item.dart:113`
+   renders using the stored value. A GBP
    user's £40 expense displays as "-$40.00", and sats were computed from the GBP
    price, so the two now disagree. Pass `app.currencyNotifier.value`.
    Related: `add_transaction_sheet.dart:119` hardcodes `$` in the sats→fiat hint.
 
-5. **Data · month ranges end at `23:59:59`**, used with `!isAfter(lastDay)` at
+2. **Data · month ranges end at `23:59:59`**, used with `!isAfter(lastDay)` at
    `dashboard_service.dart:37,92,108,181,252` and `budget_service.dart:80`.
    Anything in the last 999 ms of a month belongs to no month — reachable,
    because `add_transaction_sheet.dart:47` seeds the date with
    `DateTime.now()`. Use an exclusive `isBefore(firstOfNextMonth)` bound.
 
-6. **Data · renaming a category orphans every transaction in it.**
+3. **Data · renaming a category orphans every transaction in it.**
    `category_service.dart:37-50` updates `Categories.name`, but
    `Transactions.category` is free text matched by string
    (`budget_service.dart:86`). The budget card drops to "$0 of $500", no
    overspend alert fires, and the pie chart shows a phantom slice. Update both
    tables in one transaction.
 
-7. **Data · BTC-denominated imports write BTC units into `amountFiat`**
+4. **Data · BTC-denominated imports write BTC units into `amountFiat`**
    (`import_service.dart:964-990`), and `DashboardService` sums that column as
    money: a 0.05 BTC deposit reads as "$0.05". Convert at import time using the
    historical price. Same root cause as the discarded source currency — the
    user's per-source choice (`import_source_setup_screen.dart:30`) is never
    read; every rules/mapping path hardcodes `'USD'` (`:700,879,1233`).
 
-8. **UI · missing `mounted` guards after `await`** — seven in
-   `csv_import_sheet.dart` (44,49,53,59,70,78,84: not one in the file), plus
+5. **UI · missing `mounted` guards after `await`** —
    `settings_screen.dart:323,371,484,600`, `add_transaction_sheet.dart:233`,
    `set_budget_sheet.dart:81`, `stack_screen.dart:92`. Each is a real
    `setState() called after dispose()` — e.g. dismiss the CSV sheet while the
    native picker is open. Mechanical fix; `_testCloudConnection` already does it
    right.
 
-9. **UI · streams and futures constructed inside `build()`** —
+6. **UI · streams and futures constructed inside `build()`** —
    `transactions_screen.dart:225`, `stack_screen.dart:118`,
    `dashboard_screen.dart:121,301`, `analytics_screen.dart:109`,
    `budgets_screen.dart:100`. Every `watch*()` builds a new Drift stream, so
@@ -178,15 +214,14 @@ Also fixed in the same file:
    row* in a `FutureBuilder`; `dashboard_screen.dart:370` does the same on every
    price tick.
 
-10. **Data · bulk inserts are not wrapped in a transaction**
-    (`import_service.dart:925-1005`, `csv_import_service.dart:300-331`; xpub is
-    now fixed). Each commit fires `watchAll()` → `main.dart:138` →
+7. **Data · bulk inserts are not wrapped in a transaction**
+    (`import_service.dart:925-1005`; xpub is now fixed). Each commit fires `watchAll()` → `main.dart:138` →
     `checkAndNotify()` → three full table selects, plus every mounted
     `StreamBuilder`. A 300-row import means ~900 full-table selects and a
     multi-second freeze; a kill mid-loop leaves the two tables inconsistent.
     `generateDueRecurring` already shows the right pattern.
 
-11. **AI · `aiEnabledNotifier` drifts between the two choosers.**
+8. **AI · `aiEnabledNotifier` drifts between the two choosers.**
     `settings_screen.dart:269` omits the "hosted provider with a key" term that
     `onboarding_screen.dart:146` has, so a mobile user with a saved Anthropic
     key loses the AI tab by switching provider and back. Separately
@@ -195,41 +230,31 @@ Also fixed in the same file:
     `aiShouldBeEnabled(AiProvider)` helper — CLAUDE.md claims these two paths
     cannot drift, and they have.
 
-12. **AI · LM Studio claims `isPrivate: true` unconditionally**
-    (`ollama_service.dart:98-109`) — "Nothing leaves your device" — while its
-    base URL is a free-text field the user can point at a VPS. Ollama's own
-    wording is honest; copy it, or derive the claim from the host.
-
-13. **AI · mid-stream provider errors are silently swallowed**
+9. **AI · mid-stream provider errors are silently swallowed**
     (`cloud_backend.dart:456-481`). An error frame arriving after 200 tokens
     ends the stream, and the truncated answer is persisted as complete. Also
     `max_tokens: 4096` is hardcoded with no truncation notice.
 
-14. **AI · a partially-masked API key can reach the screen.**
-    `describeError` prefers the provider's message even for 401, and OpenAI's
-    401 body contains `Incorrect API key provided: sk-proj-ab****XYZ`, printed
-    verbatim by `ai_chat_screen.dart:165`. Use the canned string for 401/403.
-
-15. **Import · editing an imported BTC row zeroes it.**
+10. **Import · editing an imported BTC row zeroes it.**
     `transaction_edit_sheet.dart:68` formats with `toStringAsFixed(2)`, so
     0.00047 BTC opens as "0.00"; saving writes 0.0 and passes the `< 0` guard.
 
-16. **Data · `BudgetService.upsert` is read-then-write with no transaction and
+11. **Data · `BudgetService.upsert` is read-then-write with no transaction and
     no unique index on `budgets.categoryId`** — double-tapping Save creates two
     rows, after which every later `upsert` for that category throws
     `StateError` from `getSingleOrNull` and the budget can never be edited
     again. Wrap in a transaction and add the index.
 
-17. **UI · the Stack hero card and chart gridlines are hardcoded dark** —
+12. **UI · the Stack hero card and chart gridlines are hardcoded dark** —
     `stack_screen.dart:329` (`0xFF1A1200`/`0xFF2A1F00` with white text) and
     `:535` (5%-opacity white gridlines, invisible in light mode). Survivors of
     the light-mode pass recorded as complete in CLAUDE.md.
 
-18. **UI · `/ai` has no redirect when the tab disappears.** `app.dart:130-139`
+13. **UI · `/ai` has no redirect when the tab disappears.** `app.dart:130-139`
     drops the path from `_tabPaths` and `_indexForLocation` falls back to 0, so
     the AI screen stays rendered with Dashboard highlighted and no matching tab.
 
-19. **UI · a notification is fired from inside `build()`** —
+14. **UI · a notification is fired from inside `build()`** —
     `budgets_screen.dart:124`, guarded by a module-level `Set` that is never
     cleared, so re-exceeding a budget in the same month never alerts again.
 
@@ -271,10 +296,6 @@ Also fixed in the same file:
   (`onBadCertificate: (_) => true`) with no pinning — on hostile Wi-Fi that
   hands an attacker the user's entire derived address set.
   `ElectrumSession.call` leaks a pending completer on every timeout.
-- `notification_service.dart:24-35` passes no `iOS:` initialisation settings and
-  only resolves the macOS permission plugin, so **notifications never appear on
-  the TestFlight iOS build**. ID scheme collides with the stack-goal ID at
-  `categoryId == 4999`.
 - xpub derivation runs on the UI isolate; there is no scan cursor, so every
   rescan re-fetches from index 0 on both chains.
 - Onboarding's Bitcoin-server page is a non-scrolling `Column` with a text

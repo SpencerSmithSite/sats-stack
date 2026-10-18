@@ -12,6 +12,7 @@ import 'package:syncfusion_flutter_pdf/pdf.dart';
 import '../database/database.dart';
 import 'ollama_service.dart';
 import '../../data/institution_profiles.dart';
+import '../../shared/constants/app_constants.dart';
 import '../../shared/utils/hash_utils.dart';
 
 /// Thrown when [ImportService.cancelImport] is called during an active import.
@@ -93,6 +94,7 @@ class ImportResult {
     this.isPdfNoAi = false,
     this.pdfAiNotReady = false,
     this.pdfScanned = false,
+    this.aiConsentDeclined = false,
     this.rawCsvContent,
     this.csvRows,
     this.csvHeaders,
@@ -109,6 +111,10 @@ class ImportResult {
   /// True when the PDF appears to be a scanned/image-only document (text layer
   /// extracted fewer than 50 characters).
   final bool pdfScanned;
+
+  /// True when reading this file needed a third party and the user said no.
+  /// Not a failure — the file is untouched and nothing was sent.
+  final bool aiConsentDeclined;
   final ImportFileType fileType;
   final String fileName;
   final String? rawCsvContent;
@@ -168,10 +174,68 @@ class ImportService {
   void _resetImportState() {
     _importCancelled = false;
     _activeImportClient = null;
+    _consentThisImport = null;
   }
 
   void _checkCancelled() {
     if (_importCancelled) throw const ImportCancelledException();
+  }
+
+  // ── Off-device consent ───────────────────────────────────────────────────
+  //
+  // The AI tier is tried FIRST for every statement, and with a hosted provider
+  // selected that means the raw file — account numbers, balances, every line
+  // item — is uploaded to a third party before any local parsing is attempted.
+  // That is more sensitive than anything the chat screen sends, and until this
+  // gate existed nothing on the import screens said it happened at all.
+  //
+  // A private backend needs no gate: nothing leaves the device.
+
+  /// Set for the duration of one import once the user has answered, so a
+  /// multi-tier import never asks twice.
+  bool? _consentThisImport;
+
+  /// Whether the user has already agreed to let the active provider's
+  /// recipient read their statements. Always true for a private backend.
+  Future<bool> offDeviceImportAllowed() async {
+    if (!ollama.sendsDataOffDevice) return true;
+    final row = await (db.select(db.appSettings)
+          ..where((t) => t.key
+              .equals(AppConstants.aiImportConsentKey(ollama.activeProvider.key))))
+        .getSingleOrNull();
+    return row?.value == 'true';
+  }
+
+  /// Records the user's answer for the active provider, so they are asked once
+  /// rather than on every import.
+  Future<void> setOffDeviceImportAllowed(bool allowed) async {
+    if (!ollama.sendsDataOffDevice) return;
+    await db.into(db.appSettings).insertOnConflictUpdate(
+          AppSettingsCompanion.insert(
+            key: AppConstants.aiImportConsentKey(ollama.activeProvider.key),
+            value: allowed.toString(),
+          ),
+        );
+  }
+
+  /// May the AI tier run for this file?
+  ///
+  /// Private backend: yes. Otherwise the stored answer, or [onOffDeviceConsent]
+  /// is asked and the answer remembered. With no callback and no stored
+  /// consent the answer is no — a caller that cannot ask must not send.
+  Future<bool> _aiTierPermitted(
+    Future<bool> Function(String recipient)? onOffDeviceConsent,
+  ) async {
+    if (!ollama.sendsDataOffDevice) return true;
+    if (_consentThisImport != null) return _consentThisImport!;
+    if (await offDeviceImportAllowed()) return _consentThisImport = true;
+    final recipient = ollama.activeDataRecipient;
+    if (onOffDeviceConsent == null || recipient == null) {
+      return _consentThisImport = false;
+    }
+    final granted = await onOffDeviceConsent(recipient);
+    await setOffDeviceImportAllowed(granted);
+    return _consentThisImport = granted;
   }
 
   // ── Public entry point ───────────────────────────────────────────────────
@@ -187,6 +251,7 @@ class ImportService {
     required String fileName,
     required int sourceId,
     void Function(String stage)? onStageChange,
+    Future<bool> Function(String recipient)? onOffDeviceConsent,
   }) async {
     _resetImportState();
     final lname = fileName.toLowerCase();
@@ -199,10 +264,12 @@ class ImportService {
     ImportResult result;
     if (fileType == ImportFileType.pdf) {
       result = await _handlePdf(filePath, fileName, sourceId,
-          onStageChange: onStageChange);
+          onStageChange: onStageChange,
+          onOffDeviceConsent: onOffDeviceConsent);
     } else {
       result = await _handleCsv(filePath, fileName, sourceId,
-          onStageChange: onStageChange);
+          onStageChange: onStageChange,
+          onOffDeviceConsent: onOffDeviceConsent);
     }
 
     // Apply user-defined category mappings from previous imports
@@ -219,13 +286,14 @@ class ImportService {
     required String imagePath,
     required int sourceId,
     void Function(String stage)? onStageChange,
+    Future<bool> Function(String recipient)? onOffDeviceConsent,
   }) async {
     _resetImportState();
     final fileName = imagePath.contains('/')
         ? imagePath.split('/').last
         : imagePath.split('\\').last;
     final result = await _handleImage(imagePath, fileName, sourceId,
-        onStageChange: onStageChange);
+        onStageChange: onStageChange, onOffDeviceConsent: onOffDeviceConsent);
     if (result.transactions.isNotEmpty) {
       await _applyDescriptionMappings(result.transactions, sourceId);
     }
@@ -261,6 +329,7 @@ class ImportService {
     String fileName,
     int sourceId, {
     void Function(String)? onStageChange,
+    Future<bool> Function(String recipient)? onOffDeviceConsent,
   }) async {
     onStageChange?.call('Reading your statement…');
     // Let the UI render the first stage before blocking on I/O
@@ -284,7 +353,13 @@ class ImportService {
         await ollama.isAvailable() && (ollama.selectedModel?.isNotEmpty ?? false);
     _checkCancelled();
 
-    if (!ollamaReady) {
+    // Declining falls through to the same heuristic path as "no AI configured",
+    // so the statement is still read — just locally.
+    final aiPermitted =
+        ollamaReady && await _aiTierPermitted(onOffDeviceConsent);
+    _checkCancelled();
+
+    if (!aiPermitted) {
       onStageChange?.call('Attempting heuristic detection…');
       await Future.delayed(const Duration(milliseconds: 60));
       final heuristicTxns = _parseTransactionsFromPdfText(text);
@@ -300,7 +375,8 @@ class ImportService {
         transactions: [],
         fileType: ImportFileType.pdf,
         fileName: fileName,
-        pdfAiNotReady: true,
+        pdfAiNotReady: !ollamaReady,
+        aiConsentDeclined: ollamaReady,
       );
     }
 
@@ -324,9 +400,22 @@ class ImportService {
     String fileName,
     int sourceId, {
     void Function(String)? onStageChange,
+    Future<bool> Function(String recipient)? onOffDeviceConsent,
   }) async {
     onStageChange?.call('Preparing image…');
     await Future.delayed(const Duration(milliseconds: 60));
+    _checkCancelled();
+
+    // Reading a photo of a statement has no local fallback — it is the model or
+    // nothing. Ask before the image is encoded, not after.
+    if (!await _aiTierPermitted(onOffDeviceConsent)) {
+      return ImportResult(
+        transactions: [],
+        fileType: ImportFileType.image,
+        fileName: fileName,
+        aiConsentDeclined: true,
+      );
+    }
     _checkCancelled();
 
     // Read bytes and base64-encode
@@ -446,6 +535,7 @@ Rules:
     String fileName,
     int sourceId, {
     void Function(String)? onStageChange,
+    Future<bool> Function(String recipient)? onOffDeviceConsent,
   }) async {
     onStageChange?.call('Reading your statement…');
     await Future.delayed(const Duration(milliseconds: 60));
@@ -491,12 +581,16 @@ Rules:
     }
     _checkCancelled();
 
-    // --- Tier 1: Ollama ---
+    // --- Tier 1: AI ---
+    //
+    // Asked before the file is read by anyone else. A CSV has the rule-based
+    // tier to fall back on, so declining costs the user nothing but a slightly
+    // worse parse.
     final ollamaReady =
         await ollama.isAvailable() && (ollama.selectedModel?.isNotEmpty ?? false);
     _checkCancelled();
 
-    if (ollamaReady) {
+    if (ollamaReady && await _aiTierPermitted(onOffDeviceConsent)) {
       final txns =
           await parseWithOllama(content, onStageChange: onStageChange);
       _checkCancelled();
