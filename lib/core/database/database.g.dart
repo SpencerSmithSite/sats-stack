@@ -4550,6 +4550,10 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       $ImportedTransactionsTable(this);
   late final $DescriptionCategoryMappingsTable descriptionCategoryMappings =
       $DescriptionCategoryMappingsTable(this);
+  late final Index idxBudgetsCategoryId = Index(
+    'idx_budgets_category_id',
+    'CREATE UNIQUE INDEX idx_budgets_category_id ON budgets (category_id)',
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -4566,6 +4570,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     importSources,
     importedTransactions,
     descriptionCategoryMappings,
+    idxBudgetsCategoryId,
   ];
 }
 

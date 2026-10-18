@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:drift/drift.dart' show Value;
 import '../database/database.dart';
 import '../models/budget_progress.dart';
+import '../../shared/utils/date_range.dart';
 import 'notification_service.dart';
 
 class BudgetService {
@@ -18,26 +19,34 @@ class BudgetService {
   // ── CRUD ─────────────────────────────────────────────────────────────────────
 
   /// Creates or updates the monthly budget for [categoryId].
+  ///
+  /// The read and the write are one transaction, and `budgets.categoryId`
+  /// carries a unique index. Before both, double-tapping Save raced two
+  /// inserts through the gap, and from then on every upsert for that category
+  /// threw `StateError` out of `getSingleOrNull` — the budget could not be
+  /// edited again without clearing the data.
   Future<void> upsert({
     required int categoryId,
     required double amountFiat,
   }) async {
-    final existing = await (_db.select(_db.budgets)
-          ..where((b) => b.categoryId.equals(categoryId)))
-        .getSingleOrNull();
+    await _db.transaction(() async {
+      final existing = await (_db.select(_db.budgets)
+            ..where((b) => b.categoryId.equals(categoryId)))
+          .getSingleOrNull();
 
-    if (existing != null) {
-      await (_db.update(_db.budgets)..where((b) => b.id.equals(existing.id)))
-          .write(BudgetsCompanion(amountFiat: Value(amountFiat)));
-    } else {
-      await _db.into(_db.budgets).insert(
-        BudgetsCompanion.insert(
-          categoryId: categoryId,
-          amountFiat: amountFiat,
-          period: 'monthly',
-        ),
-      );
-    }
+      if (existing != null) {
+        await (_db.update(_db.budgets)..where((b) => b.id.equals(existing.id)))
+            .write(BudgetsCompanion(amountFiat: Value(amountFiat)));
+      } else {
+        await _db.into(_db.budgets).insert(
+          BudgetsCompanion.insert(
+            categoryId: categoryId,
+            amountFiat: amountFiat,
+            period: 'monthly',
+          ),
+        );
+      }
+    });
   }
 
   Future<void> deleteById(int id) {
@@ -76,13 +85,12 @@ class BudgetService {
     final categories = await _db.select(_db.categories).get();
     final allTxns = await _db.select(_db.transactions).get();
 
-    final firstDay = DateTime(month.year, month.month, 1);
-    final lastDay = DateTime(month.year, month.month + 1, 0, 23, 59, 59);
+    final range = DateRange.month(month);
 
     final monthSpend = <int, double>{};
     for (final t in allTxns) {
       if (t.amountFiat >= 0) continue;
-      if (t.date.isBefore(firstDay) || t.date.isAfter(lastDay)) continue;
+      if (!range.contains(t.date)) continue;
       final cat = categories.where((c) => c.name == t.category).firstOrNull;
       if (cat != null) {
         monthSpend[cat.id] = (monthSpend[cat.id] ?? 0) + t.amountFiat.abs();

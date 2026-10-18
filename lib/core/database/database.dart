@@ -42,7 +42,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -66,8 +66,28 @@ class AppDatabase extends _$AppDatabase {
           if (from < 5) {
             await m.createTable(descriptionCategoryMappings);
           }
+          if (from < 6) {
+            await migrateToV6(m);
+          }
         },
       );
+
+  /// v5 → v6: one budget per category, enforced.
+  ///
+  /// The index cannot be created over a table that already holds duplicates,
+  /// and a pre-v6 install could — `BudgetService.upsert` was a read-then-write
+  /// with no transaction. Collapse first, keeping the newest row per category,
+  /// then create the index.
+  ///
+  /// Named rather than inlined so a test can run the real statements; there is
+  /// no generated schema history to migrate against.
+  Future<void> migrateToV6(Migrator m) async {
+    await customStatement(
+      'DELETE FROM budgets WHERE id NOT IN '
+      '(SELECT MAX(id) FROM budgets GROUP BY category_id)',
+    );
+    await m.createIndex(idxBudgetsCategoryId);
+  }
 
   /// Deletes all user data and re-seeds the factory defaults.
   Future<void> resetAndReseed() async {
