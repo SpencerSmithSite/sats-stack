@@ -42,6 +42,7 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen> {
         transactions: _txns,
         sourceId: widget.sourceId,
         sourceName: widget.sourceName,
+        btcPriceService: app.btcPriceService,
         btcPrice: app.btcPriceService.priceNotifier.value,
       );
       if (mounted) {

@@ -12,7 +12,6 @@ import '../../../shared/theme/app_text_styles.dart';
 import '../../../shared/utils/sat_converter.dart';
 import '../../../shared/utils/hash_utils.dart';
 import '../../../shared/utils/currency_utils.dart';
-import '../../../shared/constants/app_constants.dart';
 import '../../../main.dart' as app;
 
 class AddTransactionSheet extends StatefulWidget {
@@ -117,7 +116,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       return '≈ ${SatConverter.formatSats(sats)} sats';
     } else {
       final fiat = SatConverter.satsToFiat(raw.round(), price);
-      return '≈ \$${fiat.toStringAsFixed(2)}';
+      return '≈ ${CurrencyUtils.format(fiat, app.currencyNotifier.value)}';
     }
   }
 
@@ -140,11 +139,16 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
           double.parse(_amountController.text.replaceAll(',', ''));
       final wallet = await widget.walletService.getDefaultManual();
       if (wallet == null) {
-        _showError('No manual account found. Please restart the app.');
+        if (mounted) _showError('No manual account found. Please restart the app.');
         return;
       }
 
       final price = _btcPrice;
+      // The amount is entered in — and converted at the rate of — whatever
+      // currency is active now. Storing 'USD' regardless made a GBP user's £40
+      // render as "-\$40.00", with sats derived from the GBP price, so the two
+      // halves of the same row disagreed.
+      final currency = app.currencyNotifier.value;
       double amountFiat;
       int amountSats;
 
@@ -187,6 +191,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
             description: Value(_descriptionController.text.trim()),
             amountSats: Value(amountSats),
             amountFiat: Value(amountFiat),
+            fiatCurrency: Value(currency),
             category: Value(_selectedCategory?.name),
             notes: Value(_notesController.text.trim().isEmpty
                 ? null
@@ -210,7 +215,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
             description: _descriptionController.text.trim(),
             amountSats: amountSats,
             amountFiat: amountFiat,
-            fiatCurrency: AppConstants.defaultCurrency,
+            fiatCurrency: currency,
             category: Value(_selectedCategory?.name),
             source: 'manual',
             notes: Value(_notesController.text.trim().isEmpty
@@ -225,7 +230,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
 
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
-      _showError('Failed to save: $e');
+      if (mounted) _showError('Failed to save: $e');
     } finally {
       if (mounted) setState(() => _saving = false);
     }

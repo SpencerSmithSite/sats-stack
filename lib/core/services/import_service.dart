@@ -10,6 +10,7 @@ import 'package:http/http.dart' as http;
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 
 import '../database/database.dart';
+import 'btc_price_service.dart';
 import 'ollama_service.dart';
 import '../../data/institution_profiles.dart';
 import '../../shared/constants/app_constants.dart';
@@ -238,6 +239,29 @@ class ImportService {
     return _consentThisImport = granted;
   }
 
+  // ── Source currency ──────────────────────────────────────────────────────
+
+  /// The currency the user said this account is denominated in
+  /// (`ImportSourceSetupScreen`). Every parsed row inherits it unless the file
+  /// itself states otherwise, which only the AI tiers can do.
+  ///
+  /// Every parse path used to hardcode `'USD'`, so the per-source choice was
+  /// collected and then thrown away.
+  Future<String> _sourceCurrency(int sourceId) async {
+    final source = await (db.select(db.importSources)
+          ..where((t) => t.id.equals(sourceId)))
+        .getSingleOrNull();
+    return _normaliseCurrency(source?.currency);
+  }
+
+  /// [code] if it is usable, else [fallback]. A model that omits the currency
+  /// field, or reports one for a line it could not read, must not silently
+  /// redenominate the account.
+  static String _normaliseCurrency(String? code, [String fallback = 'USD']) {
+    final trimmed = code?.trim().toUpperCase();
+    return (trimmed == null || trimmed.isEmpty) ? fallback : trimmed;
+  }
+
   // ── Public entry point ───────────────────────────────────────────────────
 
   /// Tries tiers in order: saved mapping → Ollama → rules → manual mapping signal.
@@ -349,6 +373,7 @@ class ImportService {
       );
     }
 
+    final currency = await _sourceCurrency(sourceId);
     final ollamaReady =
         await ollama.isAvailable() && (ollama.selectedModel?.isNotEmpty ?? false);
     _checkCancelled();
@@ -362,7 +387,7 @@ class ImportService {
     if (!aiPermitted) {
       onStageChange?.call('Attempting heuristic detection…');
       await Future.delayed(const Duration(milliseconds: 60));
-      final heuristicTxns = _parseTransactionsFromPdfText(text);
+      final heuristicTxns = _parseTransactionsFromPdfText(text, currency);
       if (heuristicTxns.length >= 3) {
         return ImportResult(
           transactions: heuristicTxns,
@@ -380,8 +405,11 @@ class ImportService {
       );
     }
 
-    final txns =
-        await parseWithOllama(text, onStageChange: onStageChange);
+    final txns = await parseWithOllama(
+      text,
+      fallbackCurrency: currency,
+      onStageChange: onStageChange,
+    );
     _checkCancelled();
 
     return ImportResult(
@@ -417,6 +445,8 @@ class ImportService {
       );
     }
     _checkCancelled();
+
+    final fallbackCurrency = await _sourceCurrency(sourceId);
 
     // Read bytes and base64-encode
     final imageBytes = await File(imagePath).readAsBytes();
@@ -487,15 +517,15 @@ Rules:
               final direction =
                   ((map['direction'] as String?) ?? 'debit').toLowerCase();
               final description = (map['description'] as String?) ?? '';
-              final currency =
-                  ((map['currency'] as String?) ?? 'USD').toUpperCase();
+              final rowCurrency =
+                  _normaliseCurrency(map['currency'] as String?, fallbackCurrency);
               return ParsedTransaction(
                 date: date,
                 amount: amount.abs(),
                 direction: direction == 'credit' ? 'credit' : 'debit',
                 description: description,
                 rawDescription: description,
-                currency: currency,
+                currency: rowCurrency,
                 category: _autoCategory(description),
               );
             } catch (_) {
@@ -562,11 +592,14 @@ Rules:
         .getSingleOrNull();
     _checkCancelled();
 
+    final currency = _normaliseCurrency(source?.currency);
+
     if (source?.columnMapping != null) {
       try {
         final mapping =
             ColumnMapping.fromJson(jsonDecode(source!.columnMapping!) as Map<String, dynamic>);
-        final txns = await parseWithMapping(content, mapping);
+        final txns =
+            await parseWithMapping(content, mapping, currency: currency);
         if (txns != null && txns.isNotEmpty) {
           return ImportResult(
             transactions: txns,
@@ -591,8 +624,11 @@ Rules:
     _checkCancelled();
 
     if (ollamaReady && await _aiTierPermitted(onOffDeviceConsent)) {
-      final txns =
-          await parseWithOllama(content, onStageChange: onStageChange);
+      final txns = await parseWithOllama(
+        content,
+        fallbackCurrency: currency,
+        onStageChange: onStageChange,
+      );
       _checkCancelled();
       if (txns != null && txns.isNotEmpty) {
         return ImportResult(
@@ -606,7 +642,7 @@ Rules:
 
     // --- Tier 2: Rule-based ---
     onStageChange?.call('Applying smart rules…');
-    final txns = await parseWithRules(content);
+    final txns = await parseWithRules(content, currency: currency);
     _checkCancelled();
 
     if (txns != null && txns.isNotEmpty) {
@@ -635,6 +671,7 @@ Rules:
 
   Future<List<ParsedTransaction>?> parseWithOllama(
     String content, {
+    required String fallbackCurrency,
     void Function(String)? onStageChange,
   }) async {
     final client = http.Client();
@@ -705,15 +742,15 @@ FILE CONTENT:
               final direction =
                   ((map['direction'] as String?) ?? 'debit').toLowerCase();
               final description = (map['description'] as String?) ?? '';
-              final currency =
-                  ((map['currency'] as String?) ?? 'USD').toUpperCase();
+              final rowCurrency =
+                  _normaliseCurrency(map['currency'] as String?, fallbackCurrency);
               return ParsedTransaction(
                 date: date,
                 amount: amount.abs(),
                 direction: direction == 'credit' ? 'credit' : 'debit',
                 description: description,
                 rawDescription: description,
-                currency: currency,
+                currency: rowCurrency,
                 category: _autoCategory(description),
               );
             } catch (_) {
@@ -737,7 +774,10 @@ FILE CONTENT:
 
   // ── Tier 2: Rule-based CSV parsing ───────────────────────────────────────
 
-  Future<List<ParsedTransaction>?> parseWithRules(String csvContent) async {
+  Future<List<ParsedTransaction>?> parseWithRules(
+    String csvContent, {
+    required String currency,
+  }) async {
     final allRows = _parseCsvRows(csvContent);
     if (allRows.length < 2) return null;
 
@@ -748,7 +788,7 @@ FILE CONTENT:
     // Try institution profile first
     final profile = InstitutionProfiles.detect(headers);
     if (profile != null) {
-      return _parseWithProfile(allRows, headers, profile);
+      return _parseWithProfile(allRows, headers, profile, currency);
     }
 
     // Generic header detection
@@ -791,7 +831,7 @@ FILE CONTENT:
       debitCol: debitCol,
       creditCol: creditCol,
       signedAmount: amountCol != null,
-      currency: 'USD',
+      currency: currency,
     );
   }
 
@@ -799,6 +839,7 @@ FILE CONTENT:
     List<List<String>> allRows,
     List<String> headers,
     InstitutionProfile profile,
+    String currency,
   ) {
     int? dateCol, descCol, amountCol, debitCol, creditCol;
 
@@ -838,7 +879,9 @@ FILE CONTENT:
       debitCol: debitCol,
       creditCol: creditCol,
       signedAmount: profile.signedAmount,
-      currency: profile.defaultCurrency,
+      // The account's own currency, not the profile's: a profile identifies a
+      // column layout, and the user is the authority on what the account holds.
+      currency: currency,
       // Honoured at last: a positional profile (Wells Fargo) has no header
       // line, and skipping row 0 regardless dropped its first transaction.
       skipHeaderRow: profile.skipHeaderRow,
@@ -940,8 +983,13 @@ FILE CONTENT:
 
   Future<List<ParsedTransaction>?> parseWithMapping(
     String csvContent,
-    ColumnMapping mapping,
-  ) async {
+    ColumnMapping mapping, {
+    String? currency,
+    int? sourceId,
+  }) async {
+    assert(currency != null || sourceId != null,
+        'parseWithMapping needs the account currency or the source to read it from');
+    final rowCurrency = currency ?? await _sourceCurrency(sourceId!);
     final allRows = _parseCsvRows(csvContent);
     if (allRows.length < 2) return null;
 
@@ -995,7 +1043,7 @@ FILE CONTENT:
         direction: direction,
         description: description,
         rawDescription: description,
-        currency: 'USD',
+        currency: rowCurrency,
         category: _autoCategory(description),
       ));
     }
@@ -1019,10 +1067,19 @@ FILE CONTENT:
 
   // ── Save to database ──────────────────────────────────────────────────────
 
+  /// Writes the included rows into `importedTransactions` and the main
+  /// `transactions` table.
+  ///
+  /// [btcPriceService] supplies the historical rate for each row's date, which
+  /// is what makes a Bitcoin-denominated account storable: `amountFiat` is a
+  /// money column the dashboard sums, so a 0.05 BTC deposit written there
+  /// verbatim read as "$0.05". [btcPrice] is the spot rate, used only when a
+  /// row's historical price cannot be resolved.
   Future<ImportSummary> saveTransactions({
     required List<ParsedTransaction> transactions,
     required int sourceId,
     required String sourceName,
+    required BtcPriceService btcPriceService,
     double? btcPrice,
   }) async {
     // FK for the main transactions table. Prefer a manual wallet: `wallets`
@@ -1047,93 +1104,137 @@ FILE CONTENT:
 
     final toInsert = transactions.where((t) => t.include).toList();
 
-    for (final tx in toInsert) {
-      final cents = _toSmallestUnit(tx.amount, tx.currency);
-      final hash = computeHash(sourceId, tx.date, cents, tx.rawDescription);
+    // ── Resolve historical prices up front, once per date ───────────────────
+    //
+    // Before the write transaction opens: `getHistoricalPrice` goes to the
+    // network and writes its own cache rows, neither of which belongs inside a
+    // held write lock.
+    final displayCurrency = btcPriceService.currency;
+    final datesToPrice = <String, DateTime>{
+      for (final tx in toInsert) _dayKey(tx.date): tx.date,
+    };
+    final priceByDay = <String, double?>{};
+    for (final entry in datesToPrice.entries) {
+      priceByDay[entry.key] =
+          await btcPriceService.getHistoricalPrice(entry.value, displayCurrency);
+    }
 
-      if (existingHashes.contains(hash)) {
-        duplicatesSkipped++;
-        continue;
-      }
+    double? priceFor(DateTime date) {
+      final historical = priceByDay[_dayKey(date)];
+      if (historical != null && historical > 0) return historical;
+      return (btcPrice != null && btcPrice > 0) ? btcPrice : null;
+    }
 
-      try {
-        await db.into(db.importedTransactions).insert(
-          ImportedTransactionsCompanion.insert(
-            sourceId: sourceId,
-            date: tx.date,
-            amountCents: cents,
-            direction: tx.direction,
-            description: tx.description,
-            category: Value(tx.category),
-            currency: tx.currency,
-            rawDescription: tx.rawDescription,
-            importHash: hash,
-          ),
-          mode: InsertMode.insertOrIgnore,
-        );
-        existingHashes.add(hash);
-        imported++;
-        if (startDate == null || tx.date.isBefore(startDate)) startDate = tx.date;
-        if (endDate == null || tx.date.isAfter(endDate)) endDate = tx.date;
-      } catch (_) {
-        duplicatesSkipped++;
-        continue;
-      }
+    // ── One write transaction for the whole import ──────────────────────────
+    //
+    // Every committed statement fires `transactions.watchAll()`, which
+    // main.dart turns into a budget re-check plus three full table selects, and
+    // wakes every mounted StreamBuilder. Row by row, a 300-row import meant
+    // hundreds of full scans and a multi-second freeze. Wrapping the loop also
+    // means the two tables can no longer disagree if the app is killed
+    // mid-import: either a row is in both or in neither.
+    await db.transaction(() async {
+      for (final tx in toInsert) {
+        final cents = _toSmallestUnit(tx.amount, tx.currency);
+        final hash = computeHash(sourceId, tx.date, cents, tx.rawDescription);
 
-      // Also write into the main transactions table so the Transactions screen
-      // can display imported data alongside manual and xpub entries.
-      if (walletId != null) {
-        final isBitcoin = tx.currency == 'BTC' || tx.currency == 'SATS';
-        // fiatCurrency must be exactly 3 chars; SATS → BTC, others kept as-is
-        final fiatCurrency = tx.currency == 'SATS'
-            ? 'BTC'
-            : (tx.currency.length == 3 ? tx.currency : 'USD');
-        // signed: credit = positive, debit = negative
-        final signedFiat = tx.direction == 'credit' ? tx.amount : -tx.amount;
-        int amountSats;
-        if (isBitcoin) {
-          amountSats = tx.direction == 'credit' ? cents : -cents;
-        } else if (btcPrice != null && btcPrice > 0) {
-          amountSats = (signedFiat / btcPrice * 100000000).round();
-        } else {
-          amountSats = 0;
+        if (existingHashes.contains(hash)) {
+          duplicatesSkipped++;
+          continue;
         }
-        // Hash the *signed* amount, and scope it to the wallet.
-        //
-        // `tx.amount` is always positive, so a charge and its same-day refund
-        // hashed identically and the refund was dropped by the unique index —
-        // silently, because the insert is insertOrIgnore. The wallet salt stops
-        // the same rent figure in two accounts colliding the same way.
-        final dedupHash = HashUtils.transactionDedupHash(
-          date: tx.date,
-          amount: signedFiat,
-          description: tx.rawDescription,
-          salt: 'wallet_$walletId',
-        );
+
         try {
-          await db.into(db.transactions).insert(
-            TransactionsCompanion.insert(
-              walletId: walletId,
+          await db.into(db.importedTransactions).insert(
+            ImportedTransactionsCompanion.insert(
+              sourceId: sourceId,
               date: tx.date,
+              amountCents: cents,
+              direction: tx.direction,
               description: tx.description,
-              amountFiat: signedFiat,
-              amountSats: amountSats,
-              fiatCurrency: fiatCurrency,
               category: Value(tx.category),
-              source: 'csv',
-              isBitcoin: Value(isBitcoin),
-              dedupHash: dedupHash,
+              currency: tx.currency,
+              rawDescription: tx.rawDescription,
+              importHash: hash,
             ),
             mode: InsertMode.insertOrIgnore,
           );
+          existingHashes.add(hash);
+          imported++;
+          // Explicit `!`: captured by the transaction closure, these no longer
+          // promote on a null check.
+          if (startDate == null || tx.date.isBefore(startDate!)) {
+            startDate = tx.date;
+          }
+          if (endDate == null || tx.date.isAfter(endDate!)) endDate = tx.date;
         } catch (_) {
-          // Unique constraint violation — transaction already exists in main table
+          duplicatesSkipped++;
+          continue;
+        }
+
+        // Also write into the main transactions table so the Transactions screen
+        // can display imported data alongside manual and xpub entries.
+        if (walletId != null) {
+          final isBitcoin = tx.currency == 'BTC' || tx.currency == 'SATS';
+          final price = priceFor(tx.date);
+          // The signed amount in the account's own currency.
+          final signedSource = tx.direction == 'credit' ? tx.amount : -tx.amount;
+
+          final int amountSats;
+          final double amountFiat;
+          final String fiatCurrency;
+          if (isBitcoin) {
+            // `cents` is already sats for a BTC/SATS account. The fiat column is
+            // derived from it, never a copy of the BTC figure — writing 0.05
+            // there made the dashboard read a 0.05 BTC deposit as "$0.05".
+            amountSats = tx.direction == 'credit' ? cents : -cents;
+            amountFiat =
+                price != null ? amountSats / 100000000 * price : 0.0;
+            fiatCurrency = displayCurrency;
+          } else {
+            amountFiat = signedSource;
+            fiatCurrency =
+                tx.currency.length == 3 ? tx.currency : displayCurrency;
+            amountSats =
+                price != null ? (signedSource / price * 100000000).round() : 0;
+          }
+          // Hash the *signed* amount, and scope it to the wallet.
+          //
+          // `tx.amount` is always positive, so a charge and its same-day refund
+          // hashed identically and the refund was dropped by the unique index —
+          // silently, because the insert is insertOrIgnore. The wallet salt stops
+          // the same rent figure in two accounts colliding the same way.
+          final dedupHash = HashUtils.transactionDedupHash(
+            date: tx.date,
+            amount: signedSource,
+            description: tx.rawDescription,
+            salt: 'wallet_$walletId',
+          );
+          try {
+            await db.into(db.transactions).insert(
+              TransactionsCompanion.insert(
+                walletId: walletId,
+                date: tx.date,
+                description: tx.description,
+                amountFiat: amountFiat,
+                amountSats: amountSats,
+                fiatCurrency: fiatCurrency,
+                category: Value(tx.category),
+                source: 'csv',
+                isBitcoin: Value(isBitcoin),
+                dedupHash: dedupHash,
+              ),
+              mode: InsertMode.insertOrIgnore,
+            );
+          } catch (_) {
+            // Unique constraint violation — transaction already exists in main table
+          }
         }
       }
-    }
 
-    // Persist description → category mappings for future imports
-    await _saveDescriptionMappings(toInsert, sourceId);
+      // Inside the same transaction: another few hundred statements, and a
+      // half-written mapping set would mis-categorise the next import.
+      await _saveDescriptionMappings(toInsert, sourceId);
+    });
 
     return ImportSummary(
       imported: imported,
@@ -1236,7 +1337,8 @@ FILE CONTENT:
 
   /// Parses transactions from plain-text PDF content using pattern matching.
   /// Returns an empty list when fewer than 3 rows are found (low confidence).
-  List<ParsedTransaction> _parseTransactionsFromPdfText(String text) {
+  List<ParsedTransaction> _parseTransactionsFromPdfText(
+      String text, String currency) {
     final lines = text.split(RegExp(r'\r?\n'));
 
     // Date patterns tried in order — take the first match per line.
@@ -1361,7 +1463,7 @@ FILE CONTENT:
         direction: direction,
         description: desc,
         rawDescription: desc,
-        currency: 'USD',
+        currency: currency,
         category: _autoCategory(desc),
       ));
     }
@@ -1370,6 +1472,9 @@ FILE CONTENT:
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
+
+  static String _dayKey(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
   String computeHash(
       int sourceId, DateTime date, int amountCents, String rawDescription) {
