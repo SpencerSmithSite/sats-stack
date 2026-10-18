@@ -8,6 +8,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sats_stack/shared/theme/category_palette.dart';
+import 'package:sats_stack/shared/utils/month_cursor.dart';
 import 'package:sats_stack/shared/utils/sat_converter.dart';
 
 void main() {
@@ -87,6 +88,38 @@ void main() {
       expect(CategoryPalette.parseHex('#F7931A'), const Color(0xFFF7931A));
       expect(CategoryPalette.parseHex('F7931A'), const Color(0xFFF7931A));
       expect(CategoryPalette.parseHex('80F7931A'), const Color(0x80F7931A));
+    });
+  });
+
+  group('MonthCursor', () {
+    test('normalises to the first of the month', () {
+      expect(MonthCursor(DateTime(2026, 3, 17, 23, 59)).month,
+          DateTime(2026, 3, 1));
+    });
+
+    test('steps backwards and forwards across a year boundary', () {
+      expect(MonthCursor(DateTime(2026, 1)).previous.month, DateTime(2025, 12));
+      expect(MonthCursor(DateTime(2026, 12)).next.month, DateTime(2027, 1));
+    });
+
+    test('isCurrent compares year and month only', () {
+      final now = DateTime(2026, 3, 17, 14, 30);
+      expect(MonthCursor(DateTime(2026, 3, 1)).isCurrent(now), isTrue);
+      expect(MonthCursor(DateTime(2026, 2, 28)).isCurrent(now), isFalse);
+      expect(MonthCursor(DateTime(2025, 3, 17)).isCurrent(now), isFalse);
+    });
+
+    test('range is the half-open month', () {
+      final range = MonthCursor(DateTime(2026, 2, 10)).range;
+      expect(range.start, DateTime(2026, 2, 1));
+      expect(range.end, DateTime(2026, 3, 1));
+      // The boundary case the three screens used to get wrong on their own.
+      expect(range.contains(DateTime(2026, 2, 28, 23, 59, 59, 400)), isTrue);
+      expect(range.contains(DateTime(2026, 3, 1)), isFalse);
+    });
+
+    test('label is what the app bar shows', () {
+      expect(MonthCursor(DateTime(2026, 3)).label, 'March 2026');
     });
   });
 }

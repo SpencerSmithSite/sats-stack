@@ -11,6 +11,7 @@ import '../../shared/widgets/empty_state.dart';
 import 'widgets/budget_card.dart';
 import 'widgets/set_budget_sheet.dart';
 import '../../main.dart' as app;
+import '../../shared/utils/month_cursor.dart';
 
 class BudgetsScreen extends StatefulWidget {
   const BudgetsScreen({super.key});
@@ -65,19 +66,16 @@ class _BudgetsScreenState extends State<BudgetsScreen> {
   }
 
   void _previousMonth() => setState(() {
-        _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month - 1);
+        _selectedMonth = MonthCursor(_selectedMonth).previous.month;
         _subscribe();
       });
 
   void _nextMonth() => setState(() {
-        _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month + 1);
+        _selectedMonth = MonthCursor(_selectedMonth).next.month;
         _subscribe();
       });
 
-  bool get _isCurrentMonth {
-    final now = DateTime.now();
-    return _selectedMonth.year == now.year && _selectedMonth.month == now.month;
-  }
+  bool get _isCurrentMonth => MonthCursor(_selectedMonth).isCurrent();
 
   void _openSetBudget({BudgetProgress? existing}) {
     showModalBottomSheet(
