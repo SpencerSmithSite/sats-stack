@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart' show ResultSetImplementation;
 import 'package:intl/intl.dart';
 
 import '../database/database.dart';
@@ -6,26 +7,41 @@ import '../models/dashboard_data.dart';
 import '../models/wallet_summary.dart';
 import '../../shared/constants/app_constants.dart';
 import '../../shared/utils/currency_utils.dart';
+import '../../shared/utils/date_range.dart';
 
 class DashboardService {
   DashboardService(this._db);
 
   final AppDatabase _db;
 
-  /// Emits a fresh [DashboardData] whenever any transaction changes.
+  /// Emits once, then whenever any of [tables] changes.
+  ///
+  /// `select(...).watch()` only tracks the table it selects from, which is not
+  /// the same set a computed aggregate reads.
+  Stream<void> _changesTo(Set<ResultSetImplementation<dynamic, dynamic>> tables) =>
+      _db.customSelect('SELECT 1', readsFrom: tables).watch();
+
+  /// Emits a fresh [DashboardData] whenever anything it reads changes.
   /// The [month] parameter controls which month's aggregates are returned.
+  ///
+  /// `appSettings` is in the set because [_compute] reads the stack goal from
+  /// it. Watching only `transactions` was masked for as long as the widget
+  /// tree rebuilt this stream on every frame; with the stream built once, a
+  /// change to the goal would otherwise never reach the card.
   Stream<DashboardData> watchDashboard(DateTime month,
       {double inflationRate = 3.5}) {
-    return _db.select(_db.transactions).watch().asyncMap(
-          (txns) => _compute(txns, month, inflationRate: inflationRate),
-        );
+    return _changesTo({_db.transactions, _db.appSettings}).asyncMap((_) async {
+      final txns = await _db.select(_db.transactions).get();
+      return _compute(txns, month, inflationRate: inflationRate);
+    });
   }
 
-  /// Emits a per-wallet breakdown whenever any transaction changes.
+  /// Emits a per-wallet breakdown whenever a transaction or a wallet changes.
   Stream<List<WalletSummary>> watchPerWallet(DateTime month) {
-    return _db.select(_db.transactions).watch().asyncMap(
-          (txns) => _computePerWallet(txns, month),
-        );
+    return _changesTo({_db.transactions, _db.wallets}).asyncMap((_) async {
+      final txns = await _db.select(_db.transactions).get();
+      return _computePerWallet(txns, month);
+    });
   }
 
   Future<List<WalletSummary>> _computePerWallet(
@@ -33,21 +49,26 @@ class DashboardService {
     DateTime month,
   ) async {
     final wallets = await _db.select(_db.wallets).get();
-    final firstDay = DateTime(month.year, month.month, 1);
-    final lastDay = DateTime(month.year, month.month + 1, 0, 23, 59, 59);
+    final range = DateRange.month(month);
+
+    // Grouped in one pass. Filtering `allTxns` inside the wallet loop made
+    // this O(wallets × transactions), re-walking the whole history once per
+    // wallet on every change — on the UI isolate.
+    final byWallet = <int, List<Transaction>>{};
+    for (final t in allTxns) {
+      (byWallet[t.walletId] ??= <Transaction>[]).add(t);
+    }
 
     final result = <WalletSummary>[];
     for (final wallet in wallets) {
-      final walletTxns =
-          allTxns.where((t) => t.walletId == wallet.id).toList();
+      final walletTxns = byWallet[wallet.id] ?? const <Transaction>[];
 
       final totalSats = walletTxns
           .where((t) => t.isBitcoin)
           .fold(0, (s, t) => s + t.amountSats);
 
-      final monthTxns = walletTxns
-          .where((t) => !t.date.isBefore(firstDay) && !t.date.isAfter(lastDay))
-          .toList();
+      final monthTxns =
+          walletTxns.where((t) => range.contains(t.date)).toList();
 
       final monthChangeSats = monthTxns
           .where((t) => t.isBitcoin)
@@ -86,13 +107,9 @@ class DashboardService {
     DateTime selectedMonth,
   ) async {
     // ── Selected month breakdown ─────────────────────────────────────────────
-    final firstDay =
-        DateTime(selectedMonth.year, selectedMonth.month, 1);
-    final lastDay =
-        DateTime(selectedMonth.year, selectedMonth.month + 1, 0, 23, 59, 59);
-    final monthTxns = allTxns
-        .where((t) => !t.date.isBefore(firstDay) && !t.date.isAfter(lastDay))
-        .toList();
+    final range = DateRange.month(selectedMonth);
+    final monthTxns =
+        allTxns.where((t) => range.contains(t.date)).toList();
 
     final byCategory = <String, double>{};
     for (final t in monthTxns.where((t) => t.amountFiat < 0)) {
@@ -104,12 +121,8 @@ class DashboardService {
     final monthlyTotals = <MonthlyTotal>[];
     for (int i = 5; i >= 0; i--) {
       final m = DateTime(selectedMonth.year, selectedMonth.month - i, 1);
-      final mFirst = DateTime(m.year, m.month, 1);
-      final mLast = DateTime(m.year, m.month + 1, 0, 23, 59, 59);
-      final mTxns = allTxns
-          .where(
-              (t) => !t.date.isBefore(mFirst) && !t.date.isAfter(mLast))
-          .toList();
+      final mRange = DateRange.month(m);
+      final mTxns = allTxns.where((t) => mRange.contains(t.date)).toList();
 
       double inc = 0, spend = 0;
       final mByCategory = <String, double>{};
@@ -131,12 +144,9 @@ class DashboardService {
     }
 
     // ── YTD ──────────────────────────────────────────────────────────────────
-    final ytdFirst = DateTime(selectedMonth.year, 1, 1);
-    final ytdLast = DateTime(selectedMonth.year, 12, 31, 23, 59, 59);
-    final ytdTxns = allTxns
-        .where((t) =>
-            !t.date.isBefore(ytdFirst) && !t.date.isAfter(ytdLast))
-        .toList();
+    final ytdRange = DateRange.year(selectedMonth);
+    final ytdTxns =
+        allTxns.where((t) => ytdRange.contains(t.date)).toList();
 
     double ytdInc = 0, ytdSpend = 0;
     for (final t in ytdTxns) {
@@ -177,11 +187,10 @@ class DashboardService {
     }
 
     // Spending per category for the selected month
-    final firstDay = DateTime(month.year, month.month, 1);
-    final lastDay = DateTime(month.year, month.month + 1, 0, 23, 59, 59);
+    final range = DateRange.month(month);
     final spentByCat = <String, double>{};
-    for (final t in txns.where(
-        (t) => !t.date.isBefore(firstDay) && !t.date.isAfter(lastDay) && t.amountFiat < 0)) {
+    for (final t
+        in txns.where((t) => range.contains(t.date) && t.amountFiat < 0)) {
       final cat = t.category ?? 'Other';
       spentByCat[cat] = (spentByCat[cat] ?? 0) + t.amountFiat.abs();
     }
@@ -248,12 +257,9 @@ class DashboardService {
     DateTime month, {
     double inflationRate = 3.5,
   }) async {
-    final firstDay = DateTime(month.year, month.month, 1);
-    final lastDay = DateTime(month.year, month.month + 1, 0, 23, 59, 59);
+    final range = DateRange.month(month);
 
-    final monthTxns = allTxns
-        .where((t) => !t.date.isBefore(firstDay) && !t.date.isAfter(lastDay))
-        .toList();
+    final monthTxns = allTxns.where((t) => range.contains(t.date)).toList();
 
     // ── Fiat aggregates ──────────────────────────────────────────────────────
     double income = 0;

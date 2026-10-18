@@ -14,7 +14,6 @@ class InstitutionProfile {
     this.creditHeader,
     this.skipHeaderRow = true,
     this.signedAmount = false,
-    this.defaultCurrency = 'USD',
     this.positional = false,
   });
 
@@ -40,7 +39,6 @@ class InstitutionProfile {
   /// True → single amount column where negative = debit, positive = credit.
   final bool signedAmount;
 
-  final String defaultCurrency;
 
   /// True → do not rely on header names to find columns; use fixed indices.
   final bool positional;
@@ -54,7 +52,6 @@ abstract final class InstitutionProfiles {
     descriptionHeader: 'description',
     amountHeader: 'amount',
     signedAmount: true,
-    defaultCurrency: 'USD',
   );
 
   static const _bofa = InstitutionProfile(
@@ -64,7 +61,6 @@ abstract final class InstitutionProfiles {
     descriptionHeader: 'description',
     amountHeader: 'amount',
     signedAmount: true,
-    defaultCurrency: 'USD',
   );
 
   // Wells Fargo exports: "Date","Amount","*","*","Description" — positional, no real headers
@@ -76,7 +72,6 @@ abstract final class InstitutionProfiles {
     descriptionColumn: 4,
     signedAmount: true,
     positional: true,
-    defaultCurrency: 'USD',
   );
 
   static const _capitalOne = InstitutionProfile(
@@ -86,7 +81,6 @@ abstract final class InstitutionProfiles {
     descriptionHeader: 'description',
     debitHeader: 'debit',
     creditHeader: 'credit',
-    defaultCurrency: 'USD',
   );
 
   static const _coinbase = InstitutionProfile(
@@ -96,7 +90,6 @@ abstract final class InstitutionProfiles {
     descriptionHeader: 'notes',
     amountHeader: 'total (inclusive of fees and/or spread)',
     signedAmount: false,
-    defaultCurrency: 'USD',
   );
 
   static const _strike = InstitutionProfile(
@@ -106,7 +99,6 @@ abstract final class InstitutionProfiles {
     descriptionHeader: 'type',
     amountHeader: 'total',
     signedAmount: false,
-    defaultCurrency: 'USD',
   );
 
   static const _swan = InstitutionProfile(
@@ -116,7 +108,6 @@ abstract final class InstitutionProfiles {
     descriptionHeader: 'type',
     amountHeader: 'amount usd',
     signedAmount: false,
-    defaultCurrency: 'USD',
   );
 
   static const all = <InstitutionProfile>[

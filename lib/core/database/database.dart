@@ -1,5 +1,11 @@
+import 'dart:io';
+
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+
+import '../../shared/constants/app_constants.dart';
 
 import 'tables/wallets_table.dart';
 import 'tables/transactions_table.dart';
@@ -31,8 +37,12 @@ part 'database.g.dart';
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
+  /// Runs against a caller-supplied executor — tests use
+  /// `NativeDatabase.memory()` so they never touch the on-disk database.
+  AppDatabase.forTesting(super.e);
+
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -56,8 +66,62 @@ class AppDatabase extends _$AppDatabase {
           if (from < 5) {
             await m.createTable(descriptionCategoryMappings);
           }
+          if (from < 6) {
+            await migrateToV6(m);
+          }
+          if (from < 7) {
+            await migrateToV7(m);
+          }
+        },
+        beforeOpen: (details) async {
+          // sqlite ignores foreign keys unless asked, per connection, so every
+          // `.references(...)` in the table definitions was decorative: a row
+          // could point at a wallet or category that no longer existed and
+          // nothing would complain until something read it back.
+          //
+          // After the migrator, not before: a migration that rebuilds a table
+          // legitimately breaks references while it runs.
+          await customStatement('PRAGMA foreign_keys = ON');
         },
       );
+
+  /// v5 → v6: one budget per category, enforced.
+  ///
+  /// The index cannot be created over a table that already holds duplicates,
+  /// and a pre-v6 install could — `BudgetService.upsert` was a read-then-write
+  /// with no transaction. Collapse first, keeping the newest row per category,
+  /// then create the index.
+  ///
+  /// Named rather than inlined so a test can run the real statements; there is
+  /// no generated schema history to migrate against.
+  Future<void> migrateToV6(Migrator m) async {
+    await customStatement(
+      'DELETE FROM budgets WHERE id NOT IN '
+      '(SELECT MAX(id) FROM budgets GROUP BY category_id)',
+    );
+    await m.createIndex(idxBudgetsCategoryId);
+  }
+
+  /// v6 → v7: indexes for the columns the app filters and sorts on.
+  ///
+  /// The schema had almost none, so every month range, per-wallet total and
+  /// budget grouping was a full table scan. Same shape as [migrateToV6]: the
+  /// unique index on the learned-category mappings cannot be created over a
+  /// table that already holds duplicates, and a pre-v7 install could, because
+  /// the old delete-then-insert was not atomic.
+  Future<void> migrateToV7(Migrator m) async {
+    await customStatement(
+      'DELETE FROM description_category_mappings WHERE id NOT IN '
+      '(SELECT MAX(id) FROM description_category_mappings '
+      'GROUP BY source_id, description)',
+    );
+    await m.createIndex(idxTransactionsDate);
+    await m.createIndex(idxTransactionsWalletId);
+    await m.createIndex(idxTransactionsCategory);
+    await m.createIndex(idxTransactionsRecurringPeriod);
+    await m.createIndex(idxImportedTransactionsSourceId);
+    await m.createIndex(idxDescriptionMappingsSourceDescription);
+  }
 
   /// Deletes all user data and re-seeds the factory defaults.
   Future<void> resetAndReseed() async {
@@ -150,5 +214,18 @@ class AppDatabase extends _$AppDatabase {
 }
 
 QueryExecutor _openConnection() {
-  return driftDatabase(name: 'sats_stack_db');
+  return driftDatabase(name: AppConstants.dbName);
+}
+
+/// The file drift actually opens.
+///
+/// There is one of these because there used to be two: Settings → Data built
+/// the path from `getApplicationSupportDirectory()` while `driftDatabase`
+/// defaults to `getApplicationDocumentsDirectory()`. Export therefore reported
+/// "Database file not found", and Import wrote the backup to a path nothing
+/// ever reads and then told the user the restore had succeeded. Anything that
+/// touches the database file must go through here.
+Future<File> databaseFile() async {
+  final dir = await getApplicationDocumentsDirectory();
+  return File(p.join(dir.path, '${AppConstants.dbName}.sqlite'));
 }

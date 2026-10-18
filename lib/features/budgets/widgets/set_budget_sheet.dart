@@ -78,7 +78,7 @@ class _SetBudgetSheetState extends State<SetBudgetSheet> {
       );
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
-      setState(() { _saving = false; _error = 'Error: $e'; });
+      if (mounted) setState(() { _saving = false; _error = 'Error: $e'; });
     }
   }
 

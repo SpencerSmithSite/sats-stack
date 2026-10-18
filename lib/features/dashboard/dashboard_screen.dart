@@ -1,11 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/database/database.dart';
 import '../../core/models/dashboard_data.dart';
 import '../../core/models/wallet_summary.dart';
 import '../../shared/theme/app_colors.dart';
 import '../../shared/widgets/btc_price_chip.dart';
 import '../../features/transactions/widgets/transaction_list_item.dart';
-import '../../core/services/category_service.dart';
 import '../../shared/utils/currency_utils.dart';
 import 'widgets/month_selector.dart';
 import 'widgets/hero_card.dart';
@@ -13,6 +15,7 @@ import 'widgets/metric_tile.dart';
 import 'widgets/spending_chart.dart';
 import 'widgets/ai_insight_card.dart';
 import '../../main.dart' as app;
+import '../../shared/utils/sat_converter.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -30,19 +33,72 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String? _cachedInsight;
   bool _isGeneratingInsight = false;
 
+  /// Who would receive this month's figures, or null when the active backend
+  /// keeps them on the device (or on the user's own server).
+  String? _insightRecipient;
+
+  /// Rebuilt only when the month or the inflation rate actually changes.
+  ///
+  /// These were constructed inside `build()`, and `watch*()` returns a new
+  /// Drift stream every call, so each rebuild re-subscribed and reset to
+  /// `waiting` — the Wallets section vanished and came back on every BTC
+  /// price tick, and the whole dashboard re-queried the table with it.
+  late Stream<DashboardData> _dashboard;
+  late Stream<List<WalletSummary>> _perWallet;
+
+  /// Category name → category, for the recent-transaction rows. Previously a
+  /// `getAll()` future rebuilt on every price tick.
+  Map<String, Category> _categoriesByName = const {};
+  StreamSubscription<List<Category>>? _categorySub;
+
   @override
   void initState() {
     super.initState();
+    _rebuildStreams();
+    app.inflationRateNotifier.addListener(_onInflationChange);
+    _categorySub = app.categoryService.watchAll().listen((cats) {
+      if (!mounted) return;
+      setState(() => _categoriesByName = {for (final c in cats) c.name: c});
+    });
     if (app.aiEnabledNotifier.value) _initInsight();
   }
 
+  @override
+  void dispose() {
+    app.inflationRateNotifier.removeListener(_onInflationChange);
+    _categorySub?.cancel();
+    super.dispose();
+  }
+
+  void _rebuildStreams() {
+    _dashboard = app.dashboardService.watchDashboard(
+      _selectedMonth,
+      inflationRate: app.inflationRateNotifier.value,
+    );
+    _perWallet = app.dashboardService.watchPerWallet(_selectedMonth);
+  }
+
+  /// The rate is baked into the aggregate, so a change does need a new stream
+  /// — just not one per frame.
+  void _onInflationChange() => setState(_rebuildStreams);
+
   Future<void> _initInsight() async {
     _cachedInsight = await app.ollamaService.loadCachedInsight();
+    // A hosted provider is told nothing unless the user asks. Generating this
+    // automatically meant that selecting Claude in Settings and opening the
+    // Dashboard uploaded the month's income, spending, surplus, stack total
+    // and full category breakdown to a third party with no user action and no
+    // disclosure — while the disclosure widget promised the opposite.
+    final offDevice = app.ollamaService.sendsDataOffDevice;
+    _insightRecipient = offDevice ? app.ollamaService.activeDataRecipient : null;
     if (mounted) setState(() {});
+    if (offDevice) return;
     final stale = await app.ollamaService.isInsightStale();
     if (stale) _generateInsight();
   }
 
+  /// Generates on an explicit tap. For a hosted provider this is the only way
+  /// an insight is ever generated.
   Future<void> _generateInsight() async {
     if (_isGeneratingInsight) return;
     final available = await app.ollamaService.isAvailable();
@@ -77,6 +133,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _selectedMonth.year,
         _selectedMonth.month - 1,
       );
+      _rebuildStreams();
     });
   }
 
@@ -86,6 +143,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _selectedMonth.year,
         _selectedMonth.month + 1,
       );
+      _rebuildStreams();
     });
   }
 
@@ -114,13 +172,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ],
       ),
-      body: ValueListenableBuilder<double>(
-        valueListenable: app.inflationRateNotifier,
-        builder: (context, inflationRate, _) =>
-            StreamBuilder<DashboardData>(
-          stream: app.dashboardService
-              .watchDashboard(_selectedMonth, inflationRate: inflationRate),
-          builder: (context, snapshot) {
+      // The StreamBuilder is outermost and its stream is not rebuilt here, so
+      // a price or currency tick only repaints — it no longer re-subscribes.
+      body: StreamBuilder<DashboardData>(
+        stream: _dashboard,
+        builder: (context, snapshot) {
           if (snapshot.hasError) {
             return _ErrorState(message: snapshot.error.toString());
           }
@@ -139,12 +195,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       data: data,
                       btcPrice: btcPrice,
                       currency: currency,
-                      categoryService: app.categoryService,
+                      categoriesByName: _categoriesByName,
+                      perWallet: _perWallet,
                       selectedMonth: _selectedMonth,
-                      inflationRate: inflationRate,
+                      inflationRate: app.inflationRateNotifier.value,
                       cachedInsight: _cachedInsight,
                       isGeneratingInsight: _isGeneratingInsight,
                       onRefreshInsight: _generateInsight,
+                      insightRecipient: _insightRecipient,
                     ),
                   );
                 },
@@ -153,7 +211,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
           );
         },
       ),
-        ),
     );
   }
 }
@@ -194,23 +251,30 @@ class _DashboardContent extends StatelessWidget {
     required this.data,
     required this.btcPrice,
     required this.currency,
-    required this.categoryService,
+    required this.categoriesByName,
+    required this.perWallet,
     required this.selectedMonth,
     required this.inflationRate,
     this.cachedInsight,
     this.isGeneratingInsight = false,
     this.onRefreshInsight,
+    this.insightRecipient,
   });
 
   final DashboardData data;
   final double? btcPrice;
   final String currency;
-  final CategoryService categoryService;
+  final Map<String, Category> categoriesByName;
+  final Stream<List<WalletSummary>> perWallet;
   final DateTime selectedMonth;
   final double inflationRate;
   final String? cachedInsight;
   final bool isGeneratingInsight;
   final VoidCallback? onRefreshInsight;
+
+  /// Named third party that would receive the figures, or null when the
+  /// insight is generated without anything leaving the device.
+  final String? insightRecipient;
 
   @override
   Widget build(BuildContext context) {
@@ -298,7 +362,7 @@ class _DashboardContent extends StatelessWidget {
 
         // ── Wallet breakdown (only when ≥ 2 wallets have activity) ─────────
         StreamBuilder<List<WalletSummary>>(
-          stream: app.dashboardService.watchPerWallet(selectedMonth),
+          stream: perWallet,
           builder: (context, snapshot) {
             final summaries = (snapshot.data ?? [])
                 .where((s) => s.hasActivity)
@@ -333,6 +397,11 @@ class _DashboardContent extends StatelessWidget {
                 spendingByCategory: data.spendingByCategory,
                 btcPrice: btcPrice,
                 currency: currency,
+                // The colours the user actually chose. The chart used to draw
+                // its own fixed palette and ignore them.
+                categoryColorHex: {
+                  for (final e in categoriesByName.entries) e.key: e.value.color,
+                },
               ),
             ),
           ),
@@ -366,56 +435,45 @@ class _DashboardContent extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Card(
-              child: FutureBuilder(
-                future: categoryService.getAll(),
-                builder: (context, snapshot) {
-                  final cats = snapshot.data ?? [];
-                  return Column(
-                    children: [
-                      for (int i = 0;
-                          i < data.recentTransactions.length;
-                          i++) ...[
-                        TransactionListItem(
-                          transaction: data.recentTransactions[i],
-                          category: cats
-                              .where((c) =>
-                                  c.name ==
-                                  data.recentTransactions[i].category)
-                              .firstOrNull,
-                          btcPrice: btcPrice,
-                        ),
-                        if (i < data.recentTransactions.length - 1)
-                          const Divider(indent: 16, endIndent: 16),
-                      ],
-                    ],
-                  );
-                },
+              child: Column(
+                children: [
+                  for (int i = 0; i < data.recentTransactions.length; i++) ...[
+                    TransactionListItem(
+                      transaction: data.recentTransactions[i],
+                      category: categoriesByName[
+                          data.recentTransactions[i].category],
+                      btcPrice: btcPrice,
+                    ),
+                    if (i < data.recentTransactions.length - 1)
+                      const Divider(indent: 16, endIndent: 16),
+                  ],
+                ],
               ),
             ),
           ),
         const SizedBox(height: 20),
 
         // ── AI insight card ────────────────────────────────────────────────
-        AiInsightCard(
-          cachedInsight: cachedInsight,
-          isGenerating: isGeneratingInsight,
-          onRefresh: onRefreshInsight,
+        // Listens, rather than reading the notifier once: enabling AI in
+        // Settings and coming back used to leave the card in its old state
+        // until the Dashboard was rebuilt from scratch.
+        ValueListenableBuilder<bool>(
+          valueListenable: app.aiEnabledNotifier,
+          builder: (_, aiEnabled, __) => AiInsightCard(
+            aiEnabled: aiEnabled,
+            cachedInsight: cachedInsight,
+            isGenerating: isGeneratingInsight,
+            onRefresh: onRefreshInsight,
+            offDeviceRecipient: insightRecipient,
+          ),
         ),
         const SizedBox(height: 8),
       ],
     );
   }
 
-  String _satConversion(double fiat, double price) {
-    final sats = (fiat / price * 100000000).round();
-    final formatted = sats
-        .toString()
-        .replaceAllMapped(
-          RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-          (m) => '${m[1]},',
-        );
-    return '≈ $formatted sats';
-  }
+  String _satConversion(double fiat, double price) =>
+      '≈ ${SatConverter.formatSats(SatConverter.fiatToSats(fiat, price))} sats';
 }
 
 // ── Wallet breakdown ──────────────────────────────────────────────────────────
@@ -597,11 +655,7 @@ class _WalletRow extends StatelessWidget {
     );
   }
 
-  String _formatSats(int sats) => sats
-      .abs()
-      .toString()
-      .replaceAllMapped(
-          RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},');
+  String _formatSats(int sats) => SatConverter.formatSats(sats.abs());
 }
 
 // ── Section header ────────────────────────────────────────────────────────────

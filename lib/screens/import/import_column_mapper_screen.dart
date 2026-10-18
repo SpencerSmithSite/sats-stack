@@ -127,8 +127,11 @@ class _ImportColumnMapperScreenState extends State<ImportColumnMapperScreen> {
       if (_saveMapping) {
         await app.importService.saveColumnMapping(widget.sourceId, _mapping);
       }
-      final txns = await app.importService
-          .parseWithMapping(widget.result.rawCsvContent!, _mapping);
+      final txns = await app.importService.parseWithMapping(
+        widget.result.rawCsvContent!,
+        _mapping,
+        sourceId: widget.sourceId,
+      );
       if (!mounted) return;
       final newResult = ImportResult(
         transactions: txns ?? [],

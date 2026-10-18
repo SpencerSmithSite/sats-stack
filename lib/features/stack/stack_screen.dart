@@ -15,6 +15,7 @@ import '../../shared/utils/currency_utils.dart';
 import '../../shared/widgets/btc_price_chip.dart';
 import '../../shared/widgets/empty_state.dart';
 import '../../main.dart' as app;
+import '../../shared/utils/sat_converter.dart';
 
 // ── Chart period ──────────────────────────────────────────────────────────────
 
@@ -45,10 +46,16 @@ class _StackScreenState extends State<StackScreen> {
   int? _stackGoalSats;
   StreamSubscription<List<Transaction>>? _txnSub;
 
+  /// Built once. `watchAll()` hands back a new Drift stream per call, so
+  /// building it in `build()` re-subscribed and re-queried the table on every
+  /// rebuild — including every period-filter tap and BTC price tick.
+  late final Stream<List<Transaction>> _transactions;
+
   @override
   void initState() {
     super.initState();
     _loadGoal();
+    _transactions = app.transactionService.watchAll();
     _txnSub = app.transactionService.watchAll().listen(_checkGoalNotification);
   }
 
@@ -89,7 +96,7 @@ class _StackScreenState extends State<StackScreen> {
         value: sats.toString(),
       ),
     );
-    setState(() => _stackGoalSats = sats);
+    if (mounted) setState(() => _stackGoalSats = sats);
   }
 
   void _openSetGoal(BuildContext context) {
@@ -115,7 +122,7 @@ class _StackScreenState extends State<StackScreen> {
         ],
       ),
       body: StreamBuilder<List<Transaction>>(
-        stream: app.transactionService.watchAll(),
+        stream: _transactions,
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return Center(
@@ -325,8 +332,16 @@ class _StackHero extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF1A1200), Color(0xFF2A1F00)],
+        // An orange wash over the theme's own surface. The fixed 0xFF1A1200 →
+        // 0xFF2A1F00 gradient underneath white text was a survivor of the
+        // light-mode pass: in light mode it stayed a dark brown slab.
+        gradient: LinearGradient(
+          colors: [
+            Color.alphaBlend(AppColors.bitcoinOrange.withAlpha(20),
+                theme.colorScheme.surfaceContainerHighest),
+            Color.alphaBlend(AppColors.bitcoinOrange.withAlpha(48),
+                theme.colorScheme.surfaceContainerHighest),
+          ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -356,7 +371,8 @@ class _StackHero extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             _formatSats(totalSats),
-            style: AppTextStyles.heroSats.copyWith(color: Colors.white),
+            style: AppTextStyles.heroSats
+                .copyWith(color: theme.colorScheme.onSurface),
           ),
           Text(
             'sats',
@@ -368,7 +384,7 @@ class _StackHero extends StatelessWidget {
               Text(
                 '≈ $fiatValue',
                 style: AppTextStyles.monoMedium.copyWith(
-                  color: Colors.white.withAlpha(200),
+                  color: theme.colorScheme.onSurface.withAlpha(200),
                 ),
               ),
               const Spacer(),
@@ -381,12 +397,7 @@ class _StackHero extends StatelessWidget {
     );
   }
 
-  String _formatSats(int sats) {
-    return sats.toString().replaceAllMapped(
-          RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-          (m) => '${m[1]},',
-        );
-  }
+  String _formatSats(int sats) => SatConverter.formatSats(sats);
 }
 
 class _MonthChange extends StatelessWidget {
@@ -397,8 +408,7 @@ class _MonthChange extends StatelessWidget {
   Widget build(BuildContext context) {
     final positive = sats > 0;
     final color = positive ? AppColors.success : AppColors.danger;
-    final sign = positive ? '+' : '';
-    final formatted = '$sign${sats.abs().toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')}';
+    final formatted = SatConverter.formatSatsSigned(sats);
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -531,8 +541,9 @@ class _LineChart extends StatelessWidget {
         gridData: FlGridData(
           show: true,
           drawVerticalLine: false,
+          // 5 %-opacity white was invisible on a light background.
           getDrawingHorizontalLine: (_) => FlLine(
-            color: Colors.white.withAlpha(12),
+            color: Theme.of(context).colorScheme.onSurface.withAlpha(24),
             strokeWidth: 0.5,
           ),
         ),
@@ -598,15 +609,9 @@ class _LineChart extends StatelessWidget {
     );
   }
 
-  String _abbrevSats(int sats) {
-    if (sats >= 1000000) return '${(sats / 1000000).toStringAsFixed(1)}M';
-    if (sats >= 1000) return '${(sats / 1000).toStringAsFixed(0)}k';
-    return '$sats';
-  }
+  String _abbrevSats(int sats) => SatConverter.abbreviateSats(sats);
 
-  String _formatSats(int sats) => sats
-      .toString()
-      .replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},');
+  String _formatSats(int sats) => SatConverter.formatSats(sats);
 }
 
 // ── Stack goal card ───────────────────────────────────────────────────────────
@@ -783,9 +788,7 @@ class _StackGoalCard extends StatelessWidget {
     );
   }
 
-  String _formatSats(int sats) => sats
-      .toString()
-      .replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},');
+  String _formatSats(int sats) => SatConverter.formatSats(sats);
 }
 
 // ── DCA Simulator ─────────────────────────────────────────────────────────────
@@ -954,9 +957,7 @@ class _ScenarioRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final fiatFmt = NumberFormat.currency(symbol: CurrencyUtils.symbolFor(app.currencyNotifier.value), decimalDigits: 0);
     final fiatValue = fiatFmt.format(sats / 1e8 * btcPrice);
-    final satsStr = sats
-        .toString()
-        .replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},');
+    final satsStr = SatConverter.formatSats(sats);
 
     return Row(
       children: [

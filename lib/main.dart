@@ -11,13 +11,11 @@ import 'core/services/category_service.dart';
 import 'core/services/wallet_service.dart';
 import 'core/services/btc_price_service.dart';
 import 'core/services/dashboard_service.dart';
-import 'core/services/csv_import_service.dart';
 import 'core/services/xpub_service.dart';
 import 'core/services/budget_service.dart';
 import 'core/services/notification_service.dart';
 import 'core/services/ollama_service.dart';
 import 'core/services/import_service.dart';
-import 'shared/utils/platform_utils.dart';
 
 late AppDatabase db;
 late TransactionService transactionService;
@@ -25,7 +23,6 @@ late CategoryService categoryService;
 late WalletService walletService;
 late BtcPriceService btcPriceService;
 late DashboardService dashboardService;
-late CsvImportService csvImportService;
 late XpubService xpubService;
 late BudgetService budgetService;
 late OllamaService ollamaService;
@@ -69,17 +66,15 @@ void main() async {
   walletService = WalletService(db);
   btcPriceService = BtcPriceService(db);
   dashboardService = DashboardService(db);
-  csvImportService = CsvImportService(db);
   xpubService = XpubService(db);
   budgetService = BudgetService(db);
   ollamaService = OllamaService(db);
   await ollamaService.loadSettings();
   importService = ImportService(db, ollamaService);
-  // AI is enabled on desktop always; on mobile only when a successful connection
-  // has been verified (persisted as ollama_connected in AppSettings).
-  aiEnabledNotifier = ValueNotifier(
-    PlatformUtils.isDesktop || ollamaService.isConnected,
-  );
+  // One rule, owned by OllamaService. Seeding this from
+  // `isDesktop || isConnected` meant an on-device provider lost the tab on
+  // every restart: its `isConnected` is a probe `loadSettings` only kicks off.
+  aiEnabledNotifier = ValueNotifier(ollamaService.aiEnabled);
   await xpubService.loadSettings();
   // btcPriceService.loadSettings() is called inside initialize() below.
 

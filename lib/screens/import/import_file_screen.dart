@@ -10,6 +10,7 @@ import '../../core/services/import_service.dart';
 import '../../core/services/ollama_service.dart';
 import '../../main.dart' as app;
 import '../../shared/utils/platform_utils.dart';
+import '../../shared/widgets/ai_privacy_disclosure.dart';
 import 'import_column_mapper_screen.dart';
 import 'import_preview_screen.dart';
 import 'import_source_setup_screen.dart';
@@ -51,6 +52,69 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
     _tokenSub?.cancel();
     _tokenScrollController.dispose();
     super.dispose();
+  }
+
+  /// Asks before a statement is handed to a third party.
+  ///
+  /// The AI tier runs first for every file, so without this the raw statement
+  /// — account numbers, balances, every line item — went to whichever hosted
+  /// provider was selected before anything local was tried, and no screen in
+  /// the import flow said so. Answering is remembered per provider.
+  Future<bool> _askOffDeviceConsent(String recipient, String subject) async {
+    if (!mounted) return false;
+    final provider = app.ollamaService.activeProvider;
+
+    // Pause the progress overlay's stage text while the question is up, so it
+    // does not read "AI is reading your statement…" behind the dialog.
+    if (mounted) {
+      setState(() => _currentStage = 'Waiting for your answer…');
+    }
+
+    final granted = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Send this statement to be read?'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${provider.label} reads statements far better than the '
+                "built-in rules do, but it runs on $recipient's servers: the "
+                'contents of $subject would be uploaded to them.',
+                style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(height: 1.45),
+              ),
+              const SizedBox(height: 12),
+              AiPrivacyDisclosure(
+                provider: provider,
+                compact: true,
+                recipient: recipient,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Say no and the file is read on this device with the built-in '
+                'rules instead. You can change the AI provider in Settings → '
+                'AI at any time.',
+                style: Theme.of(ctx).textTheme.bodySmall?.copyWith(height: 1.45),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('No, keep it local'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('Send to $recipient'),
+          ),
+        ],
+      ),
+    );
+    return granted ?? false;
   }
 
   @override
@@ -295,6 +359,8 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
         onStageChange: (stage) {
           if (mounted) setState(() => _currentStage = stage);
         },
+        onOffDeviceConsent: (recipient) =>
+            _askOffDeviceConsent(recipient, fileName),
       );
     } on ImportCancelledException {
       _cleanupProcessing();
@@ -532,6 +598,8 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
         onStageChange: (stage) {
           if (mounted) setState(() => _currentStage = stage);
         },
+        onOffDeviceConsent: (recipient) =>
+            _askOffDeviceConsent(recipient, 'this photo'),
       );
     } on ImportCancelledException {
       _cleanupProcessing();

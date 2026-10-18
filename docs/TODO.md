@@ -147,18 +147,21 @@ that rather than starting over.
 
 ## Known broken / unfinished (pre-existing)
 
-Untracked and **not** committed, because two of them do not compile:
+Untracked and **not** committed.
 
-- `lib/core/services/bitcoin_node_service.dart` — references a
-  `flutter_secure_storage` dependency that is not in `pubspec.yaml`, plus
-  `AppConstants` keys that do not exist (`settingBitcoinRpcUrl`,
-  `settingBitcoinRpcUser`, `settingBitcoinRpcPassword`, `defaultBitcoinRpcUrl`).
-- `lib/core/services/electrum_service.dart` — same, for `settingElectrumHost`,
-  `settingElectrumPort`, `settingElectrumSsl`, `defaultElectrumPort`.
-- `lib/core/models/bitcoin_data_source.dart`,
-  `lib/features/transactions/widgets/manage_wallets_sheet.dart`,
-  `test/scripthash_test.dart` — appear complete but are untracked.
-
-`flutter_secure_storage` is now a dependency (item #1), so the missing-package
-half of the first two is resolved. Both still need their `AppConstants` keys
-added before they will compile.
+- `lib/core/services/bitcoin_node_service.dart` and
+  `lib/core/services/electrum_service.dart` **now compile.** The missing
+  `AppConstants` keys (`settingElectrumHost/Port/Ssl`, `defaultElectrumPort`,
+  `settingBitcoinRpcUrl/User/Password`, `defaultBitcoinRpcUrl`, plus
+  `settingBitcoinDataSource`) are in
+  [`app_constants.dart`](../lib/shared/constants/app_constants.dart), and
+  `flutter_secure_storage` is a dependency as of item #1.
+- Nothing is **wired up** yet: no screen, service locator or router entry
+  references `ElectrumService`, `BitcoinNodeService`, `BitcoinDataSource` or
+  `ManageWalletsSheet`. They compile and are unit-testable
+  (`test/scripthash_test.dart` covers the scripthash formula) but are dead code
+  until Settings → Servers gets a data-source picker and `XpubService` learns to
+  read history through the chosen source.
+- `BitcoinNodeService` stores the RPC password through `SecureKeyStore` rather
+  than its own `FlutterSecureStorage` instance, so the macOS file-based-keychain
+  workaround applies to it too.

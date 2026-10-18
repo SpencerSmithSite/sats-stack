@@ -2,6 +2,8 @@ import 'package:drift/drift.dart';
 
 import 'import_sources_table.dart';
 
+/// Every import reads this table filtered by source to find duplicates.
+@TableIndex(name: 'idx_imported_transactions_source_id', columns: {#sourceId})
 class ImportedTransactions extends Table {
   IntColumn get id => integer().autoIncrement()();
   IntColumn get sourceId => integer().references(ImportSources, #id)();

@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:path_provider/path_provider.dart';
 
 import '../../core/database/database.dart';
 import '../../core/models/ai_backend_group.dart';
@@ -23,6 +22,7 @@ import '../../shared/utils/platform_utils.dart';
 import '../../shared/widgets/ai_privacy_disclosure.dart';
 import 'widgets/categories_sheet.dart';
 import 'widgets/on_device_ai_section.dart';
+import '../../shared/utils/sat_converter.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -255,6 +255,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
         );
   }
 
+  /// Re-derives the AI tab's visibility from `OllamaService`, which owns the
+  /// rule. Every site here used to inline its own copy of it.
+  void _refreshAiEnabled() =>
+      app.aiEnabledNotifier.value = app.ollamaService.aiEnabled;
+
   Future<void> _onProviderChanged(AiProvider provider) async {
     setState(() {
       _selectedProvider = provider;
@@ -266,9 +271,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     // the old `isDesktop || isConnected` test could not express. A hosted
     // provider does the same once its key is in place — it needs no local
     // server either, so the tab must appear on a phone.
-    app.aiEnabledNotifier.value = PlatformUtils.isDesktop ||
-        provider.isOnDevice ||
-        app.ollamaService.isConnected;
+    _refreshAiEnabled();
     if (provider.isOnDevice) await _refreshOnDeviceStatus();
     if (provider.needsApiKey) await _loadModels();
   }
@@ -289,7 +292,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await app.ollamaService.saveSettings(url: url, model: _selectedModel);
     if (url.isEmpty) {
       await app.ollamaService.setConnected(false);
-      app.aiEnabledNotifier.value = PlatformUtils.isDesktop;
+      _refreshAiEnabled();
     }
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -309,7 +312,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (ok) {
       final models = await app.ollamaService.listModels();
       await app.ollamaService.setConnected(true);
-      app.aiEnabledNotifier.value = true;
+      _refreshAiEnabled();
       if (mounted) {
         setState(() {
           _models = models;
@@ -319,7 +322,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
     } else {
       await app.ollamaService.setConnected(false);
-      app.aiEnabledNotifier.value = PlatformUtils.isDesktop;
+      _refreshAiEnabled();
+      if (!mounted) return;
       setState(() {
         _testingConnection = false;
         _connectionStatus =
@@ -336,7 +340,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         .saveLmStudioSettings(url: url, model: _lmStudioSelectedModel);
     if (url.isEmpty) {
       await app.ollamaService.setConnected(false);
-      app.aiEnabledNotifier.value = PlatformUtils.isDesktop;
+      _refreshAiEnabled();
     }
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -357,7 +361,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (ok) {
       final models = await app.ollamaService.listModels();
       await app.ollamaService.setConnected(true);
-      app.aiEnabledNotifier.value = true;
+      _refreshAiEnabled();
       if (mounted) {
         setState(() {
           _lmStudioModels = models;
@@ -367,7 +371,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
     } else {
       await app.ollamaService.setConnected(false);
-      app.aiEnabledNotifier.value = PlatformUtils.isDesktop;
+      _refreshAiEnabled();
+      if (!mounted) return;
       setState(() {
         _testingLmStudio = false;
         _lmStudioStatus = 'Could not reach LM Studio at $url';
@@ -391,6 +396,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       model: _cloudSelectedModel[p.id],
       apiKey: key,
     );
+    // A hosted provider needs nothing but a key, so saving one is enough to
+    // bring the tab back on a phone.
+    _refreshAiEnabled();
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -421,7 +429,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (status.available) {
       final models = await app.ollamaService.listModels();
       await app.ollamaService.setConnected(true);
-      app.aiEnabledNotifier.value = true;
+      _refreshAiEnabled();
       if (!mounted) return;
       setState(() {
         _cloudModels[p.id] = models;
@@ -430,7 +438,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       });
     } else {
       await app.ollamaService.setConnected(false);
-      app.aiEnabledNotifier.value = PlatformUtils.isDesktop;
+      _refreshAiEnabled();
       if (!mounted) return;
       setState(() {
         _testingCloudId = null;
@@ -448,7 +456,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         .saveMapleSettings(url: url, model: _mapleSelectedModel, apiKey: key);
     if (url.isEmpty) {
       await app.ollamaService.setConnected(false);
-      app.aiEnabledNotifier.value = PlatformUtils.isDesktop;
+      _refreshAiEnabled();
     }
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -470,7 +478,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (ok) {
       final models = await app.ollamaService.listModels();
       await app.ollamaService.setConnected(true);
-      app.aiEnabledNotifier.value = true;
+      _refreshAiEnabled();
       if (mounted) {
         setState(() {
           _mapleModels = models;
@@ -480,7 +488,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
     } else {
       await app.ollamaService.setConnected(false);
-      app.aiEnabledNotifier.value = PlatformUtils.isDesktop;
+      _refreshAiEnabled();
+      if (!mounted) return;
       setState(() {
         _testingMaple = false;
         _mapleStatus = 'Could not reach Maple at $url';
@@ -490,8 +499,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _exportDb() async {
     try {
-      final dir = await getApplicationSupportDirectory();
-      final dbFile = File('${dir.path}/sats_stack_db.sqlite');
+      final dbFile = await databaseFile();
+      if (!mounted) return;
       if (!dbFile.existsSync()) {
         _showSnack('Database file not found');
         return;
@@ -503,10 +512,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
         type: FileType.custom,
       );
       if (savePath == null) return;
-      await dbFile.copy(savePath);
+
+      // VACUUM INTO rather than File.copy: the database is open and may be
+      // mid-write, and a byte copy of a live rollback-journal database can be
+      // torn — a backup that only fails when you need it. VACUUM INTO asks
+      // sqlite for a consistent snapshot, and compacts it on the way out.
+      // It refuses to overwrite, so clear whatever the save dialog created.
+      final dest = File(savePath);
+      if (dest.existsSync()) await dest.delete();
+      await app.db.customStatement('VACUUM INTO ?', [savePath]);
+
+      if (!mounted) return;
       _showSnack('Database exported successfully');
     } catch (e) {
-      _showSnack('Export failed: $e');
+      if (mounted) _showSnack('Export failed: $e');
+    }
+  }
+
+  /// Every sqlite file starts with this, so a user who picks the wrong file in
+  /// the restore dialog is told instead of losing their data to it.
+  static const _sqliteMagic = 'SQLite format 3';
+
+  Future<bool> _looksLikeSqlite(File file) async {
+    try {
+      if (!file.existsSync()) return false;
+      final handle = await file.open();
+      try {
+        final header = await handle.read(_sqliteMagic.length);
+        return String.fromCharCodes(header) == _sqliteMagic;
+      } finally {
+        await handle.close();
+      }
+    } catch (_) {
+      return false;
     }
   }
 
@@ -543,11 +581,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (result == null || result.files.single.path == null) return;
 
       final srcFile = File(result.files.single.path!);
-      final dir = await getApplicationSupportDirectory();
-      final destPath = '${dir.path}/sats_stack_db.sqlite';
+      if (!await _looksLikeSqlite(srcFile)) {
+        if (mounted) {
+          _showSnack('That file is not a Sats Stack database — nothing changed');
+        }
+        return;
+      }
+
+      final dbFile = await databaseFile();
 
       await app.db.close();
-      await srcFile.copy(destPath);
+      // Keep the database we are about to replace. Without this, picking the
+      // wrong backup is unrecoverable — and if the restored file turns out to
+      // be unreadable the app cannot even start, because AppDatabase is opened
+      // before runApp.
+      if (dbFile.existsSync()) {
+        await dbFile.copy('${dbFile.path}.bak');
+      }
+      await srcFile.copy(dbFile.path);
 
       // Restart prompt — hot reload / full restart needed to reopen DB
       if (mounted) {
@@ -569,15 +620,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
         );
       }
     } catch (e) {
-      _showSnack('Import failed: $e');
+      if (mounted) _showSnack('Import failed: $e');
     }
   }
 
   Future<void> _saveBitcoinServers() async {
-    await app.xpubService.saveSettings(url: _esploraUrlCtrl.text);
+    final typed = _esploraUrlCtrl.text.trim();
+    final saved = await app.xpubService.saveSettings(url: typed);
     await app.btcPriceService.loadSettings(); // reload from the same key
-    if (mounted) setState(() {}); // refresh privacy warning
-    _showSnack('Bitcoin server settings saved');
+    if (!mounted) return;
+    // Show the normalised form, so the user sees what is actually in use.
+    _esploraUrlCtrl.text = saved ?? '';
+    setState(() {}); // refresh privacy warning
+    if (typed.isNotEmpty && saved == null) {
+      // Falling back silently would leave them thinking a typo was accepted
+      // and their wallet scans were private.
+      _showSnack("'$typed' isn't a usable server URL — using mempool.space");
+    } else {
+      _showSnack('Bitcoin server settings saved');
+    }
   }
 
   Future<void> _testEsploraConnection() async {
@@ -597,6 +658,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           .timeout(const Duration(seconds: 8));
 
       if (heightResp.statusCode != 200) {
+        if (!mounted) return;
         setState(() {
           _esploraStatus = 'HTTP ${heightResp.statusCode} — '
               'is this a valid Esplora / Mempool URL?';
@@ -649,9 +711,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  String _fmtInt(int n) => n
-      .toString()
-      .replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},');
+  String _fmtInt(int n) => SatConverter.formatSats(n);
 
   bool get _usingDefaultServer {
     final text = _esploraUrlCtrl.text.trim();

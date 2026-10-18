@@ -1,17 +1,22 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 
 import 'package:crypto/crypto.dart';
 import 'package:csv/csv.dart';
-import 'package:drift/drift.dart' show Value, InsertMode, OrderingTerm;
+import 'package:drift/drift.dart'
+    show DoUpdate, InsertMode, OrderingTerm, Value;
 import 'package:http/http.dart' as http;
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 
 import '../database/database.dart';
+import 'btc_price_service.dart';
 import 'ollama_service.dart';
 import '../../data/institution_profiles.dart';
+import '../../shared/constants/app_constants.dart';
 import '../../shared/utils/hash_utils.dart';
 
 /// Thrown when [ImportService.cancelImport] is called during an active import.
@@ -35,6 +40,7 @@ class ParsedTransaction {
     required this.currency,
     this.category,
     this.include = true,
+    this.categoryIsFallback = false,
   });
 
   DateTime date;
@@ -45,6 +51,24 @@ class ParsedTransaction {
   String currency;
   String? category;
   bool include;
+
+  /// True while [category] is only the fallback — no keyword matched the
+  /// description.
+  ///
+  /// A fallback is not worth learning from. The import used to write a
+  /// description → category mapping for every included row, `'Other'`
+  /// included, and apply it to every future import of that source — so one
+  /// unrecognised merchant was pinned to Other for good, even after the
+  /// keyword list improved. That is the real reason "everything lands in
+  /// Other" and stays there.
+  bool categoryIsFallback;
+
+  /// Sets a category the user (or a previously learned mapping) chose, which
+  /// is by definition not a fallback.
+  void setUserCategory(String? value) {
+    category = value;
+    categoryIsFallback = false;
+  }
 }
 
 class ColumnMapping {
@@ -93,6 +117,7 @@ class ImportResult {
     this.isPdfNoAi = false,
     this.pdfAiNotReady = false,
     this.pdfScanned = false,
+    this.aiConsentDeclined = false,
     this.rawCsvContent,
     this.csvRows,
     this.csvHeaders,
@@ -109,6 +134,10 @@ class ImportResult {
   /// True when the PDF appears to be a scanned/image-only document (text layer
   /// extracted fewer than 50 characters).
   final bool pdfScanned;
+
+  /// True when reading this file needed a third party and the user said no.
+  /// Not a failure — the file is untouched and nothing was sent.
+  final bool aiConsentDeclined;
   final ImportFileType fileType;
   final String fileName;
   final String? rawCsvContent;
@@ -168,10 +197,91 @@ class ImportService {
   void _resetImportState() {
     _importCancelled = false;
     _activeImportClient = null;
+    _consentThisImport = null;
   }
 
   void _checkCancelled() {
     if (_importCancelled) throw const ImportCancelledException();
+  }
+
+  // ── Off-device consent ───────────────────────────────────────────────────
+  //
+  // The AI tier is tried FIRST for every statement, and with a hosted provider
+  // selected that means the raw file — account numbers, balances, every line
+  // item — is uploaded to a third party before any local parsing is attempted.
+  // That is more sensitive than anything the chat screen sends, and until this
+  // gate existed nothing on the import screens said it happened at all.
+  //
+  // A private backend needs no gate: nothing leaves the device.
+
+  /// Set for the duration of one import once the user has answered, so a
+  /// multi-tier import never asks twice.
+  bool? _consentThisImport;
+
+  /// Whether the user has already agreed to let the active provider's
+  /// recipient read their statements. Always true for a private backend.
+  Future<bool> offDeviceImportAllowed() async {
+    if (!ollama.sendsDataOffDevice) return true;
+    final row = await (db.select(db.appSettings)
+          ..where((t) => t.key
+              .equals(AppConstants.aiImportConsentKey(ollama.activeProvider.key))))
+        .getSingleOrNull();
+    return row?.value == 'true';
+  }
+
+  /// Records the user's answer for the active provider, so they are asked once
+  /// rather than on every import.
+  Future<void> setOffDeviceImportAllowed(bool allowed) async {
+    if (!ollama.sendsDataOffDevice) return;
+    await db.into(db.appSettings).insertOnConflictUpdate(
+          AppSettingsCompanion.insert(
+            key: AppConstants.aiImportConsentKey(ollama.activeProvider.key),
+            value: allowed.toString(),
+          ),
+        );
+  }
+
+  /// May the AI tier run for this file?
+  ///
+  /// Private backend: yes. Otherwise the stored answer, or [onOffDeviceConsent]
+  /// is asked and the answer remembered. With no callback and no stored
+  /// consent the answer is no — a caller that cannot ask must not send.
+  Future<bool> _aiTierPermitted(
+    Future<bool> Function(String recipient)? onOffDeviceConsent,
+  ) async {
+    if (!ollama.sendsDataOffDevice) return true;
+    if (_consentThisImport != null) return _consentThisImport!;
+    if (await offDeviceImportAllowed()) return _consentThisImport = true;
+    final recipient = ollama.activeDataRecipient;
+    if (onOffDeviceConsent == null || recipient == null) {
+      return _consentThisImport = false;
+    }
+    final granted = await onOffDeviceConsent(recipient);
+    await setOffDeviceImportAllowed(granted);
+    return _consentThisImport = granted;
+  }
+
+  // ── Source currency ──────────────────────────────────────────────────────
+
+  /// The currency the user said this account is denominated in
+  /// (`ImportSourceSetupScreen`). Every parsed row inherits it unless the file
+  /// itself states otherwise, which only the AI tiers can do.
+  ///
+  /// Every parse path used to hardcode `'USD'`, so the per-source choice was
+  /// collected and then thrown away.
+  Future<String> _sourceCurrency(int sourceId) async {
+    final source = await (db.select(db.importSources)
+          ..where((t) => t.id.equals(sourceId)))
+        .getSingleOrNull();
+    return _normaliseCurrency(source?.currency);
+  }
+
+  /// [code] if it is usable, else [fallback]. A model that omits the currency
+  /// field, or reports one for a line it could not read, must not silently
+  /// redenominate the account.
+  static String _normaliseCurrency(String? code, [String fallback = 'USD']) {
+    final trimmed = code?.trim().toUpperCase();
+    return (trimmed == null || trimmed.isEmpty) ? fallback : trimmed;
   }
 
   // ── Public entry point ───────────────────────────────────────────────────
@@ -187,6 +297,7 @@ class ImportService {
     required String fileName,
     required int sourceId,
     void Function(String stage)? onStageChange,
+    Future<bool> Function(String recipient)? onOffDeviceConsent,
   }) async {
     _resetImportState();
     final lname = fileName.toLowerCase();
@@ -199,10 +310,12 @@ class ImportService {
     ImportResult result;
     if (fileType == ImportFileType.pdf) {
       result = await _handlePdf(filePath, fileName, sourceId,
-          onStageChange: onStageChange);
+          onStageChange: onStageChange,
+          onOffDeviceConsent: onOffDeviceConsent);
     } else {
       result = await _handleCsv(filePath, fileName, sourceId,
-          onStageChange: onStageChange);
+          onStageChange: onStageChange,
+          onOffDeviceConsent: onOffDeviceConsent);
     }
 
     // Apply user-defined category mappings from previous imports
@@ -219,13 +332,14 @@ class ImportService {
     required String imagePath,
     required int sourceId,
     void Function(String stage)? onStageChange,
+    Future<bool> Function(String recipient)? onOffDeviceConsent,
   }) async {
     _resetImportState();
     final fileName = imagePath.contains('/')
         ? imagePath.split('/').last
         : imagePath.split('\\').last;
     final result = await _handleImage(imagePath, fileName, sourceId,
-        onStageChange: onStageChange);
+        onStageChange: onStageChange, onOffDeviceConsent: onOffDeviceConsent);
     if (result.transactions.isNotEmpty) {
       await _applyDescriptionMappings(result.transactions, sourceId);
     }
@@ -261,6 +375,7 @@ class ImportService {
     String fileName,
     int sourceId, {
     void Function(String)? onStageChange,
+    Future<bool> Function(String recipient)? onOffDeviceConsent,
   }) async {
     onStageChange?.call('Reading your statement…');
     // Let the UI render the first stage before blocking on I/O
@@ -280,14 +395,21 @@ class ImportService {
       );
     }
 
+    final currency = await _sourceCurrency(sourceId);
     final ollamaReady =
         await ollama.isAvailable() && (ollama.selectedModel?.isNotEmpty ?? false);
     _checkCancelled();
 
-    if (!ollamaReady) {
+    // Declining falls through to the same heuristic path as "no AI configured",
+    // so the statement is still read — just locally.
+    final aiPermitted =
+        ollamaReady && await _aiTierPermitted(onOffDeviceConsent);
+    _checkCancelled();
+
+    if (!aiPermitted) {
       onStageChange?.call('Attempting heuristic detection…');
       await Future.delayed(const Duration(milliseconds: 60));
-      final heuristicTxns = _parseTransactionsFromPdfText(text);
+      final heuristicTxns = _parseTransactionsFromPdfText(text, currency);
       if (heuristicTxns.length >= 3) {
         return ImportResult(
           transactions: heuristicTxns,
@@ -300,12 +422,16 @@ class ImportService {
         transactions: [],
         fileType: ImportFileType.pdf,
         fileName: fileName,
-        pdfAiNotReady: true,
+        pdfAiNotReady: !ollamaReady,
+        aiConsentDeclined: ollamaReady,
       );
     }
 
-    final txns =
-        await parseWithOllama(text, onStageChange: onStageChange);
+    final txns = await parseWithOllama(
+      text,
+      fallbackCurrency: currency,
+      onStageChange: onStageChange,
+    );
     _checkCancelled();
 
     return ImportResult(
@@ -324,16 +450,35 @@ class ImportService {
     String fileName,
     int sourceId, {
     void Function(String)? onStageChange,
+    Future<bool> Function(String recipient)? onOffDeviceConsent,
   }) async {
     onStageChange?.call('Preparing image…');
     await Future.delayed(const Duration(milliseconds: 60));
     _checkCancelled();
 
-    // Read bytes and base64-encode
-    final imageBytes = await File(imagePath).readAsBytes();
-    final lower = imagePath.toLowerCase();
-    final mimeType = lower.endsWith('.png') ? 'image/png' : 'image/jpeg';
-    final base64Image = base64Encode(imageBytes);
+    // Reading a photo of a statement has no local fallback — it is the model or
+    // nothing. Ask before the image is encoded, not after.
+    if (!await _aiTierPermitted(onOffDeviceConsent)) {
+      return ImportResult(
+        transactions: [],
+        fileType: ImportFileType.image,
+        fileName: fileName,
+        aiConsentDeclined: true,
+      );
+    }
+    _checkCancelled();
+
+    final fallbackCurrency = await _sourceCurrency(sourceId);
+
+    // Downscaled before encoding. A phone camera photo is 3–5 MB, which
+    // base64 inflates by a third, and every hosted provider rejects it:
+    // Anthropic caps an image at 5 MB and ~1,568 px on the long edge, OpenAI
+    // caps the whole request at 20 MB. The user waited through the upload and
+    // then got the provider's raw 400 back.
+    final original = await File(imagePath).readAsBytes();
+    final scaled = await _downscaleForVision(original);
+    final base64Image = base64Encode(scaled.bytes);
+    final mimeType = scaled.mimeType;
     _checkCancelled();
 
     const prompt = '''You are a financial data extraction assistant. This image shows a bank statement, credit card statement, or financial document. Extract every transaction you can see and return them as a JSON array.
@@ -398,16 +543,14 @@ Rules:
               final direction =
                   ((map['direction'] as String?) ?? 'debit').toLowerCase();
               final description = (map['description'] as String?) ?? '';
-              final currency =
-                  ((map['currency'] as String?) ?? 'USD').toUpperCase();
-              return ParsedTransaction(
+              final rowCurrency =
+                  _normaliseCurrency(map['currency'] as String?, fallbackCurrency);
+              return _categorised(
                 date: date,
                 amount: amount.abs(),
                 direction: direction == 'credit' ? 'credit' : 'debit',
                 description: description,
-                rawDescription: description,
-                currency: currency,
-                category: _autoCategory(description),
+                currency: rowCurrency,
               );
             } catch (_) {
               return null;
@@ -446,6 +589,7 @@ Rules:
     String fileName,
     int sourceId, {
     void Function(String)? onStageChange,
+    Future<bool> Function(String recipient)? onOffDeviceConsent,
   }) async {
     onStageChange?.call('Reading your statement…');
     await Future.delayed(const Duration(milliseconds: 60));
@@ -453,7 +597,7 @@ Rules:
 
     final String content;
     try {
-      content = await File(filePath).readAsString();
+      content = await _readTextFile(filePath);
     } catch (_) {
       return ImportResult(
           transactions: [], fileType: ImportFileType.csv, fileName: fileName);
@@ -472,11 +616,14 @@ Rules:
         .getSingleOrNull();
     _checkCancelled();
 
+    final currency = _normaliseCurrency(source?.currency);
+
     if (source?.columnMapping != null) {
       try {
         final mapping =
             ColumnMapping.fromJson(jsonDecode(source!.columnMapping!) as Map<String, dynamic>);
-        final txns = await parseWithMapping(content, mapping);
+        final txns =
+            await parseWithMapping(content, mapping, currency: currency);
         if (txns != null && txns.isNotEmpty) {
           return ImportResult(
             transactions: txns,
@@ -491,14 +638,21 @@ Rules:
     }
     _checkCancelled();
 
-    // --- Tier 1: Ollama ---
+    // --- Tier 1: AI ---
+    //
+    // Asked before the file is read by anyone else. A CSV has the rule-based
+    // tier to fall back on, so declining costs the user nothing but a slightly
+    // worse parse.
     final ollamaReady =
         await ollama.isAvailable() && (ollama.selectedModel?.isNotEmpty ?? false);
     _checkCancelled();
 
-    if (ollamaReady) {
-      final txns =
-          await parseWithOllama(content, onStageChange: onStageChange);
+    if (ollamaReady && await _aiTierPermitted(onOffDeviceConsent)) {
+      final txns = await parseWithOllama(
+        content,
+        fallbackCurrency: currency,
+        onStageChange: onStageChange,
+      );
       _checkCancelled();
       if (txns != null && txns.isNotEmpty) {
         return ImportResult(
@@ -512,7 +666,7 @@ Rules:
 
     // --- Tier 2: Rule-based ---
     onStageChange?.call('Applying smart rules…');
-    final txns = await parseWithRules(content);
+    final txns = await parseWithRules(content, currency: currency);
     _checkCancelled();
 
     if (txns != null && txns.isNotEmpty) {
@@ -537,10 +691,85 @@ Rules:
     );
   }
 
+  /// Longest edge a vision request should carry. Anthropic's own guidance;
+  /// more pixels cost tokens without reading any better.
+  static const _visionMaxEdge = 1568;
+
+  /// Under the smallest limit any supported provider imposes, with room for
+  /// base64's one-third overhead.
+  static const _visionMaxBytes = 3 * 1024 * 1024;
+
+  /// Decoded, resized and re-encoded through `dart:ui`, so there is no image
+  /// package to add. Falls back to the original bytes if anything about the
+  /// file defeats the decoder — better a request the provider might reject
+  /// than an import that cannot start at all.
+  Future<({Uint8List bytes, String mimeType})> _downscaleForVision(
+    Uint8List original,
+  ) async {
+    for (final maxEdge in const [_visionMaxEdge, 1024, 768]) {
+      try {
+        final descriptor = await ui.ImageDescriptor.encoded(
+          await ui.ImmutableBuffer.fromUint8List(original),
+        );
+        final longest = descriptor.width > descriptor.height
+            ? descriptor.width
+            : descriptor.height;
+        if (longest <= maxEdge && original.length <= _visionMaxBytes) {
+          descriptor.dispose();
+          return (bytes: original, mimeType: _mimeTypeOf(original));
+        }
+
+        final scale = maxEdge / longest;
+        final codec = await descriptor.instantiateCodec(
+          targetWidth: (descriptor.width * scale).round().clamp(1, maxEdge),
+          targetHeight: (descriptor.height * scale).round().clamp(1, maxEdge),
+        );
+        final frame = await codec.getNextFrame();
+        final encoded =
+            await frame.image.toByteData(format: ui.ImageByteFormat.png);
+        frame.image.dispose();
+        codec.dispose();
+        descriptor.dispose();
+        if (encoded == null) break;
+
+        final bytes = encoded.buffer.asUint8List();
+        if (bytes.length <= _visionMaxBytes) {
+          return (bytes: bytes, mimeType: 'image/png');
+        }
+        // Still too big: round again at a smaller edge.
+      } catch (_) {
+        break;
+      }
+    }
+    return (bytes: original, mimeType: _mimeTypeOf(original));
+  }
+
+  /// From the file's own magic bytes rather than its extension, which is
+  /// frequently wrong for a photo picked out of a gallery.
+  static String _mimeTypeOf(Uint8List bytes) {
+    if (bytes.length >= 8 &&
+        bytes[0] == 0x89 &&
+        bytes[1] == 0x50 &&
+        bytes[2] == 0x4E &&
+        bytes[3] == 0x47) {
+      return 'image/png';
+    }
+    if (bytes.length >= 12 &&
+        bytes[0] == 0x52 &&
+        bytes[1] == 0x49 &&
+        bytes[2] == 0x46 &&
+        bytes[3] == 0x46 &&
+        bytes[8] == 0x57) {
+      return 'image/webp';
+    }
+    return 'image/jpeg';
+  }
+
   // ── Tier 1: Ollama ────────────────────────────────────────────────────────
 
   Future<List<ParsedTransaction>?> parseWithOllama(
     String content, {
+    required String fallbackCurrency,
     void Function(String)? onStageChange,
   }) async {
     final client = http.Client();
@@ -611,16 +840,14 @@ FILE CONTENT:
               final direction =
                   ((map['direction'] as String?) ?? 'debit').toLowerCase();
               final description = (map['description'] as String?) ?? '';
-              final currency =
-                  ((map['currency'] as String?) ?? 'USD').toUpperCase();
-              return ParsedTransaction(
+              final rowCurrency =
+                  _normaliseCurrency(map['currency'] as String?, fallbackCurrency);
+              return _categorised(
                 date: date,
                 amount: amount.abs(),
                 direction: direction == 'credit' ? 'credit' : 'debit',
                 description: description,
-                rawDescription: description,
-                currency: currency,
-                category: _autoCategory(description),
+                currency: rowCurrency,
               );
             } catch (_) {
               return null;
@@ -643,7 +870,10 @@ FILE CONTENT:
 
   // ── Tier 2: Rule-based CSV parsing ───────────────────────────────────────
 
-  Future<List<ParsedTransaction>?> parseWithRules(String csvContent) async {
+  Future<List<ParsedTransaction>?> parseWithRules(
+    String csvContent, {
+    required String currency,
+  }) async {
     final allRows = _parseCsvRows(csvContent);
     if (allRows.length < 2) return null;
 
@@ -654,7 +884,7 @@ FILE CONTENT:
     // Try institution profile first
     final profile = InstitutionProfiles.detect(headers);
     if (profile != null) {
-      return _parseWithProfile(allRows, headers, profile);
+      return _parseWithProfile(allRows, headers, profile, currency);
     }
 
     // Generic header detection
@@ -697,7 +927,7 @@ FILE CONTENT:
       debitCol: debitCol,
       creditCol: creditCol,
       signedAmount: amountCol != null,
-      currency: 'USD',
+      currency: currency,
     );
   }
 
@@ -705,6 +935,7 @@ FILE CONTENT:
     List<List<String>> allRows,
     List<String> headers,
     InstitutionProfile profile,
+    String currency,
   ) {
     int? dateCol, descCol, amountCol, debitCol, creditCol;
 
@@ -744,7 +975,12 @@ FILE CONTENT:
       debitCol: debitCol,
       creditCol: creditCol,
       signedAmount: profile.signedAmount,
-      currency: profile.defaultCurrency,
+      // The account's own currency, not the profile's: a profile identifies a
+      // column layout, and the user is the authority on what the account holds.
+      currency: currency,
+      // Honoured at last: a positional profile (Wells Fargo) has no header
+      // line, and skipping row 0 regardless dropped its first transaction.
+      skipHeaderRow: profile.skipHeaderRow,
     );
   }
 
@@ -757,16 +993,38 @@ FILE CONTENT:
     required int? creditCol,
     required bool signedAmount,
     required String currency,
+    bool skipHeaderRow = true,
   }) {
     if (dateCol == null) return null;
 
+    // A positional profile (Wells Fargo) has no header line, so starting at 1
+    // threw away its first transaction on every single import.
+    final startRow = skipHeaderRow ? 1 : 0;
+    if (allRows.length <= startRow) return null;
+
+    final dateIndex = dateCol;
+    final dataRows = allRows.skip(startRow);
+    final dayFirst = _inferDayFirst(
+      dataRows.where((r) => dateIndex < r.length).map((r) => r[dateIndex]),
+    );
+
+    // A single amount column with no negative value in it is not signed,
+    // whatever the header says: treating it as signed books every charge on a
+    // credit-card export as income.
+    final amountIndex = amountCol;
+    final columnHasNegative = amountIndex != null &&
+        dataRows.any((r) =>
+            amountIndex < r.length && (_parseAmount(r[amountIndex]) ?? 0) < 0);
+    final amountIsSigned = signedAmount && columnHasNegative;
+
     final result = <ParsedTransaction>[];
-    for (int i = 1; i < allRows.length; i++) {
+    for (int i = startRow; i < allRows.length; i++) {
       final row = allRows[i];
       if (row.every((e) => e.trim().isEmpty)) continue;
 
-      final date =
-          dateCol < row.length ? _parseDate(row[dateCol]) : null;
+      final date = dateCol < row.length
+          ? _parseDate(row[dateCol], dayFirst: dayFirst)
+          : null;
       if (date == null) continue;
 
       final description =
@@ -779,7 +1037,7 @@ FILE CONTENT:
       if (amountCol != null && amountCol < row.length) {
         final raw = _parseAmount(row[amountCol]);
         if (raw == null) continue;
-        if (signedAmount) {
+        if (amountIsSigned) {
           amount = raw.abs();
           direction = raw < 0 ? 'debit' : 'credit';
         } else {
@@ -804,14 +1062,12 @@ FILE CONTENT:
         }
       }
 
-      result.add(ParsedTransaction(
+      result.add(_categorised(
         date: date,
         amount: amount,
         direction: direction,
         description: description,
-        rawDescription: description,
         currency: currency,
-        category: _autoCategory(description),
       ));
     }
     return result.isEmpty ? null : result;
@@ -821,8 +1077,13 @@ FILE CONTENT:
 
   Future<List<ParsedTransaction>?> parseWithMapping(
     String csvContent,
-    ColumnMapping mapping,
-  ) async {
+    ColumnMapping mapping, {
+    String? currency,
+    int? sourceId,
+  }) async {
+    assert(currency != null || sourceId != null,
+        'parseWithMapping needs the account currency or the source to read it from');
+    final rowCurrency = currency ?? await _sourceCurrency(sourceId!);
     final allRows = _parseCsvRows(csvContent);
     if (allRows.length < 2) return null;
 
@@ -870,14 +1131,12 @@ FILE CONTENT:
         }
       }
 
-      result.add(ParsedTransaction(
+      result.add(_categorised(
         date: date,
         amount: amount,
         direction: direction,
         description: description,
-        rawDescription: description,
-        currency: 'USD',
-        category: _autoCategory(description),
+        currency: rowCurrency,
       ));
     }
     return result.isEmpty ? null : result;
@@ -900,15 +1159,29 @@ FILE CONTENT:
 
   // ── Save to database ──────────────────────────────────────────────────────
 
+  /// Writes the included rows into `importedTransactions` and the main
+  /// `transactions` table.
+  ///
+  /// [btcPriceService] supplies the historical rate for each row's date, which
+  /// is what makes a Bitcoin-denominated account storable: `amountFiat` is a
+  /// money column the dashboard sums, so a 0.05 BTC deposit written there
+  /// verbatim read as "$0.05". [btcPrice] is the spot rate, used only when a
+  /// row's historical price cannot be resolved.
   Future<ImportSummary> saveTransactions({
     required List<ParsedTransaction> transactions,
     required int sourceId,
     required String sourceName,
+    required BtcPriceService btcPriceService,
     double? btcPrice,
   }) async {
-    // Look up the default wallet to use as FK for main transactions table
+    // FK for the main transactions table. Prefer a manual wallet: `wallets`
+    // comes back unordered, so `first` could be an xpub wallet, which would
+    // attribute bank-statement rows to a Bitcoin wallet and pollute the
+    // dashboard's per-wallet breakdown.
     final wallets = await db.select(db.wallets).get();
-    final walletId = wallets.isNotEmpty ? wallets.first.id : null;
+    final walletId = (wallets.where((w) => w.type == 'manual').firstOrNull ??
+            wallets.firstOrNull)
+        ?.id;
 
     // Load all existing hashes for this source to detect duplicates
     final existingRows = await (db.select(db.importedTransactions)
@@ -923,86 +1196,137 @@ FILE CONTENT:
 
     final toInsert = transactions.where((t) => t.include).toList();
 
-    for (final tx in toInsert) {
-      final cents = _toSmallestUnit(tx.amount, tx.currency);
-      final hash = computeHash(sourceId, tx.date, cents, tx.rawDescription);
+    // ── Resolve historical prices up front, once per date ───────────────────
+    //
+    // Before the write transaction opens: `getHistoricalPrice` goes to the
+    // network and writes its own cache rows, neither of which belongs inside a
+    // held write lock.
+    final displayCurrency = btcPriceService.currency;
+    final datesToPrice = <String, DateTime>{
+      for (final tx in toInsert) _dayKey(tx.date): tx.date,
+    };
+    final priceByDay = <String, double?>{};
+    for (final entry in datesToPrice.entries) {
+      priceByDay[entry.key] =
+          await btcPriceService.getHistoricalPrice(entry.value, displayCurrency);
+    }
 
-      if (existingHashes.contains(hash)) {
-        duplicatesSkipped++;
-        continue;
-      }
+    double? priceFor(DateTime date) {
+      final historical = priceByDay[_dayKey(date)];
+      if (historical != null && historical > 0) return historical;
+      return (btcPrice != null && btcPrice > 0) ? btcPrice : null;
+    }
 
-      try {
-        await db.into(db.importedTransactions).insert(
-          ImportedTransactionsCompanion.insert(
-            sourceId: sourceId,
-            date: tx.date,
-            amountCents: cents,
-            direction: tx.direction,
-            description: tx.description,
-            category: Value(tx.category),
-            currency: tx.currency,
-            rawDescription: tx.rawDescription,
-            importHash: hash,
-          ),
-          mode: InsertMode.insertOrIgnore,
-        );
-        existingHashes.add(hash);
-        imported++;
-        if (startDate == null || tx.date.isBefore(startDate)) startDate = tx.date;
-        if (endDate == null || tx.date.isAfter(endDate)) endDate = tx.date;
-      } catch (_) {
-        duplicatesSkipped++;
-        continue;
-      }
+    // ── One write transaction for the whole import ──────────────────────────
+    //
+    // Every committed statement fires `transactions.watchAll()`, which
+    // main.dart turns into a budget re-check plus three full table selects, and
+    // wakes every mounted StreamBuilder. Row by row, a 300-row import meant
+    // hundreds of full scans and a multi-second freeze. Wrapping the loop also
+    // means the two tables can no longer disagree if the app is killed
+    // mid-import: either a row is in both or in neither.
+    await db.transaction(() async {
+      for (final tx in toInsert) {
+        final cents = _toSmallestUnit(tx.amount, tx.currency);
+        final hash = computeHash(sourceId, tx.date, cents, tx.rawDescription);
 
-      // Also write into the main transactions table so the Transactions screen
-      // can display imported data alongside manual and xpub entries.
-      if (walletId != null) {
-        final isBitcoin = tx.currency == 'BTC' || tx.currency == 'SATS';
-        // fiatCurrency must be exactly 3 chars; SATS → BTC, others kept as-is
-        final fiatCurrency = tx.currency == 'SATS'
-            ? 'BTC'
-            : (tx.currency.length == 3 ? tx.currency : 'USD');
-        // signed: credit = positive, debit = negative
-        final signedFiat = tx.direction == 'credit' ? tx.amount : -tx.amount;
-        int amountSats;
-        if (isBitcoin) {
-          amountSats = tx.direction == 'credit' ? cents : -cents;
-        } else if (btcPrice != null && btcPrice > 0) {
-          amountSats = (signedFiat / btcPrice * 100000000).round();
-        } else {
-          amountSats = 0;
+        if (existingHashes.contains(hash)) {
+          duplicatesSkipped++;
+          continue;
         }
-        final dedupHash = HashUtils.transactionDedupHash(
-          date: tx.date,
-          amount: tx.amount,
-          description: tx.rawDescription,
-        );
+
         try {
-          await db.into(db.transactions).insert(
-            TransactionsCompanion.insert(
-              walletId: walletId,
+          await db.into(db.importedTransactions).insert(
+            ImportedTransactionsCompanion.insert(
+              sourceId: sourceId,
               date: tx.date,
+              amountCents: cents,
+              direction: tx.direction,
               description: tx.description,
-              amountFiat: signedFiat,
-              amountSats: amountSats,
-              fiatCurrency: fiatCurrency,
               category: Value(tx.category),
-              source: 'csv',
-              isBitcoin: Value(isBitcoin),
-              dedupHash: dedupHash,
+              currency: tx.currency,
+              rawDescription: tx.rawDescription,
+              importHash: hash,
             ),
             mode: InsertMode.insertOrIgnore,
           );
+          existingHashes.add(hash);
+          imported++;
+          // Explicit `!`: captured by the transaction closure, these no longer
+          // promote on a null check.
+          if (startDate == null || tx.date.isBefore(startDate!)) {
+            startDate = tx.date;
+          }
+          if (endDate == null || tx.date.isAfter(endDate!)) endDate = tx.date;
         } catch (_) {
-          // Unique constraint violation — transaction already exists in main table
+          duplicatesSkipped++;
+          continue;
+        }
+
+        // Also write into the main transactions table so the Transactions screen
+        // can display imported data alongside manual and xpub entries.
+        if (walletId != null) {
+          final isBitcoin = tx.currency == 'BTC' || tx.currency == 'SATS';
+          final price = priceFor(tx.date);
+          // The signed amount in the account's own currency.
+          final signedSource = tx.direction == 'credit' ? tx.amount : -tx.amount;
+
+          final int amountSats;
+          final double amountFiat;
+          final String fiatCurrency;
+          if (isBitcoin) {
+            // `cents` is already sats for a BTC/SATS account. The fiat column is
+            // derived from it, never a copy of the BTC figure — writing 0.05
+            // there made the dashboard read a 0.05 BTC deposit as "$0.05".
+            amountSats = tx.direction == 'credit' ? cents : -cents;
+            amountFiat =
+                price != null ? amountSats / 100000000 * price : 0.0;
+            fiatCurrency = displayCurrency;
+          } else {
+            amountFiat = signedSource;
+            fiatCurrency =
+                tx.currency.length == 3 ? tx.currency : displayCurrency;
+            amountSats =
+                price != null ? (signedSource / price * 100000000).round() : 0;
+          }
+          // Hash the *signed* amount, and scope it to the wallet.
+          //
+          // `tx.amount` is always positive, so a charge and its same-day refund
+          // hashed identically and the refund was dropped by the unique index —
+          // silently, because the insert is insertOrIgnore. The wallet salt stops
+          // the same rent figure in two accounts colliding the same way.
+          final dedupHash = HashUtils.transactionDedupHash(
+            date: tx.date,
+            amount: signedSource,
+            description: tx.rawDescription,
+            salt: 'wallet_$walletId',
+          );
+          try {
+            await db.into(db.transactions).insert(
+              TransactionsCompanion.insert(
+                walletId: walletId,
+                date: tx.date,
+                description: tx.description,
+                amountFiat: amountFiat,
+                amountSats: amountSats,
+                fiatCurrency: fiatCurrency,
+                category: Value(tx.category),
+                source: 'csv',
+                isBitcoin: Value(isBitcoin),
+                dedupHash: dedupHash,
+              ),
+              mode: InsertMode.insertOrIgnore,
+            );
+          } catch (_) {
+            // Unique constraint violation — transaction already exists in main table
+          }
         }
       }
-    }
 
-    // Persist description → category mappings for future imports
-    await _saveDescriptionMappings(toInsert, sourceId);
+      // Inside the same transaction: another few hundred statements, and a
+      // half-written mapping set would mis-categorise the next import.
+      await _saveDescriptionMappings(toInsert, sourceId);
+    });
 
     return ImportSummary(
       imported: imported,
@@ -1029,32 +1353,58 @@ FILE CONTENT:
     for (final tx in transactions) {
       final key = tx.description.toLowerCase().trim();
       final saved = map[key];
-      if (saved != null) tx.category = saved;
+      if (saved != null) tx.setUserCategory(saved);
     }
   }
 
   /// Persists a description → category mapping for every included transaction
   /// that has a category set.  Uses delete-then-insert to upsert.
+  /// Remembers description → category for the next import of this source.
+  ///
+  /// Collapsed in memory first, then written as one batch of upserts against
+  /// the unique `(sourceId, description)` index. It used to delete and insert,
+  /// awaited, once per row — four round-trips per line for a file that repeats
+  /// the same merchant forty times, and the delete/insert pair was not atomic.
   Future<void> _saveDescriptionMappings(
       List<ParsedTransaction> transactions, int sourceId) async {
+    final byDescription = <String, String>{};
     for (final tx in transactions) {
       if (!tx.include) continue;
+      // Only what the user chose, or a mapping they chose earlier. Learning
+      // the fallback pinned every unrecognised merchant to 'Other' for good:
+      // the mapping was re-applied on every later import of that source, so
+      // improving the keyword list changed nothing for them.
+      if (tx.categoryIsFallback) continue;
       final cat = tx.category;
       if (cat == null || cat.isEmpty) continue;
       final key = tx.description.toLowerCase().trim();
       if (key.isEmpty) continue;
-      await (db.delete(db.descriptionCategoryMappings)
-            ..where((t) => t.sourceId.equals(sourceId))
-            ..where((t) => t.description.equals(key)))
-          .go();
-      await db.into(db.descriptionCategoryMappings).insert(
-        DescriptionCategoryMappingsCompanion.insert(
-          description: key,
-          sourceId: sourceId,
-          category: cat,
-        ),
-      );
+      // Last one wins, matching the previous row-by-row behaviour.
+      byDescription[key] = cat;
     }
+    if (byDescription.isEmpty) return;
+
+    await db.batch((b) {
+      for (final entry in byDescription.entries) {
+        b.insert(
+          db.descriptionCategoryMappings,
+          DescriptionCategoryMappingsCompanion.insert(
+            description: entry.key,
+            sourceId: sourceId,
+            category: entry.value,
+          ),
+          onConflict: DoUpdate(
+            (_) => DescriptionCategoryMappingsCompanion(
+              category: Value(entry.value),
+            ),
+            target: [
+              db.descriptionCategoryMappings.sourceId,
+              db.descriptionCategoryMappings.description,
+            ],
+          ),
+        );
+      }
+    });
   }
 
   // ── Save / update column mapping on a source ─────────────────────────────
@@ -1105,7 +1455,8 @@ FILE CONTENT:
 
   /// Parses transactions from plain-text PDF content using pattern matching.
   /// Returns an empty list when fewer than 3 rows are found (low confidence).
-  List<ParsedTransaction> _parseTransactionsFromPdfText(String text) {
+  List<ParsedTransaction> _parseTransactionsFromPdfText(
+      String text, String currency) {
     final lines = text.split(RegExp(r'\r?\n'));
 
     // Date patterns tried in order — take the first match per line.
@@ -1224,14 +1575,12 @@ FILE CONTENT:
 
       if (desc.length < 2) continue;
 
-      result.add(ParsedTransaction(
+      result.add(_categorised(
         date: date,
         amount: amount,
         direction: direction,
         description: desc,
-        rawDescription: desc,
-        currency: 'USD',
-        category: _autoCategory(desc),
+        currency: currency,
       ));
     }
 
@@ -1239,6 +1588,9 @@ FILE CONTENT:
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
+
+  static String _dayKey(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
   String computeHash(
       int sourceId, DateTime date, int amountCents, String rawDescription) {
@@ -1258,10 +1610,66 @@ FILE CONTENT:
     }
   }
 
+  /// Reads a statement as text, tolerating the encodings banks actually use.
+  ///
+  /// `readAsString` uses the strict UTF-8 codec, so a single `£` (0xA3) in a
+  /// legacy export throws and the whole file is reported as an unrecognised
+  /// layout. Windows-1252 is the usual culprit, so fall back to Latin-1.
+  Future<String> _readTextFile(String filePath) async {
+    final bytes = await File(filePath).readAsBytes();
+    try {
+      return utf8.decode(bytes);
+    } on FormatException {
+      return latin1.decode(bytes, allowInvalid: true);
+    }
+  }
+
   List<List<String>> _parseCsvRows(String content) {
-    final rows = const CsvToListConverter(eol: '\n', shouldParseNumbers: false)
-        .convert(content);
+    // A leading BOM is invisible but sticks to the first header, so
+    // 'date' != '\uFEFFdate' and column detection fails on a textbook CSV.
+    var text = content.startsWith('\uFEFF') ? content.substring(1) : content;
+    text = text.replaceAll('\r\n', '\n');
+    final rows = CsvToListConverter(
+      eol: '\n',
+      fieldDelimiter: _sniffDelimiter(text),
+      shouldParseNumbers: false,
+    ).convert(text);
     return rows.map((r) => r.map((e) => e.toString()).toList()).toList();
+  }
+
+  /// Picks the field delimiter from the header line.
+  ///
+  /// Most of continental Europe exports semicolon-separated CSV (precisely
+  /// because the comma is the decimal point). Assuming ',' turns such a file
+  /// into one unusable column.
+  static String _sniffDelimiter(String text) {
+    final header = text
+        .split('\n')
+        .firstWhere((l) => l.trim().isNotEmpty, orElse: () => '');
+    var best = ',';
+    var bestCount = _countOutsideQuotes(header, ',');
+    for (final candidate in const [';', '\t', '|']) {
+      final count = _countOutsideQuotes(header, candidate);
+      if (count > bestCount) {
+        best = candidate;
+        bestCount = count;
+      }
+    }
+    return best;
+  }
+
+  static int _countOutsideQuotes(String line, String char) {
+    var count = 0;
+    var inQuotes = false;
+    for (var i = 0; i < line.length; i++) {
+      final c = line[i];
+      if (c == '"') {
+        inQuotes = !inQuotes;
+      } else if (!inQuotes && c == char) {
+        count++;
+      }
+    }
+    return count;
   }
 
   List<dynamic>? _extractJsonArray(String text) {
@@ -1293,7 +1701,30 @@ FILE CONTENT:
   // 2-digit year: 00–29 → 2000–2029, 30–99 → 1930–1999 (standard bank convention)
   int _expandYear(int yy) => yy <= 29 ? 2000 + yy : 1900 + yy;
 
-  DateTime? _parseDate(String raw) {
+  /// Decides whether a `03/04/2025`-style column is day-first.
+  ///
+  /// Resolved once per file, not per row. Deciding per row meant a UK
+  /// statement came out with the month and day swapped for days 1–12 only:
+  /// `03/04/2025` read as 3 March, `13/04/2025` as 13 April, from two April
+  /// rows. One of them then lands in the wrong month's budget and dashboard.
+  ///
+  /// Falls back to month-first (US) when a file is genuinely ambiguous — every
+  /// date in it has both components ≤ 12 — which is the format the manual
+  /// mapper also defaults to.
+  static bool _inferDayFirst(Iterable<String> samples) {
+    for (final sample in samples) {
+      final m = RegExp(r'^\s*"?(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})')
+          .firstMatch(sample.trim());
+      if (m == null) continue;
+      final first = int.parse(m.group(1)!);
+      final second = int.parse(m.group(2)!);
+      if (first > 12) return true; // can only be a day
+      if (second > 12) return false; // can only be a day → month came first
+    }
+    return false;
+  }
+
+  DateTime? _parseDate(String raw, {bool dayFirst = false}) {
     raw = raw.trim().replaceAll('"', '');
     if (raw.isEmpty) return null;
 
@@ -1309,29 +1740,25 @@ FILE CONTENT:
       return DateTime.tryParse(
           '${isoSlash.group(1)}-${isoSlash.group(2)}-${isoSlash.group(3)}');
     }
-    // MM/DD/YYYY (US, 4-digit year)
-    final us = RegExp(r'^(\d{1,2})/(\d{1,2})/(\d{4})').firstMatch(raw);
-    if (us != null) {
-      final mo = int.parse(us.group(1)!);
-      final dy = int.parse(us.group(2)!);
-      final yr = int.parse(us.group(3)!);
-      if (mo <= 12 && dy <= 31) return DateTime(yr, mo, dy);
-    }
-    // M/D/YY, M/DD/YY, MM/DD/YY (US 2-digit year — not followed by another digit)
-    final us2 = RegExp(r'^(\d{1,2})/(\d{1,2})/(\d{2})(?!\d)').firstMatch(raw);
-    if (us2 != null) {
-      final mo = int.parse(us2.group(1)!);
-      final dy = int.parse(us2.group(2)!);
-      final yr = _expandYear(int.parse(us2.group(3)!));
-      if (mo <= 12 && dy <= 31) return DateTime(yr, mo, dy);
-    }
-    // DD/MM/YYYY or DD-MM-YYYY (UK)
-    final uk = RegExp(r'^(\d{1,2})[-/](\d{1,2})[-/](\d{4})').firstMatch(raw);
-    if (uk != null) {
-      final dy = int.parse(uk.group(1)!);
-      final mo = int.parse(uk.group(2)!);
-      final yr = int.parse(uk.group(3)!);
-      if (mo <= 12 && dy <= 31) return DateTime(yr, mo, dy);
+    // Two numbers then a year, separated by / - or . — the last covers
+    // continental exports like 01.02.2025, which used to parse as nothing at
+    // all. [dayFirst] settles the order; a component > 12 overrides it, since
+    // it can only be a day whatever the file's convention is.
+    final numeric =
+        RegExp(r'^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})(?!\d)').firstMatch(raw);
+    if (numeric != null) {
+      final first = int.parse(numeric.group(1)!);
+      final second = int.parse(numeric.group(2)!);
+      final yearText = numeric.group(3)!;
+      final yr = yearText.length == 2
+          ? _expandYear(int.parse(yearText))
+          : int.parse(yearText);
+      final firstIsDay = first > 12 || (dayFirst && second <= 12);
+      final dy = firstIsDay ? first : second;
+      final mo = firstIsDay ? second : first;
+      if (mo >= 1 && mo <= 12 && dy >= 1 && dy <= 31) {
+        return DateTime(yr, mo, dy);
+      }
     }
     // DD MMM YYYY  or  MMM DD YYYY
     final months = {
@@ -1402,14 +1829,55 @@ FILE CONTENT:
         .replaceAll('£', '')
         .replaceAll('€', '')
         .replaceAll('₿', '');
+
+    // UK statements put the side of the ledger in a DR/CR suffix instead of a
+    // sign: '12.50 DR' is money out. Without this the row is dropped outright.
+    var forceNegative = false;
+    final drcr = RegExp(r'\s*(DR|CR)\.?$', caseSensitive: false).firstMatch(s);
+    if (drcr != null) {
+      forceNegative = drcr.group(1)!.toUpperCase() == 'DR';
+      s = s.substring(0, drcr.start);
+    }
+
     // Parenthetical negatives: (4.50) → -4.50
-    final paren = RegExp(r'^\(([0-9,. ]+)\)$').firstMatch(s);
+    final paren = RegExp(r'^\(([0-9,.\s]+)\)$').firstMatch(s);
     if (paren != null) s = '-${paren.group(1)}';
-    // Strip thousands separators and spaces
-    s = s.replaceAll(',', '').replaceAll(' ', '');
+    s = s.replaceAll(' ', '').replaceAll('\u00a0', '');
+    s = _normalizeDecimalSeparator(s);
     // Trailing minus sign: 4.50- → -4.50
     if (s.endsWith('-')) s = '-${s.substring(0, s.length - 1)}';
-    return double.tryParse(s);
+
+    final value = double.tryParse(s);
+    if (value == null) return null;
+    return forceNegative ? -value.abs() : value;
+  }
+
+  /// Works out whether `,` is a thousands separator or the decimal point.
+  ///
+  /// Stripping every comma — what this used to do — turns the German `-12,50`
+  /// into `-1250.00` and records a €1,250 expense, with nothing to tell the
+  /// user it happened.
+  static String _normalizeDecimalSeparator(String s) {
+    final lastComma = s.lastIndexOf(',');
+    if (lastComma == -1) return s; // only dots: already Dart-parseable
+    final lastDot = s.lastIndexOf('.');
+
+    // '1,234.56' — the dot is last, so commas group thousands.
+    if (lastDot > lastComma) return s.replaceAll(',', '');
+
+    // '1.234,56' — the comma is last, so dots group thousands.
+    if (lastDot != -1) {
+      return '${s.substring(0, lastComma).replaceAll('.', '')}'
+          '.${s.substring(lastComma + 1)}';
+    }
+
+    // Commas only. Exactly 3 digits per group is a thousands separator
+    // ('1,234'); anything else is a decimal comma ('12,5', '12,50').
+    if (RegExp(r'^-?\d{1,3}(,\d{3})+$').hasMatch(s)) {
+      return s.replaceAll(',', '');
+    }
+    return '${s.substring(0, lastComma).replaceAll(',', '')}'
+        '.${s.substring(lastComma + 1)}';
   }
 
   static const _categoryKeywords = <String, List<String>>{
@@ -1431,6 +1899,9 @@ FILE CONTENT:
       'dunkin', 'chick-fil',
     ],
     'Transport': [
+      // Multi-word entries exist to beat a shorter keyword in another
+      // category: 'rent a car' outranks Housing's 'rent'.
+      'rent a car', 'car rental', 'car hire',
       'uber', 'lyft', 'taxi', 'transit', 'metro', 'bus ', 'train',
       'amtrak', 'flight', 'airline', 'parking', 'toll', ' gas ',
       'petrol', 'shell', 'bp ', 'exxon', 'chevron', 'fuel', 'tfl ',
@@ -1459,14 +1930,78 @@ FILE CONTENT:
     ],
   };
 
-  String _autoCategory(String description) {
+  /// Matchers for every keyword, built once.
+  ///
+  /// Bare `contains` matched inside words, which is how `PASSPORT OFFICE`
+  /// became Entertainment (`sport`), `BARBERSHOP` became Shopping (`shop`) and
+  /// `SHELL ENERGY ELECTRIC` became Transport. The boundaries are written as
+  /// lookarounds rather than `\b` because several keywords end in punctuation
+  /// — `disney+`, `at&t`, `chick-fil` — where `\b` asserts the opposite of
+  /// what is wanted.
+  static final Map<String, List<(RegExp, int)>> _keywordMatchers = {
+    for (final entry in _categoryKeywords.entries)
+      entry.key: [
+        for (final keyword in entry.value)
+          (
+            RegExp('(?<![a-z0-9])${RegExp.escape(keyword.trim())}(?![a-z0-9])'),
+            keyword.trim().length,
+          ),
+      ],
+  };
+
+  /// The best-matching category for [description], or null if nothing matched.
+  ///
+  /// Scores every keyword and takes the longest match rather than the first:
+  /// `MONTHLY FEE REFUND` used to be Income, because Income's `refund` is
+  /// checked before Subscriptions' `monthly fee`. The longer, more specific
+  /// phrase should win, and with the categories in a map the old order was
+  /// arbitrary anyway.
+  String? matchCategory(String description) {
     final lower = description.toLowerCase();
-    for (final entry in _categoryKeywords.entries) {
-      for (final keyword in entry.value) {
-        if (lower.contains(keyword)) return entry.key;
+    String? best;
+    var bestLength = 0;
+    for (final entry in _keywordMatchers.entries) {
+      for (final (pattern, length) in entry.value) {
+        if (length > bestLength && pattern.hasMatch(lower)) {
+          best = entry.key;
+          bestLength = length;
+        }
       }
     }
-    return 'Other';
+    return best;
+  }
+
+  /// Builds a row with its category worked out once.
+  ///
+  /// Every parse tier used to repeat the five-field constructor and call the
+  /// categoriser inline, so adding the fallback flag would have meant scoring
+  /// each description twice.
+  ParsedTransaction _categorised({
+    required DateTime date,
+    required double amount,
+    required String direction,
+    required String description,
+    required String currency,
+  }) {
+    final result = _categorise(description);
+    return ParsedTransaction(
+      date: date,
+      amount: amount,
+      direction: direction,
+      description: description,
+      rawDescription: description,
+      currency: currency,
+      category: result.category,
+      categoryIsFallback: result.isFallback,
+    );
+  }
+
+  /// [matchCategory] with the fallback applied, and whether it was applied.
+  ({String category, bool isFallback}) _categorise(String description) {
+    final match = matchCategory(description);
+    return match == null
+        ? (category: 'Other', isFallback: true)
+        : (category: match, isFallback: false);
   }
 }
 

@@ -311,7 +311,7 @@ class CloudBackend implements InferenceBackend {
           'model': model,
           // Required by the Messages API, unlike the OpenAI-shaped providers,
           // which treat it as optional.
-          'max_tokens': 4096,
+          'max_tokens': maxOutputTokens,
           if (system.isNotEmpty) 'system': system,
           'messages': [
             for (final m in turns)
@@ -364,7 +364,7 @@ class CloudBackend implements InferenceBackend {
       case CloudProvider.anthropic:
         return jsonEncode({
           'model': model,
-          'max_tokens': 4096,
+          'max_tokens': maxOutputTokens,
           'messages': [
             {
               'role': 'user',
@@ -419,6 +419,13 @@ class CloudBackend implements InferenceBackend {
         });
     }
   }
+
+  /// The output cap sent to every provider that wants one.
+  ///
+  /// Hitting it truncates the answer mid-sentence, which is why
+  /// [indicatesTruncation] exists: the stream otherwise ends cleanly and the
+  /// half-answer is saved as if it were the whole thing.
+  static const maxOutputTokens = 4096;
 
   static String _anthropicRole(String? role) =>
       role == 'assistant' ? 'assistant' : 'user';
@@ -480,6 +487,58 @@ class CloudBackend implements InferenceBackend {
     }
   }
 
+  /// The message from a mid-stream error frame, or null if this is not one.
+  ///
+  /// A provider can fail after it has already sent text — rate limited part
+  /// way through, overloaded, content filtered. [extractDelta] returns null for
+  /// those frames, so the stream used to end normally and the truncated answer
+  /// was saved as complete, with nothing anywhere saying it had failed.
+  ///
+  /// Static and public so each provider's frame shape can be tested directly.
+  static String? extractStreamError(
+      CloudProvider provider, Map<String, dynamic> data) {
+    // All four put the detail in an `error` object; Anthropic additionally
+    // tags the frame `type: error`.
+    final error = data['error'];
+    if (error is Map) {
+      final message = error['message'];
+      if (message is String && message.isNotEmpty) return message;
+      final type = error['type'];
+      if (type is String && type.isNotEmpty) return type;
+      return 'the response stream ended with an error';
+    }
+    if (provider == CloudProvider.anthropic && data['type'] == 'error') {
+      return 'the response stream ended with an error';
+    }
+    return null;
+  }
+
+  /// Whether this frame says the answer was cut off by [maxOutputTokens].
+  ///
+  /// Static and public so each provider's frame shape can be tested directly.
+  static bool indicatesTruncation(
+      CloudProvider provider, Map<String, dynamic> data) {
+    switch (provider) {
+      case CloudProvider.anthropic:
+        if (data['type'] != 'message_delta') return false;
+        final delta = data['delta'];
+        return delta is Map && delta['stop_reason'] == 'max_tokens';
+
+      case CloudProvider.openai:
+      case CloudProvider.xai:
+        final choices = data['choices'];
+        if (choices is! List || choices.isEmpty) return false;
+        final first = choices.first;
+        return first is Map && first['finish_reason'] == 'length';
+
+      case CloudProvider.gemini:
+        final candidates = data['candidates'];
+        if (candidates is! List || candidates.isEmpty) return false;
+        final first = candidates.first;
+        return first is Map && first['finishReason'] == 'MAX_TOKENS';
+    }
+  }
+
   @override
   Stream<String> chat(
     List<Map<String, String>> messages, {
@@ -531,6 +590,7 @@ class CloudBackend implements InferenceBackend {
       // buffers until a newline is actually seen rather than using LineSplitter
       // on the chunk stream.
       var buffer = '';
+      var truncated = false;
       await for (final chunk in response.stream.transform(utf8.decoder)) {
         buffer += chunk;
         while (true) {
@@ -546,12 +606,27 @@ class CloudBackend implements InferenceBackend {
           try {
             final decoded = jsonDecode(payload);
             if (decoded is! Map<String, dynamic>) continue;
+
+            // Before the delta: a failure that arrives after 200 tokens is
+            // still a failure, and letting the stream end quietly saved the
+            // half-answer as complete.
+            final streamError = extractStreamError(provider, decoded);
+            if (streamError != null) {
+              throw InferenceException('${provider.label}: $streamError');
+            }
+            if (indicatesTruncation(provider, decoded)) truncated = true;
+
             final text = extractDelta(provider, decoded);
             if (text != null && text.isNotEmpty) yield text;
           } on FormatException {
             // Keep-alives and SSE comments are not JSON.
           }
         }
+      }
+
+      if (truncated) {
+        yield '\n\n_(cut off at the $maxOutputTokens-token limit — '
+            'ask for the rest to continue.)_';
       }
     } finally {
       if (ownedClient) c.close();
@@ -569,18 +644,24 @@ class CloudBackend implements InferenceBackend {
     int status,
     String body,
   ) {
-    try {
-      final decoded = jsonDecode(body);
-      final message = decoded is Map
-          ? (decoded['error'] is Map
-              ? decoded['error']['message']
-              : decoded['message'])
-          : null;
-      if (message is String && message.isNotEmpty) {
-        return '${provider.label}: $message';
+    // Never the provider's own text for an auth failure. OpenAI answers a 401
+    // with `Incorrect API key provided: sk-proj-ab****XYZ` — a partial copy of
+    // the user's key, which the chat screen then prints verbatim and into any
+    // screenshot or bug report. The canned string below says the same thing.
+    if (status != 401 && status != 403) {
+      try {
+        final decoded = jsonDecode(body);
+        final message = decoded is Map
+            ? (decoded['error'] is Map
+                ? decoded['error']['message']
+                : decoded['message'])
+            : null;
+        if (message is String && message.isNotEmpty) {
+          return '${provider.label}: $message';
+        }
+      } on FormatException {
+        // Not JSON — fall through to the status mapping.
       }
-    } on FormatException {
-      // Not JSON — fall through to the status mapping.
     }
 
     return switch (status) {

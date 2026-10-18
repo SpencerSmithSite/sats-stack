@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <!-- Background -->
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#242424"/>
+      <stop offset="100%" stop-color="#141414"/>
+    </linearGradient>
+
+    <!-- Coin faces: left-to-right lighting (light left, dark right) -->
+    <linearGradient id="face-top" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%"   stop-color="#FFBE50"/>
+      <stop offset="55%"  stop-color="#F7931A"/>
+      <stop offset="100%" stop-color="#B86000"/>
+    </linearGradient>
+    <linearGradient id="face-mid" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%"   stop-color="#F09020"/>
+      <stop offset="55%"  stop-color="#D07810"/>
+      <stop offset="100%" stop-color="#8C4800"/>
+    </linearGradient>
+    <linearGradient id="face-bot" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%"   stop-color="#CC7818"/>
+      <stop offset="55%"  stop-color="#A86008"/>
+      <stop offset="100%" stop-color="#6A3400"/>
+    </linearGradient>
+
+    <!-- Coin rims: lighter left, darker right -->
+    <linearGradient id="rim-top" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%"   stop-color="#D07810"/>
+      <stop offset="100%" stop-color="#7A4200"/>
+    </linearGradient>
+    <linearGradient id="rim-mid" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%"   stop-color="#A05808"/>
+      <stop offset="100%" stop-color="#4E2800"/>
+    </linearGradient>
+    <linearGradient id="rim-bot" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%"   stop-color="#7A4800"/>
+      <stop offset="100%" stop-color="#321800"/>
+    </linearGradient>
+
+    <!-- Contact shadow blur -->
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="14"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+
+  <!-- === COIN GEOMETRY ===
+       Each coin: cx=512, face ellipse rx=260 ry=72, rim height=58px
+       Bottom coin cy=620, middle cy=512, top cy=404
+       Stack centered at y=512 -->
+
+  <!-- ── BOTTOM COIN ── -->
+  <path d="M252,620 a260,72 0 0,0 520,0 l0,58 a260,72 0 0,1 -520,0 Z"
+        fill="url(#rim-bot)"/>
+  <ellipse cx="512" cy="620" rx="260" ry="72" fill="url(#face-bot)"/>
+
+  <!-- Contact shadow between bottom and mid -->
+  <ellipse cx="512" cy="616" rx="230" ry="46" fill="black" fill-opacity="0.45" filter="url(#shadow)"/>
+
+  <!-- ── MIDDLE COIN ── -->
+  <path d="M252,512 a260,72 0 0,0 520,0 l0,58 a260,72 0 0,1 -520,0 Z"
+        fill="url(#rim-mid)"/>
+  <ellipse cx="512" cy="512" rx="260" ry="72" fill="url(#face-mid)"/>
+
+  <!-- Contact shadow between mid and top -->
+  <ellipse cx="512" cy="508" rx="230" ry="46" fill="black" fill-opacity="0.45" filter="url(#shadow)"/>
+
+  <!-- ── TOP COIN ── -->
+  <path d="M252,404 a260,72 0 0,0 520,0 l0,58 a260,72 0 0,1 -520,0 Z"
+        fill="url(#rim-top)"/>
+  <ellipse cx="512" cy="404" rx="260" ry="72" fill="url(#face-top)"/>
+</svg>

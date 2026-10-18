@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -24,14 +26,35 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   final Set<String> _filterSources = {};
   late final TextEditingController _searchCtrl;
 
+  /// Built once. `watchAll()` returns a *new* Drift stream on every call, so
+  /// subscribing from inside build() meant every keystroke in the search box
+  /// tore down the subscription, re-queried the table and replaced the whole
+  /// list with a spinner while the first event came back.
+  late final Stream<List<Transaction>> _transactions;
+
+  /// Category name → category, for the colour and icon each row shows.
+  /// Every row used to run `categoryService.getAll()` in its own
+  /// FutureBuilder: one full table select per visible transaction, repeated
+  /// on every rebuild. Watched rather than fetched, so a rename or a colour
+  /// change still reaches the list.
+  Map<String, Category> _categoriesByName = const {};
+  StreamSubscription<List<Category>>? _categorySub;
+
   @override
   void initState() {
     super.initState();
     _searchCtrl = TextEditingController();
+    _transactions = app.transactionService.watchAll();
+    _categorySub = app.categoryService.watchAll().listen((cats) {
+      if (!mounted) return;
+      setState(() =>
+          _categoriesByName = {for (final c in cats) c.name: c});
+    });
   }
 
   @override
   void dispose() {
+    _categorySub?.cancel();
     _searchCtrl.dispose();
     super.dispose();
   }
@@ -222,7 +245,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
           // ── Transaction list ──────────────────────────────────────────
           Expanded(
             child: StreamBuilder<List<Transaction>>(
-              stream: app.transactionService.watchAll(),
+              stream: _transactions,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
@@ -259,7 +282,10 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                   );
                 }
 
-                return _TransactionList(transactions: filtered);
+                return _TransactionList(
+                  transactions: filtered,
+                  categoriesByName: _categoriesByName,
+                );
               },
             ),
           ),
@@ -450,9 +476,13 @@ class _ActiveFilterChip extends StatelessWidget {
 // ── Transaction list (unchanged logic) ───────────────────────────────────────
 
 class _TransactionList extends StatelessWidget {
-  const _TransactionList({required this.transactions});
+  const _TransactionList({
+    required this.transactions,
+    required this.categoriesByName,
+  });
 
   final List<Transaction> transactions;
+  final Map<String, Category> categoriesByName;
 
   @override
   Widget build(BuildContext context) {
@@ -469,17 +499,26 @@ class _TransactionList extends StatelessWidget {
       itemBuilder: (context, i) {
         final date = sortedDates[i];
         final dayTxs = groups[date]!;
-        return _DateGroup(date: date, transactions: dayTxs);
+        return _DateGroup(
+          date: date,
+          transactions: dayTxs,
+          categoriesByName: categoriesByName,
+        );
       },
     );
   }
 }
 
 class _DateGroup extends StatelessWidget {
-  const _DateGroup({required this.date, required this.transactions});
+  const _DateGroup({
+    required this.date,
+    required this.transactions,
+    required this.categoriesByName,
+  });
 
   final DateTime date;
   final List<Transaction> transactions;
+  final Map<String, Category> categoriesByName;
 
   String _dateLabel() {
     final today = DateTime.now();
@@ -514,7 +553,10 @@ class _DateGroup extends StatelessWidget {
           child: Column(
             children: [
               for (int j = 0; j < transactions.length; j++) ...[
-                _TransactionRow(transaction: transactions[j]),
+                _TransactionRow(
+                  transaction: transactions[j],
+                  category: categoriesByName[transactions[j].category],
+                ),
                 if (j < transactions.length - 1)
                   const Divider(indent: 16, endIndent: 16),
               ],
@@ -527,25 +569,18 @@ class _DateGroup extends StatelessWidget {
 }
 
 class _TransactionRow extends StatelessWidget {
-  const _TransactionRow({required this.transaction});
+  const _TransactionRow({required this.transaction, this.category});
 
   final Transaction transaction;
+  final Category? category;
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<Category>>(
-      future: app.categoryService.getAll(),
-      builder: (context, snapshot) {
-        final categories = snapshot.data ?? [];
-        final category =
-            categories.where((c) => c.name == transaction.category).firstOrNull;
-        return TransactionListItem(
-          transaction: transaction,
-          category: category,
-          onTap: () => _openEditSheet(context, transaction),
-          onLongPress: () => _confirmDelete(context),
-        );
-      },
+    return TransactionListItem(
+      transaction: transaction,
+      category: category,
+      onTap: () => _openEditSheet(context, transaction),
+      onLongPress: () => _confirmDelete(context),
     );
   }
 

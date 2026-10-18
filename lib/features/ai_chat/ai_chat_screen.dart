@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 import '../../core/models/ai_provider.dart';
 import '../../shared/constants/app_constants.dart';
 import '../../shared/theme/app_colors.dart';
@@ -32,6 +35,10 @@ class _AiChatScreenState extends State<AiChatScreen> {
 
   List<_Msg> _messages = [];
   bool _isStreaming = false;
+
+  /// Held so the request can be stopped when the screen goes away.
+  StreamSubscription<String>? _streamSub;
+  http.Client? _streamClient;
   String _streamingContent = '';
   String? _error;
 
@@ -56,6 +63,10 @@ class _AiChatScreenState extends State<AiChatScreen> {
 
   @override
   void dispose() {
+    // Cancel before the controllers go: an in-flight answer would otherwise
+    // keep streaming (and billing) for a screen that no longer exists.
+    _streamSub?.cancel();
+    _streamClient?.close();
     _inputCtrl.dispose();
     _scrollCtrl.dispose();
     super.dispose();
@@ -104,19 +115,37 @@ class _AiChatScreenState extends State<AiChatScreen> {
     );
   }
 
+  /// Builds the request, newest turns first, within the backend's budget.
+  ///
+  /// The whole transcript used to be re-sent every turn with no limit, while
+  /// the budget was applied to the system prompt alone. On Apple Intelligence
+  /// (4,000 characters) or a 0.6B Qwen that overruns the window after a few
+  /// exchanges and the answers quietly degrade; on a hosted provider every
+  /// turn costs more than the last for no benefit.
   List<Map<String, String>> _buildApiMessages(String userMessage) {
-    final result = <Map<String, String>>[];
-    if (_systemPrompt != null) {
-      result.add({'role': 'system', 'content': _systemPrompt!});
-    }
-    for (final m in _messages) {
-      result.add({
+    final systemPrompt = _systemPrompt;
+    final budget = app.ollamaService.contextBudgetChars;
+
+    var remaining = budget - (systemPrompt?.length ?? 0) - userMessage.length;
+
+    // Walk backwards so the most recent context is what survives, and keep
+    // whole turns: half an exchange reads worse than one fewer.
+    final history = <Map<String, String>>[];
+    for (final m in _messages.reversed) {
+      final cost = m.content.length;
+      if (cost > remaining) break;
+      remaining -= cost;
+      history.insert(0, {
         'role': m.role == _Role.user ? 'user' : 'assistant',
         'content': m.content,
       });
     }
-    result.add({'role': 'user', 'content': userMessage});
-    return result;
+
+    return [
+      if (systemPrompt != null) {'role': 'system', 'content': systemPrompt},
+      ...history,
+      {'role': 'user', 'content': userMessage},
+    ];
   }
 
   Future<void> _send([String? override]) async {
@@ -138,34 +167,60 @@ class _AiChatScreenState extends State<AiChatScreen> {
     final apiMessages = _buildApiMessages(text);
     final buffer = StringBuffer();
 
-    try {
-      await for (final token in app.ollamaService.chat(apiMessages)) {
-        buffer.write(token);
-        if (mounted) {
-          setState(() => _streamingContent = buffer.toString());
-          _scrollToBottom();
-        }
-      }
-      final response = buffer.toString();
-      // Save to DB
-      await app.ollamaService.saveConversation(prompt: text, response: response);
+    // An owned client and a held subscription, so leaving the screen actually
+    // stops the request. With a bare `await for` and no client, switching tabs
+    // disposed this screen while the stream ran on to completion: tokens kept
+    // arriving, a hosted provider kept billing for them, and the finished
+    // answer was still written to the conversation history of a chat the user
+    // had walked away from.
+    final client = http.Client();
+    _streamClient = client;
+    final completion = Completer<void>();
 
-      if (mounted) {
-        setState(() {
-          _messages = [..._messages, _Msg(role: _Role.assistant, content: response)];
-          _isStreaming = false;
-          _streamingContent = '';
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isStreaming = false;
-          _streamingContent = '';
-          _error = 'Error: $e';
-        });
-      }
-    }
+    _streamSub = app.ollamaService.chat(apiMessages, client: client).listen(
+      (token) {
+        buffer.write(token);
+        if (!mounted) return;
+        setState(() => _streamingContent = buffer.toString());
+        _scrollToBottom();
+      },
+      onError: (Object e) {
+        if (mounted) {
+          setState(() {
+            _isStreaming = false;
+            _streamingContent = '';
+            _error = 'Error: $e';
+          });
+        }
+        if (!completion.isCompleted) completion.complete();
+      },
+      onDone: () async {
+        final response = buffer.toString();
+        if (response.isNotEmpty) {
+          await app.ollamaService.saveConversation(
+            prompt: text,
+            response: response,
+          );
+        }
+        if (mounted) {
+          setState(() {
+            _messages = [
+              ..._messages,
+              _Msg(role: _Role.assistant, content: response),
+            ];
+            _isStreaming = false;
+            _streamingContent = '';
+          });
+        }
+        if (!completion.isCompleted) completion.complete();
+      },
+      cancelOnError: true,
+    );
+
+    await completion.future;
+    client.close();
+    if (identical(_streamClient, client)) _streamClient = null;
+    _streamSub = null;
   }
 
   void _scrollToBottom() {

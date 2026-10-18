@@ -1,5 +1,6 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:intl/intl.dart';
 import '../../core/models/budget_progress.dart';
 import '../../shared/theme/app_colors.dart';
@@ -11,9 +12,6 @@ import 'widgets/budget_card.dart';
 import 'widgets/set_budget_sheet.dart';
 import '../../main.dart' as app;
 
-/// One notification per category per month — tracked in-memory per session.
-final _notifiedCategories = <String>{};
-
 class BudgetsScreen extends StatefulWidget {
   const BudgetsScreen({super.key});
 
@@ -24,12 +22,56 @@ class BudgetsScreen extends StatefulWidget {
 class _BudgetsScreenState extends State<BudgetsScreen> {
   DateTime _selectedMonth = DateTime(DateTime.now().year, DateTime.now().month);
 
+  // One subscription, owned by the state rather than by `build()`.
+  //
+  // `watchProgress` returns a new stream per call, so a StreamBuilder fed from
+  // build() re-subscribed — and re-ran the aggregate — on every currency and
+  // BTC price tick, flashing a spinner each time. Holding the latest value
+  // here also gives the overspend check somewhere legitimate to live: it used
+  // to fire a notification from inside build().
+  StreamSubscription<List<BudgetProgress>>? _progressSub;
+  List<BudgetProgress>? _items; // null until the first event
+  Object? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _subscribe();
+  }
+
+  @override
+  void dispose() {
+    _progressSub?.cancel();
+    super.dispose();
+  }
+
+  void _subscribe() {
+    _progressSub?.cancel();
+    _items = null;
+    _error = null;
+    _progressSub = app.budgetService.watchProgress(_selectedMonth).listen(
+      (items) {
+        if (!mounted) return;
+        setState(() {
+          _items = items;
+          _error = null;
+        });
+        if (_isCurrentMonth) _notifyOverspend();
+      },
+      onError: (Object e) {
+        if (mounted) setState(() => _error = e);
+      },
+    );
+  }
+
   void _previousMonth() => setState(() {
         _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month - 1);
+        _subscribe();
       });
 
   void _nextMonth() => setState(() {
         _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month + 1);
+        _subscribe();
       });
 
   bool get _isCurrentMonth {
@@ -54,31 +96,24 @@ class _BudgetsScreenState extends State<BudgetsScreen> {
     await app.budgetService.deleteById(id);
   }
 
-  void _checkNotifications(List<BudgetProgress> items) {
-    for (final p in items) {
-      if (!p.isOverBudget) continue;
-      final key = '${p.category.name}_${_selectedMonth.year}_${_selectedMonth.month}';
-      if (_notifiedCategories.contains(key)) continue;
-      _notifiedCategories.add(key);
-      _sendOverBudgetNotification(p);
-    }
-  }
-
-  Future<void> _sendOverBudgetNotification(BudgetProgress p) async {
-    try {
-      final plugin = FlutterLocalNotificationsPlugin();
-      final currency = app.currencyNotifier.value;
-      await plugin.show(
-        p.budget.id,
-        '${p.category.name} over budget',
-        'Spent ${CurrencyUtils.format(p.spentFiat, currency, decimalDigits: 0)} of ${CurrencyUtils.format(p.budget.amountFiat, currency, decimalDigits: 0)} budget.',
-        const NotificationDetails(
-          macOS: DarwinNotificationDetails(subtitle: 'Sats Stack'),
-        ),
-      );
-    } catch (_) {
-      // Notifications unavailable (permission not granted or platform issue) — ignore.
-    }
+  /// Hands the check to [BudgetService], which goes through
+  /// [NotificationService].
+  ///
+  /// The screen used to raise these itself from a bare
+  /// `FlutterLocalNotificationsPlugin()` — never initialised, so on iOS no
+  /// permission had been asked for and nothing appeared — keyed on
+  /// `p.budget.id`, which can collide with the stack-goal id, and deduplicated
+  /// by a module-level Set that was never cleared, so re-exceeding a budget in
+  /// the same month never alerted again. main.dart already runs this same
+  /// check on every transaction change; this catches the other case, a budget
+  /// lowered below what has already been spent.
+  void _notifyOverspend() {
+    app.budgetService
+        .checkAndNotify(
+          notifications: app.notificationService,
+          currency: app.currencyNotifier.value,
+        )
+        .ignore();
   }
 
   @override
@@ -96,64 +131,7 @@ class _BudgetsScreenState extends State<BudgetsScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: StreamBuilder<List<BudgetProgress>>(
-        stream: app.budgetService.watchProgress(_selectedMonth),
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.error_outline,
-                      size: 48,
-                      color: Theme.of(context)
-                          .colorScheme
-                          .error
-                          .withAlpha(160)),
-                  const SizedBox(height: 12),
-                  Text('Failed to load budgets',
-                      style: Theme.of(context).textTheme.titleMedium),
-                ],
-              ),
-            );
-          }
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          final items = snapshot.data ?? [];
-
-          // Trigger over-budget notifications (only for current month)
-          if (_isCurrentMonth) _checkNotifications(items);
-
-          if (items.isEmpty) {
-            return EmptyState(
-              icon: Icons.account_balance_wallet_outlined,
-              title: 'No budgets set',
-              subtitle: 'Set monthly spending limits per category to track your fiat leak.',
-              actionLabel: 'Set a Budget',
-              onAction: () => _openSetBudget(),
-            );
-          }
-
-          return ValueListenableBuilder<String>(
-            valueListenable: app.currencyNotifier,
-            builder: (context, currency, _) {
-              return ValueListenableBuilder<double?>(
-                valueListenable: app.btcPriceService.priceNotifier,
-                builder: (context, btcPrice, _) {
-                  return _BudgetList(
-                    items: items,
-                    btcPrice: btcPrice,
-                    currency: currency,
-                    onEdit: (p) => _openSetBudget(existing: p),
-                    onDelete: (id) => _deleteBudget(id),
-                  );
-                },
-              );
-            },
-          );
-        },
-      ),
+      body: _buildBody(context),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _openSetBudget(),
         backgroundColor: AppColors.bitcoinOrange,
@@ -161,6 +139,58 @@ class _BudgetsScreenState extends State<BudgetsScreen> {
         tooltip: 'Add budget',
         child: const Icon(Icons.add),
       ),
+    );
+  }
+
+  Widget _buildBody(BuildContext context) {
+    if (_error != null) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.error_outline,
+                size: 48,
+                color: Theme.of(context).colorScheme.error.withAlpha(160)),
+            const SizedBox(height: 12),
+            Text('Failed to load budgets',
+                style: Theme.of(context).textTheme.titleMedium),
+          ],
+        ),
+      );
+    }
+
+    final items = _items;
+    if (items == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (items.isEmpty) {
+      return EmptyState(
+        icon: Icons.account_balance_wallet_outlined,
+        title: 'No budgets set',
+        subtitle:
+            'Set monthly spending limits per category to track your fiat leak.',
+        actionLabel: 'Set a Budget',
+        onAction: () => _openSetBudget(),
+      );
+    }
+
+    return ValueListenableBuilder<String>(
+      valueListenable: app.currencyNotifier,
+      builder: (context, currency, _) {
+        return ValueListenableBuilder<double?>(
+          valueListenable: app.btcPriceService.priceNotifier,
+          builder: (context, btcPrice, _) {
+            return _BudgetList(
+              items: items,
+              btcPrice: btcPrice,
+              currency: currency,
+              onEdit: (p) => _openSetBudget(existing: p),
+              onDelete: (id) => _deleteBudget(id),
+            );
+          },
+        );
+      },
     );
   }
 }

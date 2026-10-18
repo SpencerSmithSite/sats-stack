@@ -58,23 +58,44 @@ class _TransactionEditSheetState extends State<TransactionEditSheet> {
 
   bool get _isParsed => widget.parsedTx != null;
 
+  /// What the amount field is denominated in, so the value shown, the value
+  /// saved and the label all agree.
+  ///
+  /// It was always formatted with `toStringAsFixed(2)`: an imported 0.00047
+  /// BTC row opened as "0.00", and saving wrote 0.0, which passed the `< 0`
+  /// check and silently zeroed the transaction.
+  late final _AmountUnit _unit;
+
   @override
   void initState() {
     super.initState();
 
     if (_isParsed) {
       final tx = widget.parsedTx!;
+      _unit = _AmountUnit.forCurrency(tx.currency);
       _descCtrl = TextEditingController(text: tx.description);
-      _amountCtrl = TextEditingController(text: tx.amount.toStringAsFixed(2));
+      _amountCtrl =
+          TextEditingController(text: _unit.format(tx.amount.abs()));
       _direction = tx.direction;
       _date = tx.date;
       _selectedCategory = tx.category;
     } else {
       final tx = widget.existingTx!;
+      // A Bitcoin row is edited in sats, the column that is authoritative for
+      // it; its fiat value is derived from the price, not typed.
+      _unit = tx.isBitcoin ? _AmountUnit.sats : _AmountUnit.fiat;
       _descCtrl = TextEditingController(text: tx.description);
-      _amountCtrl =
-          TextEditingController(text: tx.amountFiat.abs().toStringAsFixed(2));
-      _direction = tx.amountFiat >= 0 ? 'credit' : 'debit';
+      _amountCtrl = TextEditingController(
+        text: _unit.format(
+          tx.isBitcoin
+              ? tx.amountSats.abs().toDouble()
+              : tx.amountFiat.abs(),
+        ),
+      );
+      _direction =
+          (tx.isBitcoin ? tx.amountSats >= 0 : tx.amountFiat >= 0)
+              ? 'credit'
+              : 'debit';
       _date = tx.date;
       _selectedCategory = tx.category;
     }
@@ -118,7 +139,9 @@ class _TransactionEditSheetState extends State<TransactionEditSheet> {
   Future<void> _save() async {
     final desc = _descCtrl.text.trim();
     final amount = double.tryParse(_amountCtrl.text.replaceAll(',', ''));
-    if (amount == null || amount < 0) {
+    // Zero is rejected, not just negatives: it was how the rounded-to-"0.00"
+    // BTC amount got through.
+    if (amount == null || amount <= 0) {
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('Enter a valid amount')));
       return;
@@ -136,24 +159,32 @@ class _TransactionEditSheetState extends State<TransactionEditSheet> {
         tx.amount = amount;
         tx.direction = _direction;
         tx.date = _date;
-        tx.category = category;
+        // setUserCategory, not a plain assignment: it clears the
+        // "this was only a guess" flag, so the choice is worth learning from
+        // on the next import of this source.
+        tx.setUserCategory(category);
         Navigator.pop(context);
         widget.onSaved?.call();
       } else {
         final tx = widget.existingTx!;
-        final signedFiat = _direction == 'credit' ? amount : -amount;
-        // Recalculate sats proportionally if we have a BTC price
+        final sign = _direction == 'credit' ? 1 : -1;
         final price = app.btcPriceService.priceNotifier.value;
+
         final int newSats;
+        final double signedFiat;
         if (tx.isBitcoin) {
-          newSats = _direction == 'credit'
-              ? (amount * 100000000).round()
-              : -(amount * 100000000).round();
-        } else if (price != null && price > 0) {
-          newSats = (signedFiat / price * 100000000).round();
+          // Sats are what was typed; fiat is derived.
+          newSats = sign * amount.round();
+          signedFiat = (price != null && price > 0)
+              ? newSats / 100000000 * price
+              // Nothing better to derive it from, so keep the stored magnitude
+              // and move the sign with the direction.
+              : sign * tx.amountFiat.abs();
         } else {
-          // Keep existing sats if no price available
-          newSats = tx.amountSats;
+          signedFiat = sign * amount;
+          newSats = (price != null && price > 0)
+              ? (signedFiat / price * 100000000).round()
+              : tx.amountSats;
         }
 
         await app.transactionService.update(
@@ -279,11 +310,11 @@ class _TransactionEditSheetState extends State<TransactionEditSheet> {
             // Amount
             TextField(
               controller: _amountCtrl,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(
-                labelText: 'Amount',
-                border: OutlineInputBorder(),
+              keyboardType: TextInputType.numberWithOptions(
+                  decimal: _unit.decimals > 0),
+              decoration: InputDecoration(
+                labelText: _unit.label,
+                border: const OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 12),
@@ -394,4 +425,25 @@ class _TransactionEditSheetState extends State<TransactionEditSheet> {
       ),
     );
   }
+}
+
+/// How the amount field is denominated.
+enum _AmountUnit {
+  fiat('Amount', 2),
+  btc('Amount (BTC)', 8),
+  sats('Amount (sats)', 0);
+
+  const _AmountUnit(this.label, this.decimals);
+
+  final String label;
+  final int decimals;
+
+  factory _AmountUnit.forCurrency(String currency) =>
+      switch (currency.toUpperCase()) {
+        'BTC' => _AmountUnit.btc,
+        'SATS' => _AmountUnit.sats,
+        _ => _AmountUnit.fiat,
+      };
+
+  String format(double amount) => amount.toStringAsFixed(decimals);
 }

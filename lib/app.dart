@@ -35,19 +35,32 @@ class SatsStackApp extends StatelessWidget {
   }
 }
 
-Future<String?> _onboardingRedirect(
-    BuildContext context, GoRouterState state) async {
-  if (state.uri.path == '/onboarding') return null; // already there
-  final rows = await (app.db.select(app.db.appSettings)
-        ..where((t) => t.key.equals(AppConstants.settingOnboardingComplete)))
-      .get();
-  final done = rows.isNotEmpty && rows.first.value == 'true';
-  return done ? null : '/onboarding';
+Future<String?> _appRedirect(BuildContext context, GoRouterState state) async {
+  final path = state.uri.path;
+
+  if (path != '/onboarding') {
+    final rows = await (app.db.select(app.db.appSettings)
+          ..where((t) => t.key.equals(AppConstants.settingOnboardingComplete)))
+        .get();
+    final done = rows.isNotEmpty && rows.first.value == 'true';
+    if (!done) return '/onboarding';
+  }
+
+  // The AI tab can go away while /ai is the current route — the user picks a
+  // provider in Settings that cannot answer on this device. The path was only
+  // dropped from the shell's tab list, so `_indexForLocation` fell back to 0
+  // and the AI screen stayed rendered with Dashboard highlighted and no tab
+  // matching it. `refreshListenable` below is what makes this re-run on the
+  // toggle rather than waiting for the next navigation.
+  if (path == '/ai' && !app.aiEnabledNotifier.value) return '/dashboard';
+
+  return null;
 }
 
 final _router = GoRouter(
   initialLocation: '/dashboard',
-  redirect: _onboardingRedirect,
+  redirect: _appRedirect,
+  refreshListenable: app.aiEnabledNotifier,
   routes: [
     GoRoute(
       path: '/onboarding',

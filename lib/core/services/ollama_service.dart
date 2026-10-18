@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import '../database/database.dart';
 import '../models/ai_provider.dart';
 import '../../shared/constants/app_constants.dart';
+import '../../shared/utils/platform_utils.dart';
 import 'inference/cloud_backend.dart';
 import 'inference/gemini_nano_backend.dart';
 import 'inference/inference_backend.dart';
@@ -93,18 +94,28 @@ class OllamaService {
   /// configuration edit takes effect without anything having to invalidate a
   /// cached instance.
   InferenceBackend get backend => switch (_activeProvider) {
-        AiProvider.ollama =>
-          OllamaBackend(baseUrl: _baseUrl, model: _selectedModel),
+        AiProvider.ollama => OllamaBackend(
+            baseUrl: _baseUrl,
+            model: _selectedModel,
+            isPrivate: isLocalEndpoint(_baseUrl),
+          ),
         AiProvider.lmStudio => OpenAiCompatBackend(
             id: OpenAiCompatBackend.lmStudioId,
             displayName: 'LM Studio',
-            description:
-                'A model running in LM Studio on this machine. Nothing leaves '
-                'your device.',
+            description: isLocalEndpoint(_lmStudioBaseUrl)
+                ? 'A model running in LM Studio on this machine. Nothing '
+                    'leaves your device.'
+                : 'LM Studio on the server you configured. Your financial '
+                    'figures are sent there to answer each question.',
             baseUrl: _lmStudioBaseUrl,
             model: _lmStudioSelectedModel,
             apiKey: '',
-            isPrivate: true,
+            // Derived from the URL, not hardcoded. The field is free text, so
+            // "Nothing leaves your device" was a claim the app could not back:
+            // a user pointing it at a VPS got the reassurance anyway, and this
+            // flag now decides whether insights generate automatically and
+            // whether statements are uploaded without asking.
+            isPrivate: isLocalEndpoint(_lmStudioBaseUrl),
             contextBudgetChars: 12000,
           ),
         AiProvider.maple => OpenAiCompatBackend(
@@ -163,6 +174,57 @@ class OllamaService {
   /// Whether the active backend keeps everything on this device.
   bool get sendsDataOffDevice => !backend.isPrivate;
 
+  /// Who receives the user's figures when [sendsDataOffDevice] is true, phrased
+  /// for a sentence. Null when nothing leaves.
+  ///
+  /// `AiProvider.dataRecipient` covers the hosted providers, which have a fixed
+  /// endpoint. Ollama and LM Studio do not: their URL is whatever the user
+  /// typed, so the recipient is that host — known only here.
+  String? get activeDataRecipient {
+    final fixed = _activeProvider.dataRecipient;
+    if (fixed != null) return fixed;
+    final url = switch (_activeProvider) {
+      AiProvider.ollama => _baseUrl,
+      AiProvider.lmStudio => _lmStudioBaseUrl,
+      _ => null,
+    };
+    if (url == null || isLocalEndpoint(url)) return null;
+    final host = Uri.tryParse(url)?.host;
+    return host == null || host.isEmpty
+        ? 'the server you configured'
+        : 'the server you configured ($host)';
+  }
+
+  /// Whether [url] is this device or a machine on the user's own network.
+  ///
+  /// Loopback, `.local`, link-local and the RFC 1918 private ranges count:
+  /// those are hardware the user controls, so "nothing leaves your device" is
+  /// close enough to true to say. A public hostname is not, however much the
+  /// user trusts the box — it crosses the internet to get there.
+  static bool isLocalEndpoint(String url) {
+    final host = Uri.tryParse(url)?.host ?? '';
+    // Unparseable or empty means the field is unset and a localhost default is
+    // in force; treating that as local matches what actually happens.
+    if (host.isEmpty) return true;
+    if (host == 'localhost' ||
+        host == '::1' ||
+        host.endsWith('.local') ||
+        host.endsWith('.localhost')) {
+      return true;
+    }
+    final v4 = RegExp(r'^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$')
+        .firstMatch(host);
+    if (v4 == null) return false;
+    final a = int.parse(v4.group(1)!);
+    final b = int.parse(v4.group(2)!);
+    if (a == 127 || a == 10) return true; // loopback, private
+    if (a == 0) return true; // 0.0.0.0
+    if (a == 192 && b == 168) return true; // private
+    if (a == 172 && b >= 16 && b <= 31) return true; // private
+    if (a == 169 && b == 254) return true; // link-local
+    return false;
+  }
+
   /// Base URL of the Ollama server (used for Ollama-specific settings UI).
   String get baseUrl => _baseUrl;
 
@@ -215,6 +277,48 @@ class OllamaService {
         AiProvider.grok =>
           cloudConnected(_activeProvider.cloudProvider!),
       };
+
+  /// Whether the AI tab should be visible with [provider] selected.
+  ///
+  /// The one rule, so the three places that decide this cannot disagree again.
+  /// Settings omitted the hosted-provider term that onboarding had, so a
+  /// mobile user with a saved Anthropic key lost the AI tab by switching
+  /// provider and back; and main.dart seeded the notifier from
+  /// `isDesktop || isConnected`, where an on-device provider's `isConnected`
+  /// is a probe that `loadSettings` only kicks off, so on-device providers
+  /// lost the tab after every restart.
+  bool aiShouldBeEnabled(AiProvider provider) =>
+      PlatformUtils.isDesktop || isUsableWithoutDesktop(provider);
+
+  /// Whether [provider] can answer on a device that is not a desktop.
+  ///
+  /// Split out from [aiShouldBeEnabled] so the rule itself is testable without
+  /// pretending to be a phone.
+  bool isUsableWithoutDesktop(AiProvider provider) {
+    return switch (provider) {
+      // There is no host to reach. Readiness is the OS's answer, re-asked on
+      // every launch, so the tab must not wait on a probe that has not
+      // returned — the AI screen reports an unavailable backend itself.
+      AiProvider.appleIntelligence ||
+      AiProvider.geminiNano ||
+      AiProvider.localModel =>
+        true,
+      // A key is all a hosted provider needs: no local server is involved, so
+      // the tab belongs on a phone.
+      AiProvider.claude ||
+      AiProvider.chatGpt ||
+      AiProvider.gemini ||
+      AiProvider.grok =>
+        cloudApiKey(provider.cloudProvider!).isNotEmpty,
+      // A server-backed provider needs a host that answered.
+      AiProvider.ollama => _isConnected,
+      AiProvider.lmStudio => _lmStudioConnected,
+      AiProvider.maple => _mapleConnected,
+    };
+  }
+
+  /// [aiShouldBeEnabled] for the provider that is actually selected.
+  bool get aiEnabled => aiShouldBeEnabled(_activeProvider);
 
   bool _onDeviceReady = false;
 
@@ -812,10 +916,17 @@ Top spending categories this month:
           .transform(utf8.decoder)
           .transform(const LineSplitter())) {
         if (line.trim().isEmpty) continue;
-        if (line == 'data: [DONE]') return;
-        if (!line.startsWith('data: ')) continue;
+        if (!line.startsWith('data:')) continue;
+        // `substring(5).trim()` rather than matching the exact string
+        // 'data: [DONE]': the space after the colon is optional in SSE, and a
+        // server that omits it (or adds trailing whitespace) used to fall
+        // through the terminator check and then through the 'data: ' prefix
+        // filter, so the stream just ended with no explicit finish.
+        final payload = line.substring(5).trim();
+        if (payload == '[DONE]') return;
+        if (payload.isEmpty) continue;
         try {
-          final data = jsonDecode(line.substring(6)) as Map<String, dynamic>;
+          final data = jsonDecode(payload) as Map<String, dynamic>;
           final choices = data['choices'] as List?;
           if (choices == null || choices.isEmpty) continue;
           final delta = choices[0]['delta'] as Map<String, dynamic>?;

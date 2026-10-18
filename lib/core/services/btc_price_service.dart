@@ -79,12 +79,17 @@ class BtcPriceService {
       priceNotifier.value = fromMap;
     }
 
-    // Fall back to the single-currency DB cache for the timestamp.
+    // The single-value cache is read for its timestamp only.
+    //
+    // Its `priceUsd` column holds whatever currency happened to be active when
+    // it was written, which is not recorded anywhere — so using it as a
+    // fallback showed, say, a USD figure to a user whose currency is EUR, with
+    // every sats conversion on the dashboard out by the exchange rate and
+    // nothing to indicate it. The all-prices map above is the real cache; when
+    // it has no entry for the active currency the price stays null and the UI
+    // shows its loading state until the fetch lands.
     final cached = await _getLatestCached();
-    if (cached != null) {
-      lastFetchedAt = cached.fetchedAt;
-      if (priceNotifier.value == null) priceNotifier.value = cached.priceUsd;
-    }
+    if (cached != null) lastFetchedAt = cached.fetchedAt;
 
     if (isPriceStale) {
       fetchAndCache().ignore();
@@ -96,12 +101,15 @@ class BtcPriceService {
   void switchCurrency(String currency) {
     _currency = currency;
     final cached = _allPrices[currency.toUpperCase()];
-    if (cached != null) {
-      priceNotifier.value = cached;
-    } else {
-      // No data yet (first launch or custom server that doesn't return this
-      // currency). Trigger a fresh fetch.
-      _isFetching = false; // reset in case a stale lock is held
+    // Null rather than left alone: the getter already reports the new
+    // currency, so holding the old currency's number meant every fiat figure
+    // on the dashboard was relabelled rather than reconverted — wrong by the
+    // exchange rate, with no error anywhere. Null renders as "loading".
+    priceNotifier.value = cached;
+    if (cached == null) {
+      // First launch, or a custom server that does not carry this currency.
+      // The in-flight guard is left alone: clearing it, as this used to, let
+      // two fetches run at once and interleave their writes.
       fetchAndCache().ignore();
     }
   }
@@ -116,20 +124,34 @@ class BtcPriceService {
   /// Pass [force] to bypass the in-progress guard (e.g. manual user refresh).
   Future<double?> fetchAndCache({bool force = false}) async {
     if (_isFetching && !force) return priceNotifier.value;
-    _isFetching = false; // reset before re-entering
     _isFetching = true;
     try {
-      final price = await _fetchFromApi();
-      if (price != null) {
+      final fetched = await _fetchFromApi();
+      if (fetched != null && fetched.isNotEmpty) {
+        // Replaced in one step, and only once a response has actually been
+        // parsed. The fetchers used to clear `_allPrices` before knowing
+        // whether the response held anything, so a partial reply — or a
+        // mempool failure followed by a CoinGecko failure — left the map
+        // stripped of the currencies it already had, and that empty map was
+        // then persisted.
+        _allPrices
+          ..clear()
+          ..addAll(fetched);
+
+        final price = _allPrices[_currency.toUpperCase()];
         final now = DateTime.now();
 
-        // Persist the active-currency price in the legacy single-value cache.
-        await _db.into(_db.btcPriceCache).insert(
-              BtcPriceCacheCompanion.insert(
-                priceUsd: price,
-                fetchedAt: now,
-              ),
-            );
+        // The legacy single-value cache. Written only when the active
+        // currency is actually in the response, since the column records no
+        // currency of its own.
+        if (price != null) {
+          await _db.into(_db.btcPriceCache).insert(
+                BtcPriceCacheCompanion.insert(
+                  priceUsd: price,
+                  fetchedAt: now,
+                ),
+              );
+        }
 
         // Persist the full multi-currency map so future launches don't need
         // a network call just to display the price in a different currency.
@@ -140,11 +162,14 @@ class BtcPriceService {
               ),
             );
 
+        // Assigned even when null: a server that does not carry this currency
+        // must not leave the previous currency's number on screen.
         priceNotifier.value = price;
         lastFetchedAt = now;
         await _pruneOldEntries();
+        return price;
       }
-      return price;
+      return null;
     } catch (_) {
       return null;
     } finally {
@@ -152,6 +177,8 @@ class BtcPriceService {
     }
   }
 
+  /// The last persisted price, in whichever currency was active when it was
+  /// written. Only safe where the currency does not matter.
   Future<double?> getCachedPrice() async {
     return (await _getLatestCached())?.priceUsd;
   }
@@ -165,9 +192,10 @@ class BtcPriceService {
         .getSingleOrNull();
   }
 
-  Future<double?> _fetchFromApi() async {
-    final currencyKey = _currency.toUpperCase();
-
+  /// Fetches every currency the active source offers, or null if it could not
+  /// be reached. Never touches [_allPrices] — the caller swaps it in on
+  /// success, so a failed fetch cannot destroy a good map.
+  Future<Map<String, double>?> _fetchFromApi() async {
     final customBase = _esploraBaseUrl;
     final hasCustomServer = customBase != null &&
         customBase.isNotEmpty &&
@@ -175,45 +203,56 @@ class BtcPriceService {
 
     // When a custom server is configured, use it exclusively — no public fallback.
     if (hasCustomServer) {
-      return _fetchMempoolPrices(customBase, currencyKey);
+      return _fetchMempoolPrices(customBase);
     }
 
     // Default: mempool.space prices API (same server used for xpub sync —
     // avoids CoinGecko as an additional third party).
     // Falls back to CoinGecko only if mempool.space is unreachable.
-    final mempoolPrice =
-        await _fetchMempoolPrices(AppConstants.mempoolBaseUrl, currencyKey);
-    if (mempoolPrice != null) return mempoolPrice;
+    final fromMempool = await _fetchMempoolPrices(AppConstants.mempoolBaseUrl);
+    if (fromMempool != null && fromMempool.isNotEmpty) return fromMempool;
 
     // CoinGecko fallback (default path only, not for custom servers).
-    return _fetchCoinGeckoPrices(currencyKey);
+    return _fetchCoinGeckoPrices();
   }
 
-  /// Fetches prices from a Mempool-compatible `/api/v1/prices` endpoint.
-  /// Returns the price for [currencyKey] and populates [_allPrices].
-  Future<double?> _fetchMempoolPrices(
-      String baseUrl, String currencyKey) async {
+  /// Keeps the currency entries and drops everything else.
+  ///
+  /// Visible for testing: the filtering is the whole defence against a
+  /// non-price field being stored as a price.
+  @visibleForTesting
+  ///
+  /// mempool's `/v1/prices` includes a `time` field alongside the currencies,
+  /// which used to be stored as a price of "TIME" — a Unix timestamp, written
+  /// into the persisted map.
+  static Map<String, double> currencyEntries(Map<String, dynamic> json) {
+    final out = <String, double>{};
+    for (final entry in json.entries) {
+      final key = entry.key.toUpperCase();
+      final value = entry.value;
+      if (value is! num) continue;
+      if (key.length != 3 || !RegExp(r'^[A-Z]{3}$').hasMatch(key)) continue;
+      out[key] = value.toDouble();
+    }
+    return out;
+  }
+
+  /// Fetches every price a Mempool-compatible `/v1/prices` endpoint offers.
+  Future<Map<String, double>?> _fetchMempoolPrices(String baseUrl) async {
     try {
       final uri = Uri.parse('$baseUrl/v1/prices');
       final response =
           await http.get(uri).timeout(const Duration(seconds: 8));
       if (response.statusCode == 200) {
-        final json = jsonDecode(response.body) as Map<String, dynamic>;
-        _allPrices.clear();
-        for (final entry in json.entries) {
-          if (entry.value is num) {
-            _allPrices[entry.key.toUpperCase()] =
-                (entry.value as num).toDouble();
-          }
-        }
-        return _allPrices[currencyKey];
+        return currencyEntries(
+            jsonDecode(response.body) as Map<String, dynamic>);
       }
     } catch (_) {}
     return null;
   }
 
   /// CoinGecko fallback: fetches all supported currencies in one request.
-  Future<double?> _fetchCoinGeckoPrices(String currencyKey) async {
+  Future<Map<String, double>?> _fetchCoinGeckoPrices() async {
     try {
       final vsParam = _supported.join(',');
       final uri = Uri.parse(
@@ -223,15 +262,8 @@ class BtcPriceService {
           await http.get(uri).timeout(const Duration(seconds: 10));
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
-        final btc = json['bitcoin'] as Map<String, dynamic>?;
-        if (btc != null) {
-          _allPrices.clear();
-          for (final entry in btc.entries) {
-            _allPrices[entry.key.toUpperCase()] =
-                (entry.value as num).toDouble();
-          }
-          return _allPrices[currencyKey];
-        }
+        final btc = json['bitcoin'];
+        if (btc is Map<String, dynamic>) return currencyEntries(btc);
       }
     } catch (_) {}
     return null;

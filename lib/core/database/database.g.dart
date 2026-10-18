@@ -4550,6 +4550,34 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       $ImportedTransactionsTable(this);
   late final $DescriptionCategoryMappingsTable descriptionCategoryMappings =
       $DescriptionCategoryMappingsTable(this);
+  late final Index idxTransactionsDate = Index(
+    'idx_transactions_date',
+    'CREATE INDEX idx_transactions_date ON transactions (date)',
+  );
+  late final Index idxTransactionsWalletId = Index(
+    'idx_transactions_wallet_id',
+    'CREATE INDEX idx_transactions_wallet_id ON transactions (wallet_id)',
+  );
+  late final Index idxTransactionsCategory = Index(
+    'idx_transactions_category',
+    'CREATE INDEX idx_transactions_category ON transactions (category)',
+  );
+  late final Index idxTransactionsRecurringPeriod = Index(
+    'idx_transactions_recurring_period',
+    'CREATE INDEX idx_transactions_recurring_period ON transactions (recurring_period)',
+  );
+  late final Index idxBudgetsCategoryId = Index(
+    'idx_budgets_category_id',
+    'CREATE UNIQUE INDEX idx_budgets_category_id ON budgets (category_id)',
+  );
+  late final Index idxImportedTransactionsSourceId = Index(
+    'idx_imported_transactions_source_id',
+    'CREATE INDEX idx_imported_transactions_source_id ON imported_transactions (source_id)',
+  );
+  late final Index idxDescriptionMappingsSourceDescription = Index(
+    'idx_description_mappings_source_description',
+    'CREATE UNIQUE INDEX idx_description_mappings_source_description ON description_category_mappings (source_id, description)',
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -4566,6 +4594,13 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     importSources,
     importedTransactions,
     descriptionCategoryMappings,
+    idxTransactionsDate,
+    idxTransactionsWalletId,
+    idxTransactionsCategory,
+    idxTransactionsRecurringPeriod,
+    idxBudgetsCategoryId,
+    idxImportedTransactionsSourceId,
+    idxDescriptionMappingsSourceDescription,
   ];
 }
 

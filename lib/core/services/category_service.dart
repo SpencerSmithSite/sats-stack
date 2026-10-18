@@ -34,19 +34,51 @@ class CategoryService {
         );
   }
 
+  /// Renames or restyles a category, carrying every row that referred to it
+  /// by name along with it.
+  ///
+  /// `transactions.category`, `importedTransactions.category` and
+  /// `descriptionCategoryMappings.category` are free text matched by string —
+  /// `BudgetService.getProgress` joins on the name, not the id. Updating only
+  /// `Categories.name` therefore orphaned every transaction in the category:
+  /// the budget card dropped to "0 of 500", no overspend notification could
+  /// fire, the pie chart kept a phantom slice under the old name, and the next
+  /// import re-learned the stale name from the mapping table.
+  ///
+  /// All four writes go in one transaction, so a failure cannot leave the
+  /// category renamed with its transactions still pointing at the old name.
   Future<void> updateCategory({
     required int id,
     required String name,
     required String color,
     required String icon,
-  }) {
-    return (_db.update(_db.categories)..where((t) => t.id.equals(id))).write(
-          CategoriesCompanion(
-            name: Value(name),
-            color: Value(color),
-            icon: Value(icon),
-          ),
-        );
+  }) async {
+    await _db.transaction(() async {
+      final existing = await (_db.select(_db.categories)
+            ..where((t) => t.id.equals(id)))
+          .getSingleOrNull();
+
+      await (_db.update(_db.categories)..where((t) => t.id.equals(id))).write(
+        CategoriesCompanion(
+          name: Value(name),
+          color: Value(color),
+          icon: Value(icon),
+        ),
+      );
+
+      final oldName = existing?.name;
+      if (oldName == null || oldName == name) return;
+
+      await (_db.update(_db.transactions)
+            ..where((t) => t.category.equals(oldName)))
+          .write(TransactionsCompanion(category: Value(name)));
+      await (_db.update(_db.importedTransactions)
+            ..where((t) => t.category.equals(oldName)))
+          .write(ImportedTransactionsCompanion(category: Value(name)));
+      await (_db.update(_db.descriptionCategoryMappings)
+            ..where((t) => t.category.equals(oldName)))
+          .write(DescriptionCategoryMappingsCompanion(category: Value(name)));
+    });
   }
 
   /// Returns the number of transactions and budgets referencing this category.

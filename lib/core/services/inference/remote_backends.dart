@@ -11,12 +11,26 @@ import 'inference_backend.dart';
 /// localhost or a box on their LAN. That is a different claim from a hosted
 /// service, and the picker says so.
 class OllamaBackend implements InferenceBackend {
-  OllamaBackend({required this.baseUrl, required this.model});
+  OllamaBackend({
+    required this.baseUrl,
+    required this.model,
+    this.isPrivate = true,
+  });
 
   static const String backendId = 'ollama';
 
   final String baseUrl;
   final String? model;
+
+  /// False when [baseUrl] points somewhere off the user's own network.
+  ///
+  /// Decided by the caller, which is the only place that knows the URL —
+  /// see `OllamaService.isLocalEndpoint`. A LAN address is hardware the user
+  /// controls; a public host is not, and the app must not claim otherwise,
+  /// because this flag now gates automatic insight generation and the AI
+  /// statement parser.
+  @override
+  final bool isPrivate;
 
   @override
   String get id => backendId;
@@ -25,12 +39,11 @@ class OllamaBackend implements InferenceBackend {
   String get displayName => 'Ollama';
 
   @override
-  String get description =>
-      'A model running on your own machine or one on your network. Nothing '
-      'leaves hardware you control.';
-
-  @override
-  bool get isPrivate => true;
+  String get description => isPrivate
+      ? 'A model running on your own machine or one on your network. Nothing '
+          'leaves hardware you control.'
+      : 'A model running on the server you configured. Your financial figures '
+          'are sent there to answer each question.';
 
   /// Generous: Ollama hosts are usually desktops running 7B+ models with a
   /// context window far larger than anything on-device.
@@ -65,7 +78,14 @@ class OllamaBackend implements InferenceBackend {
       if (response.statusCode != 200) return [];
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       final models = (data['models'] as List<dynamic>?) ?? [];
-      return models.map((m) => m['name'] as String).toList();
+      // whereType, not a cast: one entry missing `name` used to throw inside
+      // the try and turn the entire list into [], which the picker reports as
+      // "no models loaded".
+      return models
+          .whereType<Map<String, dynamic>>()
+          .map((m) => m['name'])
+          .whereType<String>()
+          .toList();
     } catch (_) {
       return [];
     }
@@ -199,7 +219,11 @@ class OpenAiCompatBackend implements InferenceBackend {
       if (response.statusCode != 200) return [];
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       final models = (data['data'] as List<dynamic>?) ?? [];
-      return models.map((m) => m['id'] as String).toList();
+      return models
+          .whereType<Map<String, dynamic>>()
+          .map((m) => m['id'])
+          .whereType<String>()
+          .toList();
     } catch (_) {
       return [];
     }
@@ -240,12 +264,18 @@ class OpenAiCompatBackend implements InferenceBackend {
           .transform(utf8.decoder)
           .transform(const LineSplitter())) {
         if (line.trim().isEmpty) continue;
-        if (line == 'data: [DONE]') return;
-        if (!line.startsWith('data: ')) continue;
+        if (!line.startsWith('data:')) continue;
+        // `substring(5).trim()` rather than matching the exact string
+        // 'data: [DONE]': the space after the colon is optional in SSE, and a
+        // server that omits it (or adds trailing whitespace) used to fall
+        // through the terminator check and then through the 'data: ' prefix
+        // filter, so the stream just ended with no explicit finish.
+        final payload = line.substring(5).trim();
+        if (payload == '[DONE]') return;
+        if (payload.isEmpty) continue;
 
         try {
-          final data =
-              jsonDecode(line.substring(6)) as Map<String, dynamic>;
+          final data = jsonDecode(payload) as Map<String, dynamic>;
           final choices = data['choices'] as List?;
           if (choices == null || choices.isEmpty) continue;
           final delta = choices[0]['delta'] as Map<String, dynamic>?;
