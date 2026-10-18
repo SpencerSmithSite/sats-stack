@@ -851,6 +851,7 @@ Top spending categories this month:
 
       await for (final line in streamedResponse.stream
           .transform(utf8.decoder)
+          .idleTimeout(const Duration(seconds: 120), 'The model')
           .transform(const LineSplitter())) {
         if (line.trim().isEmpty) continue;
         try {
@@ -914,6 +915,7 @@ Top spending categories this month:
 
       await for (final line in streamedResponse.stream
           .transform(utf8.decoder)
+          .idleTimeout(const Duration(seconds: 120), 'The model')
           .transform(const LineSplitter())) {
         if (line.trim().isEmpty) continue;
         if (!line.startsWith('data:')) continue;

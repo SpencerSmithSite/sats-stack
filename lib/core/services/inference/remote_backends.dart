@@ -10,6 +10,11 @@ import 'inference_backend.dart';
 /// [isPrivate] is true: the host is the user's own hardware, whether that is
 /// localhost or a box on their LAN. That is a different claim from a hosted
 /// service, and the picker says so.
+/// How long a self-hosted server may go silent mid-answer before the request
+/// is abandoned. Generous: a local model on modest hardware can take a while
+/// between tokens, and a slow answer is not a broken one.
+const _idleGap = Duration(seconds: 120);
+
 class OllamaBackend implements InferenceBackend {
   OllamaBackend({
     required this.baseUrl,
@@ -123,6 +128,7 @@ class OllamaBackend implements InferenceBackend {
 
       await for (final line in streamedResponse.stream
           .transform(utf8.decoder)
+          .idleTimeout(_idleGap, displayName)
           .transform(const LineSplitter())) {
         if (line.trim().isEmpty) continue;
         try {
@@ -262,6 +268,7 @@ class OpenAiCompatBackend implements InferenceBackend {
 
       await for (final line in streamedResponse.stream
           .transform(utf8.decoder)
+          .idleTimeout(_idleGap, displayName)
           .transform(const LineSplitter())) {
         if (line.trim().isEmpty) continue;
         if (!line.startsWith('data:')) continue;

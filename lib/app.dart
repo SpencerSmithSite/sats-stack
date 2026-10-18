@@ -11,7 +11,6 @@ import 'features/onboarding/onboarding_screen.dart';
 import 'features/analytics/analytics_screen.dart';
 import 'screens/import/import_file_screen.dart';
 import 'main.dart' as app;
-import 'shared/constants/app_constants.dart';
 import 'shared/theme/app_theme.dart';
 
 class SatsStackApp extends StatelessWidget {
@@ -35,15 +34,18 @@ class SatsStackApp extends StatelessWidget {
   }
 }
 
-Future<String?> _appRedirect(BuildContext context, GoRouterState state) async {
+/// Synchronous on purpose.
+///
+/// This used to be async and query `app_settings` for the onboarding flag every
+/// time it ran, which is every navigation plus each of GoRouter's
+/// redirect-resolution passes. `onboardingCompleteNotifier` is read once at
+/// startup and kept current by the two places that change it, and it is in
+/// `refreshListenable` below so a change re-runs this immediately.
+String? _appRedirect(BuildContext context, GoRouterState state) {
   final path = state.uri.path;
 
-  if (path != '/onboarding') {
-    final rows = await (app.db.select(app.db.appSettings)
-          ..where((t) => t.key.equals(AppConstants.settingOnboardingComplete)))
-        .get();
-    final done = rows.isNotEmpty && rows.first.value == 'true';
-    if (!done) return '/onboarding';
+  if (path != '/onboarding' && !app.onboardingCompleteNotifier.value) {
+    return '/onboarding';
   }
 
   // The AI tab can go away while /ai is the current route — the user picks a
@@ -60,7 +62,9 @@ Future<String?> _appRedirect(BuildContext context, GoRouterState state) async {
 final _router = GoRouter(
   initialLocation: '/dashboard',
   redirect: _appRedirect,
-  refreshListenable: app.aiEnabledNotifier,
+  refreshListenable: Listenable.merge(
+    [app.aiEnabledNotifier, app.onboardingCompleteNotifier],
+  ),
   routes: [
     GoRoute(
       path: '/onboarding',

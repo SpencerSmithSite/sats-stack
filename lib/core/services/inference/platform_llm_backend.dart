@@ -92,8 +92,8 @@ class PlatformLlmAvailability {
 class PlatformLlmBackend implements InferenceBackend {
   static const MethodChannel _methods =
       MethodChannel('app.satsstack/platform_llm');
-  static const EventChannel _events =
-      EventChannel('app.satsstack/platform_llm_stream');
+  static const _streamChannel = 'app.satsstack/platform_llm_stream';
+  static const EventChannel _events = EventChannel(_streamChannel);
 
   /// Cached because the picker, the chat screen and the status line all ask on
   /// the same frame, and the platform call is not free.
@@ -184,19 +184,26 @@ class PlatformLlmBackend implements InferenceBackend {
     http.Client? client,
   }) {
     final flat = InferenceBackend.flattenMessages(messages);
-    return _events
-        .receiveBroadcastStream({
-          'prompt': flat.prompt,
-          'system': flat.system,
-        })
-        .map((event) => event as String)
-        .handleError((Object error) {
-          throw InferenceException(
-            error is PlatformException
-                ? error.message ?? 'Apple Intelligence failed to answer.'
-                : error.toString(),
-          );
-        });
+    // Queued, and with a gap timeout: the channel serves one listener at a
+    // time, and if the native side dies mid-answer there is nothing else to
+    // end the stream.
+    return serialisedOnChannel(
+      _streamChannel,
+      () => _events
+          .receiveBroadcastStream({
+            'prompt': flat.prompt,
+            'system': flat.system,
+          })
+          .map((event) => event as String)
+          .idleTimeout(const Duration(seconds: 90), 'Apple Intelligence')
+          .handleError((Object error) {
+            throw InferenceException(
+              error is PlatformException
+                  ? error.message ?? 'Apple Intelligence failed to answer.'
+                  : error.toString(),
+            );
+          }),
+    );
   }
 
   /// Empty on purpose: Apple ships exactly one model and does not name it.

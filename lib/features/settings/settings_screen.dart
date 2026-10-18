@@ -749,6 +749,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     // genuine surprise — and on a shared or resold device, a real leak.
     await app.ollamaService.clearAllApiKeys();
     app.themeModeNotifier.value = ThemeMode.dark;
+    // resetAndReseed empties app_settings, so the flag is gone from the
+    // database; the notifier has to follow or the router will not let the user
+    // back into onboarding.
+    app.onboardingCompleteNotifier.value = false;
 
     if (mounted) context.go('/onboarding');
   }
@@ -757,6 +761,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await (app.db.delete(app.db.appSettings)
           ..where((t) => t.key.equals(AppConstants.settingOnboardingComplete)))
         .go();
+    app.onboardingCompleteNotifier.value = false;
     if (mounted) context.go('/onboarding');
   }
 

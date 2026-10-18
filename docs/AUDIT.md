@@ -4,8 +4,46 @@ Five parallel audits (data layer · Bitcoin/network · import pipeline ·
 AI/inference · UI/state) over ~25k lines. Every finding below was verified
 against the source; anything that could not be substantiated was dropped.
 
-Fixed items are done and tested on `fix/codebase-audit`. The rest are listed
-with enough detail to act on without re-auditing.
+Everything here is fixed and on `main`. Forward-looking work lives in
+[`TODO.md`](TODO.md); this file is the record of what was wrong and why, kept
+so none of it has to be re-investigated.
+
+---
+
+## What is left
+
+Nothing from this audit is open. The three P2 items that were still listed here
+on 2026-10-18 — streaming idle timeouts, the on-device channel collision, and
+the per-navigation database read in the router redirect — are fixed below.
+
+Forward-looking work lives in **[`TODO.md`](TODO.md)**, which is the single
+list. Two things this audit surfaced are tracked there rather than here,
+because they are features and judgement calls rather than defects:
+
+- Wiring up the Bitcoin data-source picker, which is what the dead
+  `ElectrumService` / `BitcoinNodeService` code exists for.
+- Getting xpub derivation off the UI isolate and giving the scan a cursor.
+- Decomposing `settings_screen.dart`, which needs a design change rather than
+  the file move the other two screens got.
+- The remaining test gaps, and the fact that `CLAUDE.md` is gitignored so its
+  stale SDK and schema versions cannot be corrected by a commit.
+
+### Two claims this report got wrong
+
+Recorded because a reader would otherwise go looking for work that should not
+be done:
+
+- **`_SectionHeader` is not a four-way duplicate** and the month selector is
+  not a three-way one. The four headers are *two* designs (title-case with an
+  action link, versus uppercase label with a trailing widget) at three
+  different paddings, and the Analytics month selector uses `IconButton` and
+  `titleMedium` where the shared one uses `GestureDetector` and `titleSmall`.
+  Merging either would change what is on screen. The genuinely duplicated part
+  was the month arithmetic, now `MonthCursor`.
+- **The `add-claude-github-actions` branch did not have 30 unmerged commits.**
+  It had an unrelated history — no common ancestor with `main` — so those
+  commits were this project's own history under different ids. The only unique
+  content was two workflow files, now on `main`.
 
 ---
 
@@ -330,46 +368,6 @@ import and Esplora non-200 branches, plus `add_transaction_sheet`,
 
 ---
 
-## Not fixed — highest value first
-
-P1 is clear as of 2026-10-18; everything below was judged worth doing but not
-urgent, and the detail is here so it can be acted on without re-auditing. Line
-numbers were accurate on 2026-10-17 and most files have moved since.
-
-### P2 — worth doing, not urgent
-
-- Streaming requests time out only on headers, not on an idle body, so a
-  dropped connection mid-answer leaves the spinner up for good. Concurrent
-  on-device EventChannel listeners clobber each other — two generations at once
-  (dashboard insight plus a chat question on Apple Intelligence) and one hangs.
-  Model pickers list every id the provider returns, including embedding and TTS
-  models, and `_ModelSelector` falls back to `models.firstOrNull`, so the app
-  bar can name a model the requests are not using.
-- xpub derivation runs on the UI isolate; there is no scan cursor, so every
-  rescan re-fetches from index 0 on both chains.
-- `_onboardingRedirect` issues a DB select on every navigation, including each
-  of GoRouter's redirect-resolution passes.
-
-### Duplication / shape
-- `ElectrumService`, `BitcoinNodeService`, `BitcoinDataSource` and
-  `ManageWalletsSheet` compile but nothing references them — dead until
-  Settings → Servers gets a data-source picker.
-- **`_SectionHeader` ×4 and the month selector ×3 were overstated by this
-  report.** Looked at properly: the four headers are *two* designs (title-case
-  with an action link, versus uppercase label with a trailing widget) at three
-  different paddings, and the Analytics month selector uses `IconButton` and
-  `titleMedium` where the shared one uses `GestureDetector` and `titleSmall`.
-  Merging either would change what is on screen. The genuinely duplicated part
-  — the prev/next/is-current month arithmetic, byte-identical in three screens —
-  is now `MonthCursor`.
-- `settings_screen.dart` is still 1,575 lines and is the one file the split
-  could not reduce much: its bulk is a single state class holding every
-  controller and every connection test, so per-section files mean passing all
-  of it back in. That is a design change, not a move, and is not done.
-- `settings_screen.dart` (1,724), `onboarding_screen.dart` (1,745) and
-  `stack_screen.dart` (1,156) each want splitting; `on_device_ai_section.dart`
-  is the precedent.
-
 ### The schema can be trusted (v7)
 
 Addressed 2026-10-18.
@@ -580,15 +578,47 @@ enough to see:
 Verified with `flutter build macos --debug` as well as the suite, since the
 analyzer alone does not prove 2,900 moved lines still link.
 
+### The last three P2 items
+
+Addressed 2026-10-18.
+
+- **Streaming bodies have an idle timeout.** Every backend applied its timeout
+  to `client.send(...)`, which completes as soon as the response *headers*
+  arrive — so a body that stalled afterwards stalled forever. A dropped mobile
+  connection mid-answer left the chat spinner turning with no error, and the
+  import's cancel flag is only checked when a token arrives, so that hung too.
+  The new `Stream.idleTimeout` extension measures the gap between events
+  rather than a total budget, because a long answer is not a broken one: 45s
+  for a hosted provider, 120s for a self-hosted or on-device model.
+- **On-device generation is serialised per channel.**
+  `EventChannel.receiveBroadcastStream` installs one handler per channel name,
+  so a second concurrent listen *replaces* the first — which then receives
+  nothing and never completes. Reachable without trying: the dashboard's
+  monthly insight generating on Apple Intelligence while the user opens the AI
+  tab and asks a question. Multiplexing would need request ids on both native
+  sides; `serialisedOnChannel` queues instead, and a queued answer beats a hung
+  one. Both on-device backends also gained a 90s idle timeout, since nothing
+  else would ever end a stream the native side had abandoned.
+- **The router's redirect no longer reads the database.** It queried
+  `app_settings` for the onboarding flag on every navigation — each bottom-nav
+  tap, each `context.push`, and again on each of GoRouter's
+  redirect-resolution passes — so a tab switch waited on a round-trip. It is
+  synchronous now against `onboardingCompleteNotifier`, read once at startup,
+  kept current by the three places that change it (finishing onboarding,
+  resetting onboarding, resetting all data) and included in
+  `refreshListenable` so a change still re-runs the redirect immediately.
+
+Covered by `stream_resilience_test.dart`: that a quiet stream fails, that a
+slow-but-alive one does not, that a second generation waits rather than
+clobbering the first, that a failure does not block the next, and that
+different channels do not queue behind each other.
+
 ### Test gaps
-Month-boundary aggregation, `getProgress` after a category rename, the v6
-migration and the AI-tab rule are covered now (`month_boundary_test.dart`,
-`category_rename_test.dart`, `ai_enabled_test.dart`). Still uncovered: a
-v1→v6 migration against a fresh `onCreate` — there is no generated schema
-history to migrate against, which is why `migrateToV6` is a named method the
-test calls directly — the dedup-hash contract across the three salts, and
-widget-level stream reactivity (the import save path's single-commit guarantee
-is asserted at the service level).
+
+The suite went from 102 tests to 209 over this work. Month boundaries, category
+renames, the AI-tab rule, the migrations, the categoriser, the price map, the
+dedup hash's wallet scoping, the formatters and the stream guards are all
+covered. What is still missing is listed in [`TODO.md`](TODO.md) item 3.
 
 ---
 

@@ -560,6 +560,11 @@ class CloudBackend implements InferenceBackend {
         timeout: const Duration(seconds: 60),
       );
 
+  /// How long the body may go silent before the request is abandoned. Long
+  /// enough for a slow first token, short enough that a dead connection does
+  /// not leave the UI spinning.
+  static const _idleGap = Duration(seconds: 45);
+
   Stream<String> _stream(
     String body, {
     http.Client? client,
@@ -591,7 +596,9 @@ class CloudBackend implements InferenceBackend {
       // on the chunk stream.
       var buffer = '';
       var truncated = false;
-      await for (final chunk in response.stream.transform(utf8.decoder)) {
+      await for (final chunk in response.stream
+          .transform(utf8.decoder)
+          .idleTimeout(_idleGap, provider.label)) {
         buffer += chunk;
         while (true) {
           final newline = buffer.indexOf('\n');

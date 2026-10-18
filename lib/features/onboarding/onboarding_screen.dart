@@ -145,13 +145,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     // that was missing the hosted term.
     app.aiEnabledNotifier.value = app.ollamaService.aiEnabled;
 
-    // Mark onboarding complete
+    // Mark onboarding complete, in the database and in the notifier the
+    // router's redirect reads. Both, or the redirect sends the user straight
+    // back here.
     await app.db.into(app.db.appSettings).insertOnConflictUpdate(
           AppSettingsCompanion.insert(
             key: AppConstants.settingOnboardingComplete,
             value: 'true',
           ),
         );
+    app.onboardingCompleteNotifier.value = true;
 
     if (mounted) context.go('/dashboard');
   }

@@ -32,6 +32,14 @@ late ValueNotifier<ThemeMode> themeModeNotifier;
 late ValueNotifier<String> currencyNotifier;
 late ValueNotifier<bool> showBtcPriceNotifier;
 late ValueNotifier<bool> aiEnabledNotifier;
+
+/// Whether onboarding has been completed.
+///
+/// Read once here rather than per navigation. The router's redirect used to
+/// query `app_settings` every time it ran — on each bottom-nav tap, each
+/// `context.push`, and again on every one of GoRouter's redirect-resolution
+/// passes — so a tab switch waited on a database round-trip.
+late ValueNotifier<bool> onboardingCompleteNotifier;
 late ValueNotifier<double> inflationRateNotifier;
 
 void main() async {
@@ -77,6 +85,14 @@ void main() async {
   aiEnabledNotifier = ValueNotifier(ollamaService.aiEnabled);
   await xpubService.loadSettings();
   // btcPriceService.loadSettings() is called inside initialize() below.
+
+  // Onboarding state, for the router's redirect.
+  final onboardingRows = await (db.select(db.appSettings)
+        ..where((t) => t.key.equals(AppConstants.settingOnboardingComplete)))
+      .get();
+  onboardingCompleteNotifier = ValueNotifier(
+    onboardingRows.isNotEmpty && onboardingRows.first.value == 'true',
+  );
 
   // Load persisted theme mode
   final themeRows = await (db.select(db.appSettings)
