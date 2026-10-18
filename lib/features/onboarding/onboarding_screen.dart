@@ -139,17 +139,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         // progress and a size the onboarding flow has no room for.
         break;
     }
-    // An on-device backend enables AI on mobile without any server, which the
-    // old `isDesktop || isConnected` test could not express: those devices are
-    // not desktops and have nothing to connect to. A hosted provider with a key
-    // is the same situation — no local server, but perfectly able to answer.
-    app.aiEnabledNotifier.value = PlatformUtils.isDesktop ||
-        _aiProvider.isOnDevice ||
-        (_aiProvider.needsApiKey &&
-            _cloudKeyCtrls[_aiProvider.cloudProvider!.id]!.text
-                .trim()
-                .isNotEmpty) ||
-        app.ollamaService.isConnected;
+    // One rule, owned by OllamaService: an on-device backend needs no server,
+    // and a hosted one needs only a key. Settings had its own copy of this
+    // that was missing the hosted term.
+    app.aiEnabledNotifier.value = app.ollamaService.aiEnabled;
 
     // Mark onboarding complete
     await app.db.into(app.db.appSettings).insertOnConflictUpdate(

@@ -254,6 +254,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
         );
   }
 
+  /// Re-derives the AI tab's visibility from `OllamaService`, which owns the
+  /// rule. Every site here used to inline its own copy of it.
+  void _refreshAiEnabled() =>
+      app.aiEnabledNotifier.value = app.ollamaService.aiEnabled;
+
   Future<void> _onProviderChanged(AiProvider provider) async {
     setState(() {
       _selectedProvider = provider;
@@ -265,9 +270,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     // the old `isDesktop || isConnected` test could not express. A hosted
     // provider does the same once its key is in place — it needs no local
     // server either, so the tab must appear on a phone.
-    app.aiEnabledNotifier.value = PlatformUtils.isDesktop ||
-        provider.isOnDevice ||
-        app.ollamaService.isConnected;
+    _refreshAiEnabled();
     if (provider.isOnDevice) await _refreshOnDeviceStatus();
     if (provider.needsApiKey) await _loadModels();
   }
@@ -288,7 +291,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await app.ollamaService.saveSettings(url: url, model: _selectedModel);
     if (url.isEmpty) {
       await app.ollamaService.setConnected(false);
-      app.aiEnabledNotifier.value = PlatformUtils.isDesktop;
+      _refreshAiEnabled();
     }
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -308,7 +311,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (ok) {
       final models = await app.ollamaService.listModels();
       await app.ollamaService.setConnected(true);
-      app.aiEnabledNotifier.value = true;
+      _refreshAiEnabled();
       if (mounted) {
         setState(() {
           _models = models;
@@ -318,7 +321,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
     } else {
       await app.ollamaService.setConnected(false);
-      app.aiEnabledNotifier.value = PlatformUtils.isDesktop;
+      _refreshAiEnabled();
+      if (!mounted) return;
       setState(() {
         _testingConnection = false;
         _connectionStatus =
@@ -335,7 +339,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         .saveLmStudioSettings(url: url, model: _lmStudioSelectedModel);
     if (url.isEmpty) {
       await app.ollamaService.setConnected(false);
-      app.aiEnabledNotifier.value = PlatformUtils.isDesktop;
+      _refreshAiEnabled();
     }
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -356,7 +360,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (ok) {
       final models = await app.ollamaService.listModels();
       await app.ollamaService.setConnected(true);
-      app.aiEnabledNotifier.value = true;
+      _refreshAiEnabled();
       if (mounted) {
         setState(() {
           _lmStudioModels = models;
@@ -366,7 +370,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
     } else {
       await app.ollamaService.setConnected(false);
-      app.aiEnabledNotifier.value = PlatformUtils.isDesktop;
+      _refreshAiEnabled();
+      if (!mounted) return;
       setState(() {
         _testingLmStudio = false;
         _lmStudioStatus = 'Could not reach LM Studio at $url';
@@ -390,6 +395,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       model: _cloudSelectedModel[p.id],
       apiKey: key,
     );
+    // A hosted provider needs nothing but a key, so saving one is enough to
+    // bring the tab back on a phone.
+    _refreshAiEnabled();
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -420,7 +428,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (status.available) {
       final models = await app.ollamaService.listModels();
       await app.ollamaService.setConnected(true);
-      app.aiEnabledNotifier.value = true;
+      _refreshAiEnabled();
       if (!mounted) return;
       setState(() {
         _cloudModels[p.id] = models;
@@ -429,7 +437,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       });
     } else {
       await app.ollamaService.setConnected(false);
-      app.aiEnabledNotifier.value = PlatformUtils.isDesktop;
+      _refreshAiEnabled();
       if (!mounted) return;
       setState(() {
         _testingCloudId = null;
@@ -447,7 +455,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         .saveMapleSettings(url: url, model: _mapleSelectedModel, apiKey: key);
     if (url.isEmpty) {
       await app.ollamaService.setConnected(false);
-      app.aiEnabledNotifier.value = PlatformUtils.isDesktop;
+      _refreshAiEnabled();
     }
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -469,7 +477,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (ok) {
       final models = await app.ollamaService.listModels();
       await app.ollamaService.setConnected(true);
-      app.aiEnabledNotifier.value = true;
+      _refreshAiEnabled();
       if (mounted) {
         setState(() {
           _mapleModels = models;
@@ -479,7 +487,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
     } else {
       await app.ollamaService.setConnected(false);
-      app.aiEnabledNotifier.value = PlatformUtils.isDesktop;
+      _refreshAiEnabled();
+      if (!mounted) return;
       setState(() {
         _testingMaple = false;
         _mapleStatus = 'Could not reach Maple at $url';
@@ -490,6 +499,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _exportDb() async {
     try {
       final dbFile = await databaseFile();
+      if (!mounted) return;
       if (!dbFile.existsSync()) {
         _showSnack('Database file not found');
         return;
@@ -609,7 +619,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         );
       }
     } catch (e) {
-      _showSnack('Import failed: $e');
+      if (mounted) _showSnack('Import failed: $e');
     }
   }
 
@@ -647,6 +657,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           .timeout(const Duration(seconds: 8));
 
       if (heightResp.statusCode != 200) {
+        if (!mounted) return;
         setState(() {
           _esploraStatus = 'HTTP ${heightResp.statusCode} — '
               'is this a valid Esplora / Mempool URL?';

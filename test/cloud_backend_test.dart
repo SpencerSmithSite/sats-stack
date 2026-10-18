@@ -373,6 +373,139 @@ void main() {
     });
   });
 
+  group('mid-stream errors', () {
+    // A provider can fail after it has already sent text. extractDelta returns
+    // null for those frames, so the stream ended normally and the truncated
+    // answer was saved as if it were complete.
+    test('an error object is reported whichever provider sent it', () {
+      for (final p in CloudProvider.values) {
+        expect(
+          CloudBackend.extractStreamError(p, {
+            'error': {'message': 'Overloaded'},
+          }),
+          'Overloaded',
+          reason: p.id,
+        );
+      }
+    });
+
+    test("Anthropic's type: error frame is recognised without a message", () {
+      expect(
+        CloudBackend.extractStreamError(
+            CloudProvider.anthropic, const {'type': 'error'}),
+        isNotNull,
+      );
+    });
+
+    test('an error with only a type falls back to it', () {
+      expect(
+        CloudBackend.extractStreamError(CloudProvider.openai, {
+          'error': {'type': 'rate_limit_exceeded'},
+        }),
+        'rate_limit_exceeded',
+      );
+    });
+
+    test('an ordinary frame is not an error', () {
+      expect(
+        CloudBackend.extractStreamError(CloudProvider.anthropic, {
+          'type': 'content_block_delta',
+          'delta': {'type': 'text_delta', 'text': 'hi'},
+        }),
+        isNull,
+      );
+      for (final p in CloudProvider.values) {
+        expect(CloudBackend.extractStreamError(p, const {}), isNull,
+            reason: p.id);
+      }
+    });
+  });
+
+  group('truncation at the token limit', () {
+    test('Anthropic message_delta stop_reason', () {
+      expect(
+        CloudBackend.indicatesTruncation(CloudProvider.anthropic, {
+          'type': 'message_delta',
+          'delta': {'stop_reason': 'max_tokens'},
+        }),
+        isTrue,
+      );
+      expect(
+        CloudBackend.indicatesTruncation(CloudProvider.anthropic, {
+          'type': 'message_delta',
+          'delta': {'stop_reason': 'end_turn'},
+        }),
+        isFalse,
+      );
+    });
+
+    test('OpenAI and Grok finish_reason length', () {
+      for (final p in [CloudProvider.openai, CloudProvider.xai]) {
+        expect(
+          CloudBackend.indicatesTruncation(p, {
+            'choices': [
+              {'finish_reason': 'length', 'delta': const {}},
+            ],
+          }),
+          isTrue,
+          reason: p.id,
+        );
+        expect(
+          CloudBackend.indicatesTruncation(p, {
+            'choices': [
+              {'finish_reason': 'stop', 'delta': const {}},
+            ],
+          }),
+          isFalse,
+          reason: p.id,
+        );
+      }
+    });
+
+    test('Gemini finishReason MAX_TOKENS', () {
+      expect(
+        CloudBackend.indicatesTruncation(CloudProvider.gemini, {
+          'candidates': [
+            {'finishReason': 'MAX_TOKENS'},
+          ],
+        }),
+        isTrue,
+      );
+      expect(
+        CloudBackend.indicatesTruncation(CloudProvider.gemini, {
+          'candidates': [
+            {'finishReason': 'STOP'},
+          ],
+        }),
+        isFalse,
+      );
+    });
+
+    test('an empty or malformed frame never throws', () {
+      for (final p in CloudProvider.values) {
+        expect(CloudBackend.indicatesTruncation(p, const {}), isFalse,
+            reason: p.id);
+        expect(
+          CloudBackend.indicatesTruncation(
+              p, const {'choices': [], 'candidates': []}),
+          isFalse,
+          reason: p.id,
+        );
+      }
+    });
+
+    test('the cap the notice quotes is the cap that is sent', () {
+      final body = jsonDecode(CloudBackend.buildChatBody(
+        CloudProvider.anthropic,
+        'claude-x',
+        const [
+          {'role': 'user', 'content': 'hi'},
+        ],
+      )) as Map<String, dynamic>;
+      expect(body['max_tokens'], CloudBackend.maxOutputTokens);
+    });
+  });
+
   group('model list parsing', () {
     test('Anthropic and OpenAI shape: data[].id', () {
       const body = '{"data":[{"id":"claude-opus-5"},{"id":"claude-sonnet-5"}]}';

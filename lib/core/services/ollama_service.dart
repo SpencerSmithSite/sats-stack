@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import '../database/database.dart';
 import '../models/ai_provider.dart';
 import '../../shared/constants/app_constants.dart';
+import '../../shared/utils/platform_utils.dart';
 import 'inference/cloud_backend.dart';
 import 'inference/gemini_nano_backend.dart';
 import 'inference/inference_backend.dart';
@@ -276,6 +277,48 @@ class OllamaService {
         AiProvider.grok =>
           cloudConnected(_activeProvider.cloudProvider!),
       };
+
+  /// Whether the AI tab should be visible with [provider] selected.
+  ///
+  /// The one rule, so the three places that decide this cannot disagree again.
+  /// Settings omitted the hosted-provider term that onboarding had, so a
+  /// mobile user with a saved Anthropic key lost the AI tab by switching
+  /// provider and back; and main.dart seeded the notifier from
+  /// `isDesktop || isConnected`, where an on-device provider's `isConnected`
+  /// is a probe that `loadSettings` only kicks off, so on-device providers
+  /// lost the tab after every restart.
+  bool aiShouldBeEnabled(AiProvider provider) =>
+      PlatformUtils.isDesktop || isUsableWithoutDesktop(provider);
+
+  /// Whether [provider] can answer on a device that is not a desktop.
+  ///
+  /// Split out from [aiShouldBeEnabled] so the rule itself is testable without
+  /// pretending to be a phone.
+  bool isUsableWithoutDesktop(AiProvider provider) {
+    return switch (provider) {
+      // There is no host to reach. Readiness is the OS's answer, re-asked on
+      // every launch, so the tab must not wait on a probe that has not
+      // returned — the AI screen reports an unavailable backend itself.
+      AiProvider.appleIntelligence ||
+      AiProvider.geminiNano ||
+      AiProvider.localModel =>
+        true,
+      // A key is all a hosted provider needs: no local server is involved, so
+      // the tab belongs on a phone.
+      AiProvider.claude ||
+      AiProvider.chatGpt ||
+      AiProvider.gemini ||
+      AiProvider.grok =>
+        cloudApiKey(provider.cloudProvider!).isNotEmpty,
+      // A server-backed provider needs a host that answered.
+      AiProvider.ollama => _isConnected,
+      AiProvider.lmStudio => _lmStudioConnected,
+      AiProvider.maple => _mapleConnected,
+    };
+  }
+
+  /// [aiShouldBeEnabled] for the provider that is actually selected.
+  bool get aiEnabled => aiShouldBeEnabled(_activeProvider);
 
   bool _onDeviceReady = false;
 
