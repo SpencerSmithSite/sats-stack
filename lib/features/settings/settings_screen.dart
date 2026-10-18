@@ -19,6 +19,7 @@ import '../../shared/constants/app_constants.dart';
 import '../../shared/theme/app_colors.dart';
 import '../../shared/utils/currency_utils.dart';
 import '../../shared/utils/platform_utils.dart';
+import 'widgets/settings_widgets.dart';
 import '../../shared/widgets/ai_privacy_disclosure.dart';
 import 'widgets/categories_sheet.dart';
 import 'widgets/on_device_ai_section.dart';
@@ -781,7 +782,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             tilePadding:
                 const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             children: [
-              _SettingsTile(
+              SettingsTile(
                 title: 'Theme',
                 subtitle: _themeName(_themeMode),
                 trailing: SegmentedButton<ThemeMode>(
@@ -809,7 +810,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ),
               ),
-              _SettingsTile(
+              SettingsTile(
                 title: 'Currency',
                 subtitle: '${CurrencyUtils.symbolFor(_currency)} $_currency',
                 trailing: Wrap(
@@ -855,7 +856,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const _SectionHeader('Expected Inflation Rate'),
+                    const SettingsSectionHeader('Expected Inflation Rate'),
                     const SizedBox(height: 8),
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -912,7 +913,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             children: [
               ...[
-                const _SectionHeader('AI Provider'),
+                const SettingsSectionHeader('AI Provider'),
                 Padding(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -1244,7 +1245,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                 const Divider(indent: 16, endIndent: 16),
               ],
-              _SectionHeader('Bitcoin'),
+              SettingsSectionHeader('Bitcoin'),
               Padding(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -1259,10 +1260,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         helperText: 'Used for wallet sync and BTC price. '
                             'Leave blank to use mempool.space.',
                       ),
-                      onChanged: (_) => setState(() {}),
                     ),
                     const SizedBox(height: 10),
-                    _DataRoutingBanner(usingDefault: _usingDefaultServer),
+                    // Listens to the field instead of `onChanged: setState`.
+                    // The only thing the text affects here is this banner, and
+                    // a setState rebuilt the whole 1,700-line Settings tree —
+                    // five ExpansionTiles, ten provider cards, four dropdowns
+                    // — on every keystroke.
+                    ValueListenableBuilder<TextEditingValue>(
+                      valueListenable: _esploraUrlCtrl,
+                      builder: (_, __, ___) =>
+                          DataRoutingBanner(usingDefault: _usingDefaultServer),
+                    ),
                     const SizedBox(height: 12),
                     if (_esploraStatus != null)
                       Padding(
@@ -1407,33 +1416,46 @@ class _SettingsScreenState extends State<SettingsScreen> {
     // Advisory only. A key whose prefix has changed is still a valid key, and
     // refusing it would be far worse than accepting one that turns out to be
     // wrong — the connection test is what actually decides.
-    final looksWrong = ctrl.text.trim().isNotEmpty &&
-        !ctrl.text.trim().startsWith(cloud.keyPrefix);
-
     return [
-      TextField(
-        controller: ctrl,
-        obscureText: !visible,
-        autocorrect: false,
-        enableSuggestions: false,
-        onChanged: (_) => setState(() {}),
-        decoration: InputDecoration(
-          labelText: '${cloud.label} API key',
-          hintText: '${cloud.keyPrefix}…',
-          helperText: looksWrong
-              ? '${cloud.label} keys usually start with "${cloud.keyPrefix}".'
-              : 'Stored in this device\'s keychain, not in the app database.',
-          helperMaxLines: 2,
-          suffixIcon: IconButton(
-            icon: Icon(
-              visible ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-              size: 19,
+      // Rebuilt by the controller rather than by setState. Pasting a 100-char
+      // key used to trigger a hundred full-screen rebuilds, and all the text
+      // actually decides is the advisory helper line below.
+      ValueListenableBuilder<TextEditingValue>(
+        valueListenable: ctrl,
+        builder: (_, value, __) {
+          // Advisory only. A key whose prefix has changed is still a valid
+          // key, and refusing it would be far worse than accepting one that
+          // turns out to be wrong — the connection test is what decides.
+          final looksWrong = value.text.trim().isNotEmpty &&
+              !value.text.trim().startsWith(cloud.keyPrefix);
+          return TextField(
+            controller: ctrl,
+            obscureText: !visible,
+            autocorrect: false,
+            enableSuggestions: false,
+            decoration: InputDecoration(
+              labelText: '${cloud.label} API key',
+              hintText: '${cloud.keyPrefix}…',
+              helperText: looksWrong
+                  ? '${cloud.label} keys usually start with '
+                      '"${cloud.keyPrefix}".'
+                  : 'Stored in this device\'s keychain, not in the app '
+                      'database.',
+              helperMaxLines: 2,
+              suffixIcon: IconButton(
+                icon: Icon(
+                  visible
+                      ? Icons.visibility_off_outlined
+                      : Icons.visibility_outlined,
+                  size: 19,
+                ),
+                tooltip: visible ? 'Hide key' : 'Show key',
+                onPressed: () =>
+                    setState(() => _cloudKeyVisible[cloud.id] = !visible),
+              ),
             ),
-            tooltip: visible ? 'Hide key' : 'Show key',
-            onPressed: () =>
-                setState(() => _cloudKeyVisible[cloud.id] = !visible),
-          ),
-        ),
+          );
+        },
       ),
       ApiKeyHelpLink(provider: _selectedProvider),
       const SizedBox(height: 4),
@@ -1551,234 +1573,3 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
 /// Shows a summary of which servers are used for data, based on whether a
 /// custom Mempool/Esplora server is configured.
-class _DataRoutingBanner extends StatelessWidget {
-  const _DataRoutingBanner({required this.usingDefault});
-
-  final bool usingDefault;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    if (usingDefault) {
-      return _Banner(
-        icon: Icons.public,
-        iconColor: const Color(0xFF6AB0E8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Using public servers',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: const Color(0xFF6AB0E8),
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 4),
-            _RouteRow(
-              label: 'Wallet sync',
-              value: 'mempool.space',
-              color: const Color(0xFF6AB0E8),
-            ),
-            _RouteRow(
-              label: 'BTC price',
-              value: 'mempool.space · CoinGecko (fallback)',
-              color: const Color(0xFF6AB0E8),
-            ),
-            _RouteRow(
-              label: 'Historical prices',
-              value: 'mempool.space · CoinGecko (fallback)',
-              color: const Color(0xFF6AB0E8),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'The operators of these services can see which addresses and prices you request. '
-              'Set a self-hosted server below to route all data through it instead.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: const Color(0xFF6AB0E8),
-                height: 1.5,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return _Banner(
-      icon: Icons.shield_outlined,
-      iconColor: const Color(0xFF6AC86A),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'All data routed through your server',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: const Color(0xFF6AC86A),
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 4),
-          _RouteRow(
-            label: 'Wallet sync',
-            value: 'Your server only',
-            color: const Color(0xFF6AC86A),
-          ),
-          _RouteRow(
-            label: 'BTC price',
-            value: 'Your server only',
-            color: const Color(0xFF6AC86A),
-          ),
-          _RouteRow(
-            label: 'Historical prices',
-            value: 'Your server only (mempool with price data required)',
-            color: const Color(0xFF6AC86A),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'mempool.space and CoinGecko are never contacted. '
-            'If your server does not support price history, '
-            'imported transaction amounts will show as \$0.',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: const Color(0xFF6AC86A),
-              height: 1.5,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Banner extends StatelessWidget {
-  const _Banner({
-    required this.icon,
-    required this.iconColor,
-    required this.child,
-  });
-
-  final IconData icon;
-  final Color iconColor;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = iconColor.withOpacity(isDark ? 0.12 : 0.08);
-    final border = iconColor.withOpacity(isDark ? 0.35 : 0.20);
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: border, width: 0.5),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 14, color: iconColor),
-          const SizedBox(width: 8),
-          Expanded(child: child),
-        ],
-      ),
-    );
-  }
-}
-
-class _RouteRow extends StatelessWidget {
-  const _RouteRow({
-    required this.label,
-    required this.value,
-    required this.color,
-  });
-
-  final String label;
-  final String value;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 2),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 80,
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                color: color.withAlpha(180),
-              ),
-            ),
-          ),
-          Flexible(
-            child: Text(
-              '→  $value',
-              style: TextStyle(
-                fontSize: 11,
-                color: color,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader(this.title);
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-      child: Text(
-        title.toUpperCase(),
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: AppColors.textSecondary,
-              letterSpacing: 1.2,
-            ),
-      ),
-    );
-  }
-}
-
-class _SettingsTile extends StatelessWidget {
-  const _SettingsTile({
-    required this.title,
-    this.subtitle,
-    this.trailing,
-  });
-
-  final String title;
-  final String? subtitle;
-  final Widget? trailing;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: Theme.of(context).textTheme.bodyLarge),
-          if (subtitle != null)
-            Text(
-              subtitle!,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-            ),
-          if (trailing != null) ...[
-            const SizedBox(height: 10),
-            trailing!,
-          ],
-        ],
-      ),
-    );
-  }
-}
