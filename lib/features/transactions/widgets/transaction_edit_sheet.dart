@@ -159,7 +159,10 @@ class _TransactionEditSheetState extends State<TransactionEditSheet> {
         tx.amount = amount;
         tx.direction = _direction;
         tx.date = _date;
-        tx.category = category;
+        // setUserCategory, not a plain assignment: it clears the
+        // "this was only a guess" flag, so the choice is worth learning from
+        // on the next import of this source.
+        tx.setUserCategory(category);
         Navigator.pop(context);
         widget.onSaved?.call();
       } else {

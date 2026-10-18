@@ -338,13 +338,6 @@ numbers were accurate on 2026-10-17 and most files have moved since.
 
 ### P2 — worth doing, not urgent
 
-- Auto-categorisation matches bare substrings and then **persists the result —
-  including the `'Other'` default — as a learned mapping**, permanently pinning
-  that merchant. This is the real cause of "everything lands in Other": the
-  categoriser does run and does persist. Verified misses: `METRO BANK CHARGE` →
-  Transport, `RENT A CAR HERTZ` → Housing, `PASSPORT OFFICE` → Entertainment,
-  `MONTHLY FEE REFUND` → Income. Match on word boundaries, score all matches,
-  and only persist user edits.
 - Receipt import base64-encodes the photo whole with no downscale (a 4 MB photo
   becomes ~5.5 MB and the provider 400s); chat re-sends the entire transcript
   every turn with no trimming; streaming requests time out only on headers, not
@@ -453,6 +446,35 @@ this number, so each of these was wrong money on every screen at once.
   was stored as a price of "TIME" — a Unix timestamp — and persisted.
   `currencyEntries` keeps 3-letter codes with numeric values and drops the
   rest. Tested.
+
+### Imported rows stop landing in Other and staying there
+
+Addressed 2026-10-18. This is the complaint in `SatsStackNotes.md`, and the
+categoriser was not the only cause.
+
+- **Keywords matched inside words.** A bare `contains` made `PASSPORT OFFICE`
+  Entertainment (`sport`), `BARBERSHOP` Shopping (`shop`) and
+  `CURRENT ACCOUNT FEE` Housing (`rent`). Matching is now bounded by
+  lookarounds rather than `\b`, because several keywords end in punctuation —
+  `disney+`, `at&t`, `chick-fil` — where `\b` asserts the opposite.
+- **The first match won, not the best.** Categories live in a map, so the order
+  was arbitrary: `MONTHLY FEE REFUND` was Income because Income's `refund`
+  came before Subscriptions' `monthly fee`. The longest match now wins, which
+  also lets a specific phrase override a general one — `rent a car` beats
+  Housing's `rent`.
+- **The fallback was learned.** Every included row wrote a description →
+  category mapping, `'Other'` included, and that mapping was re-applied to
+  every later import of the same source — so one unrecognised merchant was
+  pinned to Other permanently, and improving the keyword list changed nothing
+  for it. `ParsedTransaction.categoryIsFallback` marks a guess, guesses are not
+  learned, and `setUserCategory` clears the mark when the user picks one.
+
+`METRO BANK CHARGE` → Transport is the one case left: `metro` genuinely is a
+whole word there, and no amount of scoring fixes it. It needs either a
+negative-keyword list or the user's own correction, which is now learned.
+
+Tested in `auto_category_test.dart`, with every misclassification above as a
+case.
 
 ### Test gaps
 Month-boundary aggregation, `getProgress` after a category rename, the v6

@@ -38,6 +38,7 @@ class ParsedTransaction {
     required this.currency,
     this.category,
     this.include = true,
+    this.categoryIsFallback = false,
   });
 
   DateTime date;
@@ -48,6 +49,24 @@ class ParsedTransaction {
   String currency;
   String? category;
   bool include;
+
+  /// True while [category] is only the fallback — no keyword matched the
+  /// description.
+  ///
+  /// A fallback is not worth learning from. The import used to write a
+  /// description → category mapping for every included row, `'Other'`
+  /// included, and apply it to every future import of that source — so one
+  /// unrecognised merchant was pinned to Other for good, even after the
+  /// keyword list improved. That is the real reason "everything lands in
+  /// Other" and stays there.
+  bool categoryIsFallback;
+
+  /// Sets a category the user (or a previously learned mapping) chose, which
+  /// is by definition not a fallback.
+  void setUserCategory(String? value) {
+    category = value;
+    categoryIsFallback = false;
+  }
 }
 
 class ColumnMapping {
@@ -520,14 +539,12 @@ Rules:
               final description = (map['description'] as String?) ?? '';
               final rowCurrency =
                   _normaliseCurrency(map['currency'] as String?, fallbackCurrency);
-              return ParsedTransaction(
+              return _categorised(
                 date: date,
                 amount: amount.abs(),
                 direction: direction == 'credit' ? 'credit' : 'debit',
                 description: description,
-                rawDescription: description,
                 currency: rowCurrency,
-                category: _autoCategory(description),
               );
             } catch (_) {
               return null;
@@ -745,14 +762,12 @@ FILE CONTENT:
               final description = (map['description'] as String?) ?? '';
               final rowCurrency =
                   _normaliseCurrency(map['currency'] as String?, fallbackCurrency);
-              return ParsedTransaction(
+              return _categorised(
                 date: date,
                 amount: amount.abs(),
                 direction: direction == 'credit' ? 'credit' : 'debit',
                 description: description,
-                rawDescription: description,
                 currency: rowCurrency,
-                category: _autoCategory(description),
               );
             } catch (_) {
               return null;
@@ -967,14 +982,12 @@ FILE CONTENT:
         }
       }
 
-      result.add(ParsedTransaction(
+      result.add(_categorised(
         date: date,
         amount: amount,
         direction: direction,
         description: description,
-        rawDescription: description,
         currency: currency,
-        category: _autoCategory(description),
       ));
     }
     return result.isEmpty ? null : result;
@@ -1038,14 +1051,12 @@ FILE CONTENT:
         }
       }
 
-      result.add(ParsedTransaction(
+      result.add(_categorised(
         date: date,
         amount: amount,
         direction: direction,
         description: description,
-        rawDescription: description,
         currency: rowCurrency,
-        category: _autoCategory(description),
       ));
     }
     return result.isEmpty ? null : result;
@@ -1262,7 +1273,7 @@ FILE CONTENT:
     for (final tx in transactions) {
       final key = tx.description.toLowerCase().trim();
       final saved = map[key];
-      if (saved != null) tx.category = saved;
+      if (saved != null) tx.setUserCategory(saved);
     }
   }
 
@@ -1279,6 +1290,11 @@ FILE CONTENT:
     final byDescription = <String, String>{};
     for (final tx in transactions) {
       if (!tx.include) continue;
+      // Only what the user chose, or a mapping they chose earlier. Learning
+      // the fallback pinned every unrecognised merchant to 'Other' for good:
+      // the mapping was re-applied on every later import of that source, so
+      // improving the keyword list changed nothing for them.
+      if (tx.categoryIsFallback) continue;
       final cat = tx.category;
       if (cat == null || cat.isEmpty) continue;
       final key = tx.description.toLowerCase().trim();
@@ -1479,14 +1495,12 @@ FILE CONTENT:
 
       if (desc.length < 2) continue;
 
-      result.add(ParsedTransaction(
+      result.add(_categorised(
         date: date,
         amount: amount,
         direction: direction,
         description: desc,
-        rawDescription: desc,
         currency: currency,
-        category: _autoCategory(desc),
       ));
     }
 
@@ -1805,6 +1819,9 @@ FILE CONTENT:
       'dunkin', 'chick-fil',
     ],
     'Transport': [
+      // Multi-word entries exist to beat a shorter keyword in another
+      // category: 'rent a car' outranks Housing's 'rent'.
+      'rent a car', 'car rental', 'car hire',
       'uber', 'lyft', 'taxi', 'transit', 'metro', 'bus ', 'train',
       'amtrak', 'flight', 'airline', 'parking', 'toll', ' gas ',
       'petrol', 'shell', 'bp ', 'exxon', 'chevron', 'fuel', 'tfl ',
@@ -1833,14 +1850,78 @@ FILE CONTENT:
     ],
   };
 
-  String _autoCategory(String description) {
+  /// Matchers for every keyword, built once.
+  ///
+  /// Bare `contains` matched inside words, which is how `PASSPORT OFFICE`
+  /// became Entertainment (`sport`), `BARBERSHOP` became Shopping (`shop`) and
+  /// `SHELL ENERGY ELECTRIC` became Transport. The boundaries are written as
+  /// lookarounds rather than `\b` because several keywords end in punctuation
+  /// — `disney+`, `at&t`, `chick-fil` — where `\b` asserts the opposite of
+  /// what is wanted.
+  static final Map<String, List<(RegExp, int)>> _keywordMatchers = {
+    for (final entry in _categoryKeywords.entries)
+      entry.key: [
+        for (final keyword in entry.value)
+          (
+            RegExp('(?<![a-z0-9])${RegExp.escape(keyword.trim())}(?![a-z0-9])'),
+            keyword.trim().length,
+          ),
+      ],
+  };
+
+  /// The best-matching category for [description], or null if nothing matched.
+  ///
+  /// Scores every keyword and takes the longest match rather than the first:
+  /// `MONTHLY FEE REFUND` used to be Income, because Income's `refund` is
+  /// checked before Subscriptions' `monthly fee`. The longer, more specific
+  /// phrase should win, and with the categories in a map the old order was
+  /// arbitrary anyway.
+  String? matchCategory(String description) {
     final lower = description.toLowerCase();
-    for (final entry in _categoryKeywords.entries) {
-      for (final keyword in entry.value) {
-        if (lower.contains(keyword)) return entry.key;
+    String? best;
+    var bestLength = 0;
+    for (final entry in _keywordMatchers.entries) {
+      for (final (pattern, length) in entry.value) {
+        if (length > bestLength && pattern.hasMatch(lower)) {
+          best = entry.key;
+          bestLength = length;
+        }
       }
     }
-    return 'Other';
+    return best;
+  }
+
+  /// Builds a row with its category worked out once.
+  ///
+  /// Every parse tier used to repeat the five-field constructor and call the
+  /// categoriser inline, so adding the fallback flag would have meant scoring
+  /// each description twice.
+  ParsedTransaction _categorised({
+    required DateTime date,
+    required double amount,
+    required String direction,
+    required String description,
+    required String currency,
+  }) {
+    final result = _categorise(description);
+    return ParsedTransaction(
+      date: date,
+      amount: amount,
+      direction: direction,
+      description: description,
+      rawDescription: description,
+      currency: currency,
+      category: result.category,
+      categoryIsFallback: result.isFallback,
+    );
+  }
+
+  /// [matchCategory] with the fallback applied, and whether it was applied.
+  ({String category, bool isFallback}) _categorise(String description) {
+    final match = matchCategory(description);
+    return match == null
+        ? (category: 'Other', isFallback: true)
+        : (category: match, isFallback: false);
   }
 }
 
