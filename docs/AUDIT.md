@@ -345,11 +345,6 @@ numbers were accurate on 2026-10-17 and most files have moved since.
   Model pickers list every id the provider returns, including embedding and TTS
   models, and `_ModelSelector` falls back to `models.firstOrNull`, so the app
   bar can name a model the requests are not using.
-- `rpcCall` decodes the body before checking the status, so a wrong RPC password
-  surfaces as `FormatException`. Electrum TLS accepts any certificate
-  (`onBadCertificate: (_) => true`) with no pinning — on hostile Wi-Fi that
-  hands an attacker the user's entire derived address set.
-  `ElectrumSession.call` leaks a pending completer on every timeout.
 - xpub derivation runs on the UI isolate; there is no scan cursor, so every
   rescan re-fetches from index 0 on both chains.
 - Onboarding's Bitcoin-server page is a non-scrolling `Column` with a text
@@ -472,6 +467,27 @@ negative-keyword list or the user's own correction, which is now learned.
 
 Tested in `auto_category_test.dart`, with every misclassification above as a
 case.
+
+### The Bitcoin plumbing is honest about failure
+
+Addressed 2026-10-18. None of this is wired into a screen yet, but it compiles
+and is the next feature up, so it is better fixed before it ships.
+
+- **Electrum verified no certificates at all** —
+  `onBadCertificate: (_) => true`, for the convenience of self-signed servers.
+  On a hostile network that lets anyone sit in the middle of the connection and
+  harvest the full set of addresses a wallet scan asks about, which
+  deanonymises the whole wallet, while returning empty history so nothing looks
+  wrong. Certificates are verified; a self-signed server is used by pinning its
+  fingerprint first (`fetchCertificateFingerprint` probes without proceeding),
+  and only that certificate is accepted afterwards.
+- `ElectrumSession.call` applied its timeout to the returned future, leaving
+  the completer in `_pending` for the life of the socket — one leak per
+  timed-out request. The timeout removes its own entry now.
+- `rpcCall` decoded the body before looking at the status, and Bitcoin Core
+  answers a bad credential with 401 and a non-JSON body, so "wrong password"
+  surfaced as `FormatException: Unexpected character` and a 403 from
+  `rpcallowip` was indistinguishable from it.
 
 ### The AI paths stop wasting and leaking
 
