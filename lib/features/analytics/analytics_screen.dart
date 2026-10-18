@@ -12,6 +12,7 @@ import '../../shared/theme/app_text_styles.dart';
 import '../../shared/utils/currency_utils.dart';
 import '../../shared/widgets/empty_state.dart';
 import '../../main.dart' as app;
+import '../../shared/utils/month_cursor.dart';
 
 // ── Colour palette for categories ─────────────────────────────────────────────
 
@@ -45,22 +46,16 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   }
 
   void _previousMonth() => setState(() {
-        _selectedMonth =
-            DateTime(_selectedMonth.year, _selectedMonth.month - 1);
+        _selectedMonth = MonthCursor(_selectedMonth).previous.month;
         _analytics = app.dashboardService.watchAnalytics(_selectedMonth);
       });
 
   void _nextMonth() => setState(() {
-        _selectedMonth =
-            DateTime(_selectedMonth.year, _selectedMonth.month + 1);
+        _selectedMonth = MonthCursor(_selectedMonth).next.month;
         _analytics = app.dashboardService.watchAnalytics(_selectedMonth);
       });
 
-  bool get _isCurrentMonth {
-    final now = DateTime.now();
-    return _selectedMonth.year == now.year &&
-        _selectedMonth.month == now.month;
-  }
+  bool get _isCurrentMonth => MonthCursor(_selectedMonth).isCurrent();
 
   Future<void> _exportCsv() async {
     final currency = app.currencyNotifier.value;

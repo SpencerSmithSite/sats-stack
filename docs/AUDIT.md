@@ -347,20 +347,25 @@ numbers were accurate on 2026-10-17 and most files have moved since.
   bar can name a model the requests are not using.
 - xpub derivation runs on the UI isolate; there is no scan cursor, so every
   rescan re-fetches from index 0 on both chains.
-- Onboarding's Bitcoin-server page is a non-scrolling `Column` with a text
-  field — RenderFlex overflow on a small phone when the keyboard opens.
-  `_onboardingRedirect` issues a DB select on every navigation.
-  Settings rebuilds its whole 1,724-line tree on every keystroke in the API-key
-  and server fields.
+- `_onboardingRedirect` issues a DB select on every navigation, including each
+  of GoRouter's redirect-resolution passes.
 
 ### Duplication / shape
-- `_SectionHeader` ×4 (`dashboard_screen`, `stack_screen`, `analytics_screen`,
-  `settings_screen`) and the month selector ×3 (a public `MonthSelector` plus
-  private re-implementations in `analytics_screen` and `budgets_screen`), with
-  the prev/next/is-current arithmetic triplicated alongside.
 - `ElectrumService`, `BitcoinNodeService`, `BitcoinDataSource` and
   `ManageWalletsSheet` compile but nothing references them — dead until
   Settings → Servers gets a data-source picker.
+- **`_SectionHeader` ×4 and the month selector ×3 were overstated by this
+  report.** Looked at properly: the four headers are *two* designs (title-case
+  with an action link, versus uppercase label with a trailing widget) at three
+  different paddings, and the Analytics month selector uses `IconButton` and
+  `titleMedium` where the shared one uses `GestureDetector` and `titleSmall`.
+  Merging either would change what is on screen. The genuinely duplicated part
+  — the prev/next/is-current month arithmetic, byte-identical in three screens —
+  is now `MonthCursor`.
+- `settings_screen.dart` is still 1,575 lines and is the one file the split
+  could not reduce much: its bulk is a single state class holding every
+  controller and every connection test, so per-section files mean passing all
+  of it back in. That is a design change, not a move, and is not done.
 - `settings_screen.dart` (1,724), `onboarding_screen.dart` (1,745) and
   `stack_screen.dart` (1,156) each want splitting; `on_device_ai_section.dart`
   is the precedent.
@@ -542,6 +547,38 @@ Addressed 2026-10-18.
 - `sat_amount_display.dart` (95 lines, never referenced) is deleted.
 
 Both are covered by `formatting_test.dart`.
+
+### The three oversized screens are split
+
+Addressed 2026-10-18, as its own PR — pure moves, no behaviour change, so the
+review question is only "is this the same code".
+
+| file | was | now |
+|---|---|---|
+| `stack_screen.dart` | 1,157 | 327 + 5 files under `widgets/` |
+| `onboarding_screen.dart` | 1,738 | 290 + 5 files under `pages/` |
+| `settings_screen.dart` | 1,784 | 1,575 + `widgets/settings_widgets.dart` |
+
+The moved classes were file-private, so each is public now with `super.key`
+added. Two names had to change: `_LineChart` → `StackLineChart`, because
+`fl_chart` exports a `LineChart` that the same file uses, and `_Period` →
+`StackPeriod`, which had to move because the chart and the chips both need it.
+
+Three real fixes went in alongside, each a few lines once the file was small
+enough to see:
+
+- The onboarding **Bitcoin server page now scrolls**. It was a fixed-height
+  `Column` containing a text field, whose only slack was two `Spacer`s that
+  clamp at zero, so on a small phone the keyboard overflowed it and could sit
+  on top of the field.
+- Settings **no longer rebuilds its whole tree per keystroke**. Two fields had
+  `onChanged: (_) => setState(() {})`; each now drives a
+  `ValueListenableBuilder` on its own controller, since the text decides
+  exactly one widget in each case.
+- `MonthCursor` replaces the triplicated month arithmetic.
+
+Verified with `flutter build macos --debug` as well as the suite, since the
+analyzer alone does not prove 2,900 moved lines still link.
 
 ### Test gaps
 Month-boundary aggregation, `getProgress` after a category rename, the v6

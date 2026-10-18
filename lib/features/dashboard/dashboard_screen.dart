@@ -16,6 +16,7 @@ import 'widgets/spending_chart.dart';
 import 'widgets/ai_insight_card.dart';
 import '../../main.dart' as app;
 import '../../shared/utils/sat_converter.dart';
+import '../../shared/utils/month_cursor.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -129,28 +130,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   void _previousMonth() {
     setState(() {
-      _selectedMonth = DateTime(
-        _selectedMonth.year,
-        _selectedMonth.month - 1,
-      );
+      _selectedMonth = MonthCursor(_selectedMonth).previous.month;
       _rebuildStreams();
     });
   }
 
   void _nextMonth() {
     setState(() {
-      _selectedMonth = DateTime(
-        _selectedMonth.year,
-        _selectedMonth.month + 1,
-      );
+      _selectedMonth = MonthCursor(_selectedMonth).next.month;
       _rebuildStreams();
     });
   }
 
-  bool get _isCurrentMonth {
-    final now = DateTime.now();
-    return _selectedMonth.year == now.year && _selectedMonth.month == now.month;
-  }
+  bool get _isCurrentMonth => MonthCursor(_selectedMonth).isCurrent();
 
   @override
   Widget build(BuildContext context) {
