@@ -42,7 +42,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -69,6 +69,19 @@ class AppDatabase extends _$AppDatabase {
           if (from < 6) {
             await migrateToV6(m);
           }
+          if (from < 7) {
+            await migrateToV7(m);
+          }
+        },
+        beforeOpen: (details) async {
+          // sqlite ignores foreign keys unless asked, per connection, so every
+          // `.references(...)` in the table definitions was decorative: a row
+          // could point at a wallet or category that no longer existed and
+          // nothing would complain until something read it back.
+          //
+          // After the migrator, not before: a migration that rebuilds a table
+          // legitimately breaks references while it runs.
+          await customStatement('PRAGMA foreign_keys = ON');
         },
       );
 
@@ -87,6 +100,27 @@ class AppDatabase extends _$AppDatabase {
       '(SELECT MAX(id) FROM budgets GROUP BY category_id)',
     );
     await m.createIndex(idxBudgetsCategoryId);
+  }
+
+  /// v6 → v7: indexes for the columns the app filters and sorts on.
+  ///
+  /// The schema had almost none, so every month range, per-wallet total and
+  /// budget grouping was a full table scan. Same shape as [migrateToV6]: the
+  /// unique index on the learned-category mappings cannot be created over a
+  /// table that already holds duplicates, and a pre-v7 install could, because
+  /// the old delete-then-insert was not atomic.
+  Future<void> migrateToV7(Migrator m) async {
+    await customStatement(
+      'DELETE FROM description_category_mappings WHERE id NOT IN '
+      '(SELECT MAX(id) FROM description_category_mappings '
+      'GROUP BY source_id, description)',
+    );
+    await m.createIndex(idxTransactionsDate);
+    await m.createIndex(idxTransactionsWalletId);
+    await m.createIndex(idxTransactionsCategory);
+    await m.createIndex(idxTransactionsRecurringPeriod);
+    await m.createIndex(idxImportedTransactionsSourceId);
+    await m.createIndex(idxDescriptionMappingsSourceDescription);
   }
 
   /// Deletes all user data and re-seeds the factory defaults.

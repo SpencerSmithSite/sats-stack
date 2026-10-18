@@ -5,7 +5,8 @@ import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 import 'package:csv/csv.dart';
-import 'package:drift/drift.dart' show Value, InsertMode, OrderingTerm;
+import 'package:drift/drift.dart'
+    show DoUpdate, InsertMode, OrderingTerm, Value;
 import 'package:http/http.dart' as http;
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 
@@ -1267,26 +1268,47 @@ FILE CONTENT:
 
   /// Persists a description → category mapping for every included transaction
   /// that has a category set.  Uses delete-then-insert to upsert.
+  /// Remembers description → category for the next import of this source.
+  ///
+  /// Collapsed in memory first, then written as one batch of upserts against
+  /// the unique `(sourceId, description)` index. It used to delete and insert,
+  /// awaited, once per row — four round-trips per line for a file that repeats
+  /// the same merchant forty times, and the delete/insert pair was not atomic.
   Future<void> _saveDescriptionMappings(
       List<ParsedTransaction> transactions, int sourceId) async {
+    final byDescription = <String, String>{};
     for (final tx in transactions) {
       if (!tx.include) continue;
       final cat = tx.category;
       if (cat == null || cat.isEmpty) continue;
       final key = tx.description.toLowerCase().trim();
       if (key.isEmpty) continue;
-      await (db.delete(db.descriptionCategoryMappings)
-            ..where((t) => t.sourceId.equals(sourceId))
-            ..where((t) => t.description.equals(key)))
-          .go();
-      await db.into(db.descriptionCategoryMappings).insert(
-        DescriptionCategoryMappingsCompanion.insert(
-          description: key,
-          sourceId: sourceId,
-          category: cat,
-        ),
-      );
+      // Last one wins, matching the previous row-by-row behaviour.
+      byDescription[key] = cat;
     }
+    if (byDescription.isEmpty) return;
+
+    await db.batch((b) {
+      for (final entry in byDescription.entries) {
+        b.insert(
+          db.descriptionCategoryMappings,
+          DescriptionCategoryMappingsCompanion.insert(
+            description: entry.key,
+            sourceId: sourceId,
+            category: entry.value,
+          ),
+          onConflict: DoUpdate(
+            (_) => DescriptionCategoryMappingsCompanion(
+              category: Value(entry.value),
+            ),
+            target: [
+              db.descriptionCategoryMappings.sourceId,
+              db.descriptionCategoryMappings.description,
+            ],
+          ),
+        );
+      }
+    });
   }
 
   // ── Save / update column mapping on a source ─────────────────────────────

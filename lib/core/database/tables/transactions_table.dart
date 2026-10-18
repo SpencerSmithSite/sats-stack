@@ -1,6 +1,18 @@
 import 'package:drift/drift.dart';
 import 'wallets_table.dart';
 
+/// Indexes cover the columns the app actually filters and sorts on.
+///
+/// `date` carries every month range and the list ordering; `walletId` the
+/// per-wallet breakdown; `category` the budget and analytics grouping;
+/// `recurringPeriod` the launch-time scan for due series, which is a tiny
+/// fraction of rows and so benefits most. `dedupHash` already has one from its
+/// unique constraint.
+@TableIndex(name: 'idx_transactions_date', columns: {#date})
+@TableIndex(name: 'idx_transactions_wallet_id', columns: {#walletId})
+@TableIndex(name: 'idx_transactions_category', columns: {#category})
+@TableIndex(name: 'idx_transactions_recurring_period',
+    columns: {#recurringPeriod})
 class Transactions extends Table {
   IntColumn get id => integer().autoIncrement()();
   IntColumn get walletId => integer().references(Wallets, #id)();

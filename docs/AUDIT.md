@@ -338,14 +338,6 @@ numbers were accurate on 2026-10-17 and most files have moved since.
 
 ### P2 — worth doing, not urgent
 
-- **Almost no indexes exist in the schema.** `budgets.categoryId` gained a
-  unique one in v6 (above); these are still unindexed: `transactions.date`
-  (sorted and range-filtered everywhere), `.walletId`, `.category`,
-  `.recurringPeriod`, `importedTransactions.sourceId`,
-  `descriptionCategoryMappings.(sourceId, description)`. Needs `@TableIndex`
-  + a v7 migration step.
-- **Foreign keys are never enforced** — no `beforeOpen`, so every
-  `.references(...)` is decorative and `PRAGMA foreign_keys` stays off.
 - `BudgetService.watchProgress` double-fires on first listen — `onListen` sets
   up two watches that each emit immediately *and* calls `update()` — and
   `onCancel` cancels the subscriptions without closing the controller.
@@ -398,6 +390,30 @@ numbers were accurate on 2026-10-17 and most files have moved since.
 - `settings_screen.dart` (1,724), `onboarding_screen.dart` (1,745) and
   `stack_screen.dart` (1,156) each want splitting; `on_device_ai_section.dart`
   is the precedent.
+
+### The schema can be trusted (v7)
+
+Addressed 2026-10-18.
+
+- **Indexes exist.** The schema had almost none, so every month range,
+  per-wallet total, budget grouping and launch-time recurring scan was a full
+  table scan. `transactions.(date, walletId, category, recurringPeriod)`,
+  `importedTransactions.sourceId` and a unique
+  `descriptionCategoryMappings.(sourceId, description)` are indexed by
+  `migrateToV7`, which collapses pre-existing duplicate mappings first, as v6
+  did for budgets. `schema_integrity_test.dart` asserts each index exists and
+  that a month-range query plans against `idx_transactions_date` rather than
+  scanning.
+- **Foreign keys are enforced.** sqlite ignores them unless asked, per
+  connection, so every `.references(...)` was decorative: a transaction could
+  point at a deleted wallet and nothing would complain until something read it
+  back. `beforeOpen` now issues `PRAGMA foreign_keys = ON` — after the migrator,
+  since a migration that rebuilds a table legitimately breaks references while
+  it runs. Tested, including that the seed and `resetAndReseed` both satisfy it.
+- **Learned categories are written once per import, not four times per row.**
+  `_saveDescriptionMappings` deleted and inserted per row, awaited; it now
+  collapses in memory and writes one batch of upserts against the new unique
+  index.
 
 ### Test gaps
 Month-boundary aggregation, `getProgress` after a category rename, the v6
