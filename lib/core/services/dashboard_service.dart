@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart' show ResultSetImplementation;
 import 'package:intl/intl.dart';
 
 import '../database/database.dart';
@@ -13,20 +14,34 @@ class DashboardService {
 
   final AppDatabase _db;
 
-  /// Emits a fresh [DashboardData] whenever any transaction changes.
+  /// Emits once, then whenever any of [tables] changes.
+  ///
+  /// `select(...).watch()` only tracks the table it selects from, which is not
+  /// the same set a computed aggregate reads.
+  Stream<void> _changesTo(Set<ResultSetImplementation<dynamic, dynamic>> tables) =>
+      _db.customSelect('SELECT 1', readsFrom: tables).watch();
+
+  /// Emits a fresh [DashboardData] whenever anything it reads changes.
   /// The [month] parameter controls which month's aggregates are returned.
+  ///
+  /// `appSettings` is in the set because [_compute] reads the stack goal from
+  /// it. Watching only `transactions` was masked for as long as the widget
+  /// tree rebuilt this stream on every frame; with the stream built once, a
+  /// change to the goal would otherwise never reach the card.
   Stream<DashboardData> watchDashboard(DateTime month,
       {double inflationRate = 3.5}) {
-    return _db.select(_db.transactions).watch().asyncMap(
-          (txns) => _compute(txns, month, inflationRate: inflationRate),
-        );
+    return _changesTo({_db.transactions, _db.appSettings}).asyncMap((_) async {
+      final txns = await _db.select(_db.transactions).get();
+      return _compute(txns, month, inflationRate: inflationRate);
+    });
   }
 
-  /// Emits a per-wallet breakdown whenever any transaction changes.
+  /// Emits a per-wallet breakdown whenever a transaction or a wallet changes.
   Stream<List<WalletSummary>> watchPerWallet(DateTime month) {
-    return _db.select(_db.transactions).watch().asyncMap(
-          (txns) => _computePerWallet(txns, month),
-        );
+    return _changesTo({_db.transactions, _db.wallets}).asyncMap((_) async {
+      final txns = await _db.select(_db.transactions).get();
+      return _computePerWallet(txns, month);
+    });
   }
 
   Future<List<WalletSummary>> _computePerWallet(

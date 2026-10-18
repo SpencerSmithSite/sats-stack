@@ -41,14 +41,27 @@ class AnalyticsScreen extends StatefulWidget {
 class _AnalyticsScreenState extends State<AnalyticsScreen> {
   DateTime _selectedMonth = DateTime(DateTime.now().year, DateTime.now().month);
 
+  /// Rebuilt only when the month changes. `watchAnalytics` hands back a new
+  /// Drift stream per call, so constructing it in `build()` re-subscribed and
+  /// re-ran the six-month aggregate on every currency tick.
+  late Stream<AnalyticsData> _analytics;
+
+  @override
+  void initState() {
+    super.initState();
+    _analytics = app.dashboardService.watchAnalytics(_selectedMonth);
+  }
+
   void _previousMonth() => setState(() {
         _selectedMonth =
             DateTime(_selectedMonth.year, _selectedMonth.month - 1);
+        _analytics = app.dashboardService.watchAnalytics(_selectedMonth);
       });
 
   void _nextMonth() => setState(() {
         _selectedMonth =
             DateTime(_selectedMonth.year, _selectedMonth.month + 1);
+        _analytics = app.dashboardService.watchAnalytics(_selectedMonth);
       });
 
   bool get _isCurrentMonth {
@@ -102,12 +115,12 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         ),
         centerTitle: false,
       ),
-      body: ValueListenableBuilder<String>(
-        valueListenable: app.currencyNotifier,
-        builder: (context, currency, _) {
-          return StreamBuilder<AnalyticsData>(
-            stream: app.dashboardService.watchAnalytics(_selectedMonth),
-            builder: (context, snapshot) {
+      body: StreamBuilder<AnalyticsData>(
+        stream: _analytics,
+        builder: (context, snapshot) {
+          return ValueListenableBuilder<String>(
+            valueListenable: app.currencyNotifier,
+            builder: (context, currency, _) {
               if (snapshot.hasError) {
                 return Center(
                   child: Text('Failed to load analytics: ${snapshot.error}'),

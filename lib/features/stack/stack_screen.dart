@@ -45,10 +45,16 @@ class _StackScreenState extends State<StackScreen> {
   int? _stackGoalSats;
   StreamSubscription<List<Transaction>>? _txnSub;
 
+  /// Built once. `watchAll()` hands back a new Drift stream per call, so
+  /// building it in `build()` re-subscribed and re-queried the table on every
+  /// rebuild — including every period-filter tap and BTC price tick.
+  late final Stream<List<Transaction>> _transactions;
+
   @override
   void initState() {
     super.initState();
     _loadGoal();
+    _transactions = app.transactionService.watchAll();
     _txnSub = app.transactionService.watchAll().listen(_checkGoalNotification);
   }
 
@@ -89,7 +95,7 @@ class _StackScreenState extends State<StackScreen> {
         value: sats.toString(),
       ),
     );
-    setState(() => _stackGoalSats = sats);
+    if (mounted) setState(() => _stackGoalSats = sats);
   }
 
   void _openSetGoal(BuildContext context) {
@@ -115,7 +121,7 @@ class _StackScreenState extends State<StackScreen> {
         ],
       ),
       body: StreamBuilder<List<Transaction>>(
-        stream: app.transactionService.watchAll(),
+        stream: _transactions,
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return Center(
@@ -325,8 +331,16 @@ class _StackHero extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF1A1200), Color(0xFF2A1F00)],
+        // An orange wash over the theme's own surface. The fixed 0xFF1A1200 →
+        // 0xFF2A1F00 gradient underneath white text was a survivor of the
+        // light-mode pass: in light mode it stayed a dark brown slab.
+        gradient: LinearGradient(
+          colors: [
+            Color.alphaBlend(AppColors.bitcoinOrange.withAlpha(20),
+                theme.colorScheme.surfaceContainerHighest),
+            Color.alphaBlend(AppColors.bitcoinOrange.withAlpha(48),
+                theme.colorScheme.surfaceContainerHighest),
+          ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -356,7 +370,8 @@ class _StackHero extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             _formatSats(totalSats),
-            style: AppTextStyles.heroSats.copyWith(color: Colors.white),
+            style: AppTextStyles.heroSats
+                .copyWith(color: theme.colorScheme.onSurface),
           ),
           Text(
             'sats',
@@ -368,7 +383,7 @@ class _StackHero extends StatelessWidget {
               Text(
                 '≈ $fiatValue',
                 style: AppTextStyles.monoMedium.copyWith(
-                  color: Colors.white.withAlpha(200),
+                  color: theme.colorScheme.onSurface.withAlpha(200),
                 ),
               ),
               const Spacer(),
@@ -531,8 +546,9 @@ class _LineChart extends StatelessWidget {
         gridData: FlGridData(
           show: true,
           drawVerticalLine: false,
+          // 5 %-opacity white was invisible on a light background.
           getDrawingHorizontalLine: (_) => FlLine(
-            color: Colors.white.withAlpha(12),
+            color: Theme.of(context).colorScheme.onSurface.withAlpha(24),
             strokeWidth: 0.5,
           ),
         ),

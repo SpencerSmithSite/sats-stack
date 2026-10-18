@@ -1,11 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/database/database.dart';
 import '../../core/models/dashboard_data.dart';
 import '../../core/models/wallet_summary.dart';
 import '../../shared/theme/app_colors.dart';
 import '../../shared/widgets/btc_price_chip.dart';
 import '../../features/transactions/widgets/transaction_list_item.dart';
-import '../../core/services/category_service.dart';
 import '../../shared/utils/currency_utils.dart';
 import 'widgets/month_selector.dart';
 import 'widgets/hero_card.dart';
@@ -34,11 +36,50 @@ class _DashboardScreenState extends State<DashboardScreen> {
   /// keeps them on the device (or on the user's own server).
   String? _insightRecipient;
 
+  /// Rebuilt only when the month or the inflation rate actually changes.
+  ///
+  /// These were constructed inside `build()`, and `watch*()` returns a new
+  /// Drift stream every call, so each rebuild re-subscribed and reset to
+  /// `waiting` — the Wallets section vanished and came back on every BTC
+  /// price tick, and the whole dashboard re-queried the table with it.
+  late Stream<DashboardData> _dashboard;
+  late Stream<List<WalletSummary>> _perWallet;
+
+  /// Category name → category, for the recent-transaction rows. Previously a
+  /// `getAll()` future rebuilt on every price tick.
+  Map<String, Category> _categoriesByName = const {};
+  StreamSubscription<List<Category>>? _categorySub;
+
   @override
   void initState() {
     super.initState();
+    _rebuildStreams();
+    app.inflationRateNotifier.addListener(_onInflationChange);
+    _categorySub = app.categoryService.watchAll().listen((cats) {
+      if (!mounted) return;
+      setState(() => _categoriesByName = {for (final c in cats) c.name: c});
+    });
     if (app.aiEnabledNotifier.value) _initInsight();
   }
+
+  @override
+  void dispose() {
+    app.inflationRateNotifier.removeListener(_onInflationChange);
+    _categorySub?.cancel();
+    super.dispose();
+  }
+
+  void _rebuildStreams() {
+    _dashboard = app.dashboardService.watchDashboard(
+      _selectedMonth,
+      inflationRate: app.inflationRateNotifier.value,
+    );
+    _perWallet = app.dashboardService.watchPerWallet(_selectedMonth);
+  }
+
+  /// The rate is baked into the aggregate, so a change does need a new stream
+  /// — just not one per frame.
+  void _onInflationChange() => setState(_rebuildStreams);
 
   Future<void> _initInsight() async {
     _cachedInsight = await app.ollamaService.loadCachedInsight();
@@ -91,6 +132,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _selectedMonth.year,
         _selectedMonth.month - 1,
       );
+      _rebuildStreams();
     });
   }
 
@@ -100,6 +142,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _selectedMonth.year,
         _selectedMonth.month + 1,
       );
+      _rebuildStreams();
     });
   }
 
@@ -128,13 +171,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ],
       ),
-      body: ValueListenableBuilder<double>(
-        valueListenable: app.inflationRateNotifier,
-        builder: (context, inflationRate, _) =>
-            StreamBuilder<DashboardData>(
-          stream: app.dashboardService
-              .watchDashboard(_selectedMonth, inflationRate: inflationRate),
-          builder: (context, snapshot) {
+      // The StreamBuilder is outermost and its stream is not rebuilt here, so
+      // a price or currency tick only repaints — it no longer re-subscribes.
+      body: StreamBuilder<DashboardData>(
+        stream: _dashboard,
+        builder: (context, snapshot) {
           if (snapshot.hasError) {
             return _ErrorState(message: snapshot.error.toString());
           }
@@ -153,9 +194,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       data: data,
                       btcPrice: btcPrice,
                       currency: currency,
-                      categoryService: app.categoryService,
+                      categoriesByName: _categoriesByName,
+                      perWallet: _perWallet,
                       selectedMonth: _selectedMonth,
-                      inflationRate: inflationRate,
+                      inflationRate: app.inflationRateNotifier.value,
                       cachedInsight: _cachedInsight,
                       isGeneratingInsight: _isGeneratingInsight,
                       onRefreshInsight: _generateInsight,
@@ -168,7 +210,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
           );
         },
       ),
-        ),
     );
   }
 }
@@ -209,7 +250,8 @@ class _DashboardContent extends StatelessWidget {
     required this.data,
     required this.btcPrice,
     required this.currency,
-    required this.categoryService,
+    required this.categoriesByName,
+    required this.perWallet,
     required this.selectedMonth,
     required this.inflationRate,
     this.cachedInsight,
@@ -221,7 +263,8 @@ class _DashboardContent extends StatelessWidget {
   final DashboardData data;
   final double? btcPrice;
   final String currency;
-  final CategoryService categoryService;
+  final Map<String, Category> categoriesByName;
+  final Stream<List<WalletSummary>> perWallet;
   final DateTime selectedMonth;
   final double inflationRate;
   final String? cachedInsight;
@@ -318,7 +361,7 @@ class _DashboardContent extends StatelessWidget {
 
         // ── Wallet breakdown (only when ≥ 2 wallets have activity) ─────────
         StreamBuilder<List<WalletSummary>>(
-          stream: app.dashboardService.watchPerWallet(selectedMonth),
+          stream: perWallet,
           builder: (context, snapshot) {
             final summaries = (snapshot.data ?? [])
                 .where((s) => s.hasActivity)
@@ -386,30 +429,19 @@ class _DashboardContent extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Card(
-              child: FutureBuilder(
-                future: categoryService.getAll(),
-                builder: (context, snapshot) {
-                  final cats = snapshot.data ?? [];
-                  return Column(
-                    children: [
-                      for (int i = 0;
-                          i < data.recentTransactions.length;
-                          i++) ...[
-                        TransactionListItem(
-                          transaction: data.recentTransactions[i],
-                          category: cats
-                              .where((c) =>
-                                  c.name ==
-                                  data.recentTransactions[i].category)
-                              .firstOrNull,
-                          btcPrice: btcPrice,
-                        ),
-                        if (i < data.recentTransactions.length - 1)
-                          const Divider(indent: 16, endIndent: 16),
-                      ],
-                    ],
-                  );
-                },
+              child: Column(
+                children: [
+                  for (int i = 0; i < data.recentTransactions.length; i++) ...[
+                    TransactionListItem(
+                      transaction: data.recentTransactions[i],
+                      category: categoriesByName[
+                          data.recentTransactions[i].category],
+                      btcPrice: btcPrice,
+                    ),
+                    if (i < data.recentTransactions.length - 1)
+                      const Divider(indent: 16, endIndent: 16),
+                  ],
+                ],
               ),
             ),
           ),
