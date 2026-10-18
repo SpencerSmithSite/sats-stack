@@ -338,11 +338,6 @@ numbers were accurate on 2026-10-17 and most files have moved since.
 
 ### P2 — worth doing, not urgent
 
-- Price service: `switchCurrency` deliberately clears the in-flight guard
-  (`btc_price_service.dart:104`), so two fetches can interleave and persist a
-  partial map; a partial mempool response clears `_allPrices` before checking;
-  `priceNotifier` can hold the old currency's number after a switch; the
-  `priceUsd` column stores whatever the active currency was.
 - Auto-categorisation matches bare substrings and then **persists the result —
   including the `'Other'` default — as a learned mapping**, permanently pinning
   that merchant. This is the real cause of "everything lands in Other": the
@@ -431,6 +426,33 @@ Addressed 2026-10-18.
   instance did not, which made it inconsistent too. A per-series high-water
   mark in `AppSettings` (`AppConstants.recurringCursorKey`) only moves forward.
   Both cases are tested.
+
+### The price map cannot be half-destroyed
+
+Addressed 2026-10-18. Every fiat figure in the app is one conversion away from
+this number, so each of these was wrong money on every screen at once.
+
+- The two fetchers cleared `_allPrices` *before* knowing whether the response
+  held anything, so a partial reply — or a mempool failure followed by a
+  CoinGecko failure — left the map stripped of currencies it already had, and
+  that stripped map was then persisted. They now build and return their own
+  map, and the caller swaps it in only on success.
+- `switchCurrency` cleared the in-flight guard with the comment "in case a
+  stale lock is held", which let two fetches run at once and interleave their
+  writes. The guard is left alone now.
+- Switching to a currency with no data left `priceNotifier` holding the
+  previous currency's number while the getter already reported the new one —
+  every figure relabelled rather than reconverted, out by the exchange rate,
+  with nothing shown to the user. It is now set to null, which the UI renders
+  as loading. Tested.
+- `initialize` fell back to the `priceUsd` column, which holds whatever
+  currency was active when it was written and records no currency of its own,
+  so a EUR user could be shown a USD figure. It is read for its timestamp
+  only; the all-prices map is the real cache.
+- mempool's `/v1/prices` returns a `time` field beside the currencies, which
+  was stored as a price of "TIME" — a Unix timestamp — and persisted.
+  `currencyEntries` keeps 3-letter codes with numeric values and drops the
+  rest. Tested.
 
 ### Test gaps
 Month-boundary aggregation, `getProgress` after a category rename, the v6
