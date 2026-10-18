@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 
 import 'package:crypto/crypto.dart';
@@ -468,11 +470,15 @@ class ImportService {
 
     final fallbackCurrency = await _sourceCurrency(sourceId);
 
-    // Read bytes and base64-encode
-    final imageBytes = await File(imagePath).readAsBytes();
-    final lower = imagePath.toLowerCase();
-    final mimeType = lower.endsWith('.png') ? 'image/png' : 'image/jpeg';
-    final base64Image = base64Encode(imageBytes);
+    // Downscaled before encoding. A phone camera photo is 3–5 MB, which
+    // base64 inflates by a third, and every hosted provider rejects it:
+    // Anthropic caps an image at 5 MB and ~1,568 px on the long edge, OpenAI
+    // caps the whole request at 20 MB. The user waited through the upload and
+    // then got the provider's raw 400 back.
+    final original = await File(imagePath).readAsBytes();
+    final scaled = await _downscaleForVision(original);
+    final base64Image = base64Encode(scaled.bytes);
+    final mimeType = scaled.mimeType;
     _checkCancelled();
 
     const prompt = '''You are a financial data extraction assistant. This image shows a bank statement, credit card statement, or financial document. Extract every transaction you can see and return them as a JSON array.
@@ -683,6 +689,80 @@ Rules:
       csvRows: allRows,
       csvHeaders: rawHeaders,
     );
+  }
+
+  /// Longest edge a vision request should carry. Anthropic's own guidance;
+  /// more pixels cost tokens without reading any better.
+  static const _visionMaxEdge = 1568;
+
+  /// Under the smallest limit any supported provider imposes, with room for
+  /// base64's one-third overhead.
+  static const _visionMaxBytes = 3 * 1024 * 1024;
+
+  /// Decoded, resized and re-encoded through `dart:ui`, so there is no image
+  /// package to add. Falls back to the original bytes if anything about the
+  /// file defeats the decoder — better a request the provider might reject
+  /// than an import that cannot start at all.
+  Future<({Uint8List bytes, String mimeType})> _downscaleForVision(
+    Uint8List original,
+  ) async {
+    for (final maxEdge in const [_visionMaxEdge, 1024, 768]) {
+      try {
+        final descriptor = await ui.ImageDescriptor.encoded(
+          await ui.ImmutableBuffer.fromUint8List(original),
+        );
+        final longest = descriptor.width > descriptor.height
+            ? descriptor.width
+            : descriptor.height;
+        if (longest <= maxEdge && original.length <= _visionMaxBytes) {
+          descriptor.dispose();
+          return (bytes: original, mimeType: _mimeTypeOf(original));
+        }
+
+        final scale = maxEdge / longest;
+        final codec = await descriptor.instantiateCodec(
+          targetWidth: (descriptor.width * scale).round().clamp(1, maxEdge),
+          targetHeight: (descriptor.height * scale).round().clamp(1, maxEdge),
+        );
+        final frame = await codec.getNextFrame();
+        final encoded =
+            await frame.image.toByteData(format: ui.ImageByteFormat.png);
+        frame.image.dispose();
+        codec.dispose();
+        descriptor.dispose();
+        if (encoded == null) break;
+
+        final bytes = encoded.buffer.asUint8List();
+        if (bytes.length <= _visionMaxBytes) {
+          return (bytes: bytes, mimeType: 'image/png');
+        }
+        // Still too big: round again at a smaller edge.
+      } catch (_) {
+        break;
+      }
+    }
+    return (bytes: original, mimeType: _mimeTypeOf(original));
+  }
+
+  /// From the file's own magic bytes rather than its extension, which is
+  /// frequently wrong for a photo picked out of a gallery.
+  static String _mimeTypeOf(Uint8List bytes) {
+    if (bytes.length >= 8 &&
+        bytes[0] == 0x89 &&
+        bytes[1] == 0x50 &&
+        bytes[2] == 0x4E &&
+        bytes[3] == 0x47) {
+      return 'image/png';
+    }
+    if (bytes.length >= 12 &&
+        bytes[0] == 0x52 &&
+        bytes[1] == 0x49 &&
+        bytes[2] == 0x46 &&
+        bytes[3] == 0x46 &&
+        bytes[8] == 0x57) {
+      return 'image/webp';
+    }
+    return 'image/jpeg';
   }
 
   // ── Tier 1: Ollama ────────────────────────────────────────────────────────

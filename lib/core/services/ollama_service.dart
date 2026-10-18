@@ -916,10 +916,17 @@ Top spending categories this month:
           .transform(utf8.decoder)
           .transform(const LineSplitter())) {
         if (line.trim().isEmpty) continue;
-        if (line == 'data: [DONE]') return;
-        if (!line.startsWith('data: ')) continue;
+        if (!line.startsWith('data:')) continue;
+        // `substring(5).trim()` rather than matching the exact string
+        // 'data: [DONE]': the space after the colon is optional in SSE, and a
+        // server that omits it (or adds trailing whitespace) used to fall
+        // through the terminator check and then through the 'data: ' prefix
+        // filter, so the stream just ended with no explicit finish.
+        final payload = line.substring(5).trim();
+        if (payload == '[DONE]') return;
+        if (payload.isEmpty) continue;
         try {
-          final data = jsonDecode(line.substring(6)) as Map<String, dynamic>;
+          final data = jsonDecode(payload) as Map<String, dynamic>;
           final choices = data['choices'] as List?;
           if (choices == null || choices.isEmpty) continue;
           final delta = choices[0]['delta'] as Map<String, dynamic>?;

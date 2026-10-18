@@ -338,12 +338,13 @@ numbers were accurate on 2026-10-17 and most files have moved since.
 
 ### P2 — worth doing, not urgent
 
-- Receipt import base64-encodes the photo whole with no downscale (a 4 MB photo
-  becomes ~5.5 MB and the provider 400s); chat re-sends the entire transcript
-  every turn with no trimming; streaming requests time out only on headers, not
-  on an idle body; the chat stream is never cancelled, so leaving the tab keeps
-  billing and still saves the answer; concurrent on-device EventChannel
-  listeners clobber each other; model pickers offer embedding/TTS models.
+- Streaming requests time out only on headers, not on an idle body, so a
+  dropped connection mid-answer leaves the spinner up for good. Concurrent
+  on-device EventChannel listeners clobber each other — two generations at once
+  (dashboard insight plus a chat question on Apple Intelligence) and one hangs.
+  Model pickers list every id the provider returns, including embedding and TTS
+  models, and `_ModelSelector` falls back to `models.firstOrNull`, so the app
+  bar can name a model the requests are not using.
 - `rpcCall` decodes the body before checking the status, so a wrong RPC password
   surfaces as `FormatException`. Electrum TLS accepts any certificate
   (`onBadCertificate: (_) => true`) with no pinning — on hostile Wi-Fi that
@@ -475,6 +476,38 @@ negative-keyword list or the user's own correction, which is now learned.
 
 Tested in `auto_category_test.dart`, with every misclassification above as a
 case.
+
+### The AI paths stop wasting and leaking
+
+Addressed 2026-10-18.
+
+- **A receipt photo is downscaled before it is sent.** It was base64-encoded
+  whole: a 3–5 MB camera photo becomes ~6 MB encoded, and every hosted provider
+  rejects that (Anthropic caps an image at 5 MB and ~1,568 px on the long
+  edge), so the user waited through the upload to get a raw provider 400.
+  Resized through `dart:ui`, so no image package is needed, stepping the edge
+  down until it fits, with the original as a fallback. The MIME type comes from
+  the file's magic bytes rather than its extension, which is often wrong for a
+  gallery photo.
+- **The chat transcript is trimmed to the backend's budget.** The whole history
+  was re-sent every turn with no limit while the budget was applied to the
+  system prompt alone — so on Apple Intelligence (4,000 characters) or a 0.6B
+  Qwen the answers quietly degraded after a few exchanges, and on a hosted
+  provider every turn cost more than the last. Newest turns are kept, whole.
+- **Leaving the chat actually stops the request.** A bare `await for` with no
+  client meant switching tabs disposed the screen while the stream ran to
+  completion: tokens kept arriving, a hosted provider kept billing, and the
+  answer was still written to the history of a chat the user had walked away
+  from. The subscription and an owned `http.Client` are now cancelled and
+  closed in `dispose`.
+- **SSE terminators are parsed, not string-matched.** `line == 'data: [DONE]'`
+  missed `data:[DONE]` and any trailing whitespace — the space after the colon
+  is optional in SSE — and the frame then fell through the prefix filter too,
+  so the stream ended with no explicit terminator. Both copies now take
+  `substring(5).trim()`, as `cloud_backend` already did.
+- **One malformed entry no longer discards a whole model list.** `models.map((m)
+  => m['name'] as String)` threw inside the `try` and returned `[]`, which the
+  picker reports as "no models loaded — test the connection first".
 
 ### Test gaps
 Month-boundary aggregation, `getProgress` after a category rename, the v6
