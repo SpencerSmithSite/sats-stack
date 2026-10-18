@@ -164,113 +164,192 @@ Verified with `flutter build ios --no-codesign`.
 
 ---
 
+### Currency is the one the user chose
+
+Addressed 2026-10-18.
+
+- **A manual entry stored `fiatCurrency: 'USD'`** whatever the active currency
+  was, while the list renders using the stored value — a GBP user's £40 expense
+  displayed as "-$40.00", and its sats had been derived from the GBP price, so
+  the two halves of the same row disagreed. The sats→fiat hint hardcoded `$`
+  the same way. An edit now rewrites `fiatCurrency` as well, because it
+  recomputes the amount at the current rate.
+- **The per-source currency was collected and then discarded.** Every parse
+  path in `import_service.dart` hardcoded `'USD'`, so the choice made in
+  `ImportSourceSetupScreen` reached nothing. It now threads through the rules,
+  profile, manual-mapping, PDF-heuristic and both AI tiers, where it is also
+  the fallback for a row whose currency the model omitted.
+  `InstitutionProfile.defaultCurrency` is gone: a profile identifies a column
+  layout, and the user is the authority on what the account holds.
+- **A BTC-denominated import wrote BTC units into `amountFiat`**, which
+  `DashboardService` sums as money, so a 0.05 BTC deposit read as "$0.05".
+  `amountFiat` is now derived from the sats via the historical price for that
+  date — the same shape as the xpub path — with spot as the fallback and 0 when
+  neither resolves, so the column never carries a BTC figure.
+
+Covered by `test/import_service_test.dart`.
+
+### Months tile the timeline
+
+Addressed 2026-10-18. Seven aggregates built a closed range ending at
+`23:59:59` and tested it with `!isAfter(end)`. `DateTime` carries milliseconds,
+so the last 999 ms of every month belonged to no month at all: absent from the
+dashboard, from analytics, from the budget it should have counted against, from
+the per-wallet breakdown and from the exported summary. Reachable without
+trying, because the add-transaction sheet seeds the date with `DateTime.now()`.
+
+A half-open `DateRange` (`lib/shared/utils/date_range.dart`) is now the only
+place that knows the rule, so consecutive months tile the timeline exactly.
+`test/month_boundary_test.dart` pins a transaction at 23:59:59.400 on the last
+day of a month through all six aggregates, and sweeps every millisecond either
+side of a boundary asserting exactly one month claims it.
+
+### A category rename takes its transactions with it
+
+Addressed 2026-10-18. `Transactions.category` is free text and
+`BudgetService.getProgress` joins on the name, not the id, so renaming a
+category orphaned every transaction in it: the budget card dropped to "$0 of
+$500", no overspend alert could fire, and the pie chart kept a phantom slice
+under the old name. `updateCategory` now rewrites `transactions`,
+`importedTransactions` and `descriptionCategoryMappings` in the same
+transaction as the rename — the mapping table too, or the next import
+re-learns a name that no longer exists. `test/category_rename_test.dart`.
+
+### A budget cannot be broken by a double tap
+
+Addressed 2026-10-18. `BudgetService.upsert` was a read-then-write with no
+transaction over a table with no unique index, so double-tapping Save inserted
+twice and every later upsert for that category threw `StateError` out of
+`getSingleOrNull` — the budget could not be edited again without clearing the
+data. The write is one transaction now and `budgets.categoryId` carries a
+unique index, added in a **v6 migration** that collapses any duplicates an
+older install accumulated before creating it (the index cannot be created over
+them). `migrateToV6` is a named method so the test runs the real statements;
+there is no generated schema history to migrate against.
+
+### Streams are built once, not once per frame
+
+Addressed 2026-10-18. Every `watch*()` returns a new Drift stream, so a
+`StreamBuilder` fed from inside `build()` re-subscribed and reset to `waiting`
+on each rebuild. Every keystroke in the transactions search box replaced the
+list with a spinner and re-queried the table; the dashboard's Wallets section
+vanished and came back on every BTC price tick. Each stream is now built in
+`initState` and rebuilt only when its month — or, for the dashboard, the
+inflation rate baked into the aggregate — actually changes, with the
+`ValueListenableBuilder`s moved inside the `StreamBuilder` so a price or
+currency tick only repaints.
+
+Two per-row futures went with them: the transactions screen ran
+`categoryService.getAll()` in a `FutureBuilder` per visible row, and the
+dashboard did the same for its recent-transaction list on every price tick.
+Both now read a name → category map the screen watches once, so a rename or a
+colour change still reaches the list.
+
+`watchDashboard` watched only `transactions` while `_compute` reads the stack
+goal from `AppSettings` — harmless only for as long as the widget tree rebuilt
+the stream constantly. It watches both now, and `watchPerWallet` watches
+`wallets` as well.
+
+### Bulk imports commit once
+
+Addressed 2026-10-18. The save loop in `import_service.dart` now runs in one
+`db.transaction`. Each commit used to fire `transactions.watchAll()`, which
+main.dart turns into a budget re-check plus three full table selects, and woke
+every mounted `StreamBuilder`: a 300-row import meant hundreds of full scans
+and a multi-second freeze, and a kill mid-loop left the two tables
+inconsistent. A test asserts 25 rows wake listeners once.
+
+### One rule for the AI tab
+
+Addressed 2026-10-18. CLAUDE.md claimed Settings and onboarding could not
+drift; they had. Settings omitted the "hosted provider with a key" term
+onboarding had, so a mobile user with a saved Anthropic key lost the AI tab by
+switching provider and back — and saving a key, which is all a hosted provider
+needs, did not update the flag at all. `main.dart` seeded it from
+`isDesktop || isConnected`, where an on-device provider's `isConnected` is a
+readiness probe `loadSettings` only kicks off, so on-device providers lost the
+tab after every restart.
+
+`OllamaService.aiShouldBeEnabled` is now the one rule and all three read it
+(Settings had eleven inline copies). `isUsableWithoutDesktop` holds the part
+that is not about the host platform, so `test/ai_enabled_test.dart` can pin it
+without pretending to be a phone.
+
+`/ai` also redirects to `/dashboard` when the tab is gone. The path was only
+dropped from the shell's tab list, so `_indexForLocation` fell back to 0 and
+the AI screen stayed rendered with Dashboard highlighted and no tab matching
+it. The router takes `aiEnabledNotifier` as its `refreshListenable`, so this
+re-runs on the toggle rather than at the next navigation.
+
+### A failed answer is no longer saved as a complete one
+
+Addressed 2026-10-18. A provider error frame arriving after 200 tokens was
+invisible: `extractDelta` returns null for it, so the stream ended cleanly and
+the truncated answer was persisted as complete. `CloudBackend` now recognises
+each provider's error frame and throws, and recognises the stop reason that
+means the answer hit the output cap — `maxOutputTokens`, a named constant
+rather than a literal 4096 in two places — which the answer now says.
+Covered in `test/cloud_backend_test.dart`.
+
+### Editing an imported Bitcoin row keeps its value
+
+Addressed 2026-10-18. The edit sheet's amount field was always formatted with
+`toStringAsFixed(2)`, so an 0.00047 BTC row opened as "0.00" and saving wrote
+0.0 straight past the `< 0` guard. The field is now denominated in whatever the
+row is — sats for a Bitcoin row, with the fiat value derived from the price
+rather than typed, and eight decimals for a BTC-denominated parsed row — and
+zero is rejected rather than only negatives.
+
+### Light mode reaches the Stack screen
+
+Addressed 2026-10-18. The hero card's fixed `0xFF1A1200`/`0xFF2A1F00` gradient
+under white text and the chart's 5 %-opacity white gridlines were survivors of
+the light-mode pass recorded as complete in CLAUDE.md: in light mode the card
+stayed a dark brown slab and the gridlines were invisible. Both are derived
+from the theme now.
+
+### Notifications come from one place
+
+Addressed 2026-10-18. `budgets_screen.dart` fired an over-budget notification
+from inside `build()`, through a bare `FlutterLocalNotificationsPlugin()` that
+was never initialised — so on iOS no permission had been asked for and nothing
+appeared, bypassing the whole iOS notification fix above — keyed on
+`budget.id`, which can collide with the stack-goal id, and deduplicated by a
+module-level `Set` that was never cleared, so re-exceeding a budget in the same
+month never alerted again. The screen holds its progress stream in state and
+hands the check to `BudgetService.checkAndNotify`, the path main.dart already
+uses.
+
+### Guards after an await
+
+Addressed 2026-10-18. The seven `setState()`-after-dispose paths the audit
+named: three connection-test failure branches in `settings_screen.dart` (where
+the `!mounted` check happened before the awaits that follow), its export,
+import and Esplora non-200 branches, plus `add_transaction_sheet`,
+`set_budget_sheet` and `stack_screen._saveGoal`.
+
+---
+
 ## Not fixed — highest value first
 
-### P1
-
-1. **Data · `fiatCurrency` is hardcoded `'USD'` on every manual entry** —
-   `add_transaction_sheet.dart:213` — while `transaction_list_item.dart:113`
-   renders using the stored value. A GBP
-   user's £40 expense displays as "-$40.00", and sats were computed from the GBP
-   price, so the two now disagree. Pass `app.currencyNotifier.value`.
-   Related: `add_transaction_sheet.dart:119` hardcodes `$` in the sats→fiat hint.
-
-2. **Data · month ranges end at `23:59:59`**, used with `!isAfter(lastDay)` at
-   `dashboard_service.dart:37,92,108,181,252` and `budget_service.dart:80`.
-   Anything in the last 999 ms of a month belongs to no month — reachable,
-   because `add_transaction_sheet.dart:47` seeds the date with
-   `DateTime.now()`. Use an exclusive `isBefore(firstOfNextMonth)` bound.
-
-3. **Data · renaming a category orphans every transaction in it.**
-   `category_service.dart:37-50` updates `Categories.name`, but
-   `Transactions.category` is free text matched by string
-   (`budget_service.dart:86`). The budget card drops to "$0 of $500", no
-   overspend alert fires, and the pie chart shows a phantom slice. Update both
-   tables in one transaction.
-
-4. **Data · BTC-denominated imports write BTC units into `amountFiat`**
-   (`import_service.dart:964-990`), and `DashboardService` sums that column as
-   money: a 0.05 BTC deposit reads as "$0.05". Convert at import time using the
-   historical price. Same root cause as the discarded source currency — the
-   user's per-source choice (`import_source_setup_screen.dart:30`) is never
-   read; every rules/mapping path hardcodes `'USD'` (`:700,879,1233`).
-
-5. **UI · missing `mounted` guards after `await`** —
-   `settings_screen.dart:323,371,484,600`, `add_transaction_sheet.dart:233`,
-   `set_budget_sheet.dart:81`, `stack_screen.dart:92`. Each is a real
-   `setState() called after dispose()` — e.g. dismiss the CSV sheet while the
-   native picker is open. Mechanical fix; `_testCloudConnection` already does it
-   right.
-
-6. **UI · streams and futures constructed inside `build()`** —
-   `transactions_screen.dart:225`, `stack_screen.dart:118`,
-   `dashboard_screen.dart:121,301`, `analytics_screen.dart:109`,
-   `budgets_screen.dart:100`. Every `watch*()` builds a new Drift stream, so
-   each rebuild re-subscribes and resets to `waiting`: **every keystroke in the
-   transactions search box replaces the list with a spinner and re-queries the
-   table**, and the dashboard's Wallets section vanishes and returns on each BTC
-   price tick. Hoist into `initState`/memoise on the month.
-   Worse: `transactions_screen.dart:537` runs `categoryService.getAll()` *per
-   row* in a `FutureBuilder`; `dashboard_screen.dart:370` does the same on every
-   price tick.
-
-7. **Data · bulk inserts are not wrapped in a transaction**
-    (`import_service.dart:925-1005`; xpub is now fixed). Each commit fires `watchAll()` → `main.dart:138` →
-    `checkAndNotify()` → three full table selects, plus every mounted
-    `StreamBuilder`. A 300-row import means ~900 full-table selects and a
-    multi-second freeze; a kill mid-loop leaves the two tables inconsistent.
-    `generateDueRecurring` already shows the right pattern.
-
-8. **AI · `aiEnabledNotifier` drifts between the two choosers.**
-    `settings_screen.dart:269` omits the "hosted provider with a key" term that
-    `onboarding_screen.dart:146` has, so a mobile user with a saved Anthropic
-    key loses the AI tab by switching provider and back. Separately
-    `main.dart:80-82` seeds it from a probe that is `unawaited`, so on-device
-    providers lose the tab after every restart. Extract one
-    `aiShouldBeEnabled(AiProvider)` helper — CLAUDE.md claims these two paths
-    cannot drift, and they have.
-
-9. **AI · mid-stream provider errors are silently swallowed**
-    (`cloud_backend.dart:456-481`). An error frame arriving after 200 tokens
-    ends the stream, and the truncated answer is persisted as complete. Also
-    `max_tokens: 4096` is hardcoded with no truncation notice.
-
-10. **Import · editing an imported BTC row zeroes it.**
-    `transaction_edit_sheet.dart:68` formats with `toStringAsFixed(2)`, so
-    0.00047 BTC opens as "0.00"; saving writes 0.0 and passes the `< 0` guard.
-
-11. **Data · `BudgetService.upsert` is read-then-write with no transaction and
-    no unique index on `budgets.categoryId`** — double-tapping Save creates two
-    rows, after which every later `upsert` for that category throws
-    `StateError` from `getSingleOrNull` and the budget can never be edited
-    again. Wrap in a transaction and add the index.
-
-12. **UI · the Stack hero card and chart gridlines are hardcoded dark** —
-    `stack_screen.dart:329` (`0xFF1A1200`/`0xFF2A1F00` with white text) and
-    `:535` (5%-opacity white gridlines, invisible in light mode). Survivors of
-    the light-mode pass recorded as complete in CLAUDE.md.
-
-13. **UI · `/ai` has no redirect when the tab disappears.** `app.dart:130-139`
-    drops the path from `_tabPaths` and `_indexForLocation` falls back to 0, so
-    the AI screen stays rendered with Dashboard highlighted and no matching tab.
-
-14. **UI · a notification is fired from inside `build()`** —
-    `budgets_screen.dart:124`, guarded by a module-level `Set` that is never
-    cleared, so re-exceeding a budget in the same month never alerts again.
+P1 is clear as of 2026-10-18; everything below was judged worth doing but not
+urgent, and the detail is here so it can be acted on without re-auditing. Line
+numbers were accurate on 2026-10-17 and most files have moved since.
 
 ### P2 — worth doing, not urgent
 
-- **No indexes exist anywhere in the schema.** Hot unindexed columns:
-  `transactions.date` (sorted and range-filtered everywhere), `.walletId`,
-  `.category`, `.recurringPeriod`, `budgets.categoryId`,
-  `importedTransactions.sourceId`, `descriptionCategoryMappings.(sourceId,
-  description)`. Needs `@TableIndex` + a v6 migration step.
+- **Almost no indexes exist in the schema.** `budgets.categoryId` gained a
+  unique one in v6 (above); these are still unindexed: `transactions.date`
+  (sorted and range-filtered everywhere), `.walletId`, `.category`,
+  `.recurringPeriod`, `importedTransactions.sourceId`,
+  `descriptionCategoryMappings.(sourceId, description)`. Needs `@TableIndex`
+  + a v7 migration step.
 - **Foreign keys are never enforced** — no `beforeOpen`, so every
   `.references(...)` is decorative and `PRAGMA foreign_keys` stays off.
-- `watchDashboard` ignores `AppSettings`, so the stack goal does not propagate
-  (masked today by finding 9 — fixing that exposes this). `watchPerWallet`
-  misses wallet changes and re-scans all transactions once per wallet.
-  `BudgetService.watchProgress` double-fires and never closes its controller.
+- `BudgetService.watchProgress` double-fires on first listen — `onListen` sets
+  up two watches that each emit immediately *and* calls `update()` — and
+  `onCancel` cancels the subscriptions without closing the controller.
+  `watchPerWallet` still re-scans all transactions once per wallet.
 - `generateDueRecurring` resurrects a *deleted latest* instance, because the
   resume point is the latest surviving row. Persist a per-series index.
 - Price service: `switchCurrency` deliberately clears the in-flight guard
@@ -305,11 +384,13 @@ Verified with `flutter build ios --no-codesign`.
   and server fields.
 
 ### Duplication / shape
-- Sats formatting is reimplemented **11 times** with the same regex and subtly
-  different sign handling, while `SatConverter.formatSats` exists and is used in
-  6 places. The category colour map exists **3 times with divergent colours**
-  (Shopping is purple, blue or grey depending on the screen) and none of them
-  consults the user's own per-category colour from the DB. `_SectionHeader` ×4,
+- Sats formatting is reimplemented about a dozen times with the same regex and
+  subtly different sign handling, while `SatConverter.formatSats` exists and is
+  used in 6 places. The category colour map exists **3 times with divergent
+  colours** (Shopping is purple, blue or grey depending on the screen) and none
+  of them consults the user's own per-category colour from the DB — though the
+  transactions list and the dashboard's recent rows now at least receive the
+  user's `Category` row, so the colour is available to them. `_SectionHeader` ×4,
   month selector ×3 with the arithmetic triplicated.
 - `sat_amount_display.dart` (95 lines) is dead code; so are `ElectrumService`,
   `BitcoinNodeService`, `BitcoinDataSource` and `ManageWalletsSheet` — they
@@ -317,13 +398,16 @@ Verified with `flutter build ios --no-codesign`.
 - `settings_screen.dart` (1,724), `onboarding_screen.dart` (1,745) and
   `stack_screen.dart` (1,156) each want splitting; `on_device_ai_section.dart`
   is the precedent.
-- `test/transactions_zz_scratch_test.dart` is a GoRouter scratch file with
-  `debugPrint`s and 101 identical test names — delete it.
 
 ### Test gaps
-No test covers: a v1→v5 migration against a fresh `onCreate`, month-boundary
-aggregation, `BudgetService.getProgress` after a category rename, the dedup-hash
-contract across the three salts, or any stream reactivity.
+Month-boundary aggregation, `getProgress` after a category rename, the v6
+migration and the AI-tab rule are covered now (`month_boundary_test.dart`,
+`category_rename_test.dart`, `ai_enabled_test.dart`). Still uncovered: a
+v1→v6 migration against a fresh `onCreate` — there is no generated schema
+history to migrate against, which is why `migrateToV6` is a named method the
+test calls directly — the dedup-hash contract across the three salts, and
+widget-level stream reactivity (the import save path's single-commit guarantee
+is asserted at the service level).
 
 ---
 
