@@ -70,4 +70,29 @@ abstract final class AppConstants {
   // model that the OS owns, so there is nothing to persist for them beyond the
   // provider selection itself.
   static const settingLocalModelId = 'local_model_id';
+
+  // Bitcoin data source — where wallet history is read from
+  //
+  // `settingElectrumUrl` above predates this and is the Mempool/Esplora base
+  // URL; the three keys below configure a user's own Electrum server
+  // (electrs / Fulcrum), which speaks JSON-RPC over a raw TCP socket and so
+  // needs host and port separately rather than a URL.
+  static const settingBitcoinDataSource = 'bitcoin_data_source';
+  static const settingElectrumHost = 'electrum_host';
+  static const settingElectrumPort = 'electrum_port';
+  static const settingElectrumSsl = 'electrum_ssl';
+
+  /// Electrum's standard plaintext TCP port. The SSL port is 50002, which the
+  /// user has to enter themselves when they turn SSL on.
+  static const defaultElectrumPort = 50001;
+
+  // Bitcoin Core / Knots JSON-RPC
+  //
+  // The RPC password is NOT here — it goes to `SecureKeyStore`, for the same
+  // reason the AI keys do: this table is ordinary SQLite that Settings → Data
+  // exports wholesale. This constant is the keychain entry name.
+  static const settingBitcoinRpcUrl = 'bitcoin_rpc_url';
+  static const settingBitcoinRpcUser = 'bitcoin_rpc_user';
+  static const settingBitcoinRpcPassword = 'bitcoin_rpc_password';
+  static const defaultBitcoinRpcUrl = 'http://127.0.0.1:8332';
 }

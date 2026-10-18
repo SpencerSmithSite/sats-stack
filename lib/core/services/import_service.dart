@@ -453,7 +453,7 @@ Rules:
 
     final String content;
     try {
-      content = await File(filePath).readAsString();
+      content = await _readTextFile(filePath);
     } catch (_) {
       return ImportResult(
           transactions: [], fileType: ImportFileType.csv, fileName: fileName);
@@ -745,6 +745,9 @@ FILE CONTENT:
       creditCol: creditCol,
       signedAmount: profile.signedAmount,
       currency: profile.defaultCurrency,
+      // Honoured at last: a positional profile (Wells Fargo) has no header
+      // line, and skipping row 0 regardless dropped its first transaction.
+      skipHeaderRow: profile.skipHeaderRow,
     );
   }
 
@@ -757,16 +760,38 @@ FILE CONTENT:
     required int? creditCol,
     required bool signedAmount,
     required String currency,
+    bool skipHeaderRow = true,
   }) {
     if (dateCol == null) return null;
 
+    // A positional profile (Wells Fargo) has no header line, so starting at 1
+    // threw away its first transaction on every single import.
+    final startRow = skipHeaderRow ? 1 : 0;
+    if (allRows.length <= startRow) return null;
+
+    final dateIndex = dateCol;
+    final dataRows = allRows.skip(startRow);
+    final dayFirst = _inferDayFirst(
+      dataRows.where((r) => dateIndex < r.length).map((r) => r[dateIndex]),
+    );
+
+    // A single amount column with no negative value in it is not signed,
+    // whatever the header says: treating it as signed books every charge on a
+    // credit-card export as income.
+    final amountIndex = amountCol;
+    final columnHasNegative = amountIndex != null &&
+        dataRows.any((r) =>
+            amountIndex < r.length && (_parseAmount(r[amountIndex]) ?? 0) < 0);
+    final amountIsSigned = signedAmount && columnHasNegative;
+
     final result = <ParsedTransaction>[];
-    for (int i = 1; i < allRows.length; i++) {
+    for (int i = startRow; i < allRows.length; i++) {
       final row = allRows[i];
       if (row.every((e) => e.trim().isEmpty)) continue;
 
-      final date =
-          dateCol < row.length ? _parseDate(row[dateCol]) : null;
+      final date = dateCol < row.length
+          ? _parseDate(row[dateCol], dayFirst: dayFirst)
+          : null;
       if (date == null) continue;
 
       final description =
@@ -779,7 +804,7 @@ FILE CONTENT:
       if (amountCol != null && amountCol < row.length) {
         final raw = _parseAmount(row[amountCol]);
         if (raw == null) continue;
-        if (signedAmount) {
+        if (amountIsSigned) {
           amount = raw.abs();
           direction = raw < 0 ? 'debit' : 'credit';
         } else {
@@ -906,9 +931,14 @@ FILE CONTENT:
     required String sourceName,
     double? btcPrice,
   }) async {
-    // Look up the default wallet to use as FK for main transactions table
+    // FK for the main transactions table. Prefer a manual wallet: `wallets`
+    // comes back unordered, so `first` could be an xpub wallet, which would
+    // attribute bank-statement rows to a Bitcoin wallet and pollute the
+    // dashboard's per-wallet breakdown.
     final wallets = await db.select(db.wallets).get();
-    final walletId = wallets.isNotEmpty ? wallets.first.id : null;
+    final walletId = (wallets.where((w) => w.type == 'manual').firstOrNull ??
+            wallets.firstOrNull)
+        ?.id;
 
     // Load all existing hashes for this source to detect duplicates
     final existingRows = await (db.select(db.importedTransactions)
@@ -974,10 +1004,17 @@ FILE CONTENT:
         } else {
           amountSats = 0;
         }
+        // Hash the *signed* amount, and scope it to the wallet.
+        //
+        // `tx.amount` is always positive, so a charge and its same-day refund
+        // hashed identically and the refund was dropped by the unique index —
+        // silently, because the insert is insertOrIgnore. The wallet salt stops
+        // the same rent figure in two accounts colliding the same way.
         final dedupHash = HashUtils.transactionDedupHash(
           date: tx.date,
-          amount: tx.amount,
+          amount: signedFiat,
           description: tx.rawDescription,
+          salt: 'wallet_$walletId',
         );
         try {
           await db.into(db.transactions).insert(
@@ -1258,10 +1295,66 @@ FILE CONTENT:
     }
   }
 
+  /// Reads a statement as text, tolerating the encodings banks actually use.
+  ///
+  /// `readAsString` uses the strict UTF-8 codec, so a single `£` (0xA3) in a
+  /// legacy export throws and the whole file is reported as an unrecognised
+  /// layout. Windows-1252 is the usual culprit, so fall back to Latin-1.
+  Future<String> _readTextFile(String filePath) async {
+    final bytes = await File(filePath).readAsBytes();
+    try {
+      return utf8.decode(bytes);
+    } on FormatException {
+      return latin1.decode(bytes, allowInvalid: true);
+    }
+  }
+
   List<List<String>> _parseCsvRows(String content) {
-    final rows = const CsvToListConverter(eol: '\n', shouldParseNumbers: false)
-        .convert(content);
+    // A leading BOM is invisible but sticks to the first header, so
+    // 'date' != '\uFEFFdate' and column detection fails on a textbook CSV.
+    var text = content.startsWith('\uFEFF') ? content.substring(1) : content;
+    text = text.replaceAll('\r\n', '\n');
+    final rows = CsvToListConverter(
+      eol: '\n',
+      fieldDelimiter: _sniffDelimiter(text),
+      shouldParseNumbers: false,
+    ).convert(text);
     return rows.map((r) => r.map((e) => e.toString()).toList()).toList();
+  }
+
+  /// Picks the field delimiter from the header line.
+  ///
+  /// Most of continental Europe exports semicolon-separated CSV (precisely
+  /// because the comma is the decimal point). Assuming ',' turns such a file
+  /// into one unusable column.
+  static String _sniffDelimiter(String text) {
+    final header = text
+        .split('\n')
+        .firstWhere((l) => l.trim().isNotEmpty, orElse: () => '');
+    var best = ',';
+    var bestCount = _countOutsideQuotes(header, ',');
+    for (final candidate in const [';', '\t', '|']) {
+      final count = _countOutsideQuotes(header, candidate);
+      if (count > bestCount) {
+        best = candidate;
+        bestCount = count;
+      }
+    }
+    return best;
+  }
+
+  static int _countOutsideQuotes(String line, String char) {
+    var count = 0;
+    var inQuotes = false;
+    for (var i = 0; i < line.length; i++) {
+      final c = line[i];
+      if (c == '"') {
+        inQuotes = !inQuotes;
+      } else if (!inQuotes && c == char) {
+        count++;
+      }
+    }
+    return count;
   }
 
   List<dynamic>? _extractJsonArray(String text) {
@@ -1293,7 +1386,30 @@ FILE CONTENT:
   // 2-digit year: 00–29 → 2000–2029, 30–99 → 1930–1999 (standard bank convention)
   int _expandYear(int yy) => yy <= 29 ? 2000 + yy : 1900 + yy;
 
-  DateTime? _parseDate(String raw) {
+  /// Decides whether a `03/04/2025`-style column is day-first.
+  ///
+  /// Resolved once per file, not per row. Deciding per row meant a UK
+  /// statement came out with the month and day swapped for days 1–12 only:
+  /// `03/04/2025` read as 3 March, `13/04/2025` as 13 April, from two April
+  /// rows. One of them then lands in the wrong month's budget and dashboard.
+  ///
+  /// Falls back to month-first (US) when a file is genuinely ambiguous — every
+  /// date in it has both components ≤ 12 — which is the format the manual
+  /// mapper also defaults to.
+  static bool _inferDayFirst(Iterable<String> samples) {
+    for (final sample in samples) {
+      final m = RegExp(r'^\s*"?(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})')
+          .firstMatch(sample.trim());
+      if (m == null) continue;
+      final first = int.parse(m.group(1)!);
+      final second = int.parse(m.group(2)!);
+      if (first > 12) return true; // can only be a day
+      if (second > 12) return false; // can only be a day → month came first
+    }
+    return false;
+  }
+
+  DateTime? _parseDate(String raw, {bool dayFirst = false}) {
     raw = raw.trim().replaceAll('"', '');
     if (raw.isEmpty) return null;
 
@@ -1309,29 +1425,25 @@ FILE CONTENT:
       return DateTime.tryParse(
           '${isoSlash.group(1)}-${isoSlash.group(2)}-${isoSlash.group(3)}');
     }
-    // MM/DD/YYYY (US, 4-digit year)
-    final us = RegExp(r'^(\d{1,2})/(\d{1,2})/(\d{4})').firstMatch(raw);
-    if (us != null) {
-      final mo = int.parse(us.group(1)!);
-      final dy = int.parse(us.group(2)!);
-      final yr = int.parse(us.group(3)!);
-      if (mo <= 12 && dy <= 31) return DateTime(yr, mo, dy);
-    }
-    // M/D/YY, M/DD/YY, MM/DD/YY (US 2-digit year — not followed by another digit)
-    final us2 = RegExp(r'^(\d{1,2})/(\d{1,2})/(\d{2})(?!\d)').firstMatch(raw);
-    if (us2 != null) {
-      final mo = int.parse(us2.group(1)!);
-      final dy = int.parse(us2.group(2)!);
-      final yr = _expandYear(int.parse(us2.group(3)!));
-      if (mo <= 12 && dy <= 31) return DateTime(yr, mo, dy);
-    }
-    // DD/MM/YYYY or DD-MM-YYYY (UK)
-    final uk = RegExp(r'^(\d{1,2})[-/](\d{1,2})[-/](\d{4})').firstMatch(raw);
-    if (uk != null) {
-      final dy = int.parse(uk.group(1)!);
-      final mo = int.parse(uk.group(2)!);
-      final yr = int.parse(uk.group(3)!);
-      if (mo <= 12 && dy <= 31) return DateTime(yr, mo, dy);
+    // Two numbers then a year, separated by / - or . — the last covers
+    // continental exports like 01.02.2025, which used to parse as nothing at
+    // all. [dayFirst] settles the order; a component > 12 overrides it, since
+    // it can only be a day whatever the file's convention is.
+    final numeric =
+        RegExp(r'^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})(?!\d)').firstMatch(raw);
+    if (numeric != null) {
+      final first = int.parse(numeric.group(1)!);
+      final second = int.parse(numeric.group(2)!);
+      final yearText = numeric.group(3)!;
+      final yr = yearText.length == 2
+          ? _expandYear(int.parse(yearText))
+          : int.parse(yearText);
+      final firstIsDay = first > 12 || (dayFirst && second <= 12);
+      final dy = firstIsDay ? first : second;
+      final mo = firstIsDay ? second : first;
+      if (mo >= 1 && mo <= 12 && dy >= 1 && dy <= 31) {
+        return DateTime(yr, mo, dy);
+      }
     }
     // DD MMM YYYY  or  MMM DD YYYY
     final months = {
@@ -1402,14 +1514,55 @@ FILE CONTENT:
         .replaceAll('£', '')
         .replaceAll('€', '')
         .replaceAll('₿', '');
+
+    // UK statements put the side of the ledger in a DR/CR suffix instead of a
+    // sign: '12.50 DR' is money out. Without this the row is dropped outright.
+    var forceNegative = false;
+    final drcr = RegExp(r'\s*(DR|CR)\.?$', caseSensitive: false).firstMatch(s);
+    if (drcr != null) {
+      forceNegative = drcr.group(1)!.toUpperCase() == 'DR';
+      s = s.substring(0, drcr.start);
+    }
+
     // Parenthetical negatives: (4.50) → -4.50
-    final paren = RegExp(r'^\(([0-9,. ]+)\)$').firstMatch(s);
+    final paren = RegExp(r'^\(([0-9,.\s]+)\)$').firstMatch(s);
     if (paren != null) s = '-${paren.group(1)}';
-    // Strip thousands separators and spaces
-    s = s.replaceAll(',', '').replaceAll(' ', '');
+    s = s.replaceAll(' ', '').replaceAll('\u00a0', '');
+    s = _normalizeDecimalSeparator(s);
     // Trailing minus sign: 4.50- → -4.50
     if (s.endsWith('-')) s = '-${s.substring(0, s.length - 1)}';
-    return double.tryParse(s);
+
+    final value = double.tryParse(s);
+    if (value == null) return null;
+    return forceNegative ? -value.abs() : value;
+  }
+
+  /// Works out whether `,` is a thousands separator or the decimal point.
+  ///
+  /// Stripping every comma — what this used to do — turns the German `-12,50`
+  /// into `-1250.00` and records a €1,250 expense, with nothing to tell the
+  /// user it happened.
+  static String _normalizeDecimalSeparator(String s) {
+    final lastComma = s.lastIndexOf(',');
+    if (lastComma == -1) return s; // only dots: already Dart-parseable
+    final lastDot = s.lastIndexOf('.');
+
+    // '1,234.56' — the dot is last, so commas group thousands.
+    if (lastDot > lastComma) return s.replaceAll(',', '');
+
+    // '1.234,56' — the comma is last, so dots group thousands.
+    if (lastDot != -1) {
+      return '${s.substring(0, lastComma).replaceAll('.', '')}'
+          '.${s.substring(lastComma + 1)}';
+    }
+
+    // Commas only. Exactly 3 digits per group is a thousands separator
+    // ('1,234'); anything else is a decimal comma ('12,5', '12,50').
+    if (RegExp(r'^-?\d{1,3}(,\d{3})+$').hasMatch(s)) {
+      return s.replaceAll(',', '');
+    }
+    return '${s.substring(0, lastComma).replaceAll(',', '')}'
+        '.${s.substring(lastComma + 1)}';
   }
 
   static const _categoryKeywords = <String, List<String>>{

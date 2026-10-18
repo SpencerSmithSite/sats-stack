@@ -1,7 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-/// Stores the user's AI provider API keys in the platform's secure store.
+/// Stores the user's secrets — AI provider API keys, a Bitcoin Core RPC
+/// password — in the platform's secure store.
 ///
 /// Keys are the user's own credentials for services they pay for, and they do
 /// not belong in `AppSettings`. That table is ordinary SQLite inside the app's
@@ -96,6 +97,49 @@ class SecureKeyStore {
       await _storage.delete(key: entryName(providerId));
     } catch (e) {
       debugPrint('SecureKeyStore: could not delete $providerId key: $e');
+    }
+  }
+
+  // ── Arbitrary entries ─────────────────────────────────────────────────────
+  //
+  // The three methods above name their entry from an `AiProvider` id. Secrets
+  // that are not provider keys — the Bitcoin Core RPC password — use these and
+  // pass their own entry name, so there is still exactly one place that knows
+  // the per-platform keychain options above.
+
+  /// The value stored under [entry], or an empty string. Never throws, for the
+  /// reasons given on [read].
+  Future<String> readEntry(String entry) async {
+    try {
+      return await _storage.read(key: entry) ?? '';
+    } catch (e) {
+      debugPrint('SecureKeyStore: could not read $entry: $e');
+      return '';
+    }
+  }
+
+  /// Store [value] under [entry], or delete the entry when [value] is blank.
+  /// Returns false if the secure store rejected the write — see [write].
+  Future<bool> writeEntry(String entry, String value) async {
+    try {
+      if (value.isEmpty) {
+        await _storage.delete(key: entry);
+      } else {
+        await _storage.write(key: entry, value: value);
+      }
+      return true;
+    } catch (e) {
+      debugPrint('SecureKeyStore: could not write $entry: $e');
+      return false;
+    }
+  }
+
+  /// Remove [entry]. Used by Settings → Danger Zone → Reset all data.
+  Future<void> deleteEntry(String entry) async {
+    try {
+      await _storage.delete(key: entry);
+    } catch (e) {
+      debugPrint('SecureKeyStore: could not delete $entry: $e');
     }
   }
 }

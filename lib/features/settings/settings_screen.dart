@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:path_provider/path_provider.dart';
 
 import '../../core/database/database.dart';
 import '../../core/models/ai_backend_group.dart';
@@ -490,8 +489,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _exportDb() async {
     try {
-      final dir = await getApplicationSupportDirectory();
-      final dbFile = File('${dir.path}/sats_stack_db.sqlite');
+      final dbFile = await databaseFile();
       if (!dbFile.existsSync()) {
         _showSnack('Database file not found');
         return;
@@ -503,10 +501,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
         type: FileType.custom,
       );
       if (savePath == null) return;
-      await dbFile.copy(savePath);
+
+      // VACUUM INTO rather than File.copy: the database is open and may be
+      // mid-write, and a byte copy of a live rollback-journal database can be
+      // torn — a backup that only fails when you need it. VACUUM INTO asks
+      // sqlite for a consistent snapshot, and compacts it on the way out.
+      // It refuses to overwrite, so clear whatever the save dialog created.
+      final dest = File(savePath);
+      if (dest.existsSync()) await dest.delete();
+      await app.db.customStatement('VACUUM INTO ?', [savePath]);
+
+      if (!mounted) return;
       _showSnack('Database exported successfully');
     } catch (e) {
-      _showSnack('Export failed: $e');
+      if (mounted) _showSnack('Export failed: $e');
+    }
+  }
+
+  /// Every sqlite file starts with this, so a user who picks the wrong file in
+  /// the restore dialog is told instead of losing their data to it.
+  static const _sqliteMagic = 'SQLite format 3';
+
+  Future<bool> _looksLikeSqlite(File file) async {
+    try {
+      if (!file.existsSync()) return false;
+      final handle = await file.open();
+      try {
+        final header = await handle.read(_sqliteMagic.length);
+        return String.fromCharCodes(header) == _sqliteMagic;
+      } finally {
+        await handle.close();
+      }
+    } catch (_) {
+      return false;
     }
   }
 
@@ -543,11 +570,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (result == null || result.files.single.path == null) return;
 
       final srcFile = File(result.files.single.path!);
-      final dir = await getApplicationSupportDirectory();
-      final destPath = '${dir.path}/sats_stack_db.sqlite';
+      if (!await _looksLikeSqlite(srcFile)) {
+        if (mounted) {
+          _showSnack('That file is not a Sats Stack database — nothing changed');
+        }
+        return;
+      }
+
+      final dbFile = await databaseFile();
 
       await app.db.close();
-      await srcFile.copy(destPath);
+      // Keep the database we are about to replace. Without this, picking the
+      // wrong backup is unrecoverable — and if the restored file turns out to
+      // be unreadable the app cannot even start, because AppDatabase is opened
+      // before runApp.
+      if (dbFile.existsSync()) {
+        await dbFile.copy('${dbFile.path}.bak');
+      }
+      await srcFile.copy(dbFile.path);
 
       // Restart prompt — hot reload / full restart needed to reopen DB
       if (mounted) {
@@ -574,10 +614,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _saveBitcoinServers() async {
-    await app.xpubService.saveSettings(url: _esploraUrlCtrl.text);
+    final typed = _esploraUrlCtrl.text.trim();
+    final saved = await app.xpubService.saveSettings(url: typed);
     await app.btcPriceService.loadSettings(); // reload from the same key
-    if (mounted) setState(() {}); // refresh privacy warning
-    _showSnack('Bitcoin server settings saved');
+    if (!mounted) return;
+    // Show the normalised form, so the user sees what is actually in use.
+    _esploraUrlCtrl.text = saved ?? '';
+    setState(() {}); // refresh privacy warning
+    if (typed.isNotEmpty && saved == null) {
+      // Falling back silently would leave them thinking a typo was accepted
+      // and their wallet scans were private.
+      _showSnack("'$typed' isn't a usable server URL — using mempool.space");
+    } else {
+      _showSnack('Bitcoin server settings saved');
+    }
   }
 
   Future<void> _testEsploraConnection() async {

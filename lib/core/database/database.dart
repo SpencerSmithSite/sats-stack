@@ -1,5 +1,11 @@
+import 'dart:io';
+
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+
+import '../../shared/constants/app_constants.dart';
 
 import 'tables/wallets_table.dart';
 import 'tables/transactions_table.dart';
@@ -30,6 +36,10 @@ part 'database.g.dart';
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
+
+  /// Runs against a caller-supplied executor — tests use
+  /// `NativeDatabase.memory()` so they never touch the on-disk database.
+  AppDatabase.forTesting(super.e);
 
   @override
   int get schemaVersion => 5;
@@ -150,5 +160,18 @@ class AppDatabase extends _$AppDatabase {
 }
 
 QueryExecutor _openConnection() {
-  return driftDatabase(name: 'sats_stack_db');
+  return driftDatabase(name: AppConstants.dbName);
+}
+
+/// The file drift actually opens.
+///
+/// There is one of these because there used to be two: Settings → Data built
+/// the path from `getApplicationSupportDirectory()` while `driftDatabase`
+/// defaults to `getApplicationDocumentsDirectory()`. Export therefore reported
+/// "Database file not found", and Import wrote the backup to a path nothing
+/// ever reads and then told the user the restore had succeeded. Anything that
+/// touches the database file must go through here.
+Future<File> databaseFile() async {
+  final dir = await getApplicationDocumentsDirectory();
+  return File(p.join(dir.path, '${AppConstants.dbName}.sqlite'));
 }

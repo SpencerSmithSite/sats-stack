@@ -207,17 +207,16 @@ class _FormBody extends StatelessWidget {
               enableSuggestions: false,
               style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
               validator: (v) {
-                if (v == null || v.trim().isEmpty) return 'Enter an xpub, ypub, or zpub';
-                final key = v.trim();
-                if (!key.startsWith('xpub') &&
-                    !key.startsWith('ypub') &&
-                    !key.startsWith('zpub') &&
-                    !key.startsWith('upub') &&
-                    !key.startsWith('vpub')) {
-                  return 'Must start with xpub, ypub, or zpub';
+                if (v == null || v.trim().isEmpty) {
+                  return 'Enter an xpub, ypub, or zpub';
                 }
+                // No prefix allow-list here: deriveAddresses decides, from the
+                // key's own version bytes, whether this is something the app
+                // can actually derive from — including the testnet prefixes.
                 try {
-                  xpubService.deriveAddresses(key, 0, 1);
+                  xpubService.deriveAddresses(v.trim(), 0, 1);
+                } on ArgumentError catch (e) {
+                  return e.message?.toString() ?? 'Invalid extended key';
                 } catch (_) {
                   return 'Invalid extended key — check for typos';
                 }
@@ -232,10 +231,22 @@ class _FormBody extends StatelessWidget {
                 final text = xpubController.text.trim();
                 if (text.isEmpty) return const SizedBox.shrink();
                 String hint;
-                if (text.startsWith('xpub')) hint = 'BIP44 · Legacy P2PKH';
-                else if (text.startsWith('ypub')) hint = 'BIP49 · Nested SegWit P2SH-P2WPKH';
-                else if (text.startsWith('zpub')) hint = 'BIP84 · Native SegWit P2WPKH';
-                else return const SizedBox.shrink();
+                // Derived from the key itself, so a testnet key is labelled
+                // as one rather than passing as mainnet.
+                final XpubFormat format;
+                final XpubNetwork network;
+                try {
+                  format = xpubService.detectFormat(text);
+                  network = xpubService.detectNetwork(text);
+                } catch (_) {
+                  return const SizedBox.shrink();
+                }
+                hint = switch (format) {
+                  XpubFormat.p2pkh => 'BIP44 · Legacy P2PKH',
+                  XpubFormat.p2shP2wpkh => 'BIP49 · Nested SegWit P2SH-P2WPKH',
+                  XpubFormat.p2wpkh => 'BIP84 · Native SegWit P2WPKH',
+                };
+                if (network == XpubNetwork.testnet) hint = '$hint · testnet';
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 4),
                   child: Text(
