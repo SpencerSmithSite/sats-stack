@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A new push supersedes the previous run on the same ref.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze-and-test:
+    name: Analyze and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          # Pinned to the SDK this project is actually developed against, so CI
+          # cannot pass on a version nobody runs. Bump it here when the local
+          # SDK moves.
+          flutter-version: 3.47.2
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      # --no-fatal-infos, deliberately: `flutter analyze` exits non-zero on
+      # info-level lints too, and there are ~40 of those (mostly withOpacity
+      # deprecations). Errors and warnings are held at zero, so those still
+      # fail the build — which is the line worth defending. Drop the flag once
+      # the infos are cleared.
+      - name: Analyze
+        run: flutter analyze --no-fatal-infos
+
+      - name: Test
+        run: flutter test
