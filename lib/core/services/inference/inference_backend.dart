@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:http/http.dart' as http;
 
 /// A source of generated answers.
@@ -123,3 +125,62 @@ class InferenceException implements Exception {
   @override
   String toString() => message;
 }
+
+/// Fails a response body that has gone quiet.
+///
+/// Every backend here applied its timeout to `client.send(...)`, which
+/// completes as soon as the response *headers* arrive. The body that follows
+/// could then stall forever: a dropped mobile connection mid-answer left the
+/// chat spinner turning with no error, and the import's cancel flag is only
+/// checked when a token arrives, so that stalled too.
+///
+/// A gap between events is the right thing to measure rather than a total
+/// budget — a long answer is not a broken one.
+extension IdleTimeout<T> on Stream<T> {
+  Stream<T> idleTimeout(Duration gap, String what) => timeout(
+        gap,
+        onTimeout: (sink) => sink.addError(
+          InferenceException(
+            '$what stopped responding after ${gap.inSeconds}s. '
+            'Check your connection and try again.',
+          ),
+        ),
+      );
+}
+
+/// Runs one generation at a time per platform channel.
+///
+/// `EventChannel.receiveBroadcastStream` installs a handler on the channel
+/// name, so a second concurrent listen *replaces* the first: the earlier
+/// listener then receives nothing and never completes, with no timeout to
+/// rescue it. Reachable without trying — the dashboard's monthly insight
+/// generating on Apple Intelligence while the user opens the AI tab and asks a
+/// question — and the symptom is a spinner that never stops.
+///
+/// Multiplexing would need request ids on both native sides. Queueing needs
+/// neither, and a queued answer is strictly better than a hung one: the second
+/// request starts as soon as the first finishes.
+Stream<T> serialisedOnChannel<T>(
+  String channelName,
+  Stream<T> Function() open,
+) async* {
+  final previous = _channelQueues[channelName];
+  final mine = Completer<void>();
+  _channelQueues[channelName] = mine;
+  try {
+    if (previous != null) {
+      // Someone else is generating. Their failure is not ours, so ignore it.
+      try {
+        await previous.future;
+      } catch (_) {}
+    }
+    yield* open();
+  } finally {
+    if (_channelQueues[channelName] == mine) {
+      _channelQueues.remove(channelName);
+    }
+    if (!mine.isCompleted) mine.complete();
+  }
+}
+
+final Map<String, Completer<void>> _channelQueues = {};

@@ -93,7 +93,8 @@ class GeminiNanoBackend implements InferenceBackend {
   static const MethodChannel _methods =
       MethodChannel('app.satsstack/gemini_nano');
   static const EventChannel _events =
-      EventChannel('app.satsstack/gemini_nano_stream');
+      EventChannel(_streamChannel);
+  static const _streamChannel = 'app.satsstack/gemini_nano_stream';
   static const EventChannel _downloadEvents =
       EventChannel('app.satsstack/gemini_nano_download');
 
@@ -203,16 +204,21 @@ class GeminiNanoBackend implements InferenceBackend {
         ? flat.prompt
         : '${flat.system}\n\n${flat.prompt}';
 
-    return _events
-        .receiveBroadcastStream({'prompt': prompt})
-        .map((event) => event as String)
-        .handleError((Object error) {
-          throw InferenceException(
-            error is PlatformException
-                ? error.message ?? 'Gemini Nano failed to answer.'
-                : error.toString(),
-          );
-        });
+    // Queued, and with a gap timeout — see the note on serialisedOnChannel.
+    return serialisedOnChannel(
+      _streamChannel,
+      () => _events
+          .receiveBroadcastStream({'prompt': prompt})
+          .map((event) => event as String)
+          .idleTimeout(const Duration(seconds: 90), 'Gemini Nano')
+          .handleError((Object error) {
+            throw InferenceException(
+              error is PlatformException
+                  ? error.message ?? 'Gemini Nano failed to answer.'
+                  : error.toString(),
+            );
+          }),
+    );
   }
 
   /// Empty on purpose: AICore serves one model and does not let the app pick.
