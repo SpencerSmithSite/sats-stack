@@ -359,17 +359,13 @@ numbers were accurate on 2026-10-17 and most files have moved since.
   and server fields.
 
 ### Duplication / shape
-- Sats formatting is reimplemented about a dozen times with the same regex and
-  subtly different sign handling, while `SatConverter.formatSats` exists and is
-  used in 6 places. The category colour map exists **3 times with divergent
-  colours** (Shopping is purple, blue or grey depending on the screen) and none
-  of them consults the user's own per-category colour from the DB — though the
-  transactions list and the dashboard's recent rows now at least receive the
-  user's `Category` row, so the colour is available to them. `_SectionHeader` ×4,
-  month selector ×3 with the arithmetic triplicated.
-- `sat_amount_display.dart` (95 lines) is dead code; so are `ElectrumService`,
-  `BitcoinNodeService`, `BitcoinDataSource` and `ManageWalletsSheet` — they
-  compile but nothing references them.
+- `_SectionHeader` ×4 (`dashboard_screen`, `stack_screen`, `analytics_screen`,
+  `settings_screen`) and the month selector ×3 (a public `MonthSelector` plus
+  private re-implementations in `analytics_screen` and `budgets_screen`), with
+  the prev/next/is-current arithmetic triplicated alongside.
+- `ElectrumService`, `BitcoinNodeService`, `BitcoinDataSource` and
+  `ManageWalletsSheet` compile but nothing references them — dead until
+  Settings → Servers gets a data-source picker.
 - `settings_screen.dart` (1,724), `onboarding_screen.dart` (1,745) and
   `stack_screen.dart` (1,156) each want splitting; `on_device_ai_section.dart`
   is the precedent.
@@ -508,6 +504,28 @@ Addressed 2026-10-18.
 - **One malformed entry no longer discards a whole model list.** `models.map((m)
   => m['name'] as String)` threw inside the `try` and returned `[]`, which the
   picker reports as "no models loaded — test the connection first".
+
+### One formatter, one palette
+
+Addressed 2026-10-18.
+
+- **Sats formatting** was the same regex hand-rolled in a dozen places, and
+  they disagreed: some kept the minus sign, some dropped it, so one number
+  could appear two ways on two screens. All of them now call
+  `SatConverter`, which gained `formatSatsSigned` (for deltas, where direction
+  is the point) and `abbreviateSats` (for axis labels). One copy of the regex
+  remains, in `SatConverter`.
+- **Category colours** existed in three maps that disagreed — Shopping was
+  purple in Analytics, blue-grey on the dashboard chart and grey in the CSV
+  sheet — and none consulted the colour the user picked in Settings →
+  Categories, which the `Categories` table has stored all along. One
+  `CategoryPalette` now decides: the user's colour first, then the shipped
+  colour for a seeded category, then a stable pick from a fallback set, so two
+  custom categories are no longer both the same grey. The dashboard chart
+  passes the user's colours through.
+- `sat_amount_display.dart` (95 lines, never referenced) is deleted.
+
+Both are covered by `formatting_test.dart`.
 
 ### Test gaps
 Month-boundary aggregation, `getProgress` after a category rename, the v6

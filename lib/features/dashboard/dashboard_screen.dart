@@ -15,6 +15,7 @@ import 'widgets/metric_tile.dart';
 import 'widgets/spending_chart.dart';
 import 'widgets/ai_insight_card.dart';
 import '../../main.dart' as app;
+import '../../shared/utils/sat_converter.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -396,6 +397,11 @@ class _DashboardContent extends StatelessWidget {
                 spendingByCategory: data.spendingByCategory,
                 btcPrice: btcPrice,
                 currency: currency,
+                // The colours the user actually chose. The chart used to draw
+                // its own fixed palette and ignore them.
+                categoryColorHex: {
+                  for (final e in categoriesByName.entries) e.key: e.value.color,
+                },
               ),
             ),
           ),
@@ -466,16 +472,8 @@ class _DashboardContent extends StatelessWidget {
     );
   }
 
-  String _satConversion(double fiat, double price) {
-    final sats = (fiat / price * 100000000).round();
-    final formatted = sats
-        .toString()
-        .replaceAllMapped(
-          RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-          (m) => '${m[1]},',
-        );
-    return '≈ $formatted sats';
-  }
+  String _satConversion(double fiat, double price) =>
+      '≈ ${SatConverter.formatSats(SatConverter.fiatToSats(fiat, price))} sats';
 }
 
 // ── Wallet breakdown ──────────────────────────────────────────────────────────
@@ -657,11 +655,7 @@ class _WalletRow extends StatelessWidget {
     );
   }
 
-  String _formatSats(int sats) => sats
-      .abs()
-      .toString()
-      .replaceAllMapped(
-          RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},');
+  String _formatSats(int sats) => SatConverter.formatSats(sats.abs());
 }
 
 // ── Section header ────────────────────────────────────────────────────────────

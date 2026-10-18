@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../shared/theme/app_colors.dart';
+import '../../../shared/theme/category_palette.dart';
 import '../../../shared/theme/app_text_styles.dart';
 import '../../../shared/utils/currency_utils.dart';
 import '../../../shared/utils/sat_converter.dart';
@@ -10,11 +11,16 @@ class SpendingChart extends StatelessWidget {
     required this.spendingByCategory,
     this.btcPrice,
     required this.currency,
+    this.categoryColorHex = const {},
   });
 
   final Map<String, double> spendingByCategory;
   final double? btcPrice;
   final String currency;
+
+  /// Category name → the colour the user chose in Settings → Categories.
+  /// Empty is fine; [CategoryPalette] has a default for every name.
+  final Map<String, String> categoryColorHex;
 
   @override
   Widget build(BuildContext context) {
@@ -47,6 +53,7 @@ class SpendingChart extends StatelessWidget {
             maxAmount: maxAmount,
             btcPrice: btcPrice,
             currency: currency,
+            categoryColorHex: categoryColorHex[entry.key],
           ),
       ],
     );
@@ -58,32 +65,25 @@ class _CategoryBar extends StatelessWidget {
     required this.category,
     required this.amount,
     required this.maxAmount,
+    this.categoryColorHex,
     this.btcPrice,
     required this.currency,
   });
 
   final String category;
+  final String? categoryColorHex;
   final double amount;
   final double maxAmount;
   final double? btcPrice;
   final String currency;
 
-  static const _categoryColors = <String, Color>{
-    'Food & Dining': Color(0xFFE24B4A),
-    'Transport': Color(0xFFF7931A),
-    'Housing': Color(0xFF888780),
-    'Shopping': Color(0xFF6E8ECC),
-    'Subscriptions': Color(0xFF9B6FCF),
-    'Entertainment': Color(0xFF1D9E75),
-    'Bitcoin': Color(0xFFF7931A),
-    'Income': Color(0xFF1D9E75),
-    'Other': Color(0xFF888780),
-  };
 
   @override
   Widget build(BuildContext context) {
     final barFraction = maxAmount > 0 ? (amount / maxAmount) : 0.0;
-    final color = _categoryColors[category] ?? AppColors.textSecondary;
+    // One palette for the whole app; this widget used to keep its own,
+    // which disagreed with Analytics on Shopping and Subscriptions.
+    final color = CategoryPalette.of(category, userHex: categoryColorHex);
     final fiatStr = CurrencyUtils.format(amount, currency, decimalDigits: 0);
     final sats = btcPrice != null && btcPrice! > 0
         ? SatConverter.fiatToSats(amount, btcPrice!)

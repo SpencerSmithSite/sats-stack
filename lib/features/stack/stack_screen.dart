@@ -15,6 +15,7 @@ import '../../shared/utils/currency_utils.dart';
 import '../../shared/widgets/btc_price_chip.dart';
 import '../../shared/widgets/empty_state.dart';
 import '../../main.dart' as app;
+import '../../shared/utils/sat_converter.dart';
 
 // ── Chart period ──────────────────────────────────────────────────────────────
 
@@ -396,12 +397,7 @@ class _StackHero extends StatelessWidget {
     );
   }
 
-  String _formatSats(int sats) {
-    return sats.toString().replaceAllMapped(
-          RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-          (m) => '${m[1]},',
-        );
-  }
+  String _formatSats(int sats) => SatConverter.formatSats(sats);
 }
 
 class _MonthChange extends StatelessWidget {
@@ -412,8 +408,7 @@ class _MonthChange extends StatelessWidget {
   Widget build(BuildContext context) {
     final positive = sats > 0;
     final color = positive ? AppColors.success : AppColors.danger;
-    final sign = positive ? '+' : '';
-    final formatted = '$sign${sats.abs().toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')}';
+    final formatted = SatConverter.formatSatsSigned(sats);
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -614,15 +609,9 @@ class _LineChart extends StatelessWidget {
     );
   }
 
-  String _abbrevSats(int sats) {
-    if (sats >= 1000000) return '${(sats / 1000000).toStringAsFixed(1)}M';
-    if (sats >= 1000) return '${(sats / 1000).toStringAsFixed(0)}k';
-    return '$sats';
-  }
+  String _abbrevSats(int sats) => SatConverter.abbreviateSats(sats);
 
-  String _formatSats(int sats) => sats
-      .toString()
-      .replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},');
+  String _formatSats(int sats) => SatConverter.formatSats(sats);
 }
 
 // ── Stack goal card ───────────────────────────────────────────────────────────
@@ -799,9 +788,7 @@ class _StackGoalCard extends StatelessWidget {
     );
   }
 
-  String _formatSats(int sats) => sats
-      .toString()
-      .replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},');
+  String _formatSats(int sats) => SatConverter.formatSats(sats);
 }
 
 // ── DCA Simulator ─────────────────────────────────────────────────────────────
@@ -970,9 +957,7 @@ class _ScenarioRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final fiatFmt = NumberFormat.currency(symbol: CurrencyUtils.symbolFor(app.currencyNotifier.value), decimalDigits: 0);
     final fiatValue = fiatFmt.format(sats / 1e8 * btcPrice);
-    final satsStr = sats
-        .toString()
-        .replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},');
+    final satsStr = SatConverter.formatSats(sats);
 
     return Row(
       children: [

@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 
 import '../../core/models/analytics_data.dart';
 import '../../shared/theme/app_colors.dart';
+import '../../shared/theme/category_palette.dart';
 import '../../shared/theme/app_text_styles.dart';
 import '../../shared/utils/currency_utils.dart';
 import '../../shared/widgets/empty_state.dart';
@@ -14,20 +15,11 @@ import '../../main.dart' as app;
 
 // ── Colour palette for categories ─────────────────────────────────────────────
 
-const _categoryColors = <String, Color>{
-  'Food & Dining': Color(0xFFE24B4A),
-  'Transport': Color(0xFFF7931A),
-  'Housing': Color(0xFF888780),
-  'Shopping': Color(0xFF9B59B6),
-  'Subscriptions': Color(0xFF3498DB),
-  'Entertainment': Color(0xFF1D9E75),
-  'Bitcoin': Color(0xFFF7931A),
-  'Income': Color(0xFF1D9E75),
-  'Other': Color(0xFF888780),
-};
-
-Color _colorFor(String category) =>
-    _categoryColors[category] ?? const Color(0xFF888780);
+/// Delegates to [CategoryPalette] so every screen draws a category the same
+/// colour — this file used to carry its own map, which disagreed with the
+/// dashboard's on Shopping and Subscriptions.
+Color _colorFor(String category, {String? userHex}) =>
+    CategoryPalette.of(category, userHex: userHex);
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 

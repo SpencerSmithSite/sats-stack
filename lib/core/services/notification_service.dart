@@ -1,6 +1,7 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../../shared/utils/currency_utils.dart';
+import '../../shared/utils/sat_converter.dart';
 
 /// Wraps [FlutterLocalNotificationsPlugin] and provides budget-specific
 /// notification helpers.
@@ -128,9 +129,7 @@ class NotificationService {
 
   // ── Private ────────────────────────────────────────────────────────────────
 
-  String _formatSats(int sats) => sats
-      .toString()
-      .replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},');
+  String _formatSats(int sats) => SatConverter.formatSats(sats);
 
   /// Asks for notification permission the first time there is something to
   /// show, and remembers the answer for the session.

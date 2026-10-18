@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import '../database/database.dart';
 import '../../shared/constants/app_constants.dart';
 import 'secure_key_store.dart';
+import '../../shared/utils/sat_converter.dart';
 
 /// Bitcoin Core / Knots JSON-RPC client.
 ///
@@ -143,9 +144,7 @@ class BitcoinNodeService {
     final chain = info['chain'] as String? ?? 'unknown';
     final progress = ((info['verificationprogress'] as double? ?? 0) * 100)
         .toStringAsFixed(1);
-    final formatted = blocks
-        .toString()
-        .replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},');
+    final formatted = SatConverter.formatSats(blocks);
     return 'Connected · $chain · block $formatted · ${progress}% synced';
   }
 }

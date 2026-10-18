@@ -3,6 +3,7 @@ import '../../../core/models/budget_progress.dart';
 import '../../../shared/theme/app_colors.dart';
 import '../../../shared/theme/app_text_styles.dart';
 import '../../../shared/utils/currency_utils.dart';
+import '../../../shared/utils/sat_converter.dart';
 
 class BudgetCard extends StatelessWidget {
   const BudgetCard({
@@ -207,10 +208,8 @@ class _SatsCost extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final sats = (fiat / btcPrice * 100000000).round();
-    final formatted = sats
-        .toString()
-        .replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},');
+    final formatted =
+        SatConverter.formatSats(SatConverter.fiatToSats(fiat, btcPrice));
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [

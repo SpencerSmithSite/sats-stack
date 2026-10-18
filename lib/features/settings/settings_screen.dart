@@ -22,6 +22,7 @@ import '../../shared/utils/platform_utils.dart';
 import '../../shared/widgets/ai_privacy_disclosure.dart';
 import 'widgets/categories_sheet.dart';
 import 'widgets/on_device_ai_section.dart';
+import '../../shared/utils/sat_converter.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -710,9 +711,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  String _fmtInt(int n) => n
-      .toString()
-      .replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},');
+  String _fmtInt(int n) => SatConverter.formatSats(n);
 
   bool get _usingDefaultServer {
     final text = _esploraUrlCtrl.text.trim();

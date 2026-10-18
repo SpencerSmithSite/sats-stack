@@ -13,13 +13,37 @@ abstract final class SatConverter {
     return sats / _satsPerBtc * btcPriceFiat;
   }
 
-  /// Format sat amount for display: e.g. 1,234,567 sats
+  static final _thousands = RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))');
+
+  /// Thousands-separated, e.g. `1,234,567`. Negative values keep their sign.
+  ///
+  /// This regex was hand-rolled in a dozen places, several of which differed
+  /// in whether they kept the sign, so the same number could appear with and
+  /// without its minus on two screens.
   static String formatSats(int sats) {
-    final abs = sats.abs();
-    final formatted = abs.toString().replaceAllMapped(
-          RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-          (m) => '${m[1]},',
-        );
+    final formatted = _groupDigits(sats.abs());
     return sats < 0 ? '-$formatted' : formatted;
   }
+
+  /// Always signed, e.g. `+1,234` / `-1,234`. For deltas, where the direction
+  /// is the point.
+  static String formatSatsSigned(int sats) {
+    final formatted = _groupDigits(sats.abs());
+    return sats < 0 ? '-$formatted' : '+$formatted';
+  }
+
+  /// Short form for axis labels and tight tiles: `1.2M`, `45.6k`, `880`.
+  static String abbreviateSats(int sats) {
+    final abs = sats.abs();
+    final sign = sats < 0 ? '-' : '';
+    if (abs >= 100000000) {
+      return '$sign${(abs / 100000000).toStringAsFixed(2)} BTC';
+    }
+    if (abs >= 1000000) return '$sign${(abs / 1000000).toStringAsFixed(1)}M';
+    if (abs >= 1000) return '$sign${(abs / 1000).toStringAsFixed(1)}k';
+    return '$sign$abs';
+  }
+
+  static String _groupDigits(int value) =>
+      value.toString().replaceAllMapped(_thousands, (m) => '${m[1]},');
 }

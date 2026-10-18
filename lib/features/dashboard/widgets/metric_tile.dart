@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../shared/theme/app_colors.dart';
 import '../../../shared/theme/app_text_styles.dart';
+import '../../../shared/utils/sat_converter.dart';
 
 class MetricTile extends StatelessWidget {
   const MetricTile({
@@ -160,9 +161,5 @@ class StackGoalTile extends StatelessWidget {
     );
   }
 
-  String _fmt(int sats) =>
-      sats.toString().replaceAllMapped(
-            RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-            (m) => '${m[1]},',
-          );
+  String _fmt(int sats) => SatConverter.formatSats(sats);
 }
