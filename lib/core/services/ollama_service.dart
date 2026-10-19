@@ -10,6 +10,7 @@ import '../database/database.dart';
 import '../models/ai_provider.dart';
 import '../../shared/constants/app_constants.dart';
 import '../../shared/utils/platform_utils.dart';
+import '../../shared/utils/url_utils.dart';
 import 'inference/cloud_backend.dart';
 import 'inference/gemini_nano_backend.dart';
 import 'inference/inference_backend.dart';
@@ -203,11 +204,18 @@ class OllamaService {
   /// those are hardware the user controls, so "nothing leaves your device" is
   /// close enough to true to say. A public hostname is not, however much the
   /// user trusts the box — it crosses the internet to get there.
+  ///
+  /// Fails **closed**: anything that is not blank and yields no host is
+  /// treated as remote. It used to fail open, so `ollama.example.com:11434` —
+  /// which `Uri` reads as a *scheme* with no host — was called local: no
+  /// consent prompt on import, auto-insight on, and a false privacy claim.
+  /// The setters below normalise on save so that input now gets a host; this
+  /// is the backstop for a value that still cannot be parsed.
   static bool isLocalEndpoint(String url) {
-    final host = Uri.tryParse(url)?.host ?? '';
-    // Unparseable or empty means the field is unset and a localhost default is
-    // in force; treating that as local matches what actually happens.
-    if (host.isEmpty) return true;
+    // Blank means the field is unset and a localhost default is in force.
+    if (url.trim().isEmpty) return true;
+    final host = Uri.tryParse(url.trim())?.host ?? '';
+    if (host.isEmpty) return false;
     if (host == 'localhost' ||
         host == '::1' ||
         host.endsWith('.local') ||
@@ -348,18 +356,21 @@ class OllamaService {
     final map = {for (final r in rows) r.key: r.value};
 
     // Ollama
-    _baseUrl = map[AppConstants.settingOllamaUrl] ?? AppConstants.defaultOllamaUrl;
+    _baseUrl = _serverUrl(
+        map[AppConstants.settingOllamaUrl], AppConstants.defaultOllamaUrl);
     _selectedModel = map[AppConstants.settingOllamaModel];
     _isConnected = map[AppConstants.settingOllamaConnected] == 'true';
 
     // LM Studio
-    _lmStudioBaseUrl =
-        map[AppConstants.settingLmStudioUrl] ?? AppConstants.defaultLmStudioUrl;
+    _lmStudioBaseUrl = _serverUrl(
+        map[AppConstants.settingLmStudioUrl], AppConstants.defaultLmStudioUrl);
     _lmStudioSelectedModel = map[AppConstants.settingLmStudioModel];
     _lmStudioConnected = map[AppConstants.settingLmStudioConnected] == 'true';
 
     // Maple
-    _mapleBaseUrl = map[AppConstants.settingMapleUrl] ?? AppConstants.defaultMapleUrl;
+    _mapleBaseUrl = _serverUrl(
+        map[AppConstants.settingMapleUrl], AppConstants.defaultMapleUrl,
+        scheme: 'https');
     _mapleSelectedModel = map[AppConstants.settingMapleModel];
     _mapleConnected = map[AppConstants.settingMapleConnected] == 'true';
     _mapleApiKey = await _keyStore.read(_mapleKeyId);
@@ -423,6 +434,18 @@ class OllamaService {
         .go();
   }
 
+  /// The URL to use for a server field the user typed into.
+  ///
+  /// Blank is the default. A bare `host:port` gets [scheme] — http for Ollama
+  /// and LM Studio, which serve plain HTTP out of the box. Anything that still
+  /// cannot be read is kept as typed, so the user sees their own input and the
+  /// connection test fails on it, while [isLocalEndpoint] treats it as remote.
+  static String _serverUrl(String? raw, String fallback,
+      {String scheme = 'http'}) {
+    if (raw == null || raw.trim().isEmpty) return fallback;
+    return normalizeServerUrl(raw, defaultScheme: scheme) ?? raw.trim();
+  }
+
   /// Persist the downloadable-model choice.
   Future<void> saveLocalModel(LocalModelChoice choice) async {
     _localModelId = choice.id;
@@ -432,8 +455,8 @@ class OllamaService {
   /// Persist Ollama settings (URL and/or model).
   Future<void> saveSettings({String? url, String? model}) async {
     if (url != null) {
-      _baseUrl = url;
-      await _upsertSetting(AppConstants.settingOllamaUrl, url);
+      _baseUrl = _serverUrl(url, AppConstants.defaultOllamaUrl);
+      await _upsertSetting(AppConstants.settingOllamaUrl, _baseUrl);
     }
     if (model != null) {
       _selectedModel = model;
@@ -444,8 +467,8 @@ class OllamaService {
   /// Persist LM Studio settings.
   Future<void> saveLmStudioSettings({String? url, String? model}) async {
     if (url != null) {
-      _lmStudioBaseUrl = url;
-      await _upsertSetting(AppConstants.settingLmStudioUrl, url);
+      _lmStudioBaseUrl = _serverUrl(url, AppConstants.defaultLmStudioUrl);
+      await _upsertSetting(AppConstants.settingLmStudioUrl, _lmStudioBaseUrl);
     }
     if (model != null) {
       _lmStudioSelectedModel = model;
@@ -464,8 +487,9 @@ class OllamaService {
     String? apiKey,
   }) async {
     if (url != null) {
-      _mapleBaseUrl = url;
-      await _upsertSetting(AppConstants.settingMapleUrl, url);
+      _mapleBaseUrl =
+          _serverUrl(url, AppConstants.defaultMapleUrl, scheme: 'https');
+      await _upsertSetting(AppConstants.settingMapleUrl, _mapleBaseUrl);
     }
     if (model != null) {
       _mapleSelectedModel = model;
@@ -787,6 +811,10 @@ Top spending categories this month:
         lower.contains('bakllava') ||
         lower.contains('vl');
   }
+
+  /// Whether the active backend can read an image at all — see
+  /// [chatWithImage]. None of the on-device backends can.
+  bool get canReadImages => !_activeProvider.isOnDevice;
 
   /// Streams response tokens from the active provider for a vision (image+text)
   /// request. [base64Image] is raw base64-encoded image data (no data: prefix).

@@ -22,6 +22,7 @@ import '../../shared/utils/platform_utils.dart';
 import 'widgets/settings_widgets.dart';
 import '../../shared/widgets/ai_privacy_disclosure.dart';
 import 'widgets/categories_sheet.dart';
+import 'widgets/import_consent_section.dart';
 import 'widgets/on_device_ai_section.dart';
 import '../../shared/utils/sat_converter.dart';
 
@@ -286,11 +287,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (mounted) setState(() => _onDeviceStatus = status);
   }
 
+  /// Shows the URL actually saved, which can differ from what was typed: a
+  /// bare `host:port` gains its scheme. Left alone when the field is blank,
+  /// so clearing it does not refill it with the default.
+  void _showEffectiveUrl(TextEditingController ctrl, String saved) {
+    if (ctrl.text.trim().isNotEmpty && ctrl.text != saved) ctrl.text = saved;
+  }
+
   // ── Ollama ──────────────────────────────────────────────────────────────
 
   Future<void> _saveOllama() async {
     final url = _ollamaUrlCtrl.text.trim();
     await app.ollamaService.saveSettings(url: url, model: _selectedModel);
+    _showEffectiveUrl(_ollamaUrlCtrl, app.ollamaService.baseUrl);
     if (url.isEmpty) {
       await app.ollamaService.setConnected(false);
       _refreshAiEnabled();
@@ -308,6 +317,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _connectionStatus = null;
     });
     await app.ollamaService.saveSettings(url: _ollamaUrlCtrl.text.trim());
+    _showEffectiveUrl(_ollamaUrlCtrl, app.ollamaService.baseUrl);
     final ok = await app.ollamaService.isAvailable();
     if (!mounted) return;
     if (ok) {
@@ -357,6 +367,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
     final url = _lmStudioUrlCtrl.text.trim();
     await app.ollamaService.saveLmStudioSettings(url: url);
+    _showEffectiveUrl(_lmStudioUrlCtrl, app.ollamaService.lmStudioBaseUrl);
     final ok = await app.ollamaService.isAvailable();
     if (!mounted) return;
     if (ok) {
@@ -474,6 +485,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final url = _mapleUrlCtrl.text.trim();
     final key = _mapleApiKeyCtrl.text.trim();
     await app.ollamaService.saveMapleSettings(url: url, apiKey: key);
+    _showEffectiveUrl(_mapleUrlCtrl, app.ollamaService.mapleBaseUrl);
     final ok = await app.ollamaService.isAvailable();
     if (!mounted) return;
     if (ok) {
@@ -1256,6 +1268,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 if (_selectedProvider == AiProvider.localModel)
                   LocalModelSection(onChanged: _refreshOnDeviceStatus),
+                const ImportConsentSection(),
 
                 const Divider(indent: 16, endIndent: 16),
               ],

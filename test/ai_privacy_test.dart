@@ -54,6 +54,14 @@ void main() {
         expect(OllamaService.isLocalEndpoint(url), isFalse, reason: url);
       }
     });
+
+    test('a URL with no readable host fails closed', () {
+      // `Uri` reads `ollama.example.com` here as the *scheme*, leaving no
+      // host, and the old check called a hostless URL local.
+      expect(OllamaService.isLocalEndpoint('ollama.example.com:11434'),
+          isFalse);
+      expect(OllamaService.isLocalEndpoint('not a url at all'), isFalse);
+    });
   });
 
   group('the enum invariant still holds', () {
@@ -130,6 +138,23 @@ void main() {
 
       await ollama.setActiveProvider(AiProvider.claude);
       expect(await importService.offDeviceImportAllowed(), isTrue);
+    });
+
+    test('a bare host:port is normalised on save, not taken as local',
+        () async {
+      await ollama.setActiveProvider(AiProvider.ollama);
+      await ollama.saveSettings(url: 'ollama.example.com:11434');
+      expect(ollama.baseUrl, 'http://ollama.example.com:11434');
+      expect(ollama.sendsDataOffDevice, isTrue);
+      expect(ollama.activeDataRecipient, contains('ollama.example.com'));
+
+      await ollama.saveSettings(url: '192.168.1.5:11434/');
+      expect(ollama.baseUrl, 'http://192.168.1.5:11434');
+      expect(ollama.sendsDataOffDevice, isFalse);
+
+      // Blank is "use the default", which is this machine.
+      await ollama.saveSettings(url: '');
+      expect(ollama.sendsDataOffDevice, isFalse);
     });
 
     test('a remote self-hosted server is disclosed by host', () async {

@@ -13,7 +13,9 @@ import 'package:http/http.dart' as http;
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 
 import '../database/database.dart';
+import '../models/ai_provider.dart';
 import 'btc_price_service.dart';
+import 'inference/inference_backend.dart';
 import 'ollama_service.dart';
 import '../../data/institution_profiles.dart';
 import '../../shared/constants/app_constants.dart';
@@ -125,6 +127,9 @@ class ImportResult {
     this.pdfAiNotReady = false,
     this.pdfScanned = false,
     this.aiConsentDeclined = false,
+    this.sentTo,
+    this.aiLabel,
+    this.errorMessage,
     this.rawCsvContent,
     this.csvRows,
     this.csvHeaders,
@@ -145,11 +150,49 @@ class ImportResult {
   /// True when reading this file needed a third party and the user said no.
   /// Not a failure — the file is untouched and nothing was sent.
   final bool aiConsentDeclined;
+
+  /// Who was sent the file's contents to read it, phrased for a sentence, or
+  /// null if nothing left the device. Set whenever an off-device AI tier ran
+  /// — including when it then found nothing and a local tier took over, since
+  /// the upload happened either way.
+  ///
+  /// Nothing used to say an upload had happened: one "Send" tap and every
+  /// later import went out silently.
+  final String? sentTo;
+
+  /// The AI that read the file, by name ("Claude", "Ollama"), when an AI tier
+  /// produced [transactions]. The preview used to say "Ollama AI" whichever
+  /// provider it was.
+  final String? aiLabel;
+
+  /// Why nothing could be read, in words the user can act on, when the cause
+  /// is known — for instance that the selected backend cannot read images.
+  final String? errorMessage;
   final ImportFileType fileType;
   final String fileName;
   final String? rawCsvContent;
   final List<List<String>>? csvRows;
   final List<String>? csvHeaders;
+
+  /// This result with who read it attached — see [sentTo] and [aiLabel].
+  ImportResult withProvenance({String? sentTo, String? aiLabel}) =>
+      ImportResult(
+        transactions: transactions,
+        fileType: fileType,
+        fileName: fileName,
+        tierUsed: tierUsed,
+        needsManualMapping: needsManualMapping,
+        isPdfNoAi: isPdfNoAi,
+        pdfAiNotReady: pdfAiNotReady,
+        pdfScanned: pdfScanned,
+        aiConsentDeclined: aiConsentDeclined,
+        sentTo: sentTo,
+        aiLabel: aiLabel,
+        errorMessage: errorMessage,
+        rawCsvContent: rawCsvContent,
+        csvRows: csvRows,
+        csvHeaders: csvHeaders,
+      );
 }
 
 class ImportSummary {
@@ -205,6 +248,8 @@ class ImportService {
     _importCancelled = false;
     _activeImportClient = null;
     _consentThisImport = null;
+    _consentToRemember = false;
+    _sentThisImport = false;
   }
 
   void _checkCancelled() {
@@ -224,6 +269,13 @@ class ImportService {
   /// Set for the duration of one import once the user has answered, so a
   /// multi-tier import never asks twice.
   bool? _consentThisImport;
+
+  /// The user said yes in this import's dialog, and it is to be remembered
+  /// once the import completes — see [_finishImport].
+  bool _consentToRemember = false;
+
+  /// An off-device AI tier ran during this import, so the file was uploaded.
+  bool _sentThisImport = false;
 
   /// Whether the user has already agreed to let the active provider's
   /// recipient read their statements. Always true for a private backend.
@@ -248,11 +300,45 @@ class ImportService {
         );
   }
 
+  /// Every provider currently allowed to read imported statements.
+  ///
+  /// Consent is stored per provider, so this can name more than the active
+  /// one: agreeing for Claude and later switching to ChatGPT leaves Claude's
+  /// answer in place for when the user switches back.
+  Future<List<AiProvider>> providersAllowedToReadImports() async {
+    final rows = await (db.select(db.appSettings)
+          ..where((t) => t.key.isIn(_consentKeys.keys)))
+        .get();
+    return [
+      for (final r in rows)
+        if (r.value == 'true') _consentKeys[r.key]!,
+    ]..sort((a, b) => a.index.compareTo(b.index));
+  }
+
+  /// Withdraws every stored consent, so the next import that would upload a
+  /// file asks first again.
+  Future<void> revokeOffDeviceImportConsent() async {
+    await (db.delete(db.appSettings)
+          ..where((t) => t.key.isIn(_consentKeys.keys)))
+        .go();
+  }
+
+  /// Every provider's consent key. Matched exactly rather than by a `LIKE`
+  /// prefix, in which `_` is a wildcard.
+  static final _consentKeys = {
+    for (final p in AiProvider.values) AppConstants.aiImportConsentKey(p.key): p,
+  };
+
   /// May the AI tier run for this file?
   ///
   /// Private backend: yes. Otherwise the stored answer, or [onOffDeviceConsent]
-  /// is asked and the answer remembered. With no callback and no stored
-  /// consent the answer is no — a caller that cannot ask must not send.
+  /// is asked. With no callback and no stored consent the answer is no — a
+  /// caller that cannot ask must not send.
+  ///
+  /// A yes from the dialog is not stored here. It used to be, at the tap, so
+  /// cancelling the import a second later — or the import failing — still
+  /// left every future import uploading without asking. It is remembered by
+  /// [_finishImport] once the import has actually completed.
   Future<bool> _aiTierPermitted(
     Future<bool> Function(String recipient)? onOffDeviceConsent,
   ) async {
@@ -264,8 +350,25 @@ class ImportService {
       return _consentThisImport = false;
     }
     final granted = await onOffDeviceConsent(recipient);
-    await setOffDeviceImportAllowed(granted);
+    _consentToRemember = granted;
     return _consentThisImport = granted;
+  }
+
+  /// Called immediately before an AI tier hands the file to the backend.
+  void _markSending() {
+    if (ollama.sendsDataOffDevice) _sentThisImport = true;
+  }
+
+  /// Completes an import that ran to the end without being cancelled:
+  /// remembers a consent given during it, and records who read the file.
+  Future<ImportResult> _finishImport(ImportResult result) async {
+    if (_consentToRemember) await setOffDeviceImportAllowed(true);
+    final aiTier = result.tierUsed == ImportTier.ollama ||
+        result.tierUsed == ImportTier.image;
+    return result.withProvenance(
+      sentTo: _sentThisImport ? ollama.activeDataRecipient : null,
+      aiLabel: aiTier ? ollama.activeProvider.label : null,
+    );
   }
 
   // ── Source currency ──────────────────────────────────────────────────────
@@ -329,7 +432,7 @@ class ImportService {
     if (result.transactions.isNotEmpty) {
       await _applyDescriptionMappings(result.transactions, sourceId);
     }
-    return result;
+    return _finishImport(result);
   }
 
   /// Entry point for image import (camera or photo library).
@@ -350,7 +453,7 @@ class ImportService {
     if (result.transactions.isNotEmpty) {
       await _applyDescriptionMappings(result.transactions, sourceId);
     }
-    return result;
+    return _finishImport(result);
   }
 
   /// Reads a CSV file and returns an [ImportResult] ready for the manual
@@ -434,6 +537,7 @@ class ImportService {
       );
     }
 
+    _markSending();
     final txns = await parseWithOllama(
       text,
       fallbackCurrency: currency,
@@ -462,6 +566,19 @@ class ImportService {
     onStageChange?.call('Preparing image…');
     await Future.delayed(const Duration(milliseconds: 60));
     _checkCancelled();
+
+    // Checked before asking for consent: there is no point asking to send a
+    // photo to a backend that will then refuse it.
+    if (!ollama.canReadImages) {
+      return ImportResult(
+        transactions: [],
+        fileType: ImportFileType.image,
+        fileName: fileName,
+        errorMessage: '${ollama.backend.displayName} cannot read images. '
+            'Switch to Ollama, LM Studio or a hosted model in Settings → AI '
+            'to import from a photo.',
+      );
+    }
 
     // Reading a photo of a statement has no local fallback — it is the model or
     // nothing. Ask before the image is encoded, not after.
@@ -513,6 +630,7 @@ Rules:
 
       final buffer = StringBuffer();
       var tokenCount = 0;
+      _markSending();
       await for (final token in ollama.chatWithImage(
         prompt,
         base64Image,
@@ -575,6 +693,18 @@ Rules:
       );
     } on ImportCancelledException {
       rethrow;
+    } on InferenceException catch (e) {
+      // The backend's own explanation — a rejected key, an image too large —
+      // is worth more than the generic advice the preview would otherwise
+      // show. It used to be swallowed by the catch-all below.
+      if (_importCancelled) throw const ImportCancelledException();
+      return ImportResult(
+        transactions: [],
+        fileType: ImportFileType.image,
+        fileName: fileName,
+        isPdfNoAi: true,
+        errorMessage: e.message,
+      );
     } catch (_) {
       if (_importCancelled) throw const ImportCancelledException();
       return ImportResult(
@@ -655,6 +785,7 @@ Rules:
     _checkCancelled();
 
     if (ollamaReady && await _aiTierPermitted(onOffDeviceConsent)) {
+      _markSending();
       final txns = await parseWithOllama(
         content,
         fallbackCurrency: currency,

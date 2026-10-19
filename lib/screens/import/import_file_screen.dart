@@ -60,15 +60,28 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
   /// — account numbers, balances, every line item — went to whichever hosted
   /// provider was selected before anything local was tried, and no screen in
   /// the import flow said so. Answering is remembered per provider.
-  Future<bool> _askOffDeviceConsent(String recipient, String subject) async {
+  /// Asks whether [subject] may be uploaded to [recipient].
+  ///
+  /// [hasLocalFallback] is whether saying no still gets the file read — true
+  /// for a statement, which the built-in rules can parse, and false for a
+  /// photo, which only a model can. The copy used to promise the local
+  /// fallback for both.
+  Future<bool> _askOffDeviceConsent(
+    String recipient,
+    String subject, {
+    required bool hasLocalFallback,
+  }) async {
     if (!mounted) return false;
     final provider = app.ollamaService.activeProvider;
 
     // Pause the progress overlay's stage text while the question is up, so it
     // does not read "AI is reading your statement…" behind the dialog.
-    if (mounted) {
-      setState(() => _currentStage = 'Waiting for your answer…');
-    }
+    setState(() => _currentStage = 'Waiting for your answer…');
+
+    // The timeout is for a slow model, not a slow answer. Left running, it
+    // fired behind the dialog after five minutes and stacked a second dialog
+    // over the first.
+    _timeoutTimer?.cancel();
 
     final granted = await showDialog<bool>(
       context: context,
@@ -94,9 +107,12 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
               ),
               const SizedBox(height: 12),
               Text(
-                'Say no and the file is read on this device with the built-in '
-                'rules instead. You can change the AI provider in Settings → '
-                'AI at any time.',
+                '${hasLocalFallback ? 'Say no and the file is read on this '
+                    'device with the built-in rules instead.' : 'A photo can '
+                    'only be read by an AI model, so saying no cancels this '
+                    'import.'} Say yes and later imports are sent to '
+                    '${provider.label} without asking again — you can '
+                    'withdraw that in Settings → Servers.',
                 style: Theme.of(ctx).textTheme.bodySmall?.copyWith(height: 1.45),
               ),
             ],
@@ -105,7 +121,7 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('No, keep it local'),
+            child: Text(hasLocalFallback ? 'No, keep it local' : "Don't send"),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
@@ -114,7 +130,22 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
         ],
       ),
     );
+    if (mounted && _isProcessing) _armTimeout();
     return granted ?? false;
+  }
+
+  /// What the running import does if it takes longer than five minutes.
+  VoidCallback? _onTimeout;
+
+  /// (Re)starts the five-minute timeout for the running import.
+  void _armTimeout([VoidCallback? onTimeout]) {
+    if (onTimeout != null) _onTimeout = onTimeout;
+    final action = _onTimeout;
+    _timeoutTimer?.cancel();
+    if (action == null) return;
+    _timeoutTimer = Timer(const Duration(minutes: 5), () {
+      if (mounted && _isProcessing) action();
+    });
   }
 
   @override
@@ -350,9 +381,7 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
     });
 
     // Timeout after 5 minutes
-    _timeoutTimer = Timer(const Duration(minutes: 5), () {
-      if (mounted && _isProcessing) _handleTimeout(source);
-    });
+    _armTimeout(() => _handleTimeout(source));
 
     // Yield to the event loop so the overlay renders and the token stream
     // subscription is fully active before any import work begins.
@@ -367,8 +396,9 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
         onStageChange: (stage) {
           if (mounted) setState(() => _currentStage = stage);
         },
-        onOffDeviceConsent: (recipient) =>
-            _askOffDeviceConsent(recipient, fileName),
+        onOffDeviceConsent: (recipient) => _askOffDeviceConsent(
+            recipient, fileName,
+            hasLocalFallback: true),
       );
     } on ImportCancelledException {
       _cleanupProcessing();
@@ -415,6 +445,7 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
     _tokenSub?.cancel();
     _cancelTimer = null;
     _timeoutTimer = null;
+    _onTimeout = null;
     _tokenSub = null;
     if (mounted) {
       setState(() {
@@ -490,6 +521,14 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
     // Require AI before picking
     if (!app.aiEnabledNotifier.value) {
       await _showImageNoAiDialog();
+      return;
+    }
+    // Before picking, not after: choosing a photo only to be told the
+    // selected backend cannot see it wastes the user's time.
+    if (!app.ollamaService.canReadImages) {
+      await _showImageNoAiDialog(
+        reason: '${app.ollamaService.backend.displayName} cannot read images.',
+      );
       return;
     }
 
@@ -592,9 +631,7 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
     _cancelTimer = Timer(const Duration(seconds: 5), () {
       if (mounted && _isProcessing) setState(() => _showCancel = true);
     });
-    _timeoutTimer = Timer(const Duration(minutes: 5), () {
-      if (mounted && _isProcessing) _handleImageTimeout();
-    });
+    _armTimeout(_handleImageTimeout);
 
     await Future.microtask(() {});
 
@@ -606,8 +643,9 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
         onStageChange: (stage) {
           if (mounted) setState(() => _currentStage = stage);
         },
-        onOffDeviceConsent: (recipient) =>
-            _askOffDeviceConsent(recipient, 'this photo'),
+        onOffDeviceConsent: (recipient) => _askOffDeviceConsent(
+            recipient, 'this photo',
+            hasLocalFallback: false),
       );
     } on ImportCancelledException {
       _cleanupProcessing();
@@ -636,14 +674,15 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
     );
   }
 
-  Future<void> _showImageNoAiDialog() async {
+  Future<void> _showImageNoAiDialog({String? reason}) async {
     await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('AI required'),
-        content: const Text(
-          'Image import requires an AI provider with vision support. '
-          'Connect Ollama, LM Studio, or Maple in Settings.',
+        content: Text(
+          '${reason == null ? '' : '$reason '}Image import needs an AI model '
+          'that can see images: Ollama or LM Studio with a vision model, or a '
+          'hosted provider. Choose one in Settings → Servers.',
         ),
         actions: [
           TextButton(
