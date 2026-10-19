@@ -145,6 +145,6 @@ class BitcoinNodeService {
     final progress = ((info['verificationprogress'] as double? ?? 0) * 100)
         .toStringAsFixed(1);
     final formatted = SatConverter.formatSats(blocks);
-    return 'Connected · $chain · block $formatted · ${progress}% synced';
+    return 'Connected · $chain · block $formatted · $progress% synced';
   }
 }

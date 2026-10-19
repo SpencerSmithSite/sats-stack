@@ -146,7 +146,7 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 10, vertical: 6),
                           decoration: BoxDecoration(
-                            color: Colors.orange.withOpacity(0.15),
+                            color: Colors.orange.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Row(

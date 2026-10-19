@@ -999,7 +999,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         const SizedBox(height: 12),
                         if (_models.isNotEmpty)
                           DropdownButtonFormField<String>(
-                            value: _models.contains(_selectedModel)
+                            initialValue: _models.contains(_selectedModel)
                                 ? _selectedModel
                                 : null,
                             decoration:
@@ -1071,7 +1071,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         const SizedBox(height: 12),
                         if (_lmStudioModels.isNotEmpty)
                           DropdownButtonFormField<String>(
-                            value: _lmStudioModels
+                            initialValue: _lmStudioModels
                                     .contains(_lmStudioSelectedModel)
                                 ? _lmStudioSelectedModel
                                 : null,
@@ -1153,7 +1153,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         const SizedBox(height: 12),
                         if (_mapleModels.isNotEmpty)
                           DropdownButtonFormField<String>(
-                            value:
+                            initialValue:
                                 _mapleModels.contains(_mapleSelectedModel)
                                     ? _mapleSelectedModel
                                     : null,

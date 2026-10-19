@@ -20,10 +20,9 @@ History lives elsewhere and is not duplicated into this file:
   be the only branch on the remote.
 - **Everything lands through a PR.** CI (`.github/workflows/ci.yml`) runs
   `flutter analyze --no-fatal-infos` and `flutter test` on every one.
-- **Zero analyzer errors and warnings** is the standing bar. Info-level lints
-  are tolerated (~40, mostly `withOpacity` deprecations) and CI does not fail
-  on them, so clearing them is a deliberate task rather than something that
-  happens on its own.
+- **Zero analyzer issues** is the standing bar, infos included. CI runs a bare
+  `flutter analyze`, which exits non-zero on anything, so a new deprecation
+  cannot drift in unnoticed.
 - **When an item lands, move it to `AUDIT.md`'s "Fixed" section**, so this file
   only ever shows open work.
 
@@ -111,8 +110,6 @@ else.
   keeps a `.bak` on restore.
 - **BTC price alerts** — threshold notification via
   `flutter_local_notifications`, which now actually fires on iOS.
-- **Clear the ~40 info lints** (mostly `withOpacity` → `withValues`), then drop
-  `--no-fatal-infos` from CI so they cannot come back.
 - **Register the macOS bundle id** with Apple and switch `SecureKeyStore` to
   the data-protection keychain. Needed for any macOS distribution anyway; the
   comment in `secure_key_store.dart` explains why the file-based one is in use

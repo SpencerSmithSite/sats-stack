@@ -29,13 +29,12 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      # --no-fatal-infos, deliberately: `flutter analyze` exits non-zero on
-      # info-level lints too, and there are ~40 of those (mostly withOpacity
-      # deprecations). Errors and warnings are held at zero, so those still
-      # fail the build — which is the line worth defending. Drop the flag once
-      # the infos are cleared.
+      # No --no-fatal-infos: the ~40 info lints it existed to tolerate are
+      # cleared, so `flutter analyze` is now held at zero issues of any
+      # severity. It exits non-zero on infos as well as errors and warnings,
+      # which is what keeps them from drifting back one deprecation at a time.
       - name: Analyze
-        run: flutter analyze --no-fatal-infos
+        run: flutter analyze
 
       - name: Test
         run: flutter test

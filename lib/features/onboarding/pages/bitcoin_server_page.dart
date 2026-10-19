@@ -89,10 +89,10 @@ class BitcoinServerPage extends StatelessWidget {
               return Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: accent.withOpacity(isDark ? 0.12 : 0.08),
+                  color: accent.withValues(alpha: isDark ? 0.12 : 0.08),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                      color: accent.withOpacity(isDark ? 0.35 : 0.20)),
+                      color: accent.withValues(alpha: isDark ? 0.35 : 0.20)),
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,

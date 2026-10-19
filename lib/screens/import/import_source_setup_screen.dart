@@ -90,7 +90,7 @@ class _ImportSourceSetupScreenState extends State<ImportSourceSetupScreen> {
 
             // Account type
             DropdownButtonFormField<String>(
-              value: _type,
+              initialValue: _type,
               decoration: const InputDecoration(labelText: 'Account Type'),
               items: _types.entries
                   .map((e) => DropdownMenuItem(
@@ -111,7 +111,7 @@ class _ImportSourceSetupScreenState extends State<ImportSourceSetupScreen> {
 
             // Currency — dropdown + manual entry
             DropdownButtonFormField<String>(
-              value: _currencies.contains(_currency) ? _currency : 'other',
+              initialValue: _currencies.contains(_currency) ? _currency : 'other',
               decoration: const InputDecoration(labelText: 'Currency'),
               items: [
                 ..._currencies.map((c) => DropdownMenuItem(value: c, child: Text(c))),

@@ -245,8 +245,14 @@ class XpubService {
       ..setAll(33, _intTo4BytesBE(index));
 
     final hmac = Hmac(sha512, parentChaincode);
+    // I, IL and IR are BIP32's own names for the HMAC output and its halves.
+    // Keeping them makes this checkable line-by-line against the spec, which
+    // is worth more here than the naming lint.
+    // ignore: non_constant_identifier_names
     final I = Uint8List.fromList(hmac.convert(data).bytes);
+    // ignore: non_constant_identifier_names
     final IL = I.sublist(0, 32);
+    // ignore: non_constant_identifier_names
     final IR = I.sublist(32, 64);
 
     final ilInt = BigInt.parse(

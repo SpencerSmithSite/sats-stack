@@ -924,7 +924,7 @@ class _AiSettingsSheetState extends State<_AiSettingsSheet> {
                 const SizedBox(height: 16),
                 if (widget.models.isNotEmpty) ...[
                   DropdownButtonFormField<String>(
-                    value: widget.models.contains(_selectedModel) ? _selectedModel : widget.models.firstOrNull,
+                    initialValue: widget.models.contains(_selectedModel) ? _selectedModel : widget.models.firstOrNull,
                     decoration: const InputDecoration(labelText: 'Model'),
                     items: [
                       for (final m in widget.models)

@@ -3,6 +3,8 @@
 /// If the scripthash tests fail, get_history returns empty for every address.
 /// If the address-decoding tests fail, received/spent sats are always 0 and
 /// every transaction is silently dropped.
+library;
+
 import 'dart:typed_data';
 
 import 'package:bs58check/bs58check.dart' as bs58check;

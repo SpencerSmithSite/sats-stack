@@ -126,8 +126,8 @@ class SettingsBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = iconColor.withOpacity(isDark ? 0.12 : 0.08);
-    final border = iconColor.withOpacity(isDark ? 0.35 : 0.20);
+    final bg = iconColor.withValues(alpha: isDark ? 0.12 : 0.08);
+    final border = iconColor.withValues(alpha: isDark ? 0.35 : 0.20);
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(

@@ -164,7 +164,7 @@ class _ImportColumnMapperScreenState extends State<ImportColumnMapperScreen> {
           // Instruction banner
           Container(
             width: double.infinity,
-            color: cs.primaryContainer.withOpacity(0.3),
+            color: cs.primaryContainer.withValues(alpha: 0.3),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             child: Text(
               'Assign each column from your CSV to a field below. '
@@ -242,7 +242,7 @@ class _ImportColumnMapperScreenState extends State<ImportColumnMapperScreen> {
                         Expanded(
                           flex: 3,
                           child: DropdownButtonFormField<String>(
-                            value: _assignments[i],
+                            initialValue: _assignments[i],
                             isDense: true,
                             decoration: const InputDecoration(
                               contentPadding: EdgeInsets.symmetric(
@@ -271,7 +271,7 @@ class _ImportColumnMapperScreenState extends State<ImportColumnMapperScreen> {
                       style: Theme.of(context).textTheme.labelLarge),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
-                    value: _mapping.dateFormat,
+                    initialValue: _mapping.dateFormat,
                     decoration: const InputDecoration(
                       contentPadding:
                           EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -303,15 +303,9 @@ class _ImportColumnMapperScreenState extends State<ImportColumnMapperScreen> {
                     final amtStr = _mapping.amountColumn != null &&
                             _mapping.amountColumn! < row.length
                         ? row[_mapping.amountColumn!]
-                        : ((_mapping.debitColumn != null &&
-                                    _mapping.debitColumn! < row.length
-                                ? row[_mapping.debitColumn!]
-                                : '') +
-                            '/' +
-                            (_mapping.creditColumn != null &&
-                                    _mapping.creditColumn! < row.length
-                                ? row[_mapping.creditColumn!]
-                                : ''));
+                        : '${_mapping.debitColumn != null && _mapping.debitColumn! < row.length ? row[_mapping.debitColumn!] : ''}'
+                            '/'
+                            '${_mapping.creditColumn != null && _mapping.creditColumn! < row.length ? row[_mapping.creditColumn!] : ''}';
                     return ListTile(
                       dense: true,
                       contentPadding: EdgeInsets.zero,
