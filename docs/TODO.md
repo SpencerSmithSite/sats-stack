@@ -48,18 +48,19 @@ code in the repo, and they exist for this feature:
 - Bitcoin Core is for connection testing and future broadcasting only — it is
   not usable for address-history scanning, which is why Electrum is here too.
 
-### 2. xpub scanning: off the UI isolate, and stop rescanning from zero
+### 2. xpub scanning: batch the requests further
 
-Two separate things, both in `xpub_service.dart`:
+Derivation now runs in an isolate and a window's requests overlap, so a scan is
+no longer a strictly serial walk. What is left is the request count itself: a
+resync still asks about every derived address.
 
-- Derivation runs on the UI isolate. A deep wallet means hundreds of pure-Dart
-  `pointycastle` EC multiplications interleaved with network calls. Derive a
-  window per hop inside `compute()`.
-- There is no scan cursor, so every resync re-fetches from index 0 on both
-  chains — 40+ requests for a wallet that has not changed, which is also what
-  earns the rate limit that now (correctly) aborts the scan. Persist the
-  highest used index per chain on the wallet row and resume from there,
-  re-verifying only a gap-limit window. Needs a schema bump.
+**The "scan cursor" this file used to propose is not safe, and should not be
+built as described.** Skipping addresses below a high-water mark would miss new
+payments to an address that was already used, and skipping the gap window would
+miss an address funded since the last scan — so nothing in the range is
+actually safe to skip. Reducing the request count needs a server that can
+answer about many addresses at once, which is the Electrum work in item 1
+(`blockchain.scripthash.subscribe`), not a cursor.
 
 ### 3. Close the named test gaps
 
