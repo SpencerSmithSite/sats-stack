@@ -134,4 +134,16 @@ lib/
 
 ## License
 
-[GPL-3.0](LICENSE)
+[Apache-2.0](LICENSE). See [NOTICE](NOTICE) for third-party components.
+
+One of those matters if you build this yourself: `syncfusion_flutter_pdf`,
+used to extract text from PDF statements, is **not** open source. Apache-2.0
+permits linking it, but it is not covered by this project's license — you need
+your own Syncfusion Community or commercial license. Everything else is
+permissively licensed.
+
+This was GPL-3.0 until 2026-10-19. It changed because GPLv3 cannot carry a
+proprietary dependency — §10 forbids imposing further restrictions on
+recipients, and Syncfusion's revenue and headcount limits are exactly that — and
+because GPLv3's terms conflict with App Store distribution, which is how this
+app ships.

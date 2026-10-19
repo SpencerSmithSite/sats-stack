@@ -39,15 +39,6 @@ History lives elsewhere and is not duplicated into this file:
 
 ### 1. Ships broken or cannot ship
 
-- **GPLv3 + proprietary Syncfusion + the App Store.** `LICENSE` is GPL-3.0 and
-  `README.md:137` says so, while `pubspec.yaml:74` bundles
-  `syncfusion_flutter_pdf`, which is not open source — its terms cannot satisfy
-  GPLv3's requirement that the combined work be redistributable under GPLv3.
-  Independently, GPLv3's anti-DRM and installation-information terms are the
-  known conflict with App Store distribution (the VLC precedent). **This is a
-  decision, not a fix:** relicense to MPL-2.0/Apache-2.0, or drop Syncfusion
-  for a GPL-compatible text extractor. Cheap to resolve now because the author
-  holds the copyright. Not legal advice.
 - **macOS: the hand-copied LiteRT-LM frameworks are ad-hoc signed** (`macos/
   Podfile:162,171` run `codesign --sign -`) and `Release.entitlements` has no
   `com.apple.security.cs.disable-library-validation`. This works *only* because
@@ -72,10 +63,10 @@ History lives elsewhere and is not duplicated into this file:
   downloaded models; (d) drop the backend — it is the only one of six with a
   hand-written Xcode phase, a multi-gigabyte download and an unmaintained
   native dependency, and two other on-device backends exist.
-- **macOS bundle id, product name and copyright are template placeholders.**
+- **macOS bundle id and product name are still template placeholders.**
   `AppInfo.xcconfig:11` is `com.satsstack.satsStack` against iOS's
-  `app.satsstack.SatsStack`; `:14` reads "Copyright © 2026 com.satsstack",
-  shown verbatim in the About box; `:8` makes the window title `sats_stack`.
+  `app.satsstack.SatsStack`, and `:8` makes the window title `sats_stack`.
+  (The copyright string on `:14` is fixed.)
 
 ### 2. The native bridges do not stop generating when cancelled
 
