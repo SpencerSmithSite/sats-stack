@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show ValueNotifier;
+
 import 'package:drift/drift.dart' show OrderingTerm;
 import 'package:http/http.dart' as http;
 
@@ -471,7 +473,9 @@ class OllamaService {
     }
     if (apiKey != null) {
       _mapleApiKey = apiKey;
-      return _keyStore.write(_mapleKeyId, apiKey);
+      final ok = await _keyStore.write(_mapleKeyId, apiKey);
+      configChanges.value++;
+      return ok;
     }
     return true;
   }
@@ -499,7 +503,9 @@ class OllamaService {
         AppConstants.cloudConnectedKey(provider.id),
         'false',
       );
-      return _keyStore.write(provider.id, trimmed);
+      final ok = await _keyStore.write(provider.id, trimmed);
+      configChanges.value++;
+      return ok;
     }
     return true;
   }
@@ -594,11 +600,37 @@ class OllamaService {
     }
   }
 
-  Future<void> _upsertSetting(String key, String value) {
-    return _db.into(_db.appSettings).insertOnConflictUpdate(
+  Future<void> _upsertSetting(String key, String value) async {
+    await _db.into(_db.appSettings).insertOnConflictUpdate(
           AppSettingsCompanion.insert(key: key, value: value),
         );
+    configChanges.value++;
   }
+
+  /// Bumped after any AI configuration is written — provider, endpoint, key,
+  /// connection state, model.
+  ///
+  /// The AI tab used to be rebuilt from scratch on every tab switch, which
+  /// incidentally re-read its configuration each visit. Tabs now stay alive
+  /// (see app.dart), so a screen that loaded configuration once has to be told
+  /// when it changes — otherwise fixing an Ollama URL in Settings and returning
+  /// to the chat would leave it reporting the old URL as unreachable.
+  final ValueNotifier<int> configChanges = ValueNotifier(0);
+
+  /// The parts of the configuration a chat session depends on: which backend,
+  /// where it lives, and whether it has a key. Deliberately *not* the selected
+  /// model — the chat reads that live, and including it would make picking a
+  /// model from the chat's own dropdown trigger a reload of the chat.
+  String get configFingerprint => [
+        _activeProvider.key,
+        _baseUrl,
+        _lmStudioBaseUrl,
+        _mapleBaseUrl,
+        _mapleApiKey.isNotEmpty,
+        for (final id in _cloudKeys.keys.toList()..sort())
+          '$id:${_cloudKeys[id]!.isNotEmpty}',
+        _localModelId,
+      ].join('|');
 
   // ── Connectivity ──────────────────────────────────────────────────────────
 

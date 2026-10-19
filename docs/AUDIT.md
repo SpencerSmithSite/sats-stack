@@ -695,6 +695,36 @@ whatever the user's currency was. `contrast_test.dart` pins all of the above
 against the real theme through a widget, including that each raw colour does
 fail — so the tests show the bug as well as the fix.
 
+### Tabs keep their state
+
+Addressed 2026-10-19.
+
+- **Every tab switch destroyed the screen.** The shell was a plain
+  `ShellRoute`, which builds a different child *type* per tab, so the element
+  tree could not reconcile and each switch discarded the screen's State. Set a
+  filter and a search on Transactions, tap Dashboard, tap back: both were gone,
+  the scroll position was lost, and the whole table was re-queried behind a
+  full-screen spinner. The same happened to the Stack period and DCA input and
+  the selected month on Budgets, and the Dashboard re-ran its insight reads on
+  every visit. It is a `StatefulShellRoute.indexedStack` now — one branch per
+  tab, kept alive, built lazily on first visit. The AI branch is last so a
+  branch index always equals its nav-bar index even while AI is hidden.
+- **Keeping tabs alive exposed one screen that depended on dying.** The AI chat
+  loaded its configuration once in `initState`, and tab-switching had been
+  quietly re-running it on each visit — so with tabs kept alive, fixing an
+  Ollama URL in Settings and returning would leave the chat reporting the old
+  URL as unreachable. `OllamaService.configChanges` is bumped on every AI
+  configuration write, and the chat re-initialises when its
+  `configFingerprint` changes — which deliberately excludes the selected model,
+  so picking a model from the chat's own dropdown does not reload the chat. The
+  other four tabs are stream-driven and stay correct while alive.
+
+`tab_state_test.dart` drives the real `AppShell` with tabs that hold state.
+Before relying on it, the same scenario was run against the old `ShellRoute`
+in a throwaway test: the counter came back as **0**, so the new test does
+distinguish the two designs. Verified with `flutter build macos`; not yet
+exercised by hand in the running app.
+
 ### Test gaps
 
 The suite went from 102 tests to 209 over this work. Month boundaries, category

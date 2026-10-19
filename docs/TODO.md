@@ -86,18 +86,6 @@ no engine, so it exercises the Dart queue alone. Net effect: cancelling one
 answer can corrupt or fail the next one, and on Android the model stays busy
 after the queue has moved on. Fix needs native work on both sides.
 
-### 5. Tab state is destroyed on every tab switch
-
-`app.dart:73-97` uses `ShellRoute`, not `StatefulShellRoute`, so each tab is a
-different child widget *type* and the element tree cannot reconcile — the whole
-screen State is destroyed. Set a filter and a search on Transactions, tap
-Dashboard, tap back: both are gone, the scroll position is lost, and the table
-is re-queried from scratch behind a full-screen spinner. Same for the Stack
-period and DCA input, and the selected month on Budgets and Analytics; the
-dashboard insight re-runs two DB reads per visit. `StatefulShellRoute.indexedStack`
-with one branch per tab fixes it and removes most of the per-visit cost the
-stream hoisting was aiming at.
-
 ### 6. Accessibility
 
 - **There is no `Semantics` or `semanticLabel` anywhere in the UI layer** —

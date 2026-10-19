@@ -70,29 +70,56 @@ final _router = GoRouter(
       path: '/onboarding',
       pageBuilder: (ctx, state) => _fadePage(state, const OnboardingScreen()),
     ),
-    ShellRoute(
-      builder: (ctx, state, child) => AppShell(child: child),
-      routes: [
-        GoRoute(
-          path: '/dashboard',
-          builder: (ctx, state) => const DashboardScreen(),
-        ),
-        GoRoute(
-          path: '/transactions',
-          builder: (ctx, state) => const TransactionsScreen(),
-        ),
-        GoRoute(
-          path: '/budgets',
-          builder: (ctx, state) => const BudgetsScreen(),
-        ),
-        GoRoute(
-          path: '/stack',
-          builder: (ctx, state) => const StackScreen(),
-        ),
-        GoRoute(
-          path: '/ai',
-          builder: (ctx, state) => const AiChatScreen(),
-        ),
+    // One branch per tab, each with its own Navigator, kept alive in an
+    // IndexedStack.
+    //
+    // This was a plain ShellRoute, which builds a different child *type* per
+    // tab, so the element tree could not reconcile and every tab switch
+    // destroyed the screen's State. Set a filter and a search on Transactions,
+    // tap Dashboard, tap back: both were gone, the scroll position was lost,
+    // and the whole table was re-queried behind a full-screen spinner. The
+    // Stack period and DCA input, and the selected month on Budgets, went the
+    // same way, and the Dashboard re-ran its insight reads on every visit.
+    //
+    // Branches are built lazily, on first visit, so this costs nothing up
+    // front. The AI branch is always present; the nav bar hides it when no
+    // provider can answer, and the redirect above moves off `/ai`.
+    StatefulShellRoute.indexedStack(
+      builder: (ctx, state, navigationShell) =>
+          AppShell(navigationShell: navigationShell),
+      branches: [
+        StatefulShellBranch(routes: [
+          GoRoute(
+            path: '/dashboard',
+            builder: (ctx, state) => const DashboardScreen(),
+          ),
+        ]),
+        StatefulShellBranch(routes: [
+          GoRoute(
+            path: '/transactions',
+            builder: (ctx, state) => const TransactionsScreen(),
+          ),
+        ]),
+        StatefulShellBranch(routes: [
+          GoRoute(
+            path: '/budgets',
+            builder: (ctx, state) => const BudgetsScreen(),
+          ),
+        ]),
+        StatefulShellBranch(routes: [
+          GoRoute(
+            path: '/stack',
+            builder: (ctx, state) => const StackScreen(),
+          ),
+        ]),
+        // Last on purpose: it is the only tab that can be hidden, so keeping
+        // it at the end means a branch index always equals its nav-bar index.
+        StatefulShellBranch(routes: [
+          GoRoute(
+            path: '/ai',
+            builder: (ctx, state) => const AiChatScreen(),
+          ),
+        ]),
       ],
     ),
     GoRoute(
@@ -111,23 +138,15 @@ final _router = GoRouter(
 );
 
 class AppShell extends StatefulWidget {
-  const AppShell({required this.child, super.key});
+  const AppShell({required this.navigationShell, super.key});
 
-  final Widget child;
+  final StatefulNavigationShell navigationShell;
 
   @override
   State<AppShell> createState() => _AppShellState();
 }
 
 class _AppShellState extends State<AppShell> {
-  static const _allTabPaths = [
-    '/dashboard',
-    '/transactions',
-    '/budgets',
-    '/stack',
-    '/ai',
-  ];
-
   @override
   void initState() {
     super.initState();
@@ -144,16 +163,10 @@ class _AppShellState extends State<AppShell> {
     if (mounted) setState(() {});
   }
 
-  List<String> get _tabPaths => app.aiEnabledNotifier.value
-      ? _allTabPaths
-      : _allTabPaths.take(4).toList();
-
   @override
   Widget build(BuildContext context) {
     final aiEnabled = app.aiEnabledNotifier.value;
-    // GoRouterState.of must use this widget's own context (scoped to ShellRoute).
-    final location = GoRouterState.of(context).uri.path;
-    final currentIndex = _indexForLocation(location, _tabPaths);
+    final shell = widget.navigationShell;
 
     final destinations = <NavigationDestination>[
       const NavigationDestination(
@@ -184,21 +197,25 @@ class _AppShellState extends State<AppShell> {
         ),
     ];
 
+    // Branch index equals destination index because the AI branch is last.
+    // While it is hidden the redirect has already moved off it, so this only
+    // guards the frame in between.
+    final selected = shell.currentIndex < destinations.length
+        ? shell.currentIndex
+        : 0;
+
     return Scaffold(
-      body: widget.child,
+      body: shell,
       bottomNavigationBar: NavigationBar(
-        selectedIndex: currentIndex,
+        selectedIndex: selected,
         destinations: destinations,
-        onDestinationSelected: (i) => context.go(_tabPaths[i]),
+        onDestinationSelected: (i) => shell.goBranch(
+          i,
+          // Tapping the tab you are already on returns it to its root.
+          initialLocation: i == shell.currentIndex,
+        ),
       ),
     );
-  }
-
-  static int _indexForLocation(String location, List<String> tabPaths) {
-    for (var i = 0; i < tabPaths.length; i++) {
-      if (location.startsWith(tabPaths[i])) return i;
-    }
-    return 0;
   }
 }
 
