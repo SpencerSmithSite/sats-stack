@@ -39,6 +39,10 @@ class _AiChatScreenState extends State<AiChatScreen> {
   /// Held so the request can be stopped when the screen goes away.
   StreamSubscription<String>? _streamSub;
   http.Client? _streamClient;
+
+  /// Completed when the stream ends — or by `dispose`, so cancelling does not
+  /// leave `_send` waiting on a future nothing will ever complete.
+  Completer<void>? _streamDone;
   String _streamingContent = '';
   String? _error;
 
@@ -63,8 +67,14 @@ class _AiChatScreenState extends State<AiChatScreen> {
 
   @override
   void dispose() {
-    // Cancel before the controllers go: an in-flight answer would otherwise
-    // keep streaming (and billing) for a screen that no longer exists.
+    // Release the waiter first. Cancelling a subscription fires neither
+    // onDone nor onError, so `_send`'s Completer would never complete and its
+    // frame would stay suspended for the life of the isolate, holding the
+    // buffer, the request and the closed client.
+    final pending = _streamDone;
+    if (pending != null && !pending.isCompleted) pending.complete();
+    // Then cancel: an in-flight answer would otherwise keep streaming (and
+    // billing) for a screen that no longer exists.
     _streamSub?.cancel();
     _streamClient?.close();
     _inputCtrl.dispose();
@@ -91,6 +101,11 @@ class _AiChatScreenState extends State<AiChatScreen> {
     }
 
     final prompt = await _buildSystemPrompt();
+    // Re-checked: the guard above is before `saveModelForActiveProvider` and
+    // `_buildSystemPrompt`, and the latter reads and aggregates the whole
+    // transactions table, so the screen can easily be gone by now. Switching
+    // tabs genuinely disposes it.
+    if (!mounted) return;
 
     setState(() {
       _ollamaAvailable = true;
@@ -176,6 +191,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
     final client = http.Client();
     _streamClient = client;
     final completion = Completer<void>();
+    _streamDone = completion;
 
     _streamSub = app.ollamaService.chat(apiMessages, client: client).listen(
       (token) {
@@ -220,6 +236,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
     await completion.future;
     client.close();
     if (identical(_streamClient, client)) _streamClient = null;
+    if (identical(_streamDone, completion)) _streamDone = null;
     _streamSub = null;
   }
 
@@ -310,7 +327,8 @@ class _AiChatScreenState extends State<AiChatScreen> {
                     selected: app.ollamaService.selectedModel,
                     onChanged: (m) async {
                       await app.ollamaService.saveModelForActiveProvider(m);
-                      setState(() {});
+                      // Guarded, like the two sibling callbacks above it.
+                      if (mounted) setState(() {});
                     },
                   )
                 : const Text('AI Analyst'),

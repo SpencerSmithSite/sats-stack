@@ -1,4 +1,8 @@
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
 import 'package:drift/drift.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import '../database/database.dart';
 import '../../shared/constants/app_constants.dart';
 import '../../shared/utils/hash_utils.dart';
@@ -56,17 +60,16 @@ class TransactionService {
 
     if (recurring.isEmpty) return;
 
-    // For each series (identified by recurringAnchorDate + recurringPeriod),
-    // find the most recently dated transaction so we know where to pick up from.
-    final Map<String, Transaction> latestPerSeries = {};
+    // Group the instances into series.
+    //
+    // The identity includes the description and amount, not just the period
+    // and anchor date: `showDatePicker` returns midnight, so two series
+    // started on the same day had byte-identical anchors and collided — one of
+    // them never generated at all, and they shared a cursor.
+    final seriesRows = <String, List<Transaction>>{};
     for (final tx in recurring) {
       if (tx.recurringAnchorDate == null) continue;
-      final key =
-          '${tx.recurringPeriod}_${tx.recurringAnchorDate!.millisecondsSinceEpoch}';
-      final existing = latestPerSeries[key];
-      if (existing == null || tx.date.isAfter(existing.date)) {
-        latestPerSeries[key] = tx;
-      }
+      (seriesRows[seriesKey(tx)] ??= <Transaction>[]).add(tx);
     }
 
     final today = _dateOnly(now ?? DateTime.now());
@@ -75,7 +78,11 @@ class TransactionService {
     // notifies stream listeners (dashboard, budgets, notifications) once
     // rather than once per inserted row.
     await _db.transaction(() async {
-      for (final template in latestPerSeries.values) {
+      for (final entry in seriesRows.entries) {
+        final rows = entry.value;
+        // Any row carries the series' shape; the newest is the conventional
+        // one to copy from.
+        final template = rows.reduce((a, b) => a.date.isAfter(b.date) ? a : b);
         final period = template.recurringPeriod!;
         final anchor = template.recurringAnchorDate!;
         // Dates are always derived from the anchor rather than by stepping
@@ -85,17 +92,36 @@ class TransactionService {
         // The resume point is the high-water mark, never just the latest
         // surviving row: deleting the most recent instance used to lower it
         // and the next launch brought that row straight back.
-        final cursorKey = AppConstants.recurringCursorKey(period, anchor);
+        final cursorKey = AppConstants.recurringCursorKey(entry.key);
         final cursorRow = await (_db.select(_db.appSettings)
               ..where((t) => t.key.equals(cursorKey)))
             .getSingleOrNull();
-        final generatedThrough = int.tryParse(cursorRow?.value ?? '') ?? -1;
-        final latestSurviving = _occurrenceIndex(anchor, template.date, period);
+        final cursor = int.tryParse(cursorRow?.value ?? '');
 
-        var n = (generatedThrough > latestSurviving
-                ? generatedThrough
-                : latestSurviving) +
-            1;
+        // The highest occurrence the series still has a row for.
+        var highestSurviving = 0;
+        for (final row in rows) {
+          final i = _occurrenceIndex(anchor, row.date, period);
+          if (i > highestSurviving) highestSurviving = i;
+        }
+
+        // The cursor is authoritative, with one exception.
+        //
+        // Taking `max(cursor, latestSurviving)` — what this did before — meant
+        // that editing one instance's date forward dragged the cursor with it
+        // and every occurrence in between was skipped for good.
+        //
+        // The exception is a series whose only surviving row is its anchor
+        // while the cursor sits above it: that is a series the user deleted
+        // and re-created, and honouring the stale mark meant it never
+        // generated again. A series where the newest instance alone was
+        // deleted still has its middle instances, so it keeps the cursor and
+        // the deleted row stays deleted.
+        final resumeFrom = (cursor != null && highestSurviving > 0)
+            ? cursor
+            : highestSurviving;
+
+        var n = resumeFrom + 1;
         if (n < 1) n = 1;
         var nextDue = _occurrence(anchor, period, n);
         final startedAt = n;
@@ -139,7 +165,7 @@ class TransactionService {
         // Written even when nothing was due, so a series created today records
         // its anchor and a deletion cannot rewind past it.
         final mark = n - 1;
-        if (mark > generatedThrough || startedAt == n) {
+        if (cursor == null || mark > cursor || startedAt == n) {
           await _db.into(_db.appSettings).insertOnConflictUpdate(
                 AppSettingsCompanion.insert(
                   key: cursorKey,
@@ -149,6 +175,23 @@ class TransactionService {
         }
       }
     });
+  }
+
+  /// Identifies the series an instance belongs to.
+  ///
+  /// Period, anchor, description and amount — enough that two series started
+  /// on the same day stay separate, and stable across launches so the cursor
+  /// written under it is found again. Hashed because it becomes an
+  /// `AppSettings` key.
+  @visibleForTesting
+  static String seriesKey(Transaction tx) {
+    final raw = '${tx.recurringPeriod}|'
+        '${tx.recurringAnchorDate!.millisecondsSinceEpoch}|'
+        '${tx.description}|${tx.amountFiat}';
+    return sha256
+        .convert(utf8.encode(raw))
+        .toString()
+        .substring(0, 16);
   }
 
   static DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);

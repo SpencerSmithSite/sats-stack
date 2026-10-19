@@ -35,14 +35,45 @@ class _StackScreenState extends State<StackScreen> {
   /// Built once. `watchAll()` hands back a new Drift stream per call, so
   /// building it in `build()` re-subscribed and re-queried the table on every
   /// rebuild — including every period-filter tap and BTC price tick.
+  ///
+  /// Single-subscription, and the one subscriber is [_txnSub]; the UI reads
+  /// [_txns], which that listener keeps current. Handing the same stream to a
+  /// `StreamBuilder` as well would be a second listener on a
+  /// single-subscription stream, and a second query if it were two streams.
   late final Stream<List<Transaction>> _transactions;
+
+  /// Latest rows, or null until the first emission arrives.
+  List<Transaction>? _txns;
+  Object? _txnError;
 
   @override
   void initState() {
     super.initState();
-    _loadGoal();
     _transactions = app.transactionService.watchAll();
-    _txnSub = app.transactionService.watchAll().listen(_checkGoalNotification);
+    _init();
+  }
+
+  /// The goal is loaded *before* the notification listener starts.
+  ///
+  /// It used to subscribe on the line after an un-awaited `_loadGoal()`, and
+  /// the first emission usually won that race — so `_checkGoalNotification`
+  /// returned early on a null goal, and because the notification is one-shot
+  /// per session, a user who had already passed their goal was never told,
+  /// this visit or any visit, unless a transaction happened to change while
+  /// the tab was open.
+  Future<void> _init() async {
+    await _loadGoal();
+    if (!mounted) return;
+    // One subscription, not two. This screen used to call `watchAll()` twice —
+    // once for the StreamBuilder and once for the goal check — so every
+    // insert, edit and xpub sync ran the full unfiltered table query and
+    // decoded every row twice.
+    _txnSub = _transactions.listen(
+      _onTransactions,
+      onError: (Object e) {
+        if (mounted) setState(() => _txnError = e);
+      },
+    );
   }
 
   @override
@@ -50,6 +81,16 @@ class _StackScreenState extends State<StackScreen> {
     _txnSub?.cancel();
     _dcaController.dispose();
     super.dispose();
+  }
+
+  void _onTransactions(List<Transaction> txns) {
+    if (mounted) {
+      setState(() {
+        _txns = txns;
+        _txnError = null;
+      });
+    }
+    _checkGoalNotification(txns);
   }
 
   void _checkGoalNotification(List<Transaction> txns) {
@@ -107,10 +148,9 @@ class _StackScreenState extends State<StackScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: StreamBuilder<List<Transaction>>(
-        stream: _transactions,
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
+      body: Builder(
+        builder: (context) {
+          if (_txnError != null) {
             return Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -128,10 +168,10 @@ class _StackScreenState extends State<StackScreen> {
               ),
             );
           }
-          if (snapshot.connectionState == ConnectionState.waiting) {
+          final allTxns = _txns;
+          if (allTxns == null) {
             return const Center(child: CircularProgressIndicator());
           }
-          final allTxns = snapshot.data ?? [];
           final hasBtc = allTxns.any((t) => t.isBitcoin);
 
           if (!hasBtc) {

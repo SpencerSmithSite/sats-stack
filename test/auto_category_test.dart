@@ -144,4 +144,53 @@ void main() {
       expect(mappings.single.description, 'zzqx transfer 99812');
     });
   });
+
+  group('specificity beats raw length', () {
+    test('a transport ticket is not entertainment', () {
+      // 'ticket' is six characters, so under a pure longest-match rule it
+      // outscored 'train' (5), 'bus' (3) and 'metro' (5).
+      expect(service.matchCategory('TRAIN TICKET'), 'Transport');
+      expect(service.matchCategory('BUS TICKET LONDON'), 'Transport');
+      expect(service.matchCategory('METRO TICKET'), 'Transport');
+    });
+
+    test('actual ticket vendors are still entertainment', () {
+      expect(service.matchCategory('TICKETMASTER UK'), 'Entertainment');
+      expect(service.matchCategory('EVENTBRITE'), 'Entertainment');
+      expect(service.matchCategory('ODEON CINEMA'), 'Entertainment');
+    });
+  });
+
+  group('only a user-chosen category is learned', () {
+    test('a keyword guess is not persisted as a mapping', () async {
+      final sourceId = await db.into(db.importSources).insert(
+            ImportSourcesCompanion.insert(
+              name: 'Barclays',
+              type: 'bank',
+              currency: 'GBP',
+            ),
+          );
+
+      // A confident keyword match, not the fallback — previously learned,
+      // which froze a wrong guess into the source for good.
+      final row = ParsedTransaction(
+        date: DateTime(2026, 3, 1),
+        amount: 12.5,
+        direction: 'debit',
+        description: 'TRAIN TICKET',
+        rawDescription: 'TRAIN TICKET',
+        currency: 'GBP',
+        category: 'Transport',
+      );
+
+      await service.saveTransactions(
+        transactions: [row],
+        sourceId: sourceId,
+        sourceName: 'Barclays',
+        btcPriceService: prices,
+      );
+
+      expect(await db.select(db.descriptionCategoryMappings).get(), isEmpty);
+    });
+  });
 }

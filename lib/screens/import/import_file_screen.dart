@@ -248,7 +248,15 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
       ),
     );
     if (confirmed == true) {
-      await app.importService.deleteSource(source.id);
+      try {
+        await app.importService.deleteSource(source.id);
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not remove this source: $e')),
+          );
+        }
+      }
     }
   }
 
