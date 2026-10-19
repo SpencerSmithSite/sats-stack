@@ -725,6 +725,116 @@ in a throwaway test: the counter came back as **0**, so the new test does
 distinguish the two designs. Verified with `flutter build macos`; not yet
 exercised by hand in the running app.
 
+### The import consent gate has a way out
+
+Addressed 2026-10-19.
+
+- **Consent was permanent, silent and unrevocable.** One "Send to Anthropic"
+  tap was written to settings at the tap and never asked about again; there
+  was no revoke control anywhere, and nothing afterwards said an upload had
+  happened. Settings → Servers now has a **Statement imports** row that names
+  every provider allowed to read imports and withdraws them in one tap, and is
+  shown even when none is, so the answer is visible somewhere other than the
+  dialog that asked. The preview says **"This file was sent to … to be read"**
+  whenever an off-device tier ran — including when it found nothing and the
+  local rules took over, since the upload happened either way.
+- **The preview said "Parsed via Ollama AI" for every provider.** It names the
+  provider that actually read the file.
+- **A yes was remembered even if the import was then cancelled.** It is now
+  held for the length of the import and stored only once the import completes.
+- **The dialog promised a local fallback to photos**, which have none. The copy
+  is now per flow, and both say that a yes covers later imports and where to
+  withdraw it. `AiPrivacyDisclosure` names statement imports among the things
+  that send data, instead of implying everything is per-request.
+- **The five-minute timeout kept running behind the dialog**, so it could fire
+  and stack a second dialog over the first. It is paused while the question is
+  up and restarted afterwards.
+- **`isLocalEndpoint` failed open.** `Uri.parse('ollama.example.com:11434')`
+  reads the host as a *scheme* and yields no host at all, which the check
+  called local: no consent prompt, auto-insight on, and a false privacy claim
+  for a remote server. It now fails **closed** for anything non-blank without a
+  host, and the Ollama, LM Studio and Maple URLs are normalised on save and on
+  load through `normalizeServerUrl` — the same rules `XpubService` already
+  used, now shared — so a bare `host:port` gains its scheme (http for the two
+  self-hosted servers) and Settings shows the URL actually saved.
+- **Photo import asked for consent before checking the backend could see**,
+  and swallowed the `InferenceException` saying why it could not. The
+  capability is checked before a photo is even picked, and again in the
+  service before consent; a backend error reaches the preview in its own words.
+
+Covered by `import_consent_test.dart`, end to end through `importFile` and
+`importImage` with a fake hosted backend, and by `ai_privacy_test.dart`.
+
+### Parsing conventions are decided per file
+
+Addressed 2026-10-19.
+
+- **Dot-grouped thousands.** The comma had a three-digit grouping rule and the
+  dot had none, so a German `2.500` became **2.5** — a 1000× understatement
+  with nothing to show for it — and `1.234.567` dropped the row. A blanket
+  mirror rule would turn a BTC export's `0.125` into 125, so this is inferred
+  the way `_inferDayFirst` is: `_inferDotGrouping` votes over the file's own
+  amounts (`12,50` and `1.234,56` for, `12.50` and `0.12345678` against), and
+  a file with no decisive value keeps the decimal reading. Two or more dot
+  groups can only be grouping and are always read so.
+- **`_inferDayFirst` took the first decisive date**, so one US row at the top of
+  a merged UK export decided the file. It is a vote now; each row's own
+  decisive component still overrides the file's answer for that row.
+- **The PDF heuristic tier had none of the date work** — the tier a user lands
+  on after declining off-device consent. It read every date month-first, had
+  no dotted pattern (a German `01.02.2025` line matched nothing), and its
+  amount pattern knew only `1,234.56`, and matched `2.500` as `2.50`. It now
+  infers day order and amount convention from the whole text, and matches
+  `/`, `-` and `.` dates and both amount conventions.
+- **The delimiter was sniffed from the first line**, which in many exports is a
+  title or account summary. It is now the delimiter that splits the most of
+  the first twenty lines into the same number of fields. The rules tier also
+  looks for the header row among the first fifteen rows, instead of assuming
+  row 0, so those exports no longer fall through to manual mapping.
+- **Only `\r\n` was normalised**, so a classic `\r`-only export was one row.
+
+Covered by `parsing_conventions_test.dart`. Run against the previous parser,
+eight of its ten tests fail; the two that pass are the guards that a BTC-style
+decimal is *not* reinterpreted.
+
+### Accessibility
+
+Addressed 2026-10-19.
+
+- **There was no `Semantics` anywhere in the UI layer**, and most small controls
+  were a `GestureDetector` around a decoration: unlabelled or invisible to a
+  screen reader, unreachable from the keyboard on desktop, and 14–24px tall.
+  They now go through `Tappable`, which keeps the decoration and adds a
+  button node with a name and selected/toggled state, a 48×48 target
+  (Android's floor and Material's `kMinInteractiveDimension`; iOS asks for
+  44), keyboard focus with a visible ring, Enter/Space activation and a
+  pointer cursor. Swatches are named by colour (`colourName`), icon choices by
+  name, and the price chip reads "Bitcoin price $67,000, updated 2 minutes
+  ago" rather than "2m". Long-press-only actions (budget options, copying a
+  chat message) carry a spoken hint. The three charts expose a spoken summary.
+- **Three month selectors**, two of them bare 20–22px icons. One shared
+  `MonthSelector` of `IconButton`s with tooltips, a live-region month label,
+  and `FittedBox` so it scales down in a narrow app bar at large text sizes
+  rather than overflowing.
+- **Large text overflowed.** The trailing amount column in the transaction row,
+  the dashboard wallet row and the spending bar took whatever width its text
+  wanted, so at 2× the row overflowed — by 336px at 3× on a 360px screen.
+  `ShrinkToFit` caps it and scales it down; amounts shrink rather than being
+  ellipsised. The spending bar's 100px category label now follows the text
+  size, capped at a third of the row.
+
+Fixed in passing: more orange-as-text and category-colour-as-text sites the
+contrast pass missed (Repeat, the period chips, the wallet type badge, BTC
+transaction names), and `TransactionListItem`'s private currency-symbol table,
+which duplicated `CurrencyUtils` and printed amounts without grouping.
+
+`accessibility_test.dart` uses Flutter's own `androidTapTargetGuideline`,
+`iOSTapTargetGuideline` and `labeledTapTargetGuideline`. Its first version
+passed against the row that overflowed: it faked the screen width with a
+`MediaQuery`, which changes what widgets read but not the constraints they lay
+out in. It sets the test view now, and fails against the old row at 2× and
+3×. Not yet checked with VoiceOver or TalkBack on a device.
+
 ### Test gaps
 
 The suite went from 102 tests to 209 over this work. Month boundaries, category
