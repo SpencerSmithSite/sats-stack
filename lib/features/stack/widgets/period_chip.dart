@@ -28,7 +28,7 @@ class PeriodChip extends StatelessWidget {
           color: selected ? AppColors.bitcoinOrange.withAlpha(30) : Colors.transparent,
           borderRadius: BorderRadius.circular(6),
           border: Border.all(
-            color: selected ? AppColors.bitcoinOrange : AppColors.textSecondary.withAlpha(60),
+            color: selected ? AppColors.bitcoinOrange : context.textSecondary.withAlpha(60),
             width: selected ? 1.0 : 0.5,
           ),
         ),
@@ -36,7 +36,7 @@ class PeriodChip extends StatelessWidget {
           label,
           style: TextStyle(
             fontSize: 12,
-            color: selected ? AppColors.bitcoinOrange : AppColors.textSecondary,
+            color: selected ? AppColors.bitcoinOrange : context.textSecondary,
             fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
           ),
         ),

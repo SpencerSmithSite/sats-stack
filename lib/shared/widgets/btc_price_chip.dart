@@ -84,7 +84,7 @@ class _BtcPriceChipState extends State<BtcPriceChip> {
                   Text(
                     '₿',
                     style: AppTextStyles.monoSmall.copyWith(
-                      color: AppColors.bitcoinOrange,
+                      color: context.bitcoinOrangeText,
                       fontSize: 11,
                     ),
                   ),
@@ -96,7 +96,7 @@ class _BtcPriceChipState extends State<BtcPriceChip> {
                       decimalDigits: 0,
                     ).format(price),
                     style: AppTextStyles.monoSmall.copyWith(
-                      color: AppColors.bitcoinOrange,
+                      color: context.bitcoinOrangeText,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -105,7 +105,7 @@ class _BtcPriceChipState extends State<BtcPriceChip> {
                     Text(
                       '· ${_ageLabel(lastUpdated)}',
                       style: AppTextStyles.monoSmall.copyWith(
-                        color: AppColors.textSecondary,
+                        color: context.textSecondary,
                         fontSize: 10,
                       ),
                     ),
@@ -114,7 +114,7 @@ class _BtcPriceChipState extends State<BtcPriceChip> {
                   Text(
                     'no price',
                     style: AppTextStyles.monoSmall.copyWith(
-                      color: AppColors.textSecondary,
+                      color: context.textSecondary,
                     ),
                   ),
               ],

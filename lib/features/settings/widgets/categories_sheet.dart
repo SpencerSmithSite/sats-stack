@@ -132,7 +132,7 @@ class _CategoryTile extends StatelessWidget {
           ? Text(
               'System',
               style: TextStyle(
-                  fontSize: 11, color: AppColors.textSecondary),
+                  fontSize: 11, color: context.textSecondary),
             )
           : null,
       trailing: Row(
@@ -141,7 +141,7 @@ class _CategoryTile extends StatelessWidget {
           // Edit — available for all categories
           IconButton(
             icon: const Icon(Icons.edit_outlined, size: 18),
-            color: AppColors.textSecondary,
+            color: context.textSecondary,
             onPressed: () => _openEdit(context),
           ),
           // Delete — custom categories only
@@ -379,7 +379,7 @@ class _EditCategorySheetState extends State<_EditCategorySheet> {
                   Text(
                     'Colour',
                     style: theme.textTheme.bodySmall
-                        ?.copyWith(color: AppColors.textSecondary),
+                        ?.copyWith(color: context.textSecondary),
                   ),
                   const SizedBox(height: 10),
                   Wrap(
@@ -416,7 +416,7 @@ class _EditCategorySheetState extends State<_EditCategorySheet> {
                   Text(
                     'Icon',
                     style: theme.textTheme.bodySmall
-                        ?.copyWith(color: AppColors.textSecondary),
+                        ?.copyWith(color: context.textSecondary),
                   ),
                   const SizedBox(height: 10),
                   _IconGrid(
@@ -497,7 +497,7 @@ class _IconGrid extends StatelessWidget {
             child: Icon(
               iconData,
               size: 18,
-              color: selected ? activeColor : AppColors.textSecondary,
+              color: selected ? activeColor : context.textSecondary,
             ),
           ),
         );

@@ -127,7 +127,7 @@ class BudgetCard extends StatelessWidget {
                 ),
                 Text(
                   ' / ${CurrencyUtils.format(progress.budget.amountFiat, currency, decimalDigits: 0)}',
-                  style: AppTextStyles.monoSmall.copyWith(color: AppColors.textSecondary),
+                  style: AppTextStyles.monoSmall.copyWith(color: context.textSecondary),
                 ),
                 const Spacer(),
                 // Sats opportunity cost
@@ -217,7 +217,7 @@ class _SatsCost extends StatelessWidget {
         Text(
           '$formatted sats',
           style: AppTextStyles.monoSmall.copyWith(
-            color: AppColors.bitcoinOrange,
+            color: context.bitcoinOrangeText,
             fontSize: 11,
           ),
         ),

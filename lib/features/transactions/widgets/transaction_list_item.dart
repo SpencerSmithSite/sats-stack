@@ -27,7 +27,7 @@ class TransactionListItem extends StatelessWidget {
     final isBtc = transaction.isBitcoin;
 
     final catColor = _parseColor(category?.color) ??
-        (isBtc ? AppColors.bitcoinOrange : AppColors.textSecondary);
+        (isBtc ? AppColors.bitcoinOrange : context.textSecondary);
 
     final satsDisplay = transaction.amountSats != 0
         ? SatConverter.formatSats(transaction.amountSats.abs())
@@ -87,7 +87,7 @@ class TransactionListItem extends StatelessWidget {
                           Text(
                             category!.name,
                             style: theme.textTheme.bodySmall?.copyWith(
-                              color: AppColors.textSecondary,
+                              color: context.textSecondary,
                             ),
                           ),
                         if (transaction.recurringPeriod != null) ...[
@@ -95,7 +95,7 @@ class TransactionListItem extends StatelessWidget {
                           Icon(
                             Icons.repeat,
                             size: 11,
-                            color: AppColors.textSecondary,
+                            color: context.textSecondary,
                           ),
                         ],
                       ],
@@ -122,7 +122,7 @@ class TransactionListItem extends StatelessWidget {
                   Text(
                     '${isExpense ? '-' : '+'}$satsDisplay sats',
                     style: AppTextStyles.monoSmall.copyWith(
-                      color: AppColors.bitcoinOrange,
+                      color: context.bitcoinOrangeText,
                     ),
                   ),
               ],

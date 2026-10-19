@@ -70,7 +70,7 @@ class HistoryChartCard extends StatelessWidget {
                         child: Text(
                           'Not enough data for this period',
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: AppColors.textSecondary,
+                            color: context.textSecondary,
                           ),
                         ),
                       )
@@ -150,7 +150,7 @@ class StackLineChart extends StatelessWidget {
                   style: TextStyle(
                     fontFamily: 'RobotoMono',
                     fontSize: 9,
-                    color: AppColors.textSecondary,
+                    color: context.textSecondary,
                   ),
                 ),
               ),
@@ -168,7 +168,7 @@ class StackLineChart extends StatelessWidget {
                   padding: const EdgeInsets.only(top: 4),
                   child: Text(
                     DateFormat('MMM yy').format(entries[i].key),
-                    style: TextStyle(fontSize: 9, color: AppColors.textSecondary),
+                    style: TextStyle(fontSize: 9, color: context.textSecondary),
                   ),
                 );
               },

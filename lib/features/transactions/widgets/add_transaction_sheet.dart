@@ -266,7 +266,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                           decoration: InputDecoration(
                             hintText: '0.00',
                             hintStyle: AppTextStyles.monoLarge.copyWith(
-                              color: AppColors.textSecondary,
+                              color: context.textSecondary,
                             ),
                             prefixText: _isFiatMode ? '${CurrencyUtils.symbolFor(app.currencyNotifier.value)} ' : '',
                             suffixText: !_isFiatMode ? ' sats' : '',
@@ -299,9 +299,11 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                               ),
                             ),
                             child: Text(
-                              _isFiatMode ? 'USD' : 'SATS',
+                              // The active currency, not a hardcoded 'USD' — a GBP user was being
+                        // told they were typing dollars.
+                        _isFiatMode ? app.currencyNotifier.value : 'SATS',
                               style: AppTextStyles.monoSmall.copyWith(
-                                color: AppColors.bitcoinOrange,
+                                color: context.bitcoinOrangeText,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -317,7 +319,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                       child: Text(
                         _conversionLabel,
                         style: AppTextStyles.monoSmall.copyWith(
-                          color: AppColors.bitcoinOrange,
+                          color: context.bitcoinOrangeText,
                         ),
                       ),
                     ),
@@ -341,7 +343,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                     Text(
                       'Category',
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: AppColors.textSecondary,
+                        color: context.textSecondary,
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -375,7 +377,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                           Icon(
                             Icons.calendar_today_outlined,
                             size: 16,
-                            color: AppColors.textSecondary,
+                            color: context.textSecondary,
                           ),
                           const SizedBox(width: 10),
                           Text(
@@ -399,13 +401,13 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                               ? Icons.expand_less
                               : Icons.expand_more,
                           size: 16,
-                          color: AppColors.textSecondary,
+                          color: context.textSecondary,
                         ),
                         const SizedBox(width: 4),
                         Text(
                           'Add notes',
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: AppColors.textSecondary,
+                            color: context.textSecondary,
                           ),
                         ),
                       ],
@@ -437,7 +439,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                           size: 16,
                           color: _isRecurring
                               ? AppColors.bitcoinOrange
-                              : AppColors.textSecondary,
+                              : context.textSecondary,
                         ),
                         const SizedBox(width: 4),
                         Text(
@@ -445,7 +447,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: _isRecurring
                                 ? AppColors.bitcoinOrange
-                                : AppColors.textSecondary,
+                                : context.textSecondary,
                           ),
                         ),
                       ],
@@ -549,14 +551,14 @@ class _Chip extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 14, color: selected ? selectedColor : AppColors.textSecondary),
+            Icon(icon, size: 14, color: selected ? selectedColor : context.textSecondary),
             const SizedBox(width: 6),
             Text(
               label,
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                color: selected ? selectedColor : AppColors.textSecondary,
+                color: selected ? selectedColor : context.textSecondary,
               ),
             ),
           ],
@@ -588,7 +590,7 @@ class _CategoryChips extends StatelessWidget {
         itemBuilder: (_, i) {
           final cat = categories[i];
           final isSelected = selected?.id == cat.id;
-          final color = _parseColor(cat.color) ?? AppColors.textSecondary;
+          final color = _parseColor(cat.color) ?? context.textSecondary;
 
           return GestureDetector(
             onTap: () => onSelect(cat),
@@ -599,7 +601,7 @@ class _CategoryChips extends StatelessWidget {
                 color: isSelected ? color.withAlpha(30) : Colors.transparent,
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: isSelected ? color : AppColors.textSecondary.withAlpha(80),
+                  color: isSelected ? color : context.textSecondary.withAlpha(80),
                   width: isSelected ? 1.5 : 0.5,
                 ),
               ),
@@ -608,7 +610,7 @@ class _CategoryChips extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                  color: isSelected ? color : AppColors.textSecondary,
+                  color: isSelected ? color : context.textSecondary,
                 ),
               ),
             ),
@@ -678,7 +680,7 @@ class _PeriodChip extends StatelessWidget {
           color: selected ? color.withAlpha(30) : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: selected ? color : AppColors.textSecondary.withAlpha(80),
+            color: selected ? color : context.textSecondary.withAlpha(80),
             width: selected ? 1.5 : 0.5,
           ),
         ),
@@ -687,7 +689,7 @@ class _PeriodChip extends StatelessWidget {
           style: TextStyle(
             fontSize: 12,
             fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-            color: selected ? color : AppColors.textSecondary,
+            color: selected ? color : context.textSecondary,
           ),
         ),
       ),

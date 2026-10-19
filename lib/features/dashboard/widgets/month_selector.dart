@@ -59,7 +59,7 @@ class _ArrowButton extends StatelessWidget {
       child: Icon(
         icon,
         size: 20,
-        color: disabled ? AppColors.textSecondary.withAlpha(80) : AppColors.textSecondary,
+        color: disabled ? context.textSecondary.withAlpha(80) : context.textSecondary,
       ),
     );
   }

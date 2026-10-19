@@ -252,7 +252,7 @@ class _FormBody extends StatelessWidget {
                   child: Text(
                     hint,
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: AppColors.bitcoinOrange,
+                      color: context.bitcoinOrangeText,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -277,7 +277,7 @@ class _FormBody extends StatelessWidget {
             // Color picker
             Text(
               'Colour',
-              style: theme.textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+              style: theme.textTheme.bodySmall?.copyWith(color: context.textSecondary),
             ),
             const SizedBox(height: 10),
             Row(
@@ -322,7 +322,7 @@ class _FormBody extends StatelessWidget {
                         child: Text(
                           'Transactions will be fetched exclusively from your custom server ($esploraUrl). No data is sent to public servers.',
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: accent,
+                            color: context.legibleAccent(accent),
                             height: 1.5,
                           ),
                         ),
@@ -352,7 +352,7 @@ class _FormBody extends StatelessWidget {
                       child: Text(
                         'Transactions are fetched from mempool.space. Your xpub is stored locally only — never sent to any server.',
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: accent,
+                          color: context.legibleAccent(accent),
                           height: 1.5,
                         ),
                       ),
@@ -409,7 +409,7 @@ class _SyncingBody extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             status,
-            style: theme.textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+            style: theme.textTheme.bodySmall?.copyWith(color: context.textSecondary),
             textAlign: TextAlign.center,
           ),
         ],
@@ -443,7 +443,7 @@ class _DoneBody extends StatelessWidget {
           Text(
             'Scanned ${result.addressesScanned} addresses'
             '${result.skipped > 0 ? ' · ${result.skipped} duplicates skipped' : ''}.',
-            style: theme.textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+            style: theme.textTheme.bodySmall?.copyWith(color: context.textSecondary),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 32),

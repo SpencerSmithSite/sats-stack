@@ -452,7 +452,7 @@ class _DashboardContent extends StatelessWidget {
                   child: Text(
                     'No transactions yet',
                     style: theme.textTheme.bodyMedium?.copyWith(
-                      color: AppColors.textSecondary,
+                      color: context.textSecondary,
                     ),
                   ),
                 ),
@@ -593,7 +593,7 @@ class _WalletRow extends StatelessWidget {
       if (summary.monthSpendFiat > 0) {
         secondaryValue =
             '${CurrencyUtils.format(summary.monthSpendFiat, currency)} spent';
-        changeColor = AppColors.textSecondary;
+        changeColor = context.textSecondary;
       } else {
         secondaryValue = null;
         changeColor = null;
@@ -661,7 +661,7 @@ class _WalletRow extends StatelessWidget {
                 Text(
                   secondaryValue,
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: changeColor ?? AppColors.textSecondary,
+                    color: changeColor ?? context.textSecondary,
                     fontSize: 11,
                   ),
                 ),
@@ -672,7 +672,7 @@ class _WalletRow extends StatelessWidget {
                 Text(
                   '≈ ${CurrencyUtils.formatCompact(summary.totalSats / 1e8 * btcPrice!, currency)}',
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: AppColors.textSecondary,
+                    color: context.textSecondary,
                     fontSize: 11,
                   ),
                 ),
@@ -719,7 +719,7 @@ class _SectionHeader extends StatelessWidget {
               child: Text(
                 action!,
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: AppColors.bitcoinOrange,
+                  color: context.bitcoinOrangeText,
                   fontWeight: FontWeight.w600,
                 ),
               ),

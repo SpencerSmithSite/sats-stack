@@ -59,7 +59,7 @@ class StackHero extends StatelessWidget {
               Text(
                 'Total Stack',
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: AppColors.bitcoinOrange,
+                  color: context.bitcoinOrangeText,
                   fontWeight: FontWeight.w600,
                   letterSpacing: 0.5,
                 ),
@@ -74,7 +74,7 @@ class StackHero extends StatelessWidget {
           ),
           Text(
             'sats',
-            style: theme.textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+            style: theme.textTheme.bodySmall?.copyWith(color: context.textSecondary),
           ),
           const SizedBox(height: 12),
           Row(

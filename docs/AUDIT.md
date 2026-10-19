@@ -657,6 +657,44 @@ covered the write side.
 Covered by `fx_rates_test.dart` and `currency_aggregates_test.dart`, end to end
 through the real services.
 
+### Light mode is legible
+
+Addressed 2026-10-19. Not hardcoded dark colours — the earlier light-mode pass
+found all of those. These were colours tuned for dark and reused on light, so
+nothing looked wrong in the code.
+
+- **Secondary text was one grey for both themes**: `#888780`, 5.39:1 on the
+  dark background but **3.37:1** on the light one, at 10–11px, across 125 call
+  sites — every caption, metric label, date header and category name. No single
+  grey can serve both: the luminance a colour needs to clear 4.5:1 against
+  near-black and near-white do not overlap. It is two values now, resolved from
+  the theme through `context.textSecondary`; the light one, `#67665F`, is the
+  lightest warm grey that clears AA on the background, on white cards *and* on
+  the tinted `surfaceContainerHighest` (`#6F6E67` clears the first two and fails
+  the third).
+- **Bitcoin orange as text was 2.30:1** on a light card — the sats figure on
+  every transaction row and spending bar, the app-bar price. Text now uses
+  `context.bitcoinOrangeText` (`#9A5600` on light, 5.67:1); fills, borders and
+  icons keep the brand colour, since only small text needed it.
+- **Banner copy was set in its own accent over a tint of that accent**, measured
+  at 1.97–2.20:1 — the least readable text in the app was the Settings banner
+  explaining which third parties can see your Bitcoin addresses. Body copy and
+  route rows move to theme text; headings and one-line banners keep their
+  semantic colour through `context.legibleAccent`, which darkens an accent just
+  enough to clear AA on its own tint. It is computed rather than hand-picked,
+  because each accent needs a different amount.
+
+  **The first version of that helper was wrong**, and only measuring caught it:
+  it checked against an 8% tint over pure white, and the colours it produced
+  then failed at 4.19–4.44:1 on the off-white scaffold the banners actually sit
+  on. It now measures against the darkest real case (12% over the scaffold),
+  which clears all eight real combinations at ≥4.65:1.
+
+Also fixed in passing: the add-transaction amount toggle was labelled **"USD"**
+whatever the user's currency was. `contrast_test.dart` pins all of the above
+against the real theme through a widget, including that each raw colour does
+fail — so the tests show the bug as well as the fix.
+
 ### Test gaps
 
 The suite went from 102 tests to 209 over this work. Month boundaries, category

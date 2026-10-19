@@ -190,7 +190,7 @@ class _ListBody extends StatelessWidget {
                   child: Text(
                     'No xpub wallets yet. Add one below.',
                     style: theme.textTheme.bodySmall
-                        ?.copyWith(color: AppColors.textSecondary),
+                        ?.copyWith(color: context.textSecondary),
                     textAlign: TextAlign.center,
                   ),
                 )
@@ -210,7 +210,7 @@ class _ListBody extends StatelessWidget {
                           ? '${wallet.xpub!.substring(0, 12)}…'
                           : '',
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: AppColors.textSecondary,
+                        color: context.textSecondary,
                         fontFamily: 'monospace',
                         fontSize: 11,
                       ),
@@ -277,7 +277,7 @@ class _SyncingBody extends StatelessWidget {
           Text(
             status,
             style: theme.textTheme.bodySmall
-                ?.copyWith(color: AppColors.textSecondary),
+                ?.copyWith(color: context.textSecondary),
             textAlign: TextAlign.center,
           ),
         ],
@@ -329,7 +329,7 @@ class _DoneBody extends StatelessWidget {
             'Scanned ${result.addressesScanned} addresses'
             '${result.skipped > 0 ? ' · ${result.skipped} already imported' : ''}.',
             style: theme.textTheme.bodySmall
-                ?.copyWith(color: AppColors.textSecondary),
+                ?.copyWith(color: context.textSecondary),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 32),

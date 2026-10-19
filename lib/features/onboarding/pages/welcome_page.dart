@@ -23,12 +23,12 @@ class WelcomePage extends StatelessWidget {
               color: AppColors.bitcoinOrange.withAlpha(26),
               borderRadius: BorderRadius.circular(20),
             ),
-            child: const Center(
+            child: Center(
               child: Text(
                 '₿',
                 style: TextStyle(
                   fontSize: 40,
-                  color: AppColors.bitcoinOrange,
+                  color: context.bitcoinOrangeText,
                 ),
               ),
             ),
@@ -39,7 +39,7 @@ class WelcomePage extends StatelessWidget {
             style: theme.textTheme.displaySmall?.copyWith(
               fontWeight: FontWeight.w800,
               letterSpacing: -1.5,
-              color: AppColors.bitcoinOrange,
+              color: context.bitcoinOrangeText,
             ),
           ),
           const SizedBox(height: 12),
@@ -54,7 +54,7 @@ class WelcomePage extends StatelessWidget {
           Text(
             'A Bitcoin-native budget tracker that lives entirely on your device. No cloud. No accounts. No compromises.',
             style: theme.textTheme.bodyLarge?.copyWith(
-              color: AppColors.textSecondary,
+              color: context.textSecondary,
               height: 1.6,
             ),
           ),
@@ -213,7 +213,7 @@ class TourPage extends StatelessWidget {
                             Text(
                               tab.description,
                               style: theme.textTheme.bodySmall?.copyWith(
-                                color: AppColors.textSecondary,
+                                color: context.textSecondary,
                                 height: 1.5,
                               ),
                             ),
@@ -274,7 +274,7 @@ class FeatureRow extends StatelessWidget {
               Text(
                 body,
                 style: theme.textTheme.bodyMedium?.copyWith(
-                  color: AppColors.textSecondary,
+                  color: context.textSecondary,
                   height: 1.5,
                 ),
               ),

@@ -36,7 +36,7 @@ class MetricTile extends StatelessWidget {
                   Icon(
                     icon,
                     size: 14,
-                    color: iconColor ?? AppColors.textSecondary,
+                    color: iconColor ?? context.textSecondary,
                   ),
                   const SizedBox(width: 4),
                 ],
@@ -44,7 +44,7 @@ class MetricTile extends StatelessWidget {
                   child: Text(
                     label,
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: AppColors.textSecondary,
+                      color: context.textSecondary,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -66,7 +66,7 @@ class MetricTile extends StatelessWidget {
               Text(
                 subValue!,
                 style: AppTextStyles.monoSmall.copyWith(
-                  color: AppColors.textSecondary,
+                  color: context.textSecondary,
                   fontSize: 11,
                 ),
               ),
@@ -104,16 +104,16 @@ class StackGoalTile extends StatelessWidget {
           children: [
             Row(
               children: [
-                const Icon(
+                Icon(
                   Icons.flag_outlined,
                   size: 14,
-                  color: AppColors.textSecondary,
+                  color: context.textSecondary,
                 ),
                 const SizedBox(width: 4),
                 Text(
                   'Stack Goal',
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: AppColors.textSecondary,
+                    color: context.textSecondary,
                   ),
                 ),
               ],
@@ -134,7 +134,7 @@ class StackGoalTile extends StatelessWidget {
                 child: LinearProgressIndicator(
                   value: progress,
                   minHeight: 6,
-                  backgroundColor: AppColors.textSecondary.withAlpha(40),
+                  backgroundColor: context.textSecondary.withAlpha(40),
                   valueColor: const AlwaysStoppedAnimation(AppColors.success),
                 ),
               ),
@@ -142,7 +142,7 @@ class StackGoalTile extends StatelessWidget {
               Text(
                 '${_fmt(currentSats)} / ${_fmt(goalSats!)} sats',
                 style: AppTextStyles.monoSmall.copyWith(
-                  color: AppColors.textSecondary,
+                  color: context.textSecondary,
                   fontSize: 10,
                 ),
               ),
@@ -151,7 +151,7 @@ class StackGoalTile extends StatelessWidget {
                 'Not set',
                 style: theme.textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.w600,
-                  color: AppColors.textSecondary,
+                  color: context.textSecondary,
                   letterSpacing: -0.5,
                 ),
               ),

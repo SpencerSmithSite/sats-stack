@@ -285,7 +285,7 @@ class _SummaryBar extends StatelessWidget {
               child: _SummaryItem(
                 label: 'Budgeted',
                 value: CurrencyUtils.format(totalBudgeted, currency, decimalDigits: 0),
-                color: AppColors.textSecondary,
+                color: context.textSecondary,
               ),
             ),
             Container(width: 0.5, height: 32, color: theme.colorScheme.outline.withAlpha(80)),
@@ -330,7 +330,7 @@ class _SummaryItem extends StatelessWidget {
         Text(
           label,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: AppColors.textSecondary,
+            color: context.textSecondary,
             fontSize: 11,
           ),
         ),
@@ -369,7 +369,7 @@ class _MonthSelector extends StatelessWidget {
           child: Icon(
             Icons.chevron_right,
             size: 22,
-            color: onNext != null ? theme.colorScheme.onSurface : AppColors.textSecondary.withAlpha(80),
+            color: onNext != null ? theme.colorScheme.onSurface : context.textSecondary.withAlpha(80),
           ),
         ),
       ],

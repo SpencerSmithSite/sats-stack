@@ -413,7 +413,7 @@ class _ChatList extends StatelessWidget {
           Center(
             child: Text(
               'Your financial data is injected as context.',
-              style: theme.textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+              style: theme.textTheme.bodySmall?.copyWith(color: context.textSecondary),
             ),
           ),
           const SizedBox(height: 24),
@@ -682,7 +682,7 @@ class _SendButton extends StatelessWidget {
         duration: const Duration(milliseconds: 150),
         width: 40, height: 40,
         decoration: BoxDecoration(
-          color: enabled ? AppColors.bitcoinOrange : AppColors.textSecondary.withAlpha(60),
+          color: enabled ? AppColors.bitcoinOrange : context.textSecondary.withAlpha(60),
           shape: BoxShape.circle,
         ),
         child: enabled
@@ -725,7 +725,7 @@ class _OfflineState extends StatelessWidget {
                   ? Icons.computer_outlined
                   : Icons.cloud_off_outlined,
               size: 56,
-              color: AppColors.textSecondary,
+              color: context.textSecondary,
             ),
             const SizedBox(height: 16),
             Text(
@@ -743,7 +743,7 @@ class _OfflineState extends StatelessWidget {
                           : 'Check that your server URL is correct and reachable, then tap Retry.',
               textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall?.copyWith(
-                color: AppColors.textSecondary,
+                color: context.textSecondary,
                 height: 1.6,
               ),
             ),
@@ -751,7 +751,7 @@ class _OfflineState extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 AppConstants.defaultOllamaUrl,
-                style: AppTextStyles.monoSmall.copyWith(color: AppColors.textSecondary),
+                style: AppTextStyles.monoSmall.copyWith(color: context.textSecondary),
               ),
             ],
             const SizedBox(height: 24),

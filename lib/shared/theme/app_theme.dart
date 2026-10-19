@@ -29,7 +29,10 @@ abstract final class AppTheme {
       onSurface: isDark ? Colors.white : const Color(0xFF1A1A1A),
       surfaceContainerHighest:
           isDark ? AppColors.darkSurface2 : const Color(0xFFF0EDEA),
-      onSurfaceVariant: AppColors.textSecondary,
+      // Theme-specific, because no single grey clears 4.5:1 on both — see
+      // AppColors.textSecondaryLight.
+      onSurfaceVariant:
+          isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
       outline: isDark ? AppColors.borderDark : AppColors.borderLight,
     );
 
@@ -61,18 +64,22 @@ abstract final class AppTheme {
           if (states.contains(WidgetState.selected)) {
             return const IconThemeData(color: AppColors.bitcoinOrange);
           }
-          return const IconThemeData(color: AppColors.textSecondary);
+          // Unselected nav icons: the same theme-specific grey.
+          return IconThemeData(color: colorScheme.onSurfaceVariant);
         }),
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return const TextStyle(
-              color: AppColors.bitcoinOrange,
+            // Text, so the legible orange on light — see bitcoinOrangeOnLight.
+            return TextStyle(
+              color: isDark
+                  ? AppColors.bitcoinOrange
+                  : AppColors.bitcoinOrangeOnLight,
               fontSize: 11,
               fontWeight: FontWeight.w600,
             );
           }
-          return const TextStyle(
-            color: AppColors.textSecondary,
+          return TextStyle(
+            color: colorScheme.onSurfaceVariant,
             fontSize: 11,
           );
         }),

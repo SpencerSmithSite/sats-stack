@@ -130,7 +130,7 @@ class _SetBudgetSheetState extends State<SetBudgetSheet> {
                 if (!isEditing) ...[
                   Text(
                     'Category',
-                    style: theme.textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+                    style: theme.textTheme.bodySmall?.copyWith(color: context.textSecondary),
                   ),
                   const SizedBox(height: 8),
                   _CategoryGrid(
@@ -189,7 +189,7 @@ class _SelectedCategoryRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = _parseColor(category.color) ?? AppColors.textSecondary;
+    final color = _parseColor(category.color) ?? context.textSecondary;
     return Row(
       children: [
         Container(
@@ -246,7 +246,7 @@ class _CategoryChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = _parseColor(category.color) ?? AppColors.textSecondary;
+    final color = _parseColor(category.color) ?? context.textSecondary;
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
@@ -256,7 +256,7 @@ class _CategoryChip extends StatelessWidget {
           color: isSelected ? color.withAlpha(30) : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isSelected ? color : AppColors.textSecondary.withAlpha(80),
+            color: isSelected ? color : context.textSecondary.withAlpha(80),
             width: isSelected ? 1.5 : 0.5,
           ),
         ),
@@ -273,7 +273,7 @@ class _CategoryChip extends StatelessWidget {
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                color: isSelected ? color : AppColors.textSecondary,
+                color: isSelected ? color : context.textSecondary,
               ),
             ),
           ],
