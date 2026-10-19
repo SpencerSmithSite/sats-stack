@@ -9,6 +9,7 @@ import '../../shared/theme/app_colors.dart';
 import '../../shared/theme/app_text_styles.dart';
 import '../../shared/utils/platform_utils.dart';
 import '../../main.dart' as app;
+import '../../shared/widgets/tappable.dart';
 
 // ── Message model ─────────────────────────────────────────────────────────────
 
@@ -503,7 +504,9 @@ class _Bubble extends StatelessWidget {
             const SizedBox(width: 8),
           ],
           Flexible(
-            child: GestureDetector(
+            child: Semantics(
+              onLongPressHint: 'Copy message',
+              child: GestureDetector(
               onLongPress: () {
                 Clipboard.setData(ClipboardData(text: msg.content));
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -551,6 +554,7 @@ class _Bubble extends StatelessWidget {
                         ],
                       ),
               ),
+            ),
             ),
           ),
           if (isUser) const SizedBox(width: 36),
@@ -694,7 +698,8 @@ class _SendButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return Tappable(
+      label: enabled ? 'Send' : 'Waiting for the answer',
       onTap: enabled ? onTap : null,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
@@ -815,7 +820,8 @@ class _ErrorBanner extends StatelessWidget {
               style: const TextStyle(fontSize: 12, color: AppColors.danger),
             ),
           ),
-          GestureDetector(
+          Tappable(
+            label: 'Dismiss',
             onTap: onDismiss,
             child: const Icon(Icons.close, size: 16, color: AppColors.danger),
           ),

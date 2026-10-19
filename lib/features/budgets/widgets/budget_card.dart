@@ -33,7 +33,10 @@ class BudgetCard extends StatelessWidget {
             ? AppColors.bitcoinOrange
             : AppColors.success;
 
-    return GestureDetector(
+    // A long press is undiscoverable without sight, so it is named.
+    return Semantics(
+      onLongPressHint: 'Edit or delete budget',
+      child: GestureDetector(
       onLongPress: () => _showOptions(context),
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -137,6 +140,7 @@ class BudgetCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
       ),
     );
   }

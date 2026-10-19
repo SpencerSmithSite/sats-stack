@@ -7,10 +7,15 @@ library;
 import 'package:flutter/material.dart';
 
 import '../../../shared/theme/app_colors.dart';
+import '../../../shared/widgets/tappable.dart';
 
 class PeriodChip extends StatelessWidget {
   const PeriodChip({
-    super.key,required this.label, required this.selected, required this.onTap});
+    super.key,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
 
   final String label;
   final bool selected;
@@ -18,17 +23,24 @@ class PeriodChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return Tappable(
+      selected: selected,
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 120),
         margin: const EdgeInsets.only(left: 4),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
-          color: selected ? AppColors.bitcoinOrange.withAlpha(30) : Colors.transparent,
+          color:
+              selected
+                  ? AppColors.bitcoinOrange.withAlpha(30)
+                  : Colors.transparent,
           borderRadius: BorderRadius.circular(6),
           border: Border.all(
-            color: selected ? AppColors.bitcoinOrange : context.textSecondary.withAlpha(60),
+            color:
+                selected
+                    ? AppColors.bitcoinOrange
+                    : context.textSecondary.withAlpha(60),
             width: selected ? 1.0 : 0.5,
           ),
         ),
@@ -36,7 +48,7 @@ class PeriodChip extends StatelessWidget {
           label,
           style: TextStyle(
             fontSize: 12,
-            color: selected ? AppColors.bitcoinOrange : context.textSecondary,
+            color: selected ? context.bitcoinOrangeText : context.textSecondary,
             fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
           ),
         ),

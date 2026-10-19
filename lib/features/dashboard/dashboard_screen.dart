@@ -9,7 +9,6 @@ import '../../shared/theme/app_colors.dart';
 import '../../shared/widgets/btc_price_chip.dart';
 import '../../features/transactions/widgets/transaction_list_item.dart';
 import '../../shared/utils/currency_utils.dart';
-import 'widgets/month_selector.dart';
 import 'widgets/hero_card.dart';
 import 'widgets/metric_tile.dart';
 import 'widgets/spending_chart.dart';
@@ -17,6 +16,9 @@ import 'widgets/ai_insight_card.dart';
 import '../../main.dart' as app;
 import '../../shared/utils/sat_converter.dart';
 import '../../shared/utils/month_cursor.dart';
+import '../../shared/widgets/month_selector.dart';
+import '../../shared/widgets/tappable.dart';
+import '../../shared/widgets/shrink_to_fit.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -637,7 +639,7 @@ class _WalletRow extends StatelessWidget {
                     typeLabel,
                     style: TextStyle(
                       fontSize: 10,
-                      color: _walletColor,
+                      color: context.legibleAccent(_walletColor),
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -647,7 +649,8 @@ class _WalletRow extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           // Values (right-aligned)
-          Column(
+          ShrinkToFit(
+            child: Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
@@ -677,6 +680,7 @@ class _WalletRow extends StatelessWidget {
                   ),
                 ),
             ],
+            ),
           ),
         ],
       ),
@@ -714,7 +718,7 @@ class _SectionHeader extends StatelessWidget {
             ),
           ),
           if (action != null && onAction != null)
-            GestureDetector(
+            Tappable(
               onTap: onAction,
               child: Text(
                 action!,

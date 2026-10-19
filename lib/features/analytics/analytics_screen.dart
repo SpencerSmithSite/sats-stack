@@ -13,6 +13,8 @@ import '../../shared/utils/currency_utils.dart';
 import '../../shared/widgets/empty_state.dart';
 import '../../main.dart' as app;
 import '../../shared/utils/month_cursor.dart';
+import '../../shared/widgets/month_selector.dart';
+import '../../shared/widgets/tappable.dart';
 
 // ── Colour palette for categories ─────────────────────────────────────────────
 
@@ -108,7 +110,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: _MonthSelector(
+        title: MonthSelector(
           month: _selectedMonth,
           onPrevious: _previousMonth,
           onNext: _isCurrentMonth ? null : _nextMonth,
@@ -178,46 +180,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   }
 }
 
-// ── Month selector ────────────────────────────────────────────────────────────
-
-class _MonthSelector extends StatelessWidget {
-  const _MonthSelector({
-    required this.month,
-    required this.onPrevious,
-    this.onNext,
-  });
-
-  final DateTime month;
-  final VoidCallback onPrevious;
-  final VoidCallback? onNext;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        IconButton(
-          icon: const Icon(Icons.chevron_left),
-          onPressed: onPrevious,
-          visualDensity: VisualDensity.compact,
-        ),
-        Text(
-          DateFormat('MMMM yyyy').format(month),
-          style: Theme.of(context)
-              .textTheme
-              .titleMedium
-              ?.copyWith(fontWeight: FontWeight.w600),
-        ),
-        IconButton(
-          icon: const Icon(Icons.chevron_right),
-          onPressed: onNext,
-          visualDensity: VisualDensity.compact,
-        ),
-      ],
-    );
-  }
-}
-
 // ── Pie chart + legend ────────────────────────────────────────────────────────
 
 class _PieSection extends StatefulWidget {
@@ -261,7 +223,12 @@ class _PieSectionState extends State<_PieSection> {
         children: [
           SizedBox(
             height: 200,
-            child: PieChart(
+            child: Semantics(
+              // The chart itself says nothing to a screen reader.
+              label: 'Spending by category: '
+                  '${sorted.take(6).map((e) => '${e.key} ${(e.value / total * 100).round()} percent').join(', ')}',
+              excludeSemantics: true,
+              child: PieChart(
               PieChartData(
                 sections: sections,
                 centerSpaceRadius: 44,
@@ -280,6 +247,7 @@ class _PieSectionState extends State<_PieSection> {
                   },
                 ),
               ),
+            ),
             ),
           ),
           const SizedBox(height: 16),
@@ -378,7 +346,7 @@ class _TrendChartState extends State<_TrendChart> {
         // ── Category filter chips ────────────────────────────────────────
         if (categories.isNotEmpty)
           SizedBox(
-            height: 36,
+            height: 48,
             child: ListView(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -406,7 +374,11 @@ class _TrendChartState extends State<_TrendChart> {
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: SizedBox(
             height: 180,
-            child: BarChart(
+            child: Semantics(
+              label: '${_selectedCategory ?? 'Spending'} by month: '
+                  '${[for (var i = 0; i < values.length; i++) '${DateFormat('MMMM').format(widget.monthlyTotals[i].month)} ${CurrencyUtils.format(values[i], widget.currency, decimalDigits: 0)}'].join(', ')}',
+              excludeSemantics: true,
+              child: BarChart(
               BarChartData(
                 maxY: chartMax,
                 barGroups: widget.monthlyTotals.asMap().entries.map((entry) {
@@ -493,6 +465,7 @@ class _TrendChartState extends State<_TrendChart> {
                 ),
               ),
             ),
+            ),
           ),
         ),
       ],
@@ -517,7 +490,8 @@ class _ChipOption extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(right: 8),
-      child: GestureDetector(
+      child: Tappable(
+        selected: selected,
         onTap: onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../../shared/widgets/tappable.dart';
 
 /// Shows the latest AI insight if available, otherwise a static Bitcoiner tip.
 ///
@@ -89,7 +90,8 @@ class AiInsightCard extends StatelessWidget {
               ),
               const Spacer(),
               if (aiEnabled && onRefresh != null && !_needsConsentToGenerate)
-                GestureDetector(
+                Tappable(
+                  label: isGenerating ? 'Generating insight' : 'Refresh insight',
                   onTap: isGenerating ? null : onRefresh,
                   child: isGenerating
                       ? SizedBox(
@@ -148,7 +150,7 @@ class AiInsightCard extends StatelessWidget {
           ],
           if (aiEnabled) ...[
             const SizedBox(height: 12),
-            GestureDetector(
+            Tappable(
               onTap: () => context.go('/ai'),
               child: Text(
                 'Ask the AI analyst →',

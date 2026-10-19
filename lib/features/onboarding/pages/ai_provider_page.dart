@@ -9,6 +9,7 @@ import '../../../core/models/ai_provider.dart';
 import '../../../shared/constants/app_constants.dart';
 import '../../../shared/utils/platform_utils.dart';
 import '../../../shared/widgets/ai_privacy_disclosure.dart';
+import '../../../shared/widgets/tappable.dart';
 
 class AiProviderPage extends StatelessWidget {
   const AiProviderPage({
@@ -205,7 +206,8 @@ class ProviderCard extends StatelessWidget {
     final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: GestureDetector(
+      child: Tappable(
+        selected: isSelected,
         onTap: onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),

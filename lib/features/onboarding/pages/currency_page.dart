@@ -5,6 +5,7 @@ library;
 import 'package:flutter/material.dart';
 import '../../../shared/theme/app_colors.dart';
 import '../../../shared/utils/currency_utils.dart';
+import '../../../shared/widgets/tappable.dart';
 
 class CurrencyPage extends StatelessWidget {
   const CurrencyPage({
@@ -61,7 +62,8 @@ class CurrencyPage extends StatelessWidget {
                 final isSelected = selected == code;
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 10),
-                  child: GestureDetector(
+                  child: Tappable(
+                    selected: isSelected,
                     onTap: () => onChanged(code),
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 180),
@@ -224,7 +226,8 @@ class ThemeCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isSelected = selected == mode;
-    return GestureDetector(
+    return Tappable(
+      selected: isSelected,
       onTap: () => onTap(mode),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
