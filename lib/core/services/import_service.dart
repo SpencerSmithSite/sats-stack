@@ -7,6 +7,7 @@ import 'dart:ui' as ui;
 
 import 'package:crypto/crypto.dart';
 import 'package:csv/csv.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:drift/drift.dart'
     show DoUpdate, InsertMode, OrderingTerm, Value;
 import 'package:http/http.dart' as http;
@@ -1030,12 +1031,18 @@ FILE CONTENT:
     String csvContent, {
     required String currency,
   }) async {
-    final allRows = _parseCsvRows(csvContent);
+    final parsedRows = _parseCsvRows(csvContent);
+    if (parsedRows.length < 2) return null;
+
+    // Many exports open with a title, an account number or a balance summary
+    // before the real header. Reading row 0 as the header found no columns in
+    // any of them, so they all fell through to manual mapping.
+    final headerRow = _findHeaderRow(parsedRows);
+    final allRows =
+        headerRow == 0 ? parsedRows : parsedRows.sublist(headerRow);
     if (allRows.length < 2) return null;
 
-    final rawHeaders = allRows[0];
-    final headers =
-        rawHeaders.map((h) => h.toLowerCase().trim().replaceAll('"', '')).toList();
+    final headers = _normaliseHeaders(allRows[0]);
 
     // Try institution profile first
     final profile = InstitutionProfiles.detect(headers);
@@ -1043,31 +1050,14 @@ FILE CONTENT:
       return _parseWithProfile(allRows, headers, profile, currency);
     }
 
-    // Generic header detection
-    const dateNames = {
-      'date', 'transaction date', 'posted date', 'posting date',
-      'trans date', 'value date', 'trade date',
-    };
-    const amountNames = {'amount', 'transaction amount', 'total'};
-    const debitNames = {
-      'debit', 'withdrawals', 'withdrawal', 'debit amount', 'charges', 'out'
-    };
-    const creditNames = {
-      'credit', 'deposits', 'deposit', 'credit amount', 'payments', 'in'
-    };
-    const descNames = {
-      'description', 'memo', 'narrative', 'payee', 'merchant', 'details',
-      'transaction description', 'particulars', 'name',
-    };
-
     int? dateCol, amountCol, debitCol, creditCol, descCol;
     for (int i = 0; i < headers.length; i++) {
       final h = headers[i];
-      if (dateCol == null && dateNames.contains(h)) dateCol = i;
-      if (amountCol == null && amountNames.contains(h)) amountCol = i;
-      if (debitCol == null && debitNames.contains(h)) debitCol = i;
-      if (creditCol == null && creditNames.contains(h)) creditCol = i;
-      if (descCol == null && descNames.contains(h)) descCol = i;
+      if (dateCol == null && _dateNames.contains(h)) dateCol = i;
+      if (amountCol == null && _amountNames.contains(h)) amountCol = i;
+      if (debitCol == null && _debitNames.contains(h)) debitCol = i;
+      if (creditCol == null && _creditNames.contains(h)) creditCol = i;
+      if (descCol == null && _descNames.contains(h)) descCol = i;
     }
 
     if (dateCol == null || descCol == null) return null;
@@ -1085,6 +1075,43 @@ FILE CONTENT:
       signedAmount: amountCol != null,
       currency: currency,
     );
+  }
+
+  static const _dateNames = {
+    'date', 'transaction date', 'posted date', 'posting date',
+    'trans date', 'value date', 'trade date',
+  };
+  static const _amountNames = {'amount', 'transaction amount', 'total'};
+  static const _debitNames = {
+    'debit', 'withdrawals', 'withdrawal', 'debit amount', 'charges', 'out'
+  };
+  static const _creditNames = {
+    'credit', 'deposits', 'deposit', 'credit amount', 'payments', 'in'
+  };
+  static const _descNames = {
+    'description', 'memo', 'narrative', 'payee', 'merchant', 'details',
+    'transaction description', 'particulars', 'name',
+  };
+
+  static List<String> _normaliseHeaders(List<String> row) =>
+      row.map((h) => h.toLowerCase().trim().replaceAll('"', '')).toList();
+
+  /// The index of the header row: the first of the opening rows that an
+  /// institution profile recognises, or that names a date column and an
+  /// amount column. Row 0 when none does, which is what a file with no
+  /// header at all (a positional profile) needs.
+  static int _findHeaderRow(List<List<String>> rows) {
+    final limit = rows.length < 15 ? rows.length : 15;
+    for (var i = 0; i < limit; i++) {
+      final headers = _normaliseHeaders(rows[i]);
+      if (InstitutionProfiles.detect(headers) != null) return i;
+      final hasDate = headers.any(_dateNames.contains);
+      final hasAmount = headers.any(_amountNames.contains) ||
+          headers.any(_debitNames.contains) ||
+          headers.any(_creditNames.contains);
+      if (hasDate && hasAmount) return i;
+    }
+    return 0;
   }
 
   List<ParsedTransaction>? _parseWithProfile(
@@ -1163,6 +1190,13 @@ FILE CONTENT:
     final dayFirst = _inferDayFirst(
       dataRows.where((r) => dateIndex < r.length).map((r) => r[dateIndex]),
     );
+    final dots = _inferDotGrouping([
+      for (final r in dataRows)
+        for (final c in [amountCol, debitCol, creditCol])
+          if (c != null && c < r.length) r[c],
+    ]);
+    double? amountOf(String raw) =>
+        _parseAmount(raw, dotGroupsThousands: dots);
 
     // A single amount column with no negative value in it is not signed,
     // whatever the header says: treating it as signed books every charge on a
@@ -1170,7 +1204,7 @@ FILE CONTENT:
     final amountIndex = amountCol;
     final columnHasNegative = amountIndex != null &&
         dataRows.any((r) =>
-            amountIndex < r.length && (_parseAmount(r[amountIndex]) ?? 0) < 0);
+            amountIndex < r.length && (amountOf(r[amountIndex]) ?? 0) < 0);
     final amountIsSigned = signedAmount && columnHasNegative;
 
     final result = <ParsedTransaction>[];
@@ -1191,7 +1225,7 @@ FILE CONTENT:
       String direction;
 
       if (amountCol != null && amountCol < row.length) {
-        final raw = _parseAmount(row[amountCol]);
+        final raw = amountOf(row[amountCol]);
         if (raw == null) continue;
         if (amountIsSigned) {
           amount = raw.abs();
@@ -1202,10 +1236,10 @@ FILE CONTENT:
         }
       } else {
         final dAmt = (debitCol != null && debitCol < row.length)
-            ? _parseAmount(row[debitCol])
+            ? amountOf(row[debitCol])
             : null;
         final cAmt = (creditCol != null && creditCol < row.length)
-            ? _parseAmount(row[creditCol])
+            ? amountOf(row[creditCol])
             : null;
         if (dAmt != null && dAmt.abs() > 0) {
           amount = dAmt.abs();
@@ -1243,10 +1277,22 @@ FILE CONTENT:
     final allRows = _parseCsvRows(csvContent);
     if (allRows.length < 2) return null;
 
+    final dots = _inferDotGrouping([
+      for (final r in allRows.skip(1))
+        for (final c in [
+          mapping.amountColumn,
+          mapping.debitColumn,
+          mapping.creditColumn,
+        ])
+          if (c != null && c < r.length) r[c],
+    ]);
+    double? amountOf(String raw) =>
+        _parseAmount(raw, dotGroupsThousands: dots);
+
     final amountIndex = mapping.amountColumn;
     final mappingAmountIsSigned = amountIndex == null ||
         allRows.skip(1).any((r) =>
-            amountIndex < r.length && (_parseAmount(r[amountIndex]) ?? 0) < 0);
+            amountIndex < r.length && (amountOf(r[amountIndex]) ?? 0) < 0);
 
     final result = <ParsedTransaction>[];
     for (int i = 1; i < allRows.length; i++) {
@@ -1269,7 +1315,7 @@ FILE CONTENT:
       String direction;
 
       if (mapping.amountColumn != null && mapping.amountColumn! < row.length) {
-        final raw = _parseAmount(row[mapping.amountColumn!]);
+        final raw = amountOf(row[mapping.amountColumn!]);
         if (raw == null) continue;
         amount = raw.abs();
         // Same rule as the rules tier: a single amount column with no
@@ -1283,11 +1329,11 @@ FILE CONTENT:
             : 'debit';
       } else {
         final dAmt = (mapping.debitColumn != null && mapping.debitColumn! < row.length)
-            ? _parseAmount(row[mapping.debitColumn!])
+            ? amountOf(row[mapping.debitColumn!])
             : null;
         final cAmt = (mapping.creditColumn != null &&
                 mapping.creditColumn! < row.length)
-            ? _parseAmount(row[mapping.creditColumn!])
+            ? amountOf(row[mapping.creditColumn!])
             : null;
         if (dAmt != null && dAmt.abs() > 0) {
           amount = dAmt.abs();
@@ -1640,6 +1686,12 @@ FILE CONTENT:
 
   // ── Heuristic PDF parser (no-AI fallback) ────────────────────────────────
 
+  /// The heuristic PDF tier on its own, for tests: extracting text from a real
+  /// PDF is a separate concern with its own failure modes.
+  @visibleForTesting
+  List<ParsedTransaction> parsePdfText(String text, {String currency = 'USD'}) =>
+      _parseTransactionsFromPdfText(text, currency);
+
   /// Parses transactions from plain-text PDF content using pattern matching.
   /// Returns an empty list when fewer than 3 rows are found (low confidence).
   List<ParsedTransaction> _parseTransactionsFromPdfText(
@@ -1647,10 +1699,14 @@ FILE CONTENT:
     final lines = text.split(RegExp(r'\r?\n'));
 
     // Date patterns tried in order — take the first match per line.
+    //
+    // The numeric forms accept `/`, `-` and `.`: this tier had no dotted
+    // pattern, so a German `01.02.2025` line matched nothing at all — and this
+    // is the tier a user lands on when they decline off-device consent.
     final datePats = <RegExp>[
       RegExp(r'\d{4}-\d{2}-\d{2}'),
-      RegExp(r'\d{1,2}/\d{1,2}/\d{4}'),
-      RegExp(r'\d{1,2}/\d{1,2}/\d{2}(?!\d)'),
+      RegExp(r'(?<![\d.])\d{1,2}[/.-]\d{1,2}[/.-]\d{4}(?!\d)'),
+      RegExp(r'(?<![\d.])\d{1,2}[/.-]\d{1,2}[/.-]\d{2}(?![\d.])'),
       RegExp(
           r'\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{4}',
           caseSensitive: false),
@@ -1659,12 +1715,16 @@ FILE CONTENT:
           caseSensitive: false),
     ];
 
-    // Matches currency amounts; requires decimal, thousands-comma, or currency
-    // prefix — avoids matching plain integers like years or reference numbers.
+    // Matches currency amounts; requires a decimal, a thousands separator or
+    // a currency prefix — avoids matching plain integers like years or
+    // reference numbers. Both conventions are matched here (`1,234.56` and
+    // `1.234,56`); which one a file uses is decided below, once, from all of
+    // its amounts together.
     final amtPat = RegExp(
-      r'[$£€][\d,]+(?:\.\d{1,2})?'           // $1,234 or £50.00
-      r'|[-+]?\(?\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?\)?' // 1,234 or 1,234.56
-      r'|[-+]?\(?\d+\.\d{1,2}\)?[-]?',       // 12.50 or -12.50 or (12.50)
+      r'[$£€]\d+(?:[.,]\d+)*'                         // $1,234.56 €1.234,56 £50
+      r'|[-+]?\(?\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?\)?-?' // 1,234 or 1,234.56
+      r'|[-+]?\(?\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?\)?-?' // 1.234 or 1.234,56
+      r'|[-+]?\(?\d+[.,]\d{1,2}(?!\d)\)?-?',           // 12.50 12,50 (12.50)
     );
 
     // Noise tokens stripped from descriptions.
@@ -1672,6 +1732,22 @@ FILE CONTENT:
       r'\b(?:ACH|POS|REF#?\w*|TXN\w*)\b',
       caseSensitive: false,
     );
+
+    // The day/month order and the amount convention are properties of the
+    // statement, not of a line, so both are settled once from the whole text
+    // — as the CSV tiers do. This tier used to call `_parseDate` with the
+    // default month-first, so a UK `04/03/2025` was booked as 3 April.
+    final dayFirst = _inferDayFirst([
+      for (final line in lines)
+        for (final pat in datePats.skip(1).take(2))
+          ...pat.allMatches(line).map((m) => m.group(0)!),
+    ]);
+    final dots = _inferDotGrouping([
+      for (final line in lines)
+        ...amtPat.allMatches(line).map((m) => m.group(0)!),
+    ]);
+    double? amountOf(String raw) =>
+        _parseAmount(raw, dotGroupsThousands: dots);
 
     String columnCtx = 'debit'; // updated when column headers are detected
     final result = <ParsedTransaction>[];
@@ -1697,7 +1773,7 @@ FILE CONTENT:
       }
       if (dateMatch == null) continue;
 
-      final date = _parseDate(dateMatch.group(0)!);
+      final date = _parseDate(dateMatch.group(0)!, dayFirst: dayFirst);
       if (date == null) continue;
 
       // Find amounts outside the date region.
@@ -1715,7 +1791,7 @@ FILE CONTENT:
         double? lookAhead;
         for (int j = 1; j <= 2 && (i + j) < lines.length; j++) {
           for (final m in amtPat.allMatches(lines[i + j].trim())) {
-            final p = _parseAmount(m.group(0)!);
+            final p = amountOf(m.group(0)!);
             if (p != null && p.abs() > 0.001) {
               lookAhead = p;
               break;
@@ -1729,8 +1805,8 @@ FILE CONTENT:
       } else if (amtMatches.length >= 2) {
         // Two-column format: first column = withdrawals, second = deposits.
         // Whichever is non-zero is the transaction amount.
-        final a = _parseAmount(amtMatches[0].group(0)!);
-        final b = _parseAmount(amtMatches[1].group(0)!);
+        final a = amountOf(amtMatches[0].group(0)!);
+        final b = amountOf(amtMatches[1].group(0)!);
         if (a != null && a.abs() > 0.001) {
           amount = a.abs();
           direction = 'debit';
@@ -1741,7 +1817,7 @@ FILE CONTENT:
           continue;
         }
       } else {
-        final p = _parseAmount(amtMatches[0].group(0)!);
+        final p = amountOf(amtMatches[0].group(0)!);
         if (p == null || p.abs() < 0.001) continue;
         amount = p.abs();
         direction = p < 0 ? 'debit' : columnCtx;
@@ -1815,7 +1891,9 @@ FILE CONTENT:
     // A leading BOM is invisible but sticks to the first header, so
     // 'date' != '\uFEFFdate' and column detection fails on a textbook CSV.
     var text = content.startsWith('\uFEFF') ? content.substring(1) : content;
-    text = text.replaceAll('\r\n', '\n');
+    // Classic Mac exports end lines with a bare `\r`; normalising only `\r\n`
+    // left such a file as one enormous row.
+    text = text.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
     final rows = CsvToListConverter(
       eol: '\n',
       fieldDelimiter: _sniffDelimiter(text),
@@ -1824,22 +1902,40 @@ FILE CONTENT:
     return rows.map((r) => r.map((e) => e.toString()).toList()).toList();
   }
 
-  /// Picks the field delimiter from the header line.
+  /// Picks the field delimiter from the start of the file.
   ///
   /// Most of continental Europe exports semicolon-separated CSV (precisely
   /// because the comma is the decimal point). Assuming ',' turns such a file
   /// into one unusable column.
+  ///
+  /// Judged on consistency over the first lines rather than on the first line
+  /// alone, which in many exports is a title or account summary rather than
+  /// the header: the delimiter is the one that splits the most lines into the
+  /// same number of fields.
   static String _sniffDelimiter(String text) {
-    final header = text
+    final lines = text
         .split('\n')
-        .firstWhere((l) => l.trim().isNotEmpty, orElse: () => '');
+        .where((l) => l.trim().isNotEmpty)
+        .take(20)
+        .toList();
     var best = ',';
-    var bestCount = _countOutsideQuotes(header, ',');
-    for (final candidate in const [';', '\t', '|']) {
-      final count = _countOutsideQuotes(header, candidate);
-      if (count > bestCount) {
+    var bestScore = -1;
+    var bestFields = 0;
+    for (final candidate in const [',', ';', '\t', '|']) {
+      // How many lines share each field count, ignoring lines it never splits.
+      final tally = <int, int>{};
+      for (final line in lines) {
+        final count = _countOutsideQuotes(line, candidate);
+        if (count > 0) tally[count] = (tally[count] ?? 0) + 1;
+      }
+      if (tally.isEmpty) continue;
+      final mode =
+          tally.entries.reduce((a, b) => b.value > a.value ? b : a);
+      if (mode.value > bestScore ||
+          (mode.value == bestScore && mode.key > bestFields)) {
         best = candidate;
-        bestCount = count;
+        bestScore = mode.value;
+        bestFields = mode.key;
       }
     }
     return best;
@@ -1895,20 +1991,27 @@ FILE CONTENT:
   /// `03/04/2025` read as 3 March, `13/04/2025` as 13 April, from two April
   /// rows. One of them then lands in the wrong month's budget and dashboard.
   ///
+  /// A vote across every decisive date, not the first one found: a merged
+  /// UK export with one US-formatted row used to be read month-first
+  /// throughout if that row happened to come first. Each row's own decisive
+  /// component still overrides the file's answer in [_parseDate].
+  ///
   /// Falls back to month-first (US) when a file is genuinely ambiguous — every
-  /// date in it has both components ≤ 12 — which is the format the manual
-  /// mapper also defaults to.
+  /// date in it has both components ≤ 12, or the vote is tied — which is the
+  /// format the manual mapper also defaults to.
   static bool _inferDayFirst(Iterable<String> samples) {
+    var dayFirst = 0;
+    var monthFirst = 0;
     for (final sample in samples) {
       final m = RegExp(r'^\s*"?(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})')
           .firstMatch(sample.trim());
       if (m == null) continue;
       final first = int.parse(m.group(1)!);
       final second = int.parse(m.group(2)!);
-      if (first > 12) return true; // can only be a day
-      if (second > 12) return false; // can only be a day → month came first
+      if (first > 12 && second <= 12) dayFirst++; // first can only be a day
+      if (second > 12 && first <= 12) monthFirst++; // second can only be one
     }
-    return false;
+    return dayFirst > monthFirst;
   }
 
   DateTime? _parseDate(String raw, {bool dayFirst = false}) {
@@ -2007,7 +2110,7 @@ FILE CONTENT:
     return _parseDate(raw);
   }
 
-  double? _parseAmount(String raw) {
+  double? _parseAmount(String raw, {bool dotGroupsThousands = false}) {
     if (raw.trim().isEmpty) return null;
     var s = raw
         .trim()
@@ -2030,7 +2133,7 @@ FILE CONTENT:
     final paren = RegExp(r'^\(([0-9,.\s]+)\)$').firstMatch(s);
     if (paren != null) s = '-${paren.group(1)}';
     s = s.replaceAll(' ', '').replaceAll('\u00a0', '');
-    s = _normalizeDecimalSeparator(s);
+    s = _normalizeDecimalSeparator(s, dotGroupsThousands: dotGroupsThousands);
     // Trailing minus sign: 4.50- → -4.50
     if (s.endsWith('-')) s = '-${s.substring(0, s.length - 1)}';
 
@@ -2044,9 +2147,25 @@ FILE CONTENT:
   /// Stripping every comma — what this used to do — turns the German `-12,50`
   /// into `-1250.00` and records a €1,250 expense, with nothing to tell the
   /// user it happened.
-  static String _normalizeDecimalSeparator(String s) {
+  ///
+  /// Dots alone are the mirror problem, and harder: `2.500` is two thousand
+  /// five hundred in a German export and 2.5 BTC-ish anywhere else. Two or
+  /// more dot groups (`1.234.567`) can only be grouping, so that is always
+  /// read as such. A single group of exactly three digits is decided by
+  /// [dotGroupsThousands], which the caller infers once per file from the
+  /// file's other amounts — see [_inferDotGrouping]. It used to be read as a
+  /// decimal unconditionally, so `2.500` became 2.5, a 1000× understatement,
+  /// and `1.234.567` dropped the row.
+  static String _normalizeDecimalSeparator(String s,
+      {bool dotGroupsThousands = false}) {
     final lastComma = s.lastIndexOf(',');
-    if (lastComma == -1) return s; // only dots: already Dart-parseable
+    if (lastComma == -1) {
+      if (_multiDotGrouped.hasMatch(s) ||
+          (dotGroupsThousands && _dotGrouped.hasMatch(s))) {
+        return s.replaceAll('.', '');
+      }
+      return s; // a decimal point: already Dart-parseable
+    }
     final lastDot = s.lastIndexOf('.');
 
     // '1,234.56' — the dot is last, so commas group thousands.
@@ -2065,6 +2184,46 @@ FILE CONTENT:
     }
     return '${s.substring(0, lastComma).replaceAll(',', '')}'
         '.${s.substring(lastComma + 1)}';
+  }
+
+  /// `1.234.567` — only ever thousands grouping.
+  static final _multiDotGrouped = RegExp(r'^[-+]?\d{1,3}(\.\d{3}){2,}-?$');
+
+  /// `2.500` — grouping in some files, a three-place decimal in others.
+  static final _dotGrouped = RegExp(r'^[-+]?\d{1,3}(\.\d{3})+-?$');
+
+  /// Whether a file writes amounts the continental way: `.` grouping
+  /// thousands and `,` as the decimal point.
+  ///
+  /// Decided by vote over the file's own amounts rather than per value,
+  /// because a single value often cannot say: `2.500` is ambiguous on its own,
+  /// but not in a file that also contains `12,50` or `1.234,56`. Values that
+  /// prove the other convention (`12.50`, `1,234.56`) vote against. A file
+  /// with no decisive value at all keeps the decimal-point reading, which is
+  /// what keeps a BTC export's `0.125` from becoming 125.
+  static bool _inferDotGrouping(Iterable<String> samples) {
+    var continental = 0;
+    var anglo = 0;
+    for (final raw in samples) {
+      final v = raw.replaceAll(RegExp(r'[^\d.,]'), '');
+      if (v.isEmpty) continue;
+      final lastComma = v.lastIndexOf(',');
+      final lastDot = v.lastIndexOf('.');
+      if (lastComma != -1 && lastDot != -1) {
+        lastComma > lastDot ? continental++ : anglo++;
+      } else if (lastComma != -1) {
+        // `12,50` is a decimal comma; `1,234` is ambiguous grouping.
+        if (RegExp(r',\d{1,2}$').hasMatch(v)) continental++;
+      } else if (lastDot != -1) {
+        if (RegExp(r'\.\d{1,2}$').hasMatch(v) ||
+            RegExp(r'\.\d{4,}$').hasMatch(v)) {
+          anglo++;
+        } else if (RegExp(r'^\d{1,3}(\.\d{3}){2,}$').hasMatch(v)) {
+          continental++;
+        }
+      }
+    }
+    return continental > anglo;
   }
 
   static const _categoryKeywords = <String, List<String>>{
