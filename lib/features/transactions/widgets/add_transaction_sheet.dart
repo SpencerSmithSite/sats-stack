@@ -21,15 +21,12 @@ class AddTransactionSheet extends StatefulWidget {
     required this.categoryService,
     required this.walletService,
     required this.btcPriceService,
-    this.existing,
   });
 
   final TransactionService transactionService;
   final CategoryService categoryService;
   final WalletService walletService;
   final BtcPriceService btcPriceService;
-  /// When non-null, the sheet opens in edit mode pre-populated with this transaction.
-  final Transaction? existing;
 
   @override
   State<AddTransactionSheet> createState() => _AddTransactionSheetState();
@@ -53,27 +50,10 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
 
   double? get _btcPrice => widget.btcPriceService.priceNotifier.value;
 
-  bool get _isEditing => widget.existing != null;
-
   @override
   void initState() {
     super.initState();
     widget.btcPriceService.priceNotifier.addListener(_onPriceChange);
-
-    final tx = widget.existing;
-    if (tx != null) {
-      _isExpense = tx.amountFiat < 0;
-      _isFiatMode = true;
-      _amountController.text = tx.amountFiat.abs().toStringAsFixed(2);
-      _descriptionController.text = tx.description;
-      _notesController.text = tx.notes ?? '';
-      _showNotes = tx.notes != null && tx.notes!.isNotEmpty;
-      _selectedDate = tx.date;
-      if (tx.recurringPeriod != null) {
-        _isRecurring = true;
-        _recurringPeriod = tx.recurringPeriod!;
-      }
-    }
 
     _loadCategories();
   }
@@ -85,11 +65,6 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     if (mounted) {
       setState(() {
         _categories = categories;
-        final existing = widget.existing;
-        if (existing != null) {
-          _selectedCategory =
-              categories.where((c) => c.name == existing.category).firstOrNull;
-        }
         _selectedCategory ??=
             categories.where((c) => c.name != 'Income').firstOrNull;
       });
@@ -178,55 +153,31 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
           ? Value<DateTime?>(_selectedDate)
           : const Value<DateTime?>(null);
 
-      if (_isEditing) {
-        final tx = widget.existing!;
-        // Preserve the original anchor date if we're editing a recurring series
-        final editAnchor = _isRecurring
-            ? Value<DateTime?>(tx.recurringAnchorDate ?? _selectedDate)
-            : const Value<DateTime?>(null);
-        await widget.transactionService.update(
-          TransactionsCompanion(
-            id: Value(tx.id),
-            date: Value(_selectedDate),
-            description: Value(_descriptionController.text.trim()),
-            amountSats: Value(amountSats),
-            amountFiat: Value(amountFiat),
-            fiatCurrency: Value(currency),
-            category: Value(_selectedCategory?.name),
-            notes: Value(_notesController.text.trim().isEmpty
-                ? null
-                : _notesController.text.trim()),
-            recurringPeriod: period,
-            recurringAnchorDate: editAnchor,
-          ),
-        );
-      } else {
-        final dedupHash = HashUtils.transactionDedupHash(
-          date: _selectedDate,
-          amount: amountFiat,
-          description: _descriptionController.text.trim(),
-          salt: DateTime.now().microsecondsSinceEpoch.toString(),
-        );
+      final dedupHash = HashUtils.transactionDedupHash(
+        date: _selectedDate,
+        amount: amountFiat,
+        description: _descriptionController.text.trim(),
+        salt: DateTime.now().microsecondsSinceEpoch.toString(),
+      );
 
-        await widget.transactionService.add(
-          TransactionsCompanion.insert(
-            walletId: wallet.id,
-            date: _selectedDate,
-            description: _descriptionController.text.trim(),
-            amountSats: amountSats,
-            amountFiat: amountFiat,
-            fiatCurrency: currency,
-            category: Value(_selectedCategory?.name),
-            source: 'manual',
-            notes: Value(_notesController.text.trim().isEmpty
-                ? null
-                : _notesController.text.trim()),
-            dedupHash: dedupHash,
-            recurringPeriod: period,
-            recurringAnchorDate: anchor,
-          ),
-        );
-      }
+      await widget.transactionService.add(
+        TransactionsCompanion.insert(
+          walletId: wallet.id,
+          date: _selectedDate,
+          description: _descriptionController.text.trim(),
+          amountSats: amountSats,
+          amountFiat: amountFiat,
+          fiatCurrency: currency,
+          category: Value(_selectedCategory?.name),
+          source: 'manual',
+          notes: Value(_notesController.text.trim().isEmpty
+              ? null
+              : _notesController.text.trim()),
+          dedupHash: dedupHash,
+          recurringPeriod: period,
+          recurringAnchorDate: anchor,
+        ),
+      );
 
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
@@ -276,16 +227,6 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                       ),
                     ),
                   ),
-                  if (_isEditing) ...[
-                    Text(
-                      'Edit Transaction',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-
                   // Expense / Income toggle
                   _TypeToggle(
                     isExpense: _isExpense,
@@ -531,7 +472,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                               color: Colors.white,
                             ),
                           )
-                        : Text(_isEditing ? 'Update Transaction' : 'Save Transaction'),
+                        : const Text('Save Transaction'),
                   ),
                 ],
               ),

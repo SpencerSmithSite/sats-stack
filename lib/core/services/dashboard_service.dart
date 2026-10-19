@@ -4,15 +4,52 @@ import 'package:intl/intl.dart';
 import '../database/database.dart';
 import '../models/analytics_data.dart';
 import '../models/dashboard_data.dart';
+import '../models/fx_rates.dart';
 import '../models/wallet_summary.dart';
 import '../../shared/constants/app_constants.dart';
 import '../../shared/utils/currency_utils.dart';
 import '../../shared/utils/date_range.dart';
 
 class DashboardService {
-  DashboardService(this._db);
+  /// [rates] supplies the display currency and today's BTC prices. Read at
+  /// compute time, so a currency switch takes effect on the next recompute
+  /// without the service having to be rebuilt. Without it every amount passes
+  /// through unconverted — what tests constructing the service directly get.
+  DashboardService(this._db, {FxRates Function()? rates})
+      : _rates = rates ?? _noConversion;
 
   final AppDatabase _db;
+  final FxRates Function() _rates;
+
+  static FxRates _noConversion() => const FxRates.passthrough();
+
+  /// [txns] with `amountFiat` restated in the display currency, for
+  /// aggregation only, and how many rows had no rate.
+  ///
+  /// Every aggregate below reads from this, so they all agree, and none of
+  /// them sums across currencies any more — which every one of them used to.
+  ///
+  /// A row that cannot be converted keeps its sats and gets a fiat value of
+  /// zero, so it drops out of the income/spending sums without dropping out of
+  /// the stack total: sats need no conversion and must not be lost because a
+  /// fiat rate is. The count lets the screen say a total is incomplete rather
+  /// than quietly showing a smaller number.
+  ({List<Transaction> rows, int unconverted}) _restate(List<Transaction> txns) {
+    final fx = _rates();
+    var unconverted = 0;
+    final rows = [
+      for (final t in txns)
+        switch (fx.convert(t.amountFiat, t.fiatCurrency)) {
+          null => () {
+              unconverted++;
+              return t.copyWith(amountFiat: 0);
+            }(),
+          final v when v == t.amountFiat => t,
+          final v => t.copyWith(amountFiat: v),
+        },
+    ];
+    return (rows: rows, unconverted: unconverted);
+  }
 
   /// Emits once, then whenever any of [tables] changes.
   ///
@@ -45,9 +82,10 @@ class DashboardService {
   }
 
   Future<List<WalletSummary>> _computePerWallet(
-    List<Transaction> allTxns,
+    List<Transaction> originalTxns,
     DateTime month,
   ) async {
+    final allTxns = _restate(originalTxns).rows;
     final wallets = await _db.select(_db.wallets).get();
     final range = DateRange.month(month);
 
@@ -103,9 +141,10 @@ class DashboardService {
   }
 
   Future<AnalyticsData> _computeAnalytics(
-    List<Transaction> allTxns,
+    List<Transaction> originalTxns,
     DateTime selectedMonth,
   ) async {
+    final allTxns = _restate(originalTxns).rows;
     // ── Selected month breakdown ─────────────────────────────────────────────
     final range = DateRange.month(selectedMonth);
     final monthTxns =
@@ -173,7 +212,8 @@ class DashboardService {
     required String currency,
     double? btcPrice,
   }) async {
-    final txns = await _db.select(_db.transactions).get();
+    final txns =
+        _restate(await _db.select(_db.transactions).get()).rows;
     final budgets = await _db.select(_db.budgets).get();
     final categories = await _db.select(_db.categories).get();
 
@@ -253,11 +293,13 @@ class DashboardService {
   // ── Private ────────────────────────────────────────────────────────────────
 
   Future<DashboardData> _compute(
-    List<Transaction> allTxns,
+    List<Transaction> originalTxns,
     DateTime month, {
     double inflationRate = 3.5,
   }) async {
     final range = DateRange.month(month);
+    final restated = _restate(originalTxns);
+    final allTxns = restated.rows;
 
     final monthTxns = allTxns.where((t) => range.contains(t.date)).toList();
 
@@ -294,7 +336,11 @@ class DashboardService {
         monthBtcTxns.fold<int>(0, (s, t) => s + t.amountSats);
 
     // ── Recent transactions ──────────────────────────────────────────────────
-    final sorted = List<Transaction>.from(allTxns)
+    // From the originals, not the restated rows: these are rendered with each
+    // row's own currency label, so a $50 charge must still read $50 — a
+    // converted figure under the original label would be a new version of the
+    // same bug.
+    final sorted = List<Transaction>.from(originalTxns)
       ..sort((a, b) => b.date.compareTo(a.date));
     final recent = sorted.take(5).toList();
 
@@ -316,6 +362,7 @@ class DashboardService {
       spendingByCategory: byCategory,
       recentTransactions: recent,
       stackGoalSats: goalSats,
+      unconvertedCount: restated.unconverted,
     );
   }
 }

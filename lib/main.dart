@@ -10,6 +10,7 @@ import 'core/services/transaction_service.dart';
 import 'core/services/category_service.dart';
 import 'core/services/wallet_service.dart';
 import 'core/services/btc_price_service.dart';
+import 'core/models/fx_rates.dart';
 import 'core/services/dashboard_service.dart';
 import 'core/services/xpub_service.dart';
 import 'core/services/budget_service.dart';
@@ -42,6 +43,12 @@ late ValueNotifier<bool> aiEnabledNotifier;
 late ValueNotifier<bool> onboardingCompleteNotifier;
 late ValueNotifier<double> inflationRateNotifier;
 
+/// Today's display currency and BTC prices, for converting stored amounts.
+FxRates _currentRates() => FxRates(
+      display: currencyNotifier.value,
+      btcPrices: btcPriceService.allPrices,
+    );
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -73,9 +80,15 @@ void main() async {
   categoryService = CategoryService(db);
   walletService = WalletService(db);
   btcPriceService = BtcPriceService(db);
-  dashboardService = DashboardService(db);
+  // Both aggregate fiat across transactions, so both convert into the display
+  // currency first. A closure rather than a snapshot: it reads the currency and
+  // the latest prices at compute time, so a currency switch applies on the next
+  // recompute. Wired before btcPriceService.initialize runs, which is fine — a
+  // same-currency row needs no rate, and a foreign one is counted as
+  // unconverted until prices land.
+  dashboardService = DashboardService(db, rates: _currentRates);
   xpubService = XpubService(db);
-  budgetService = BudgetService(db);
+  budgetService = BudgetService(db, rates: _currentRates);
   ollamaService = OllamaService(db);
   await ollamaService.loadSettings();
   importService = ImportService(db, ollamaService);

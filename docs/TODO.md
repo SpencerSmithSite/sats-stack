@@ -86,25 +86,6 @@ no engine, so it exercises the Dart queue alone. Net effect: cancelling one
 answer can corrupt or fail the next one, and on Android the model stays busy
 after the queue has moved on. Fix needs native work on both sides.
 
-### 3. Currency is still mixed in every aggregate
-
-- **`amountFiat` is summed across currencies.** `transactions.fiatCurrency` is
-  written by four paths and read in exactly one place — the row label at
-  `transaction_list_item.dart:113`. No aggregate filters or converts by it, and
-  the import flow deliberately supports a per-source currency. A GBP user with
-  a USD card gets dashboard spending, budget progress, the pie chart, YTD and
-  the exported CSV adding USD to GBP under a `£` label — while the transactions
-  list shows each row correctly, so the two screens visibly disagree. Convert
-  at read time via `BtcPriceHistory`, or filter aggregates to the active
-  currency and surface what was excluded.
-- **The live edit path writes a recomputed amount under the row's old
-  currency.** `transaction_edit_sheet.dart:198` derives the figure from
-  `priceNotifier.value` — the price in the *active* currency — then stores
-  `fiatCurrency: Value(tx.fiatCurrency)`. Editing a USD row while the app is in
-  GBP writes a GBP number labelled `$`. `AUDIT.md` records this as fixed, and
-  it is — in `AddTransactionSheet`'s editing branch, which is **dead code**: its
-  only call site is the add path. Fix the real path and delete the dead branch.
-
 ### 4. Light mode fails contrast, in the places that matter most
 
 Measured, not guessed. None of these is a *hardcoded dark colour* — the audit's

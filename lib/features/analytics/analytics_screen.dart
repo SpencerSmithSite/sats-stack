@@ -43,7 +43,20 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   void initState() {
     super.initState();
     _analytics = app.dashboardService.watchAnalytics(_selectedMonth);
+    app.currencyNotifier.addListener(_onCurrencyChange);
   }
+
+  @override
+  void dispose() {
+    app.currencyNotifier.removeListener(_onCurrencyChange);
+    super.dispose();
+  }
+
+  /// The figures are converted into the display currency inside the
+  /// aggregate, so a currency switch needs a recompute.
+  void _onCurrencyChange() => setState(() {
+        _analytics = app.dashboardService.watchAnalytics(_selectedMonth);
+      });
 
   void _previousMonth() => setState(() {
         _selectedMonth = MonthCursor(_selectedMonth).previous.month;

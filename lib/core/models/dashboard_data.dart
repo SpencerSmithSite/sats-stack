@@ -12,6 +12,7 @@ class DashboardData {
     required this.spendingByCategory,
     required this.recentTransactions,
     this.stackGoalSats,
+    this.unconvertedCount = 0,
   });
 
   /// Total sats held across all xpub wallets (isBitcoin = true).
@@ -43,6 +44,13 @@ class DashboardData {
 
   /// User-configured stack goal in sats, or null if not set.
   final int? stackGoalSats;
+
+  /// Transactions left out of the fiat figures because no exchange rate was
+  /// available for their currency — typically a foreign-currency row before
+  /// the first price fetch has landed. Their sats still count toward the
+  /// stack. Non-zero means the income and spending totals are incomplete, and
+  /// the screen says so rather than showing a quietly smaller number.
+  final int unconvertedCount;
 
   double get stackGoalProgress {
     if (stackGoalSats == null || stackGoalSats! <= 0) return 0;

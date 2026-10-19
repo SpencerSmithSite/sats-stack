@@ -622,6 +622,41 @@ slow-but-alive one does not, that a second generation waits rather than
 clobbering the first, that a failure does not block the next, and that
 different channels do not queue behind each other.
 
+### Currency is converted, not mixed
+
+Addressed 2026-10-19, after the second review pass found the first fix only
+covered the write side.
+
+- **Every aggregate summed `amountFiat` across currencies.** `fiatCurrency` was
+  written by four paths and read in exactly one place — a row label — so the
+  dashboard, budget progress, analytics, year-to-date and the exported summary
+  all added dollars to pounds under a `£` label, while the transactions list
+  showed each row correctly. `FxRates` now converts each row into the display
+  currency first, using BTC as the bridge because it is the one rate table the
+  app already holds for every currency. Same-currency rows — nearly all of them
+  — are returned exact and need no rate at all, so this works offline.
+  **It applies today's cross rate to every row**, so a March USD charge is
+  converted at October's rate: a deliberate trade, since major cross rates move
+  a few percent a year against the 20–30% error of adding them, and it stays
+  synchronous. A row with no rate is excluded from the fiat totals but keeps
+  its sats in the stack, and the dashboard says how many rather than showing a
+  quietly smaller number. Recent rows are taken from the originals, since they
+  are rendered with their own currency label.
+- **The live edit path rewrote historical values.** An earlier entry here said
+  "an edit now rewrites `fiatCurrency`", crediting `AddTransactionSheet`'s
+  editing branch — but that branch was **unreachable**: its only call site is
+  the add path. The real edit path, `TransactionEditSheet`, derived both columns
+  from `priceNotifier` — the price *now*, in the *active* currency — and stored
+  the row's *old* code. So editing only the category of a March purchase
+  rewrote its sats at October's price, and a USD row edited in GBP got a
+  GBP-derived figure labelled `$`. It now keeps the row's currency (the field is
+  pre-filled in it) and preserves the rate the transaction actually happened
+  at; changing the amount scales both columns at that rate. The dead branch is
+  deleted.
+
+Covered by `fx_rates_test.dart` and `currency_aggregates_test.dart`, end to end
+through the real services.
+
 ### Test gaps
 
 The suite went from 102 tests to 209 over this work. Month boundaries, category

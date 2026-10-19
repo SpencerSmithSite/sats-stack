@@ -38,10 +38,14 @@ class _BudgetsScreenState extends State<BudgetsScreen> {
   void initState() {
     super.initState();
     _subscribe();
+    // Spending is converted into the display currency before it is compared
+    // with a budget, so a currency switch needs a fresh read.
+    app.currencyNotifier.addListener(_subscribe);
   }
 
   @override
   void dispose() {
+    app.currencyNotifier.removeListener(_subscribe);
     _progressSub?.cancel();
     super.dispose();
   }

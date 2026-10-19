@@ -168,23 +168,45 @@ class _TransactionEditSheetState extends State<TransactionEditSheet> {
       } else {
         final tx = widget.existingTx!;
         final sign = _direction == 'credit' ? 1 : -1;
-        final price = app.btcPriceService.priceNotifier.value;
+
+        // The rate this transaction actually happened at — sats per unit of
+        // its own currency — preserved across the edit.
+        //
+        // This used to re-derive both sides from `priceNotifier`, the price
+        // *now* and in the *active* currency, then store the row's *old*
+        // currency code. Two bugs from one line: changing only the category
+        // of a March purchase rewrote its sats at October's price; and a USD
+        // row edited while the app was set to GBP got a GBP-derived figure
+        // labelled `$`. The field is pre-filled in the row's own currency, so
+        // the row keeps that currency and keeps its historical rate; changing
+        // the amount scales both columns at that rate.
+        final oldFiat = tx.amountFiat.abs();
+        final oldSats = tx.amountSats.abs();
+        final hasRate = oldFiat > 0 && oldSats > 0;
 
         final int newSats;
         final double signedFiat;
         if (tx.isBitcoin) {
-          // Sats are what was typed; fiat is derived.
+          // Sats are what was typed; fiat follows at the recorded rate.
           newSats = sign * amount.round();
-          signedFiat = (price != null && price > 0)
-              ? newSats / 100000000 * price
-              // Nothing better to derive it from, so keep the stored magnitude
-              // and move the sign with the direction.
-              : sign * tx.amountFiat.abs();
+          signedFiat = hasRate
+              ? sign * (amount * oldFiat / oldSats)
+              // Nothing to derive it from, so keep the stored magnitude and
+              // move the sign with the direction.
+              : sign * oldFiat;
         } else {
           signedFiat = sign * amount;
-          newSats = (price != null && price > 0)
-              ? (signedFiat / price * 100000000).round()
-              : tx.amountSats;
+          if (hasRate) {
+            newSats = sign * (amount * oldSats / oldFiat).round();
+          } else {
+            // A row stored without one side (an old import, or a price that
+            // was unavailable at the time). Fall back to today's price — but
+            // in the row's own currency, never the active one.
+            final price = app.btcPriceService.priceFor(tx.fiatCurrency);
+            newSats = (price != null && price > 0)
+                ? (signedFiat / price * 100000000).round()
+                : tx.amountSats;
+          }
         }
 
         await app.transactionService.update(
