@@ -283,7 +283,9 @@ class ThemeCard extends StatelessWidget {
 
 class ThemePreview extends StatelessWidget {
   const ThemePreview({
-    super.key,required this.isDark});
+    super.key,
+    required this.isDark,
+  });
   final bool isDark;
 
   @override

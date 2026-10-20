@@ -6,7 +6,6 @@ import 'package:flutter/services.dart';
 import '../../../shared/theme/app_colors.dart';
 import '../../../shared/utils/currency_utils.dart';
 import '../../../shared/utils/sat_converter.dart';
-import '../../../main.dart' as app;
 import 'period_chip.dart';
 import '../../../shared/theme/app_text_styles.dart';
 import 'package:intl/intl.dart';
@@ -19,9 +18,13 @@ class DcaSimulator extends StatelessWidget {
     required this.controller,
     required this.years,
     required this.onYearsChanged,
+    required this.currency,
   });
 
   final double? btcPrice;
+
+  /// See `StackHero.currency`.
+  final String currency;
   final TextEditingController controller;
   final int years;
   final ValueChanged<int> onYearsChanged;
@@ -51,7 +54,7 @@ class DcaSimulator extends StatelessWidget {
     final monthly = double.tryParse(controller.text.replaceAll(',', '')) ?? 0;
     final months = years * 12;
     final totalInvested = monthly * months;
-    final fiatFmt = NumberFormat.currency(symbol: CurrencyUtils.symbolFor(app.currencyNotifier.value), decimalDigits: 0);
+    final fiatFmt = NumberFormat.currency(symbol: CurrencyUtils.symbolFor(currency), decimalDigits: 0);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -75,7 +78,7 @@ class DcaSimulator extends StatelessWidget {
                       style: AppTextStyles.monoMedium.copyWith(color: theme.colorScheme.onSurface),
                       decoration: InputDecoration(
                         labelText: 'Monthly DCA',
-                        prefixText: '${CurrencyUtils.symbolFor(app.currencyNotifier.value)} ',
+                        prefixText: '${CurrencyUtils.symbolFor(currency)} ',
                         isDense: true,
                       ),
                     ),
@@ -137,6 +140,7 @@ class DcaSimulator extends StatelessWidget {
                     color: s.color,
                     sats: _simulate(monthly, price, months, s.rate),
                     btcPrice: price,
+                    currency: currency,
                   ),
                   const SizedBox(height: 10),
                 ],
@@ -166,9 +170,11 @@ class ScenarioRow extends StatelessWidget {
     required this.color,
     required this.sats,
     required this.btcPrice,
+    required this.currency,
   });
 
   final String label;
+  final String currency;
   final double rate;
   final Color color;
   final int sats;
@@ -176,7 +182,7 @@ class ScenarioRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fiatFmt = NumberFormat.currency(symbol: CurrencyUtils.symbolFor(app.currencyNotifier.value), decimalDigits: 0);
+    final fiatFmt = NumberFormat.currency(symbol: CurrencyUtils.symbolFor(currency), decimalDigits: 0);
     final fiatValue = fiatFmt.format(sats / 1e8 * btcPrice);
     final satsStr = SatConverter.formatSats(sats);
 

@@ -13,6 +13,7 @@ import 'widgets/stack_goal_card.dart';
 import 'widgets/stack_hero.dart';
 import 'widgets/stack_history_chart.dart';
 import 'widgets/stack_period.dart';
+import 'widgets/stack_stats.dart';
 
 // ── Chart period ──────────────────────────────────────────────────────────────
 
@@ -42,8 +43,12 @@ class _StackScreenState extends State<StackScreen> {
   /// single-subscription stream, and a second query if it were two streams.
   late final Stream<List<Transaction>> _transactions;
 
-  /// Latest rows, or null until the first emission arrives.
-  List<Transaction>? _txns;
+  /// Aggregates over the latest rows, or null until the first emission.
+  ///
+  /// Computed when the rows change, not in `build`. They used to be getters
+  /// on the content widget, so every BTC price tick — which rebuilds the
+  /// content — walked the whole transaction list four times.
+  StackStats? _stats;
   Object? _txnError;
 
   @override
@@ -84,20 +89,34 @@ class _StackScreenState extends State<StackScreen> {
   }
 
   void _onTransactions(List<Transaction> txns) {
+    final stats = StackStats.from(txns, DateTime.now());
     if (mounted) {
       setState(() {
         _txns = txns;
+        _stats = stats;
         _txnError = null;
       });
     }
-    _checkGoalNotification(txns);
+    _checkGoalNotification(stats.totalSats);
   }
 
-  void _checkGoalNotification(List<Transaction> txns) {
+  /// Latest rows, kept so the stats can be recomputed when the month turns.
+  List<Transaction> _txns = const [];
+
+  /// [_stats], recomputed first if the calendar month has changed since —
+  /// "this month" and the monthly average both depend on it, and an app left
+  /// open across midnight on the 1st would otherwise keep last month's.
+  StackStats? _currentStats() {
+    final stats = _stats;
+    if (stats == null) return null;
+    final now = DateTime.now();
+    if (stats.isFor(now)) return stats;
+    return _stats = StackStats.from(_txns, now);
+  }
+
+  void _checkGoalNotification(int total) {
     final goal = _stackGoalSats;
     if (goal == null || goal <= 0) return;
-    final total =
-        txns.where((t) => t.isBitcoin).fold(0, (s, t) => s + t.amountSats);
     if (total >= goal) {
       app.notificationService.showStackGoalReached(
         goalSats: goal,
@@ -168,13 +187,12 @@ class _StackScreenState extends State<StackScreen> {
               ),
             );
           }
-          final allTxns = _txns;
-          if (allTxns == null) {
+          final stats = _currentStats();
+          if (stats == null) {
             return const Center(child: CircularProgressIndicator());
           }
-          final hasBtc = allTxns.any((t) => t.isBitcoin);
 
-          if (!hasBtc) {
+          if (!stats.hasBitcoin) {
             return EmptyState(
               icon: Icons.currency_bitcoin,
               title: 'No Bitcoin tracked yet',
@@ -190,9 +208,10 @@ class _StackScreenState extends State<StackScreen> {
             builder: (context, btcPrice, _) {
               return ValueListenableBuilder<String>(
                 valueListenable: app.currencyNotifier,
-                builder: (context, _, __) {
+                builder: (context, currency, _) {
                   return _StackContent(
-                    allTxns: allTxns,
+                    stats: stats,
+                    currency: currency,
                     btcPrice: btcPrice,
                     period: _period,
                     onPeriodChanged: (p) => setState(() => _period = p),
@@ -216,7 +235,8 @@ class _StackScreenState extends State<StackScreen> {
 
 class _StackContent extends StatelessWidget {
   const _StackContent({
-    required this.allTxns,
+    required this.stats,
+    required this.currency,
     required this.btcPrice,
     required this.period,
     required this.onPeriodChanged,
@@ -227,7 +247,8 @@ class _StackContent extends StatelessWidget {
     required this.onDcaYearsChanged,
   });
 
-  final List<Transaction> allTxns;
+  final StackStats stats;
+  final String currency;
   final double? btcPrice;
   final StackPeriod period;
   final ValueChanged<StackPeriod> onPeriodChanged;
@@ -237,54 +258,9 @@ class _StackContent extends StatelessWidget {
   final int dcaYears;
   final ValueChanged<int> onDcaYearsChanged;
 
-  int get _totalSats =>
-      allTxns.where((t) => t.isBitcoin).fold(0, (s, t) => s + t.amountSats);
-
-  int get _monthSats {
-    final now = DateTime.now();
-    final first = DateTime(now.year, now.month, 1);
-    return allTxns
-        .where((t) => t.isBitcoin && !t.date.isBefore(first))
-        .fold(0, (s, t) => s + t.amountSats);
-  }
-
-  /// Average sats stacked per complete calendar month (excludes the current
-  /// partial month so it doesn't drag the average down mid-month).
-  int get _avgMonthlySats {
-    final now = DateTime.now();
-    final currentMonth = DateTime(now.year, now.month);
-    final byMonth = <DateTime, int>{};
-    for (final t in allTxns.where((t) => t.isBitcoin)) {
-      final m = DateTime(t.date.year, t.date.month);
-      if (m.isBefore(currentMonth)) {
-        byMonth[m] = (byMonth[m] ?? 0) + t.amountSats;
-      }
-    }
-    if (byMonth.isEmpty) return 0;
-    final total = byMonth.values.fold(0, (s, v) => s + v);
-    return (total / byMonth.length).round();
-  }
-
-  // Builds cumulative monthly history from all Bitcoin transactions.
-  Map<DateTime, int> get _fullHistory {
-    final byMonth = <DateTime, int>{};
-    for (final t in allTxns.where((t) => t.isBitcoin)) {
-      final month = DateTime(t.date.year, t.date.month);
-      byMonth[month] = (byMonth[month] ?? 0) + t.amountSats;
-    }
-    final sorted = byMonth.keys.toList()..sort();
-    int cumulative = 0;
-    final result = <DateTime, int>{};
-    for (final m in sorted) {
-      cumulative += byMonth[m]!;
-      result[m] = cumulative;
-    }
-    return result;
-  }
-
   @override
   Widget build(BuildContext context) {
-    final history = _fullHistory;
+    final history = stats.history;
     final hasBtc = history.isNotEmpty;
 
     return ListView(
@@ -294,9 +270,10 @@ class _StackContent extends StatelessWidget {
 
         // ── Hero ─────────────────────────────────────────────────────────────
         StackHero(
-          totalSats: _totalSats,
-          monthSats: _monthSats,
+          totalSats: stats.totalSats,
+          monthSats: stats.monthSats,
           btcPrice: btcPrice,
+          currency: currency,
         ),
         const SizedBox(height: 20),
 
@@ -315,11 +292,12 @@ class _StackContent extends StatelessWidget {
         // ── Stack goal ────────────────────────────────────────────────────────
         _SectionHeader(title: 'Stack Goal'),
         StackGoalCard(
-          totalSats: _totalSats,
+          totalSats: stats.totalSats,
           goalSats: stackGoalSats,
-          avgMonthlySats: _avgMonthlySats,
+          avgMonthlySats: stats.avgMonthlySats,
           btcPrice: btcPrice,
           onEdit: onEditGoal,
+          currency: currency,
         ),
         const SizedBox(height: 20),
 
@@ -330,6 +308,7 @@ class _StackContent extends StatelessWidget {
           controller: dcaController,
           years: dcaYears,
           onYearsChanged: onDcaYearsChanged,
+          currency: currency,
         ),
         const SizedBox(height: 8),
       ],

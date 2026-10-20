@@ -7,7 +7,6 @@ import 'package:intl/intl.dart';
 import '../../../shared/theme/app_colors.dart';
 import '../../../shared/utils/currency_utils.dart';
 import '../../../shared/utils/sat_converter.dart';
-import '../../../main.dart' as app;
 import '../../../shared/theme/app_text_styles.dart';
 import '../../../shared/widgets/tappable.dart';
 
@@ -19,8 +18,11 @@ class StackGoalCard extends StatelessWidget {
     required this.avgMonthlySats,
     required this.btcPrice,
     required this.onEdit,
+    required this.currency,
   });
 
+  /// See `StackHero.currency`.
+  final String currency;
   final int totalSats;
   final int? goalSats;
   final int avgMonthlySats;
@@ -38,7 +40,7 @@ class StackGoalCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final fiatFmt = NumberFormat.currency(symbol: CurrencyUtils.symbolFor(app.currencyNotifier.value), decimalDigits: 0);
+    final fiatFmt = NumberFormat.currency(symbol: CurrencyUtils.symbolFor(currency), decimalDigits: 0);
 
     if (goalSats == null || goalSats! <= 0) {
       return Padding(
@@ -190,15 +192,18 @@ class StackGoalCard extends StatelessWidget {
 
 class SetGoalSheet extends StatefulWidget {
   const SetGoalSheet({
-    super.key,required this.current, required this.onSave});
+    super.key,
+    required this.current,
+    required this.onSave,
+  });
   final int? current;
   final ValueChanged<int> onSave;
 
   @override
-  State<SetGoalSheet> createState() => SetGoalSheetState();
+  State<SetGoalSheet> createState() => _SetGoalSheetState();
 }
 
-class SetGoalSheetState extends State<SetGoalSheet> {
+class _SetGoalSheetState extends State<SetGoalSheet> {
   late final TextEditingController _ctrl;
 
   @override

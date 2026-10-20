@@ -6,22 +6,31 @@ import 'package:flutter/material.dart';
 import '../../../shared/theme/app_colors.dart';
 import '../../../shared/utils/currency_utils.dart';
 import '../../../shared/utils/sat_converter.dart';
-import '../../../main.dart' as app;
 import '../../../shared/theme/app_text_styles.dart';
 import 'package:intl/intl.dart';
 
 class StackHero extends StatelessWidget {
   const StackHero({
-    super.key,required this.totalSats, required this.monthSats, this.btcPrice});
+    super.key,
+    required this.totalSats,
+    required this.monthSats,
+    required this.currency,
+    this.btcPrice,
+  });
 
   final int totalSats;
   final int monthSats;
   final double? btcPrice;
 
+  /// Passed in rather than read from `app.currencyNotifier` in `build`, which
+  /// worked only because a parent rebuilt on a notifier it otherwise ignored.
+  final String currency;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final fiatFmt = NumberFormat.currency(symbol: CurrencyUtils.symbolFor(app.currencyNotifier.value), decimalDigits: 0);
+    final fiatFmt = NumberFormat.currency(
+        symbol: CurrencyUtils.symbolFor(currency), decimalDigits: 0);
     final fiatValue = btcPrice != null && btcPrice! > 0
         ? fiatFmt.format(totalSats / 1e8 * btcPrice!)
         : '--';
@@ -100,7 +109,9 @@ class StackHero extends StatelessWidget {
 
 class MonthChange extends StatelessWidget {
   const MonthChange({
-    super.key,required this.sats});
+    super.key,
+    required this.sats,
+  });
   final int sats;
 
   @override

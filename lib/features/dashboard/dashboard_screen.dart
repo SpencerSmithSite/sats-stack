@@ -201,33 +201,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
             return _ErrorState(message: snapshot.error.toString());
           }
           final data = snapshot.data ?? DashboardData.empty;
-          return ValueListenableBuilder<double?>(
-            valueListenable: app.btcPriceService.priceNotifier,
-            builder: (context, btcPrice, _) {
-              return ValueListenableBuilder<String>(
-                valueListenable: app.currencyNotifier,
-                builder: (context, currency, _) {
-                  return AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 250),
-                    switchInCurve: Curves.easeOut,
-                    child: _DashboardContent(
-                      key: ValueKey(_selectedMonth),
-                      data: data,
-                      btcPrice: btcPrice,
-                      currency: currency,
-                      categoriesByName: _categoriesByName,
-                      perWallet: _perWallet,
-                      selectedMonth: _selectedMonth,
-                      inflationRate: app.inflationRateNotifier.value,
-                      cachedInsight: _cachedInsight,
-                      isGeneratingInsight: _isGeneratingInsight,
-                      onRefreshInsight: _generateInsight,
-                      insightRecipient: _insightRecipient,
-                    ),
-                  );
-                },
-              );
-            },
+          // No price or currency listener here: each section that shows a
+          // price-derived figure listens for itself (`_Live`). Wrapping the
+          // whole content rebuilt every section and every transaction row on
+          // each price poll.
+          return AnimatedSwitcher(
+            duration: const Duration(milliseconds: 250),
+            switchInCurve: Curves.easeOut,
+            child: _DashboardContent(
+              key: ValueKey(_selectedMonth),
+              data: data,
+              categoriesByName: _categoriesByName,
+              perWallet: _perWallet,
+              selectedMonth: _selectedMonth,
+              inflationRate: app.inflationRateNotifier.value,
+              cachedInsight: _cachedInsight,
+              isGeneratingInsight: _isGeneratingInsight,
+              onRefreshInsight: _generateInsight,
+              insightRecipient: _insightRecipient,
+            ),
           );
         },
       ),
@@ -265,12 +257,30 @@ class _ErrorState extends StatelessWidget {
   }
 }
 
+/// Rebuilds [builder] — and only it — when the BTC price or the display
+/// currency changes.
+class _Live extends StatelessWidget {
+  const _Live({required this.builder});
+
+  final Widget Function(BuildContext context, double? btcPrice, String currency)
+      builder;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<double?>(
+      valueListenable: app.btcPriceService.priceNotifier,
+      builder: (context, btcPrice, _) => ValueListenableBuilder<String>(
+        valueListenable: app.currencyNotifier,
+        builder: (context, currency, _) => builder(context, btcPrice, currency),
+      ),
+    );
+  }
+}
+
 class _DashboardContent extends StatelessWidget {
   const _DashboardContent({
     super.key,
     required this.data,
-    required this.btcPrice,
-    required this.currency,
     required this.categoriesByName,
     required this.perWallet,
     required this.selectedMonth,
@@ -282,8 +292,6 @@ class _DashboardContent extends StatelessWidget {
   });
 
   final DashboardData data;
-  final double? btcPrice;
-  final String currency;
   final Map<String, Category> categoriesByName;
   final Stream<List<WalletSummary>> perWallet;
   final DateTime selectedMonth;
@@ -306,11 +314,13 @@ class _DashboardContent extends StatelessWidget {
         const SizedBox(height: 8),
 
         // ── Hero card ─────────────────────────────────────────────────────
-        HeroCard(
-          totalStackSats: data.totalStackSats,
-          monthChangeSats: data.monthStackChangeSats,
-          btcPrice: btcPrice,
-          currency: currency,
+        _Live(
+          builder: (context, btcPrice, currency) => HeroCard(
+            totalStackSats: data.totalStackSats,
+            monthChangeSats: data.monthStackChangeSats,
+            btcPrice: btcPrice,
+            currency: currency,
+          ),
         ),
         const SizedBox(height: 16),
 
@@ -344,64 +354,70 @@ class _DashboardContent extends StatelessWidget {
         ],
 
         // ── 2×2 Metric grid ───────────────────────────────────────────────
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
+        _Live(
+          builder: (context, btcPrice, currency) => Column(
             children: [
-              Expanded(
-                child: MetricTile(
-                  label: 'Monthly Surplus',
-                  value: CurrencyUtils.format(data.monthlySurplusFiat, currency),
-                  subValue: btcPrice != null && btcPrice! > 0
-                      ? _satConversion(data.monthlySurplusFiat.abs(), btcPrice!)
-                      : null,
-                  valueColor: data.monthlySurplusFiat >= 0
-                      ? AppColors.success
-                      : AppColors.danger,
-                  icon: Icons.savings_outlined,
-                  iconColor: data.monthlySurplusFiat >= 0
-                      ? AppColors.success
-                      : AppColors.danger,
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: MetricTile(
+                        label: 'Monthly Surplus',
+                        value: CurrencyUtils.format(data.monthlySurplusFiat, currency),
+                        subValue: btcPrice != null && btcPrice > 0
+                            ? _satConversion(data.monthlySurplusFiat.abs(), btcPrice)
+                            : null,
+                        valueColor: data.monthlySurplusFiat >= 0
+                            ? AppColors.success
+                            : AppColors.danger,
+                        icon: Icons.savings_outlined,
+                        iconColor: data.monthlySurplusFiat >= 0
+                            ? AppColors.success
+                            : AppColors.danger,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: MetricTile(
+                        label: 'Fiat Leak Rate',
+                        value: '${data.fiatLeakRate.toStringAsFixed(1)}%',
+                        subValue: 'of income spent',
+                        valueColor: data.fiatLeakRate > 80
+                            ? AppColors.danger
+                            : data.fiatLeakRate > 50
+                                ? AppColors.bitcoinOrange
+                                : AppColors.success,
+                        icon: Icons.water_drop_outlined,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: MetricTile(
-                  label: 'Fiat Leak Rate',
-                  value: '${data.fiatLeakRate.toStringAsFixed(1)}%',
-                  subValue: 'of income spent',
-                  valueColor: data.fiatLeakRate > 80
-                      ? AppColors.danger
-                      : data.fiatLeakRate > 50
-                          ? AppColors.bitcoinOrange
-                          : AppColors.success,
-                  icon: Icons.water_drop_outlined,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 10),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            children: [
-              Expanded(
-                child: StackGoalTile(
-                  progress: data.stackGoalProgress,
-                  currentSats: data.totalStackSats,
-                  goalSats: data.stackGoalSats,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: MetricTile(
-                  label: 'Inflation Cost',
-                  value: CurrencyUtils.format(data.inflationCostFiat, currency),
-                  subValue: 'per month @ ${inflationRate % 1 == 0 ? inflationRate.toStringAsFixed(0) : inflationRate.toString()}%',
-                  valueColor: AppColors.danger,
-                  icon: Icons.trending_down_outlined,
-                  iconColor: AppColors.danger,
+              const SizedBox(height: 10),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: StackGoalTile(
+                        progress: data.stackGoalProgress,
+                        currentSats: data.totalStackSats,
+                        goalSats: data.stackGoalSats,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: MetricTile(
+                        label: 'Inflation Cost',
+                        value: CurrencyUtils.format(data.inflationCostFiat, currency),
+                        subValue: 'per month @ ${inflationRate % 1 == 0 ? inflationRate.toStringAsFixed(0) : inflationRate.toString()}%',
+                        valueColor: AppColors.danger,
+                        icon: Icons.trending_down_outlined,
+                        iconColor: AppColors.danger,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -420,10 +436,13 @@ class _DashboardContent extends StatelessWidget {
             return Column(
               children: [
                 _SectionHeader(title: 'Wallets'),
-                _WalletBreakdownSection(
-                  summaries: summaries,
-                  btcPrice: btcPrice,
-                  currency: currency,
+                _Live(
+                  builder: (context, btcPrice, currency) =>
+                      _WalletBreakdownSection(
+                    summaries: summaries,
+                    btcPrice: btcPrice,
+                    currency: currency,
+                  ),
                 ),
                 const SizedBox(height: 20),
               ],
@@ -442,15 +461,18 @@ class _DashboardContent extends StatelessWidget {
           child: Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
-              child: SpendingChart(
-                spendingByCategory: data.spendingByCategory,
-                btcPrice: btcPrice,
-                currency: currency,
-                // The colours the user actually chose. The chart used to draw
-                // its own fixed palette and ignore them.
-                categoryColorHex: {
-                  for (final e in categoriesByName.entries) e.key: e.value.color,
-                },
+              child: _Live(
+                builder: (context, btcPrice, currency) => SpendingChart(
+                  spendingByCategory: data.spendingByCategory,
+                  btcPrice: btcPrice,
+                  currency: currency,
+                  // The colours the user actually chose. The chart used to
+                  // draw its own fixed palette and ignore them.
+                  categoryColorHex: {
+                    for (final e in categoriesByName.entries)
+                      e.key: e.value.color,
+                  },
+                ),
               ),
             ),
           ),
@@ -487,12 +509,7 @@ class _DashboardContent extends StatelessWidget {
               child: Column(
                 children: [
                   for (int i = 0; i < data.recentTransactions.length; i++) ...[
-                    TransactionListItem(
-                      transaction: data.recentTransactions[i],
-                      category: categoriesByName[
-                          data.recentTransactions[i].category],
-                      btcPrice: btcPrice,
-                    ),
+                    _recentRow(data.recentTransactions[i]),
                     if (i < data.recentTransactions.length - 1)
                       const Divider(indent: 16, endIndent: 16),
                   ],
@@ -518,6 +535,22 @@ class _DashboardContent extends StatelessWidget {
         ),
         const SizedBox(height: 8),
       ],
+    );
+  }
+
+  /// A row with stored sats shows them and never needs the live price, so
+  /// only a row without them listens for it.
+  Widget _recentRow(Transaction tx) {
+    final category = categoriesByName[tx.category];
+    if (tx.amountSats != 0) {
+      return TransactionListItem(transaction: tx, category: category);
+    }
+    return _Live(
+      builder: (context, btcPrice, _) => TransactionListItem(
+        transaction: tx,
+        category: category,
+        btcPrice: btcPrice,
+      ),
     );
   }
 
@@ -730,10 +763,15 @@ class _SectionHeader extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            title,
-            style: theme.textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w600,
+          // Flexible, so a long title gives way to the action at large text
+          // sizes instead of overflowing the row.
+          Flexible(
+            child: Text(
+              title,
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
           if (action != null && onAction != null)

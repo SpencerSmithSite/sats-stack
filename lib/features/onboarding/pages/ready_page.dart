@@ -61,7 +61,10 @@ class ReadyPage extends StatelessWidget {
 
 class TipRow extends StatelessWidget {
   const TipRow({
-    super.key,required this.icon, required this.text});
+    super.key,
+    required this.icon,
+    required this.text,
+  });
 
   final IconData icon;
   final String text;
