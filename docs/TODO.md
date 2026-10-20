@@ -37,36 +37,6 @@ History lives elsewhere and is not duplicated into this file:
 > Those are fixed (see `AUDIT.md`). Everything below is what they found and is
 > still open, in the order I would do it.
 
-### 1. Two decisions before the app can ship
-
-The build-phase half of this item is fixed (see `AUDIT.md`). What is left
-needs a choice, not a patch.
-
-- **`flutter_gemma` and `flutter_gemma_litertlm` are both discontinued** on
-  pub.dev (1.4.2 / 1.3.1 installed; 1.11.4 / 1.8.6 are the last versions that
-  will ever exist). The pubspec comment chose this package *on maintenance
-  grounds*; that reasoning has inverted. Options, with what breaks:
-  (a) stay — nothing breaks today, no fix ever arrives, including for the
-  `-headerpad_max_install_names` workaround in `macos/Podfile`; (b) move to
-  the final versions — resolvable, but `createModel`, the `FlutterGemma.*`
-  statics and `ModelFileType` all moved between 1.4 and 1.11, and the macOS
-  build phase is written against 1.3.1's layout; (c) replace with a direct
-  LiteRT-LM FFI binding — the only route that keeps the `.litertlm` catalogue
-  and already downloaded models; (d) drop the backend — it is the only one of
-  six with a hand-written Xcode phase, a multi-gigabyte download and an
-  unmaintained native dependency, and two other on-device backends exist.
-  Dropping it would also let iOS go back to a 15.0 minimum.
-- **The macOS bundle id is still the template's**: `com.satsstack.satsStack`
-  against iOS's `app.satsstack.SatsStack`. Registering it with Apple (needed
-  for Developer ID signing, notarization and the data-protection keychain)
-  means choosing the final one now. **Changing it moves the app's data**: the
-  app is sandboxed, so its database lives in
-  `~/Library/Containers/com.satsstack.satsStack`, and a new id opens an empty
-  container — the app would look wiped, and stored API keys would be gone.
-  Export the database from Settings → Data first and import it after, or move
-  the container by hand. (The product name, which made the window title
-  `sats_stack`, is fixed; the container follows the id, not the name.)
-
 ### 10. Decisions and upgrades the CI pass surfaced
 
 - **Encrypt the database, or keep saying it is not.** Onboarding claimed an
@@ -157,8 +127,9 @@ worth doing on purpose rather than as a move.
   keeps a `.bak` on restore.
 - **BTC price alerts** — threshold notification via
   `flutter_local_notifications`, which now actually fires on iOS.
-- **Register the macOS bundle id** with Apple and switch `SecureKeyStore` to
-  the data-protection keychain. Needed for any macOS distribution anyway; the
+- **Register the macOS bundle id** (`app.satsstack.SatsStack`, settled on
+  2026-10-20) with Apple, and switch `SecureKeyStore` to the data-protection
+  keychain. Needed for any macOS distribution anyway; the
   comment in `secure_key_store.dart` explains why the file-based one is in use
   (the ad-hoc-signed target cannot carry the entitlement, so every write fails
   with `errSecMissingEntitlement`).
@@ -170,12 +141,9 @@ worth doing on purpose rather than as a move.
 
 ## Known broken / unfinished
 
-See **Next, item 1**: the discontinued on-device-model packages, and the
-macOS bundle id that has to be settled before the app can be registered and
-signed for distribution. Both are decisions rather than defects.
-
-The only *dead* code is the Bitcoin data-source work in item 11, which is
-waiting on a screen rather than failing.
+Nothing known to be broken. The open decisions are in item 10; the only
+*dead* code is the Bitcoin data-source work in item 11, which is waiting on a
+screen rather than failing.
 
 ## Done, for reference
 

@@ -1022,6 +1022,39 @@ but is **not verified on a device** — Gemini Nano needs AICore on a physical
 phone. The renamed app also passes the native macOS `RunnerTests`, whose test
 host had the old name hardcoded.
 
+### The downloadable-model backend is removed, and macOS has its real id
+
+Decided 2026-10-20 (`TODO.md` item 1's two decisions).
+
+- **`flutter_gemma` is gone.** Both it and `flutter_gemma_litertlm` are
+  discontinued, and the backend they powered was the only one of six with an
+  unmaintained native dependency, a hand-written Xcode build phase and
+  multi-gigabyte downloads. Removed with it: the backend, its Settings
+  section and onboarding card, the memory and storage probes that existed only
+  to size its catalogue (and their native channels on iOS and Android), the
+  macOS LiteRT build phase, and a dozen transitive packages. Apple
+  Intelligence, Gemini Nano, the self-hosted and the hosted backends remain.
+  iOS goes back to a 15.0 minimum — the floor flutter_gemma had raised.
+- **Nobody who used it is stranded.** A stored choice of it moves to the
+  platform's built-in on-device model — Apple Intelligence or Gemini Nano —
+  rather than falling back to Ollama, which on a phone means no AI tab, and
+  never to anything hosted. Its model setting is deleted.
+- **Its weights are deleted.** They were 0.6–5 GB each, and with the backend
+  gone no screen could remove them. `RemovedModelCleanup` deletes them at
+  launch, by exact file name (and their partial downloads) in Documents, and
+  the package's own folder in Application Support on macOS. The database
+  lives in the same Documents folder, so a test pins that it, its backup and
+  an unrelated file with the same extension all survive.
+- **macOS uses `app.satsstack.SatsStack`**, matching iOS, instead of the
+  template's `com.satsstack.satsStack`. The app is sandboxed, so a new id is a
+  new, empty container; the old data is untouched where it was, and the
+  README gives the export/import steps and the one-line copy. API keys do not
+  come across and have to be re-entered.
+
+Covered by `removed_local_model_test.dart`. All three platforms build; the
+Apple Intelligence integration test passes on macOS under the new id, and the
+container appears where the README says it will.
+
 ### Test gaps
 
 The suite went from 102 tests to 209 over this work. Month boundaries, category
