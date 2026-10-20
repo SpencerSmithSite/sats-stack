@@ -234,7 +234,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                   TextButton(
                     onPressed: _clearFilters,
                     style: TextButton.styleFrom(
-                      foregroundColor: AppColors.textSecondary,
+                      foregroundColor: context.textSecondary,
                       visualDensity: VisualDensity.compact,
                     ),
                     child: const Text('Clear'),
@@ -368,7 +368,7 @@ class _FilterSheetState extends State<_FilterSheet> {
               height: 4,
               margin: const EdgeInsets.only(bottom: 16),
               decoration: BoxDecoration(
-                color: AppColors.textSecondary.withAlpha(80),
+                color: context.textSecondary.withAlpha(80),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -381,7 +381,7 @@ class _FilterSheetState extends State<_FilterSheet> {
                 TextButton(
                   onPressed: _clearAll,
                   style: TextButton.styleFrom(
-                      foregroundColor: AppColors.textSecondary),
+                      foregroundColor: context.textSecondary),
                   child: const Text('Clear all'),
                 ),
             ],
@@ -391,7 +391,7 @@ class _FilterSheetState extends State<_FilterSheet> {
           // Source section
           Text('Source',
               style: theme.textTheme.labelSmall?.copyWith(
-                color: AppColors.textSecondary,
+                color: context.textSecondary,
                 letterSpacing: 1.1,
               )),
           const SizedBox(height: 8),
@@ -413,7 +413,7 @@ class _FilterSheetState extends State<_FilterSheet> {
           // Category section
           Text('Category',
               style: theme.textTheme.labelSmall?.copyWith(
-                color: AppColors.textSecondary,
+                color: context.textSecondary,
                 letterSpacing: 1.1,
               )),
           const SizedBox(height: 8),
@@ -547,7 +547,7 @@ class _DateGroup extends StatelessWidget {
           child: Text(
             _dateLabel(),
             style: theme.textTheme.labelMedium?.copyWith(
-              color: AppColors.textSecondary,
+              color: context.textSecondary,
               letterSpacing: 0.5,
             ),
           ),

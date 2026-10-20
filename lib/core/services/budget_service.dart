@@ -4,13 +4,18 @@ import 'dart:async';
 import 'package:drift/drift.dart';
 import '../database/database.dart';
 import '../models/budget_progress.dart';
+import '../models/fx_rates.dart';
 import '../../shared/utils/date_range.dart';
 import 'notification_service.dart';
 
 class BudgetService {
-  BudgetService(this._db);
+  /// [rates] converts spending into the display currency before it is
+  /// compared with a budget — see [DashboardService] for why it is a function.
+  BudgetService(this._db, {FxRates Function()? rates})
+      : _rates = rates ?? (() => const FxRates.passthrough());
 
   final AppDatabase _db;
+  final FxRates Function() _rates;
 
   // ── Watches ──────────────────────────────────────────────────────────────────
 
@@ -136,11 +141,16 @@ class BudgetService {
     final categoryIdByName = {for (final c in categories) c.name: c.id};
     final categoryById = {for (final c in categories) c.id: c};
 
+    // Converted before it is compared with a budget. A £500 Food budget used
+    // to be measured against pounds and dollars added together.
+    final fx = _rates();
     final monthSpend = <int, double>{};
     for (final t in monthTxns) {
       final id = categoryIdByName[t.category];
       if (id == null) continue;
-      monthSpend[id] = (monthSpend[id] ?? 0) + t.amountFiat.abs();
+      final spent = fx.convert(t.amountFiat.abs(), t.fiatCurrency);
+      if (spent == null) continue;
+      monthSpend[id] = (monthSpend[id] ?? 0) + spent;
     }
 
     final result = <BudgetProgress>[];

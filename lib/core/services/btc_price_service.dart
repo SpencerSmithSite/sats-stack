@@ -116,6 +116,18 @@ class BtcPriceService {
 
   double? get currentPrice => priceNotifier.value;
 
+  /// The BTC price in [currency], or null if no fetch has returned it.
+  ///
+  /// Distinct from [priceNotifier], which is the price in the *active*
+  /// currency only. Anything that converts a stored amount must use the price
+  /// in that amount's own currency — using the active one is how a USD row
+  /// edited while the app was in GBP got a GBP-derived figure labelled `$`.
+  double? priceFor(String currency) => _allPrices[currency.toUpperCase()];
+
+  /// Every currency's BTC price from the latest fetch, keyed by upper-case
+  /// code. Read-only; the map is replaced wholesale on each successful fetch.
+  Map<String, double> get allPrices => Map.unmodifiable(_allPrices);
+
   /// The currently selected currency code (e.g. 'USD').
   String get currency => _currency;
 

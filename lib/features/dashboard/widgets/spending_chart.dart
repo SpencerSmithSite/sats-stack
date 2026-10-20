@@ -31,7 +31,7 @@ class SpendingChart extends StatelessWidget {
           child: Text(
             'No spending this month',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppColors.textSecondary,
+                  color: context.textSecondary,
                 ),
           ),
         ),
@@ -99,7 +99,7 @@ class _CategoryBar extends StatelessWidget {
             child: Text(
               category,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.textSecondary,
+                    color: context.textSecondary,
                   ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -152,7 +152,7 @@ class _CategoryBar extends StatelessWidget {
                 Text(
                   '${SatConverter.formatSats(sats)} sats',
                   style: AppTextStyles.monoSmall.copyWith(
-                    color: AppColors.bitcoinOrange,
+                    color: context.bitcoinOrangeText,
                     fontSize: 10,
                   ),
                 ),

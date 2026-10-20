@@ -949,7 +949,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           child: Text(
                             group.title.toUpperCase(),
                             style: theme.textTheme.labelSmall?.copyWith(
-                              color: AppColors.textSecondary,
+                              color: context.textSecondary,
                               letterSpacing: 0.8,
                               fontWeight: FontWeight.w600,
                             ),
@@ -973,7 +973,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       Text(
                         _providerDescription(_selectedProvider),
                         style: theme.textTheme.bodySmall
-                            ?.copyWith(color: AppColors.textSecondary),
+                            ?.copyWith(color: context.textSecondary),
                       ),
                       // The one claim in this app that must never be wrong. A
                       // hosted backend sends the user's complete financial
@@ -1025,7 +1025,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           Text(
                             'No models loaded — test the connection first.',
                             style: theme.textTheme.bodySmall
-                                ?.copyWith(color: AppColors.textSecondary),
+                                ?.copyWith(color: context.textSecondary),
                           ),
                         const SizedBox(height: 12),
                         if (_connectionStatus != null)
@@ -1098,7 +1098,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           Text(
                             'No models loaded — test the connection first.',
                             style: theme.textTheme.bodySmall
-                                ?.copyWith(color: AppColors.textSecondary),
+                                ?.copyWith(color: context.textSecondary),
                           ),
                         const SizedBox(height: 12),
                         if (_lmStudioStatus != null)
@@ -1180,7 +1180,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           Text(
                             'No models loaded — test the connection first.',
                             style: theme.textTheme.bodySmall
-                                ?.copyWith(color: AppColors.textSecondary),
+                                ?.copyWith(color: context.textSecondary),
                           ),
                         const SizedBox(height: 12),
                         if (_mapleStatus != null)

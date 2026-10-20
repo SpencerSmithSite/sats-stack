@@ -44,7 +44,7 @@ class CurrencyPage extends StatelessWidget {
           Text(
             'All fiat amounts will be shown in this currency. You can change it later in Settings.',
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: AppColors.textSecondary,
+              color: context.textSecondary,
               height: 1.5,
             ),
           ),
@@ -88,7 +88,7 @@ class CurrencyPage extends StatelessWidget {
                               style: theme.textTheme.titleMedium?.copyWith(
                                 color: isSelected
                                     ? AppColors.bitcoinOrange
-                                    : AppColors.textSecondary,
+                                    : context.textSecondary,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
@@ -107,7 +107,7 @@ class CurrencyPage extends StatelessWidget {
                                 Text(
                                   code,
                                   style: theme.textTheme.bodySmall?.copyWith(
-                                    color: AppColors.textSecondary,
+                                    color: context.textSecondary,
                                   ),
                                 ),
                               ],
@@ -169,7 +169,7 @@ class ThemePage extends StatelessWidget {
           Text(
             'You can always change this in Settings.',
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: AppColors.textSecondary,
+              color: context.textSecondary,
             ),
           ),
           const SizedBox(height: 24),
@@ -253,7 +253,7 @@ class ThemeCard extends StatelessWidget {
                     size: 18,
                     color: isSelected
                         ? AppColors.bitcoinOrange
-                        : AppColors.textSecondary,
+                        : context.textSecondary,
                   ),
                   const SizedBox(width: 8),
                   Text(

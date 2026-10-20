@@ -63,10 +63,26 @@ class _AiChatScreenState extends State<AiChatScreen> {
   void initState() {
     super.initState();
     _init();
+    app.ollamaService.configChanges.addListener(_onConfigChanged);
+  }
+
+  /// The configuration [_init] last loaded, so a change can be told apart
+  /// from a write that changed nothing this screen depends on.
+  String? _loadedFingerprint;
+
+  /// The tab stays alive across tab switches now, so it no longer re-reads
+  /// its configuration on each visit. Fixing an Ollama URL in Settings and
+  /// coming back would otherwise leave the chat reporting the old one as
+  /// unreachable until the app was restarted.
+  void _onConfigChanged() {
+    if (!mounted) return;
+    if (app.ollamaService.configFingerprint == _loadedFingerprint) return;
+    _init();
   }
 
   @override
   void dispose() {
+    app.ollamaService.configChanges.removeListener(_onConfigChanged);
     // Release the waiter first. Cancelling a subscription fires neither
     // onDone nor onError, so `_send`'s Completer would never complete and its
     // frame would stay suspended for the life of the isolate, holding the
@@ -83,6 +99,8 @@ class _AiChatScreenState extends State<AiChatScreen> {
   }
 
   Future<void> _init() async {
+    _loadedFingerprint = app.ollamaService.configFingerprint;
+    if (mounted) setState(() => _checking = true);
     await app.ollamaService.loadSettings();
     final available = await app.ollamaService.isAvailable();
     if (!mounted) return;
@@ -413,7 +431,7 @@ class _ChatList extends StatelessWidget {
           Center(
             child: Text(
               'Your financial data is injected as context.',
-              style: theme.textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+              style: theme.textTheme.bodySmall?.copyWith(color: context.textSecondary),
             ),
           ),
           const SizedBox(height: 24),
@@ -682,7 +700,7 @@ class _SendButton extends StatelessWidget {
         duration: const Duration(milliseconds: 150),
         width: 40, height: 40,
         decoration: BoxDecoration(
-          color: enabled ? AppColors.bitcoinOrange : AppColors.textSecondary.withAlpha(60),
+          color: enabled ? AppColors.bitcoinOrange : context.textSecondary.withAlpha(60),
           shape: BoxShape.circle,
         ),
         child: enabled
@@ -725,7 +743,7 @@ class _OfflineState extends StatelessWidget {
                   ? Icons.computer_outlined
                   : Icons.cloud_off_outlined,
               size: 56,
-              color: AppColors.textSecondary,
+              color: context.textSecondary,
             ),
             const SizedBox(height: 16),
             Text(
@@ -743,7 +761,7 @@ class _OfflineState extends StatelessWidget {
                           : 'Check that your server URL is correct and reachable, then tap Retry.',
               textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall?.copyWith(
-                color: AppColors.textSecondary,
+                color: context.textSecondary,
                 height: 1.6,
               ),
             ),
@@ -751,7 +769,7 @@ class _OfflineState extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 AppConstants.defaultOllamaUrl,
-                style: AppTextStyles.monoSmall.copyWith(color: AppColors.textSecondary),
+                style: AppTextStyles.monoSmall.copyWith(color: context.textSecondary),
               ),
             ],
             const SizedBox(height: 24),

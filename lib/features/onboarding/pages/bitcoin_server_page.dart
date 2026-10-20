@@ -59,7 +59,7 @@ class BitcoinServerPage extends StatelessWidget {
             Text(
               'Sats Stack uses a public Mempool / Esplora server to sync Bitcoin wallet balances and look up historical prices.',
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: AppColors.textSecondary,
+                color: context.textSecondary,
                 height: 1.6,
               ),
             ),
@@ -67,7 +67,7 @@ class BitcoinServerPage extends StatelessWidget {
             Text(
               'For maximum privacy, point this at your own self-hosted node.',
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: AppColors.textSecondary,
+                color: context.textSecondary,
                 height: 1.6,
               ),
             ),
@@ -103,7 +103,7 @@ class BitcoinServerPage extends StatelessWidget {
                       child: Text(
                         'You can change this later in Settings → Servers.',
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: accent,
+                          color: context.legibleAccent(accent),
                           height: 1.5,
                         ),
                       ),

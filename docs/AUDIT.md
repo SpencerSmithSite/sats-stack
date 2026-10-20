@@ -622,6 +622,109 @@ slow-but-alive one does not, that a second generation waits rather than
 clobbering the first, that a failure does not block the next, and that
 different channels do not queue behind each other.
 
+### Currency is converted, not mixed
+
+Addressed 2026-10-19, after the second review pass found the first fix only
+covered the write side.
+
+- **Every aggregate summed `amountFiat` across currencies.** `fiatCurrency` was
+  written by four paths and read in exactly one place — a row label — so the
+  dashboard, budget progress, analytics, year-to-date and the exported summary
+  all added dollars to pounds under a `£` label, while the transactions list
+  showed each row correctly. `FxRates` now converts each row into the display
+  currency first, using BTC as the bridge because it is the one rate table the
+  app already holds for every currency. Same-currency rows — nearly all of them
+  — are returned exact and need no rate at all, so this works offline.
+  **It applies today's cross rate to every row**, so a March USD charge is
+  converted at October's rate: a deliberate trade, since major cross rates move
+  a few percent a year against the 20–30% error of adding them, and it stays
+  synchronous. A row with no rate is excluded from the fiat totals but keeps
+  its sats in the stack, and the dashboard says how many rather than showing a
+  quietly smaller number. Recent rows are taken from the originals, since they
+  are rendered with their own currency label.
+- **The live edit path rewrote historical values.** An earlier entry here said
+  "an edit now rewrites `fiatCurrency`", crediting `AddTransactionSheet`'s
+  editing branch — but that branch was **unreachable**: its only call site is
+  the add path. The real edit path, `TransactionEditSheet`, derived both columns
+  from `priceNotifier` — the price *now*, in the *active* currency — and stored
+  the row's *old* code. So editing only the category of a March purchase
+  rewrote its sats at October's price, and a USD row edited in GBP got a
+  GBP-derived figure labelled `$`. It now keeps the row's currency (the field is
+  pre-filled in it) and preserves the rate the transaction actually happened
+  at; changing the amount scales both columns at that rate. The dead branch is
+  deleted.
+
+Covered by `fx_rates_test.dart` and `currency_aggregates_test.dart`, end to end
+through the real services.
+
+### Light mode is legible
+
+Addressed 2026-10-19. Not hardcoded dark colours — the earlier light-mode pass
+found all of those. These were colours tuned for dark and reused on light, so
+nothing looked wrong in the code.
+
+- **Secondary text was one grey for both themes**: `#888780`, 5.39:1 on the
+  dark background but **3.37:1** on the light one, at 10–11px, across 125 call
+  sites — every caption, metric label, date header and category name. No single
+  grey can serve both: the luminance a colour needs to clear 4.5:1 against
+  near-black and near-white do not overlap. It is two values now, resolved from
+  the theme through `context.textSecondary`; the light one, `#67665F`, is the
+  lightest warm grey that clears AA on the background, on white cards *and* on
+  the tinted `surfaceContainerHighest` (`#6F6E67` clears the first two and fails
+  the third).
+- **Bitcoin orange as text was 2.30:1** on a light card — the sats figure on
+  every transaction row and spending bar, the app-bar price. Text now uses
+  `context.bitcoinOrangeText` (`#9A5600` on light, 5.67:1); fills, borders and
+  icons keep the brand colour, since only small text needed it.
+- **Banner copy was set in its own accent over a tint of that accent**, measured
+  at 1.97–2.20:1 — the least readable text in the app was the Settings banner
+  explaining which third parties can see your Bitcoin addresses. Body copy and
+  route rows move to theme text; headings and one-line banners keep their
+  semantic colour through `context.legibleAccent`, which darkens an accent just
+  enough to clear AA on its own tint. It is computed rather than hand-picked,
+  because each accent needs a different amount.
+
+  **The first version of that helper was wrong**, and only measuring caught it:
+  it checked against an 8% tint over pure white, and the colours it produced
+  then failed at 4.19–4.44:1 on the off-white scaffold the banners actually sit
+  on. It now measures against the darkest real case (12% over the scaffold),
+  which clears all eight real combinations at ≥4.65:1.
+
+Also fixed in passing: the add-transaction amount toggle was labelled **"USD"**
+whatever the user's currency was. `contrast_test.dart` pins all of the above
+against the real theme through a widget, including that each raw colour does
+fail — so the tests show the bug as well as the fix.
+
+### Tabs keep their state
+
+Addressed 2026-10-19.
+
+- **Every tab switch destroyed the screen.** The shell was a plain
+  `ShellRoute`, which builds a different child *type* per tab, so the element
+  tree could not reconcile and each switch discarded the screen's State. Set a
+  filter and a search on Transactions, tap Dashboard, tap back: both were gone,
+  the scroll position was lost, and the whole table was re-queried behind a
+  full-screen spinner. The same happened to the Stack period and DCA input and
+  the selected month on Budgets, and the Dashboard re-ran its insight reads on
+  every visit. It is a `StatefulShellRoute.indexedStack` now — one branch per
+  tab, kept alive, built lazily on first visit. The AI branch is last so a
+  branch index always equals its nav-bar index even while AI is hidden.
+- **Keeping tabs alive exposed one screen that depended on dying.** The AI chat
+  loaded its configuration once in `initState`, and tab-switching had been
+  quietly re-running it on each visit — so with tabs kept alive, fixing an
+  Ollama URL in Settings and returning would leave the chat reporting the old
+  URL as unreachable. `OllamaService.configChanges` is bumped on every AI
+  configuration write, and the chat re-initialises when its
+  `configFingerprint` changes — which deliberately excludes the selected model,
+  so picking a model from the chat's own dropdown does not reload the chat. The
+  other four tabs are stream-driven and stay correct while alive.
+
+`tab_state_test.dart` drives the real `AppShell` with tabs that hold state.
+Before relying on it, the same scenario was run against the old `ShellRoute`
+in a throwaway test: the counter came back as **0**, so the new test does
+distinguish the two designs. Verified with `flutter build macos`; not yet
+exercised by hand in the running app.
+
 ### Test gaps
 
 The suite went from 102 tests to 209 over this work. Month boundaries, category

@@ -83,7 +83,7 @@ class AiPrivacyDisclosure extends StatelessWidget {
                   'statement itself. It goes to $recipient, under their privacy '
                   'policy and retention terms — not this app\'s.',
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: AppColors.textSecondary,
+                    color: context.textSecondary,
                     height: 1.45,
                   ),
                 ),
@@ -98,7 +98,7 @@ class AiPrivacyDisclosure extends StatelessWidget {
                     'analysis, and nothing on launch. Your wallet keys and '
                     'xpubs are never included.',
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: AppColors.textSecondary,
+                      color: context.textSecondary,
                       height: 1.45,
                     ),
                   ),

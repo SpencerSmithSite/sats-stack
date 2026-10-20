@@ -43,7 +43,20 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   void initState() {
     super.initState();
     _analytics = app.dashboardService.watchAnalytics(_selectedMonth);
+    app.currencyNotifier.addListener(_onCurrencyChange);
   }
+
+  @override
+  void dispose() {
+    app.currencyNotifier.removeListener(_onCurrencyChange);
+    super.dispose();
+  }
+
+  /// The figures are converted into the display currency inside the
+  /// aggregate, so a currency switch needs a recompute.
+  void _onCurrencyChange() => setState(() {
+        _analytics = app.dashboardService.watchAnalytics(_selectedMonth);
+      });
 
   void _previousMonth() => setState(() {
         _selectedMonth = MonthCursor(_selectedMonth).previous.month;
@@ -297,7 +310,7 @@ class _PieSectionState extends State<_PieSection> {
                   Text(
                     '${pct.toStringAsFixed(1)}%',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.textSecondary,
+                          color: context.textSecondary,
                         ),
                   ),
                   const SizedBox(width: 12),
@@ -426,8 +439,8 @@ class _TrendChartState extends State<_TrendChart> {
                           child: Text(
                             DateFormat('MMM')
                                 .format(widget.monthlyTotals[i].month),
-                            style: const TextStyle(
-                                fontSize: 10, color: AppColors.textSecondary),
+                            style: TextStyle(
+                                fontSize: 10, color: context.textSecondary),
                           ),
                         );
                       },
@@ -441,8 +454,8 @@ class _TrendChartState extends State<_TrendChart> {
                         if (value == 0 || value == chartMax) {
                           return Text(
                             CurrencyUtils.formatCompact(value, widget.currency),
-                            style: const TextStyle(
-                                fontSize: 9, color: AppColors.textSecondary),
+                            style: TextStyle(
+                                fontSize: 9, color: context.textSecondary),
                           );
                         }
                         return const SizedBox.shrink();
@@ -458,7 +471,7 @@ class _TrendChartState extends State<_TrendChart> {
                   drawVerticalLine: false,
                   horizontalInterval: chartMax / 4,
                   getDrawingHorizontalLine: (value) => FlLine(
-                    color: AppColors.textSecondary.withAlpha(30),
+                    color: context.textSecondary.withAlpha(30),
                     strokeWidth: 0.5,
                   ),
                 ),
@@ -513,7 +526,7 @@ class _ChipOption extends StatelessWidget {
             color: selected ? color.withAlpha(40) : Colors.transparent,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: selected ? color : AppColors.textSecondary.withAlpha(60),
+              color: selected ? color : context.textSecondary.withAlpha(60),
               width: selected ? 1.5 : 1,
             ),
           ),
@@ -522,7 +535,7 @@ class _ChipOption extends StatelessWidget {
             style: TextStyle(
               fontSize: 12,
               fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-              color: selected ? color : AppColors.textSecondary,
+              color: selected ? color : context.textSecondary,
             ),
           ),
         ),
@@ -594,7 +607,7 @@ class _YtdStat extends StatelessWidget {
           Text(
             label,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppColors.textSecondary,
+                  color: context.textSecondary,
                 ),
           ),
           const SizedBox(height: 4),
@@ -642,7 +655,7 @@ class _SectionHeader extends StatelessWidget {
           Text(
             title.toUpperCase(),
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: AppColors.textSecondary,
+                  color: context.textSecondary,
                   letterSpacing: 1.2,
                 ),
           ),

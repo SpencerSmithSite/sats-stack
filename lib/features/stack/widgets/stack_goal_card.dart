@@ -56,14 +56,14 @@ class StackGoalCard extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Icon(Icons.flag_outlined, size: 18, color: AppColors.textSecondary),
+                Icon(Icons.flag_outlined, size: 18, color: context.textSecondary),
                 const SizedBox(width: 10),
                 Text(
                   'Set a stacking goal',
-                  style: theme.textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
+                  style: theme.textTheme.bodyMedium?.copyWith(color: context.textSecondary),
                 ),
                 const Spacer(),
-                Icon(Icons.chevron_right, size: 18, color: AppColors.textSecondary),
+                Icon(Icons.chevron_right, size: 18, color: context.textSecondary),
               ],
             ),
           ),
@@ -111,10 +111,10 @@ class StackGoalCard extends StatelessWidget {
                   const Spacer(),
                   Text(
                     '${_formatSats(totalSats)} / ${_formatSats(goalSats!)} sats',
-                    style: AppTextStyles.monoSmall.copyWith(color: AppColors.textSecondary),
+                    style: AppTextStyles.monoSmall.copyWith(color: context.textSecondary),
                   ),
                   const SizedBox(width: 8),
-                  Icon(Icons.edit_outlined, size: 14, color: AppColors.textSecondary),
+                  Icon(Icons.edit_outlined, size: 14, color: context.textSecondary),
                 ],
               ),
               const SizedBox(height: 10),
@@ -131,19 +131,19 @@ class StackGoalCard extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text(
                   '${_formatSats(remaining)} sats to go ≈ $remainingFiat',
-                  style: theme.textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+                  style: theme.textTheme.bodySmall?.copyWith(color: context.textSecondary),
                 ),
                 const SizedBox(height: 6),
                 // ── Projection row ──────────────────────────────────────
                 Row(
                   children: [
                     if (avgMonthlySats > 0) ...[
-                      Icon(Icons.trending_up, size: 13, color: AppColors.textSecondary),
+                      Icon(Icons.trending_up, size: 13, color: context.textSecondary),
                       const SizedBox(width: 4),
                       Text(
                         '+${_formatSats(avgMonthlySats)} sats/mo avg',
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: AppColors.textSecondary,
+                          color: context.textSecondary,
                           fontSize: 11,
                         ),
                       ),
@@ -155,7 +155,7 @@ class StackGoalCard extends StatelessWidget {
                       Text(
                         'Goal by ${DateFormat('MMM yyyy').format(date)}',
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: AppColors.bitcoinOrange,
+                          color: context.bitcoinOrangeText,
                           fontSize: 11,
                           fontWeight: FontWeight.w500,
                         ),

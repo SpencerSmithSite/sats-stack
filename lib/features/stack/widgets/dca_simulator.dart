@@ -86,7 +86,7 @@ class DcaSimulator extends StatelessWidget {
                     children: [
                       Text(
                         'Period',
-                        style: theme.textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+                        style: theme.textTheme.bodySmall?.copyWith(color: context.textSecondary),
                       ),
                       const SizedBox(height: 4),
                       Row(
@@ -108,7 +108,7 @@ class DcaSimulator extends StatelessWidget {
               if (price <= 0)
                 Text(
                   'BTC price unavailable — open the app with internet to fetch price.',
-                  style: theme.textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+                  style: theme.textTheme.bodySmall?.copyWith(color: context.textSecondary),
                 )
               else ...[
                 // Total invested line
@@ -116,7 +116,7 @@ class DcaSimulator extends StatelessWidget {
                   children: [
                     Text(
                       'Total invested:',
-                      style: theme.textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+                      style: theme.textTheme.bodySmall?.copyWith(color: context.textSecondary),
                     ),
                     const SizedBox(width: 8),
                     Text(
@@ -144,7 +144,7 @@ class DcaSimulator extends StatelessWidget {
                 Text(
                   'Conservative = 0%/yr · Moderate = 20%/yr · Optimistic = 40%/yr BTC price appreciation. Values shown at today\'s price.',
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: AppColors.textSecondary,
+                    color: context.textSecondary,
                     fontSize: 10,
                     height: 1.4,
                   ),
@@ -202,7 +202,7 @@ class ScenarioRow extends StatelessWidget {
         ),
         Text(
           '≈ $fiatValue',
-          style: AppTextStyles.monoSmall.copyWith(color: AppColors.textSecondary),
+          style: AppTextStyles.monoSmall.copyWith(color: context.textSecondary),
         ),
       ],
     );

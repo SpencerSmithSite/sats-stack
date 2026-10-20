@@ -33,7 +33,7 @@ class ReadyPage extends StatelessWidget {
           Text(
             'Start by adding a transaction manually, importing a bank CSV, or syncing a Bitcoin wallet via xpub.',
             style: theme.textTheme.bodyLarge?.copyWith(
-              color: AppColors.textSecondary,
+              color: context.textSecondary,
               height: 1.6,
             ),
           ),
@@ -71,13 +71,13 @@ class TipRow extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 18, color: AppColors.textSecondary),
+        Icon(icon, size: 18, color: context.textSecondary),
         const SizedBox(width: 12),
         Expanded(
           child: Text(
             text,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppColors.textSecondary,
+                  color: context.textSecondary,
                   height: 1.5,
                 ),
           ),

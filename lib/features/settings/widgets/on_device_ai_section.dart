@@ -4,6 +4,7 @@ import '../../../core/services/inference/gemini_nano_backend.dart';
 import '../../../core/services/inference/local_model_backend.dart';
 import '../../../core/services/device_storage.dart';
 import '../../../main.dart' as app;
+import '../../../shared/theme/app_colors.dart';
 
 /// Settings UI for the backends that run on the device itself.
 ///
@@ -56,8 +57,10 @@ class PlatformModelStatus extends StatelessWidget {
                 Expanded(
                   child: Text(
                     detail,
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: color, height: 1.45),
+                    // Legible accent: the raw one over a tint of itself was
+                    // ~2:1 in light mode.
+                    style: theme.textTheme.bodySmall?.copyWith(
+                        color: context.legibleAccent(color), height: 1.45),
                   ),
                 ),
               ],

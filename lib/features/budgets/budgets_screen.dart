@@ -38,10 +38,14 @@ class _BudgetsScreenState extends State<BudgetsScreen> {
   void initState() {
     super.initState();
     _subscribe();
+    // Spending is converted into the display currency before it is compared
+    // with a budget, so a currency switch needs a fresh read.
+    app.currencyNotifier.addListener(_subscribe);
   }
 
   @override
   void dispose() {
+    app.currencyNotifier.removeListener(_subscribe);
     _progressSub?.cancel();
     super.dispose();
   }
@@ -281,7 +285,7 @@ class _SummaryBar extends StatelessWidget {
               child: _SummaryItem(
                 label: 'Budgeted',
                 value: CurrencyUtils.format(totalBudgeted, currency, decimalDigits: 0),
-                color: AppColors.textSecondary,
+                color: context.textSecondary,
               ),
             ),
             Container(width: 0.5, height: 32, color: theme.colorScheme.outline.withAlpha(80)),
@@ -326,7 +330,7 @@ class _SummaryItem extends StatelessWidget {
         Text(
           label,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: AppColors.textSecondary,
+            color: context.textSecondary,
             fontSize: 11,
           ),
         ),
@@ -365,7 +369,7 @@ class _MonthSelector extends StatelessWidget {
           child: Icon(
             Icons.chevron_right,
             size: 22,
-            color: onNext != null ? theme.colorScheme.onSurface : AppColors.textSecondary.withAlpha(80),
+            color: onNext != null ? theme.colorScheme.onSurface : context.textSecondary.withAlpha(80),
           ),
         ),
       ],

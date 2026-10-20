@@ -13,8 +13,7 @@ import 'package:flutter/material.dart';
 import '../../../shared/theme/app_colors.dart';
 
 class DataRoutingBanner extends StatelessWidget {
-  const DataRoutingBanner({
-    super.key,required this.usingDefault});
+  const DataRoutingBanner({super.key, required this.usingDefault});
 
   final bool usingDefault;
 
@@ -32,7 +31,7 @@ class DataRoutingBanner extends StatelessWidget {
             Text(
               'Using public servers',
               style: theme.textTheme.bodySmall?.copyWith(
-                color: const Color(0xFF6AB0E8),
+                color: context.legibleAccent(const Color(0xFF6AB0E8)),
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -40,24 +39,23 @@ class DataRoutingBanner extends StatelessWidget {
             RouteRow(
               label: 'Wallet sync',
               value: 'mempool.space',
-              color: const Color(0xFF6AB0E8),
             ),
             RouteRow(
               label: 'BTC price',
               value: 'mempool.space · CoinGecko (fallback)',
-              color: const Color(0xFF6AB0E8),
             ),
             RouteRow(
               label: 'Historical prices',
               value: 'mempool.space · CoinGecko (fallback)',
-              color: const Color(0xFF6AB0E8),
             ),
             const SizedBox(height: 4),
             Text(
               'The operators of these services can see which addresses and prices you request. '
               'Set a self-hosted server below to route all data through it instead.',
+              // Theme text, not the accent: two paragraphs set in the accent over a
+              // tint of it measured 1.97–2.20:1 in light mode.
               style: theme.textTheme.bodySmall?.copyWith(
-                color: const Color(0xFF6AB0E8),
+                color: theme.colorScheme.onSurface,
                 height: 1.5,
               ),
             ),
@@ -75,7 +73,7 @@ class DataRoutingBanner extends StatelessWidget {
           Text(
             'All data routed through your server',
             style: theme.textTheme.bodySmall?.copyWith(
-              color: const Color(0xFF6AC86A),
+              color: context.legibleAccent(const Color(0xFF6AC86A)),
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -83,25 +81,24 @@ class DataRoutingBanner extends StatelessWidget {
           RouteRow(
             label: 'Wallet sync',
             value: 'Your server only',
-            color: const Color(0xFF6AC86A),
           ),
           RouteRow(
             label: 'BTC price',
             value: 'Your server only',
-            color: const Color(0xFF6AC86A),
           ),
           RouteRow(
             label: 'Historical prices',
             value: 'Your server only (mempool with price data required)',
-            color: const Color(0xFF6AC86A),
           ),
           const SizedBox(height: 4),
           Text(
             'mempool.space and CoinGecko are never contacted. '
             'If your server does not support price history, '
             'imported transaction amounts will show as \$0.',
+            // Theme text, not the accent: two paragraphs set in the accent over a
+            // tint of it measured 1.97–2.20:1 in light mode.
             style: theme.textTheme.bodySmall?.copyWith(
-              color: const Color(0xFF6AC86A),
+              color: theme.colorScheme.onSurface,
               height: 1.5,
             ),
           ),
@@ -152,12 +149,10 @@ class RouteRow extends StatelessWidget {
     super.key,
     required this.label,
     required this.value,
-    required this.color,
   });
 
   final String label;
   final String value;
-  final Color color;
 
   @override
   Widget build(BuildContext context) {
@@ -170,9 +165,10 @@ class RouteRow extends StatelessWidget {
             width: 80,
             child: Text(
               label,
+              // Was the accent at 70% alpha — the worst ratio on the screen.
               style: TextStyle(
                 fontSize: 11,
-                color: color.withAlpha(180),
+                color: context.textSecondary,
               ),
             ),
           ),
@@ -181,7 +177,7 @@ class RouteRow extends StatelessWidget {
               '→  $value',
               style: TextStyle(
                 fontSize: 11,
-                color: color,
+                color: Theme.of(context).colorScheme.onSurface,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -203,7 +199,7 @@ class SettingsSectionHeader extends StatelessWidget {
       child: Text(
         title.toUpperCase(),
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: AppColors.textSecondary,
+              color: context.textSecondary,
               letterSpacing: 1.2,
             ),
       ),
@@ -235,7 +231,7 @@ class SettingsTile extends StatelessWidget {
             Text(
               subtitle!,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.textSecondary,
+                    color: context.textSecondary,
                   ),
             ),
           if (trailing != null) ...[

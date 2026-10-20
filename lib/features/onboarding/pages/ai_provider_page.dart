@@ -122,7 +122,7 @@ class AiProviderPage extends StatelessWidget {
                   : 'Pick where answers come from. You can change this later '
                       'in Settings → Servers.',
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: AppColors.textSecondary,
+                color: context.textSecondary,
                 height: 1.5,
               ),
             ),
@@ -133,7 +133,7 @@ class AiProviderPage extends StatelessWidget {
                 child: Text(
                   group.title.toUpperCase(),
                   style: theme.textTheme.labelSmall?.copyWith(
-                    color: AppColors.textSecondary,
+                    color: context.textSecondary,
                     letterSpacing: 0.9,
                     fontWeight: FontWeight.w700,
                   ),
@@ -144,7 +144,7 @@ class AiProviderPage extends StatelessWidget {
                 child: Text(
                   group.blurb,
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: AppColors.textSecondary,
+                    color: context.textSecondary,
                     height: 1.4,
                   ),
                 ),
@@ -264,7 +264,7 @@ class ProviderCard extends StatelessWidget {
                           child: Text(
                             info.subtitle,
                             style: theme.textTheme.labelSmall?.copyWith(
-                              color: AppColors.textSecondary,
+                              color: context.textSecondary,
                               fontSize: 10,
                             ),
                           ),
@@ -275,7 +275,7 @@ class ProviderCard extends StatelessWidget {
                     Text(
                       info.description,
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: AppColors.textSecondary,
+                        color: context.textSecondary,
                         height: 1.4,
                       ),
                     ),
@@ -333,8 +333,10 @@ class NoteBanner extends StatelessWidget {
           Expanded(
             child: Text(
               text,
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: color, height: 1.5),
+              // Legible accent — this is also the warning state, which is the
+              // one the user most needs to be able to read.
+              style: theme.textTheme.bodySmall?.copyWith(
+                  color: context.legibleAccent(color), height: 1.5),
             ),
           ),
         ],
@@ -519,7 +521,7 @@ class ProviderConfigSection extends StatelessWidget {
                 child: Text(
                   note,
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: noteColor,
+                    color: context.legibleAccent(noteColor),
                     height: 1.5,
                   ),
                 ),
@@ -545,7 +547,7 @@ class ProviderConfigSection extends StatelessWidget {
                 child: Text(
                   'You can test the connection and change these settings later in Settings → Servers.',
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: accentInfo,
+                    color: context.legibleAccent(accentInfo),
                     height: 1.5,
                   ),
                 ),

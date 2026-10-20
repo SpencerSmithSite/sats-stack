@@ -57,6 +57,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.initState();
     _rebuildStreams();
     app.inflationRateNotifier.addListener(_onInflationChange);
+    app.currencyNotifier.addListener(_onCurrencyChange);
     _categorySub = app.categoryService.watchAll().listen((cats) {
       if (!mounted) return;
       setState(() => _categoriesByName = {for (final c in cats) c.name: c});
@@ -67,6 +68,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void dispose() {
     app.inflationRateNotifier.removeListener(_onInflationChange);
+    app.currencyNotifier.removeListener(_onCurrencyChange);
     _categorySub?.cancel();
     super.dispose();
   }
@@ -82,6 +84,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   /// The rate is baked into the aggregate, so a change does need a new stream
   /// — just not one per frame.
   void _onInflationChange() => setState(_rebuildStreams);
+
+  /// Every fiat figure is converted into the display currency inside the
+  /// aggregate, so switching currency needs a recompute — the streams only
+  /// re-emit when a table changes, and the currency is not in a table.
+  void _onCurrencyChange() => setState(_rebuildStreams);
 
   Future<void> _initInsight() async {
     _cachedInsight = await app.ollamaService.loadCachedInsight();
@@ -286,6 +293,35 @@ class _DashboardContent extends StatelessWidget {
         ),
         const SizedBox(height: 16),
 
+        // Said, rather than shown as a quietly smaller total. Only happens for
+        // a foreign-currency row before the first price fetch has landed, and
+        // clears itself once it does.
+        if (data.unconvertedCount > 0) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.info_outline,
+                    size: 15, color: theme.colorScheme.onSurfaceVariant),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    '${data.unconvertedCount} '
+                    '${data.unconvertedCount == 1 ? 'transaction is' : 'transactions are'} '
+                    'in another currency and not yet in these totals — '
+                    'waiting for an exchange rate.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+
         // ── 2×2 Metric grid ───────────────────────────────────────────────
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -416,7 +452,7 @@ class _DashboardContent extends StatelessWidget {
                   child: Text(
                     'No transactions yet',
                     style: theme.textTheme.bodyMedium?.copyWith(
-                      color: AppColors.textSecondary,
+                      color: context.textSecondary,
                     ),
                   ),
                 ),
@@ -557,7 +593,7 @@ class _WalletRow extends StatelessWidget {
       if (summary.monthSpendFiat > 0) {
         secondaryValue =
             '${CurrencyUtils.format(summary.monthSpendFiat, currency)} spent';
-        changeColor = AppColors.textSecondary;
+        changeColor = context.textSecondary;
       } else {
         secondaryValue = null;
         changeColor = null;
@@ -625,7 +661,7 @@ class _WalletRow extends StatelessWidget {
                 Text(
                   secondaryValue,
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: changeColor ?? AppColors.textSecondary,
+                    color: changeColor ?? context.textSecondary,
                     fontSize: 11,
                   ),
                 ),
@@ -636,7 +672,7 @@ class _WalletRow extends StatelessWidget {
                 Text(
                   '≈ ${CurrencyUtils.formatCompact(summary.totalSats / 1e8 * btcPrice!, currency)}',
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: AppColors.textSecondary,
+                    color: context.textSecondary,
                     fontSize: 11,
                   ),
                 ),
@@ -683,7 +719,7 @@ class _SectionHeader extends StatelessWidget {
               child: Text(
                 action!,
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: AppColors.bitcoinOrange,
+                  color: context.bitcoinOrangeText,
                   fontWeight: FontWeight.w600,
                 ),
               ),
