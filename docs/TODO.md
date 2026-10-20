@@ -39,12 +39,18 @@ History lives elsewhere and is not duplicated into this file:
 
 ### 10. Decisions and upgrades the CI pass surfaced
 
-- **Encrypt the database, or keep saying it is not.** Onboarding claimed an
-  encrypted database; it never was, and now says so. Encrypting it means
-  SQLCipher (`sqlcipher_flutter_libs` with drift), a key held in the keychain,
-  a migration that rewrites the existing file, and flipping
-  `ITSAppUsesNonExemptEncryption` — non-exempt encryption brings an export
-  compliance filing. Worth it for a finance app; it is a product decision.
+- **Encrypt the database.** Decided 2026-10-20: yes. The design is in
+  [`DATABASE_ENCRYPTION_PLAN.md`](DATABASE_ENCRYPTION_PLAN.md) — SQLCipher,
+  a random key in the keychain, an in-place migration that copies drift's
+  `user_version` by hand — with two decisions still open (the export format,
+  and whether macOS waits for Developer ID signing).
+- **Android backs up the database and the API keys to Google Drive**, and
+  the API keys cannot be read after a restore. The manifest sets no
+  `allowBackup` rules, so Auto Backup is on: the plaintext database goes to
+  the user's cloud backup, and `flutter_secure_storage`'s preferences file
+  goes with it while its Keystore key does not. Exclude both with
+  `dataExtractionRules` / `fullBackupContent`. Independent of encryption and
+  worth doing first; see the plan, §5.
 - **Android toolchain, next floor.** Flutter 3.47.2 warns that Gradle 9.1,
   AGP 9.0.1 and Kotlin 2.3.20 will be required soon. AGP 9 is a major
   release (built-in Kotlin, changed DSL defaults), so do it on its own and
