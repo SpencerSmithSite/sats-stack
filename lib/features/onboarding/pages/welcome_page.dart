@@ -86,11 +86,17 @@ class FeaturesPage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 40),
+          // Both halves of what this used to say were false: the database is
+          // plain SQLite, not encrypted by the app, and a wallet sync sends
+          // its addresses to a block explorer. Say what is true instead — and
+          // keep it true; it is the first privacy claim a user reads.
           const FeatureRow(
             icon: Icons.lock_outline,
-            title: 'All data stays local',
+            title: 'Your records stay here',
             body:
-                'Everything lives in an encrypted SQLite database on your device. Nothing leaves.',
+                'Kept in a database on this device — no account, no Sats Stack '
+                'server. Wallet syncs and prices use a public server, or your '
+                'own.',
           ),
           const SizedBox(height: 28),
           const FeatureRow(
@@ -145,7 +151,9 @@ class TourPage extends StatelessWidget {
       icon: Icons.auto_awesome_outlined,
       label: 'AI Analyst',
       description:
-          'Ask questions about your finances in natural language. Connect Ollama, LM Studio, or Maple — you choose how private.',
+          'Ask questions about your finances in natural language, using a '
+          'model on this device, your own server, or a hosted provider — you '
+          'choose how private.',
     ),
   ];
 

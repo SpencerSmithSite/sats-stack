@@ -6,8 +6,13 @@
          errno 13. Invisible in development, because `flutter run` builds
          debug or profile. -->
     <uses-permission android:name="android.permission.INTERNET"/>
-    <uses-permission android:name="android.permission.CAMERA"/>
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+    <!-- No CAMERA and no READ_MEDIA_IMAGES, deliberately. The receipt photo
+         goes through image_picker, which uses the camera app's capture intent
+         and the system photo picker — neither needs a permission. Declaring
+         CAMERA makes image_picker prompt for it anyway (a manifest that lists
+         it must be granted before the capture intent may be used), and
+         declaring READ_MEDIA_IMAGES falls under Google Play's photo-permission
+         policy, which rejects apps that only pick the odd photo. -->
     <application
         android:label="Sats Stack"
         android:name="${applicationName}"

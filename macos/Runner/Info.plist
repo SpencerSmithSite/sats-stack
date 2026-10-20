@@ -2,6 +2,13 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- Export compliance, answered here so no upload stops to ask. The only
+	     encryption is the operating system's own HTTPS/TLS, which is exempt.
+	     SHA-256 and secp256k1 are used for hashing and Bitcoin key derivation,
+	     not to encrypt anything, and the database is not encrypted by the app.
+	     Revisit this if that changes - SQLCipher, for one, would. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleExecutable</key>
