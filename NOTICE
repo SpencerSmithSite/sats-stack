@@ -1,0 +1,33 @@
+Sats Stack
+Copyright 2026 The Sats Stack Authors
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not
+use this file except in compliance with the License. You may obtain a copy of
+the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+License for the specific language governing permissions and limitations under
+the License.
+
+--------------------------------------------------------------------------------
+Third-party components
+--------------------------------------------------------------------------------
+
+Sats Stack depends on syncfusion_flutter_pdf, which is NOT open source. It is
+licensed under the Syncfusion Essential Studio program — either their Community
+License (which requires gross revenue under USD 1,000,000 per year and fewer
+than five developers) or a commercial license:
+
+    https://www.syncfusion.com/content/downloads/syncfusion_license.pdf
+
+Apache-2.0 permits linking it, but it is not covered by this project's license.
+If you build or distribute Sats Stack yourself, you need your own Syncfusion
+license. It is used in one place, lib/core/services/import_service.dart, to
+extract text from PDF statements.
+
+All other dependencies are permissively licensed. Run `flutter pub deps` for
+the full tree.

@@ -525,10 +525,14 @@ class _DateGroup extends StatelessWidget {
     final yesterday = today.subtract(const Duration(days: 1));
     if (date.year == today.year &&
         date.month == today.month &&
-        date.day == today.day) return 'Today';
+        date.day == today.day) {
+      return 'Today';
+    }
     if (date.year == yesterday.year &&
         date.month == yesterday.month &&
-        date.day == yesterday.day) return 'Yesterday';
+        date.day == yesterday.day) {
+      return 'Yesterday';
+    }
     return DateFormat('EEEE, MMMM d').format(date);
   }
 

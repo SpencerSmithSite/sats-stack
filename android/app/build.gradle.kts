@@ -1,9 +1,22 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+
+// Release signing credentials, kept out of the repository.
+//
+// `android/key.properties` is gitignored (along with *.jks and *.keystore), so
+// it exists on a machine that is set up to publish and nowhere else. Create it
+// with storeFile, storePassword, keyAlias and keyPassword.
+val keyProperties = Properties().apply {
+    val file = rootProject.file("key.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+val hasReleaseKey = keyProperties.getProperty("storeFile") != null
 
 android {
     namespace = "app.satsstack.satsstack"
@@ -35,11 +48,33 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (hasReleaseKey) {
+            create("release") {
+                storeFile = file(keyProperties.getProperty("storeFile"))
+                storePassword = keyProperties.getProperty("storePassword")
+                keyAlias = keyProperties.getProperty("keyAlias")
+                keyPassword = keyProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // The real key when key.properties is present, and nothing at all
+            // when it is not.
+            //
+            // It used to say `signingConfigs.getByName("debug")`, straight from
+            // the Flutter template, which meant a release build was signed with
+            // the publicly-known debug key: Play rejects such an artifact
+            // outright, and anything that did ship would carry a key anyone can
+            // reproduce. An unsigned build fails loudly at the upload step
+            // instead, which is the right place to find out.
+            signingConfig = if (hasReleaseKey) {
+                signingConfigs.getByName("release")
+            } else {
+                null
+            }
         }
     }
 }

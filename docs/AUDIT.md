@@ -599,6 +599,15 @@ Addressed 2026-10-18.
   sides; `serialisedOnChannel` queues instead, and a queued answer beats a hung
   one. Both on-device backends also gained a 90s idle timeout, since nothing
   else would ever end a stream the native side had abandoned.
+
+  **Narrowed 2026-10-18.** This fixes the *Dart* side only, and the claim that
+  `stream_resilience_test.dart` proves it is too strong: that test runs under
+  `flutter test`, which has no engine, so it exercises the queue and nothing
+  else. The queue slot is released when the Dart subscription is cancelled, not
+  when the native side actually stops — and neither bridge stops on cancel
+  (`GeminiNanoBridge.kt:132`, `FoundationModelsBridge.swift:184`), so an
+  abandoned generation's trailing deltas can still land in the next answer's
+  stream. See `TODO.md` item 2.
 - **The router's redirect no longer reads the database.** It queried
   `app_settings` for the onboarding flag on every navigation — each bottom-nav
   tap, each `context.push`, and again on each of GoRouter's

@@ -130,4 +130,44 @@ void main() {
       expect(Uri.parse(service.esploraBaseUrl).scheme, anyOf('http', 'https'));
     });
   });
+
+  group('windowed derivation', () {
+    test('a window matches deriving one at a time', () {
+      // The scan now derives 20 at a time in an isolate instead of one at a
+      // time inline. Same addresses, in the same order, or a wallet would be
+      // scanned at the wrong keys.
+      final window = XpubService.deriveWindowSync(bip84Zpub, 0, 0, 20);
+      final individually = [
+        for (var i = 0; i < 20; i++)
+          service.deriveAddresses(bip84Zpub, i, 1).single,
+      ];
+      expect(window, individually);
+    });
+
+    test('a window starting partway through is offset correctly', () {
+      // The loop advances by the gap limit, so an off-by-one here would scan
+      // the wrong range on every window after the first.
+      expect(
+        XpubService.deriveWindowSync(bip84Zpub, 0, 20, 5),
+        service.deriveAddresses(bip84Zpub, 20, 5),
+      );
+    });
+
+    test('the change chain windows separately', () {
+      expect(
+        XpubService.deriveWindowSync(bip84Zpub, 1, 0, 3),
+        service.deriveAddresses(bip84Zpub, 0, 3, chain: 1),
+      );
+    });
+
+    test('the isolate entry point agrees with the static one', () async {
+      // deriveAddressWindow is what compute() invokes; its message is a plain
+      // list, and getting the order of those four fields wrong would derive a
+      // different wallet entirely.
+      expect(
+        deriveAddressWindow(<Object>[bip84Zpub, 1, 2, 4]),
+        XpubService.deriveWindowSync(bip84Zpub, 1, 2, 4),
+      );
+    });
+  });
 }

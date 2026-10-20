@@ -139,12 +139,21 @@ class InferenceException implements Exception {
 extension IdleTimeout<T> on Stream<T> {
   Stream<T> idleTimeout(Duration gap, String what) => timeout(
         gap,
-        onTimeout: (sink) => sink.addError(
-          InferenceException(
-            '$what stopped responding after ${gap.inSeconds}s. '
-            'Check your connection and try again.',
-          ),
-        ),
+        onTimeout: (sink) {
+          sink.addError(
+            InferenceException(
+              '$what stopped responding after ${gap.inSeconds}s. '
+              'Check your connection and try again.',
+            ),
+          );
+          // Closed as well as errored. A consumer with `cancelOnError: false`
+          // would otherwise sit on an open stream forever — and inside
+          // [serialisedOnChannel] that is a permanent deadlock: the queue head
+          // never reaches its `finally`, so every later generation on that
+          // channel waits on it with no timeout to break the chain. Which is
+          // the exact failure this helper exists to prevent.
+          sink.close();
+        },
       );
 }
 

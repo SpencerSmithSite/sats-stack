@@ -11,4 +11,4 @@ PRODUCT_NAME = sats_stack
 PRODUCT_BUNDLE_IDENTIFIER = com.satsstack.satsStack
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2026 com.satsstack. All rights reserved.
+PRODUCT_COPYRIGHT = Copyright © 2026 The Sats Stack Authors. Licensed under Apache-2.0.

@@ -248,7 +248,15 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
       ),
     );
     if (confirmed == true) {
-      await app.importService.deleteSource(source.id);
+      try {
+        await app.importService.deleteSource(source.id);
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not remove this source: $e')),
+          );
+        }
+      }
     }
   }
 
@@ -728,7 +736,7 @@ class _ImportProgressOverlay extends StatelessWidget {
 
     return Positioned.fill(
       child: Container(
-        color: Colors.black.withOpacity(0.6),
+        color: Colors.black.withValues(alpha: 0.6),
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 500),
@@ -787,7 +795,7 @@ class _ImportProgressOverlay extends StatelessWidget {
                           color: cs.surfaceContainerHighest,
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
-                              color: cs.outlineVariant.withOpacity(0.5)),
+                              color: cs.outlineVariant.withValues(alpha: 0.5)),
                         ),
                         child: SingleChildScrollView(
                           controller: scrollController,
@@ -838,8 +846,8 @@ class _AiConnectedBanner extends StatelessWidget {
       margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFF1D9E75).withOpacity(0.12),
-        border: Border.all(color: const Color(0xFF1D9E75).withOpacity(0.3)),
+        color: const Color(0xFF1D9E75).withValues(alpha: 0.12),
+        border: Border.all(color: const Color(0xFF1D9E75).withValues(alpha: 0.3)),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
@@ -872,9 +880,9 @@ class _AiBanner extends StatelessWidget {
       margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFFF7931A).withOpacity(0.12),
+        color: const Color(0xFFF7931A).withValues(alpha: 0.12),
         border: Border.all(
-            color: const Color(0xFFF7931A).withOpacity(0.3)),
+            color: const Color(0xFFF7931A).withValues(alpha: 0.3)),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(

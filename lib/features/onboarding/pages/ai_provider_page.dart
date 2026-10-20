@@ -165,7 +165,9 @@ class AiProviderPage extends StatelessWidget {
                 opacity: animation,
                 child: SizeTransition(
                   sizeFactor: animation,
-                  axisAlignment: -1,
+                  // The migration Flutter's own deprecation notice prescribes
+                  // for a vertical axis: Alignment(-1.0, axisAlignment).
+                  alignment: const Alignment(-1.0, -1.0),
                   child: child,
                 ),
               ),
@@ -315,9 +317,9 @@ class NoteBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: color.withOpacity(isDark ? 0.10 : 0.07),
+        color: color.withValues(alpha: isDark ? 0.10 : 0.07),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(isDark ? 0.32 : 0.20)),
+        border: Border.all(color: color.withValues(alpha: isDark ? 0.32 : 0.20)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -499,10 +501,10 @@ class ProviderConfigSection extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
-            color: noteColor.withOpacity(isDark ? 0.10 : 0.07),
+            color: noteColor.withValues(alpha: isDark ? 0.10 : 0.07),
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
-                color: noteColor.withOpacity(isDark ? 0.32 : 0.20)),
+                color: noteColor.withValues(alpha: isDark ? 0.32 : 0.20)),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -529,10 +531,10 @@ class ProviderConfigSection extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
-            color: accentInfo.withOpacity(isDark ? 0.10 : 0.07),
+            color: accentInfo.withValues(alpha: isDark ? 0.10 : 0.07),
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
-                color: accentInfo.withOpacity(isDark ? 0.32 : 0.20)),
+                color: accentInfo.withValues(alpha: isDark ? 0.32 : 0.20)),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,

@@ -1,9 +1,9 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:bech32/bech32.dart';
 import 'package:bs58check/bs58check.dart' as bs58check;
 import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart';
 import 'package:drift/drift.dart' show InsertMode, Value;
 import 'package:http/http.dart' as http;
 import 'package:pointycastle/digests/ripemd160.dart';
@@ -97,6 +97,30 @@ typedef _ExtKey = ({
   XpubFormat format,
   XpubNetwork network,
 });
+
+// ── Isolate entry ─────────────────────────────────────────────────────────────
+
+/// Derives a window of addresses. Runs in a background isolate via [compute].
+///
+/// Each address costs an EC scalar multiplication plus a point addition in
+/// pure Dart, and a scan walks dozens of them. On the UI isolate that is
+/// visible jank in the middle of a wallet import, which is exactly when the
+/// progress line is supposed to be animating.
+///
+/// The message is a plain list because that is unambiguously sendable: the
+/// extended key, the chain (0 = receive, 1 = change), the first index and how
+/// many to derive. The derivation itself is static and holds no state, so the
+/// isolate needs nothing from the service but the curve, which it rebuilds.
+List<String> deriveAddressWindow(List<Object> message) {
+  final extKey = message[0] as String;
+  final chain = message[1] as int;
+  final start = message[2] as int;
+  final count = message[3] as int;
+
+  // A fresh service: it holds no state beyond the curve, which is static and
+  // so is rebuilt once per isolate.
+  return XpubService.deriveWindowSync(extKey, chain, start, count);
+}
 
 // ── Service ───────────────────────────────────────────────────────────────────
 
@@ -199,7 +223,7 @@ class XpubService {
 
   /// Decodes an extended public key. Throws [ArgumentError] if it is not one
   /// this app can use.
-  _ExtKey _parseExtKey(String extKey) {
+  static _ExtKey _parseExtKey(String extKey) {
     final payload = bs58check.decode(extKey.trim());
     if (payload.length != 78) {
       throw ArgumentError('Invalid extended key length');
@@ -234,7 +258,7 @@ class XpubService {
   // ── BIP32 child key derivation ───────────────────────────────────────────────
 
   /// Non-hardened child derivation: CKDpub((Kpar, cpar), i) for i < 0x80000000.
-  ({Uint8List pubkey, Uint8List chaincode}) _deriveChild(
+  static ({Uint8List pubkey, Uint8List chaincode}) _deriveChild(
     Uint8List parentPubkey,
     Uint8List parentChaincode,
     int index,
@@ -245,8 +269,14 @@ class XpubService {
       ..setAll(33, _intTo4BytesBE(index));
 
     final hmac = Hmac(sha512, parentChaincode);
+    // I, IL and IR are BIP32's own names for the HMAC output and its halves.
+    // Keeping them makes this checkable line-by-line against the spec, which
+    // is worth more here than the naming lint.
+    // ignore: non_constant_identifier_names
     final I = Uint8List.fromList(hmac.convert(data).bytes);
+    // ignore: non_constant_identifier_names
     final IL = I.sublist(0, 32);
+    // ignore: non_constant_identifier_names
     final IR = I.sublist(32, 64);
 
     final ilInt = BigInt.parse(
@@ -270,10 +300,10 @@ class XpubService {
 
   // ── Hashing ──────────────────────────────────────────────────────────────────
 
-  Uint8List _sha256(Uint8List data) =>
+  static Uint8List _sha256(Uint8List data) =>
       Uint8List.fromList(sha256.convert(data).bytes);
 
-  Uint8List _ripemd160(Uint8List data) {
+  static Uint8List _ripemd160(Uint8List data) {
     final digest = RIPEMD160Digest();
     digest.update(data, 0, data.length);
     final out = Uint8List(digest.digestSize);
@@ -281,11 +311,11 @@ class XpubService {
     return out;
   }
 
-  Uint8List _hash160(Uint8List data) => _ripemd160(_sha256(data));
+  static Uint8List _hash160(Uint8List data) => _ripemd160(_sha256(data));
 
   // ── Address generation ───────────────────────────────────────────────────────
 
-  String _pubkeyToAddress(
+  static String _pubkeyToAddress(
     Uint8List pubkey,
     XpubFormat format,
     XpubNetwork network,
@@ -314,7 +344,7 @@ class XpubService {
   }
 
   // bech32 convertbits
-  List<int> _convertBits(Uint8List data, int from, int to, {required bool pad}) {
+  static List<int> _convertBits(Uint8List data, int from, int to, {required bool pad}) {
     int acc = 0, bits = 0;
     final out = <int>[];
     final maxv = (1 << to) - 1;
@@ -359,6 +389,46 @@ class XpubService {
           key.network,
         ),
     ];
+  }
+
+  /// Derives addresses without needing a database — what the isolate calls.
+  static List<String> deriveWindowSync(
+    String extKey,
+    int chain,
+    int start,
+    int count,
+  ) {
+    final key = _parseExtKey(extKey);
+    final chainKey = _deriveChild(key.pubkey, key.chaincode, chain);
+    return [
+      for (var i = start; i < start + count; i++)
+        _pubkeyToAddress(
+          _deriveChild(chainKey.pubkey, chainKey.chaincode, i).pubkey,
+          key.format,
+          key.network,
+        ),
+    ];
+  }
+
+  /// Derives a window off the UI isolate.
+  ///
+  /// Falls back to deriving in place if the isolate cannot be spawned — some
+  /// test and desktop environments cannot — because a slightly janky import
+  /// beats one that fails.
+  Future<List<String>> _deriveWindow(
+    String extKey,
+    int chain,
+    int start,
+    int count,
+  ) async {
+    try {
+      return await compute(
+        deriveAddressWindow,
+        <Object>[extKey, chain, start, count],
+      );
+    } catch (_) {
+      return deriveWindowSync(extKey, chain, start, count);
+    }
   }
 
   // ── Esplora API ──────────────────────────────────────────────────────────────
@@ -427,6 +497,41 @@ class XpubService {
     return seconds <= 30 ? Duration(seconds: seconds) : null;
   }
 
+  /// How many address requests may be in flight at once.
+  ///
+  /// Deliberately small. The point is to overlap latency, not to raise the
+  /// request rate — mempool.space rate-limits the public API, and a 429 now
+  /// (correctly) aborts the whole scan rather than looking like an empty
+  /// wallet. Combined with [_requestSpacing] between launches this lands at a
+  /// similar rate to the old serial walk, with a fraction of the wall-clock.
+  static const _maxConcurrentRequests = 3;
+
+  /// Fetches a window of addresses, at most [_maxConcurrentRequests] at a
+  /// time, returning results in the order the addresses were given.
+  Future<List<List<Map<String, dynamic>>>> _fetchWindow(
+    List<String> addresses,
+  ) async {
+    final results =
+        List<List<Map<String, dynamic>>>.filled(addresses.length, const []);
+    var next = 0;
+
+    Future<void> worker() async {
+      while (true) {
+        final i = next++;
+        if (i >= addresses.length) return;
+        results[i] = await _fetchAddressTxs(addresses[i]);
+        await Future.delayed(_requestSpacing);
+      }
+    }
+
+    // Any failure propagates: a scan that could not read an address must not
+    // report that address as unused.
+    await Future.wait([
+      for (var w = 0; w < _maxConcurrentRequests; w++) worker(),
+    ]);
+    return results;
+  }
+
   /// Every transaction Esplora knows for [address], following pagination.
   ///
   /// A single `/txs` call returns only the newest 25 confirmed transactions, so
@@ -492,7 +597,11 @@ class XpubService {
       return XpubSyncResult(imported: 0, skipped: 0, addressesScanned: 0);
     }
 
-    final key = _parseExtKey(extKey);
+    // Validates the key before any network work happens — an unusable xpub
+    // should fail immediately, not after twenty requests. The derivation
+    // itself now happens inside the isolate, which parses it again there.
+    _parseExtKey(extKey);
+
     final currency = btcPriceService.currency;
 
     // Only the hashes are needed, not every column of every row.
@@ -515,35 +624,47 @@ class XpubService {
     var addressesScanned = 0;
 
     for (final chainIndex in _chains) {
-      final chainKey = _deriveChild(key.pubkey, key.chaincode, chainIndex);
       final chainName = chainIndex == 0 ? 'receive' : 'change';
       var gapCount = 0;
       var index = 0;
 
+      // A window at a time rather than one address at a time. The derivation
+      // happens in an isolate, and the requests within a window overlap, which
+      // turns a serial walk into something closer to one round-trip per window
+      // — the scan was previously 40+ strictly sequential requests with a
+      // sleep between each.
+      //
+      // The window is the gap limit, so no address is fetched that a serial
+      // walk would not also have fetched, except at most one window at the
+      // very end.
       while (gapCount < _gapLimit) {
-        final address = _pubkeyToAddress(
-          _deriveChild(chainKey.pubkey, chainKey.chaincode, index).pubkey,
-          key.format,
-          key.network,
-        );
-        owned.add(address);
+        final addresses =
+            await _deriveWindow(extKey, chainIndex, index, _gapLimit);
+        owned.addAll(addresses);
 
-        onProgress?.call('Scanning $chainName address ${index + 1} ($address)…');
+        onProgress?.call(
+            'Scanning $chainName addresses ${index + 1}–${index + _gapLimit}…');
 
-        final txs = await _fetchAddressTxs(address);
-        if (txs.isEmpty) {
-          gapCount++;
-        } else {
-          gapCount = 0;
-          for (final tx in txs) {
-            final txid = tx['txid'];
-            if (txid is String) txById[txid] = tx;
+        final results = await _fetchWindow(addresses);
+
+        // Applied in order, so the gap limit means exactly what it meant
+        // before: N consecutive unused addresses ends the chain.
+        for (var i = 0; i < results.length; i++) {
+          addressesScanned++;
+          final txs = results[i];
+          if (txs.isEmpty) {
+            gapCount++;
+            if (gapCount >= _gapLimit) break;
+          } else {
+            gapCount = 0;
+            for (final tx in txs) {
+              final txid = tx['txid'];
+              if (txid is String) txById[txid] = tx;
+            }
           }
         }
 
-        index++;
-        addressesScanned++;
-        await Future.delayed(_requestSpacing);
+        index += _gapLimit;
       }
     }
 

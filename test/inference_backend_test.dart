@@ -203,7 +203,7 @@ void main() {
       // overfilling a small window degrades the answer rather than erroring.
       for (final budget in [3000, 4000, 6000, 8000, 12000, 24000]) {
         expect(build(budget).length, lessThanOrEqualTo(budget),
-            reason: 'overflowed a ${budget}-char budget');
+            reason: 'overflowed a $budget-char budget');
       }
     });
 

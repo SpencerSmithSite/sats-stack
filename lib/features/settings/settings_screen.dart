@@ -979,9 +979,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       // hosted backend sends the user's complete financial
                       // picture to a third party, and that cannot sit under a
                       // blanket "local-first" promise unqualified.
-                      if (!_selectedProvider.isPrivate) ...[
+                      // Gated on where the data would actually go, not on the
+                      // enum. `AiProvider.isPrivate` is hardcoded true for
+                      // Ollama and LM Studio, whose URLs are free-text fields
+                      // the user can point at a VPS — so this banner was
+                      // hidden for exactly the configuration that needs it.
+                      // `_selectedRecipient` is null when nothing leaves.
+                      if (_selectedRecipient != null) ...[
                         const SizedBox(height: 8),
-                        AiPrivacyDisclosure(provider: _selectedProvider),
+                        AiPrivacyDisclosure(
+                          provider: _selectedProvider,
+                          recipient: _selectedRecipient,
+                        ),
                       ],
                       const SizedBox(height: 14),
 
@@ -999,7 +1008,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         const SizedBox(height: 12),
                         if (_models.isNotEmpty)
                           DropdownButtonFormField<String>(
-                            value: _models.contains(_selectedModel)
+                            initialValue: _models.contains(_selectedModel)
                                 ? _selectedModel
                                 : null,
                             decoration:
@@ -1071,7 +1080,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         const SizedBox(height: 12),
                         if (_lmStudioModels.isNotEmpty)
                           DropdownButtonFormField<String>(
-                            value: _lmStudioModels
+                            initialValue: _lmStudioModels
                                     .contains(_lmStudioSelectedModel)
                                 ? _lmStudioSelectedModel
                                 : null,
@@ -1153,7 +1162,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         const SizedBox(height: 12),
                         if (_mapleModels.isNotEmpty)
                           DropdownButtonFormField<String>(
-                            value:
+                            initialValue:
                                 _mapleModels.contains(_mapleSelectedModel)
                                     ? _mapleSelectedModel
                                     : null,
@@ -1541,11 +1550,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  String _providerDescription(AiProvider provider) => switch (provider) {
-        AiProvider.ollama =>
-          'Self-hosted, runs on your own server or home network.',
-        AiProvider.lmStudio =>
-          'Fully local, runs models directly on this device. No data leaves.',
+  /// Where [provider]'s data would go, or null when it stays on hardware the
+  /// user controls.
+  ///
+  /// For the active provider this is derived from the URL actually configured,
+  /// which is the only way to be right about Ollama and LM Studio: their
+  /// `AiProvider.isPrivate` is hardcoded true while their endpoint is a
+  /// free-text field. For any other provider it is the enum's fixed answer,
+  /// which is correct for the hosted four and honest for an unconfigured
+  /// self-hosted one.
+  String? _recipientFor(AiProvider provider) =>
+      provider == app.ollamaService.activeProvider
+          ? app.ollamaService.activeDataRecipient
+          : provider.dataRecipient;
+
+  String? get _selectedRecipient => _recipientFor(_selectedProvider);
+
+  String _providerDescription(AiProvider provider) {
+    final recipient = _recipientFor(provider);
+    return switch (provider) {
+        // Derived, not asserted: the URL field decides. Saying "No data
+        // leaves" for a server the user has pointed at the internet is the
+        // one claim this app must never get wrong.
+        AiProvider.lmStudio => recipient == null
+            ? 'A model running in LM Studio on this machine. No data leaves.'
+            : 'LM Studio on the server you configured. Your financial figures '
+                'are sent there to answer each question.',
+        AiProvider.ollama => recipient == null
+            ? 'A model running on your own machine or one on your network. '
+                'Nothing leaves hardware you control.'
+            : 'Ollama on the server you configured. Your financial figures '
+                'are sent there to answer each question.',
         // Deliberately not "private, zero retention" as this once read. Maple
         // may well be both, but the app cannot verify either, and a claim it
         // cannot stand behind does not belong next to a backend that is, by
@@ -1565,7 +1600,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           'By far the most capable option, using your own '
               '${provider.cloudProvider!.company} API key. You pay '
               '${provider.cloudProvider!.company} directly for what you use.',
-      };
+    };
+  }
 
   String _themeName(ThemeMode mode) => switch (mode) {
         ThemeMode.light => 'Light',

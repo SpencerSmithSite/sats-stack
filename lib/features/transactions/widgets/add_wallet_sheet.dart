@@ -306,10 +306,10 @@ class _FormBody extends StatelessWidget {
                 return Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: accent.withOpacity(isDark ? 0.12 : 0.08),
+                    color: accent.withValues(alpha: isDark ? 0.12 : 0.08),
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
-                        color: accent.withOpacity(isDark ? 0.35 : 0.20),
+                        color: accent.withValues(alpha: isDark ? 0.35 : 0.20),
                         width: 0.5),
                   ),
                   child: Row(
@@ -337,10 +337,10 @@ class _FormBody extends StatelessWidget {
               return Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: accent.withOpacity(isDark ? 0.12 : 0.08),
+                  color: accent.withValues(alpha: isDark ? 0.12 : 0.08),
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
-                      color: accent.withOpacity(isDark ? 0.35 : 0.20),
+                      color: accent.withValues(alpha: isDark ? 0.35 : 0.20),
                       width: 0.5),
                 ),
                 child: Row(

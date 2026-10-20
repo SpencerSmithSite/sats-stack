@@ -1,4 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Required in the MAIN manifest, not just debug/profile. The Flutter
+         template declares INTERNET only in those two source sets, for hot
+         reload, so a release build had no network access at all: every price
+         fetch, xpub sync, hosted AI request and model download failed with
+         errno 13. Invisible in development, because `flutter run` builds
+         debug or profile. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
     <application

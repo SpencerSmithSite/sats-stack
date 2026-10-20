@@ -41,6 +41,7 @@ class ParsedTransaction {
     this.category,
     this.include = true,
     this.categoryIsFallback = false,
+    this.categoryIsUserChosen = false,
   });
 
   DateTime date;
@@ -51,6 +52,11 @@ class ParsedTransaction {
   String currency;
   String? category;
   bool include;
+
+  /// True when [category] came from the user rather than from the
+  /// categoriser — either picked in the preview's edit sheet, or applied from
+  /// a mapping learned from such a pick. Only these are learned.
+  bool categoryIsUserChosen;
 
   /// True while [category] is only the fallback — no keyword matched the
   /// description.
@@ -68,6 +74,7 @@ class ParsedTransaction {
   void setUserCategory(String? value) {
     category = value;
     categoryIsFallback = false;
+    categoryIsUserChosen = true;
   }
 }
 
@@ -706,41 +713,59 @@ Rules:
   Future<({Uint8List bytes, String mimeType})> _downscaleForVision(
     Uint8List original,
   ) async {
-    for (final maxEdge in const [_visionMaxEdge, 1024, 768]) {
-      try {
-        final descriptor = await ui.ImageDescriptor.encoded(
-          await ui.ImmutableBuffer.fromUint8List(original),
-        );
-        final longest = descriptor.width > descriptor.height
-            ? descriptor.width
-            : descriptor.height;
+    ui.ImmutableBuffer? buffer;
+    ui.ImageDescriptor? descriptor;
+    // The smallest encode produced so far. Returning `original` when every
+    // round came out too large — which is what this did — hands back the
+    // multi-megabyte camera photo and throws away the 768px version it had
+    // just made, which is the opposite of the point.
+    Uint8List? best;
+
+    try {
+      buffer = await ui.ImmutableBuffer.fromUint8List(original);
+      // Decoded once, not once per round.
+      descriptor = await ui.ImageDescriptor.encoded(buffer);
+      final longest = descriptor.width > descriptor.height
+          ? descriptor.width
+          : descriptor.height;
+
+      for (final maxEdge in const [_visionMaxEdge, 1024, 768]) {
         if (longest <= maxEdge && original.length <= _visionMaxBytes) {
-          descriptor.dispose();
           return (bytes: original, mimeType: _mimeTypeOf(original));
         }
 
         final scale = maxEdge / longest;
-        final codec = await descriptor.instantiateCodec(
-          targetWidth: (descriptor.width * scale).round().clamp(1, maxEdge),
-          targetHeight: (descriptor.height * scale).round().clamp(1, maxEdge),
-        );
-        final frame = await codec.getNextFrame();
-        final encoded =
-            await frame.image.toByteData(format: ui.ImageByteFormat.png);
-        frame.image.dispose();
-        codec.dispose();
-        descriptor.dispose();
-        if (encoded == null) break;
+        ui.Codec? codec;
+        ui.FrameInfo? frame;
+        try {
+          codec = await descriptor.instantiateCodec(
+            targetWidth: (descriptor.width * scale).round().clamp(1, maxEdge),
+            targetHeight: (descriptor.height * scale).round().clamp(1, maxEdge),
+          );
+          frame = await codec.getNextFrame();
+          final encoded =
+              await frame.image.toByteData(format: ui.ImageByteFormat.png);
+          if (encoded == null) break;
 
-        final bytes = encoded.buffer.asUint8List();
-        if (bytes.length <= _visionMaxBytes) {
-          return (bytes: bytes, mimeType: 'image/png');
+          final bytes = encoded.buffer.asUint8List();
+          if (best == null || bytes.length < best.length) best = bytes;
+          if (bytes.length <= _visionMaxBytes) {
+            return (bytes: bytes, mimeType: 'image/png');
+          }
+          // Still too big: round again at a smaller edge.
+        } finally {
+          frame?.image.dispose();
+          codec?.dispose();
         }
-        // Still too big: round again at a smaller edge.
-      } catch (_) {
-        break;
       }
+    } catch (_) {
+      // Fall through to whatever is in hand.
+    } finally {
+      descriptor?.dispose();
+      buffer?.dispose();
     }
+
+    if (best != null) return (bytes: best, mimeType: 'image/png');
     return (bytes: original, mimeType: _mimeTypeOf(original));
   }
 
@@ -1087,6 +1112,11 @@ FILE CONTENT:
     final allRows = _parseCsvRows(csvContent);
     if (allRows.length < 2) return null;
 
+    final amountIndex = mapping.amountColumn;
+    final mappingAmountIsSigned = amountIndex == null ||
+        allRows.skip(1).any((r) =>
+            amountIndex < r.length && (_parseAmount(r[amountIndex]) ?? 0) < 0);
+
     final result = <ParsedTransaction>[];
     for (int i = 1; i < allRows.length; i++) {
       final row = allRows[i];
@@ -1111,7 +1141,15 @@ FILE CONTENT:
         final raw = _parseAmount(row[mapping.amountColumn!]);
         if (raw == null) continue;
         amount = raw.abs();
-        direction = raw < 0 ? 'debit' : 'credit';
+        // Same rule as the rules tier: a single amount column with no
+        // negative value in it is not signed, whatever the header says.
+        // Deriving the direction from the sign alone booked every charge on a
+        // credit-card export as income — and this is the tier a saved mapping
+        // uses, so it was the *first* thing tried on every later import of
+        // that source.
+        direction = mappingAmountIsSigned
+            ? (raw < 0 ? 'debit' : 'credit')
+            : 'debit';
       } else {
         final dAmt = (mapping.debitColumn != null && mapping.debitColumn! < row.length)
             ? _parseAmount(row[mapping.debitColumn!])
@@ -1370,11 +1408,16 @@ FILE CONTENT:
     final byDescription = <String, String>{};
     for (final tx in transactions) {
       if (!tx.include) continue;
-      // Only what the user chose, or a mapping they chose earlier. Learning
-      // the fallback pinned every unrecognised merchant to 'Other' for good:
-      // the mapping was re-applied on every later import of that source, so
-      // improving the keyword list changed nothing for them.
-      if (tx.categoryIsFallback) continue;
+      // Only what the user actually chose.
+      //
+      // Learning the fallback pinned every unrecognised merchant to 'Other'
+      // for good, because the mapping is re-applied on every later import of
+      // that source. Learning a *keyword guess* has the same effect one step
+      // removed: a wrong guess is frozen into the source's mappings and
+      // improving the keyword list changes nothing for it. Only a category the
+      // user picked — or one they picked on an earlier import — is worth
+      // persisting.
+      if (!tx.categoryIsUserChosen) continue;
       final cat = tx.category;
       if (cat == null || cat.isEmpty) continue;
       final key = tx.description.toLowerCase().trim();
@@ -1437,11 +1480,24 @@ FILE CONTENT:
         ),
       );
 
+  /// Deletes a source and everything that references it.
+  ///
+  /// All three in one transaction, children first. Two things were wrong
+  /// before: `descriptionCategoryMappings` also references `importSources`
+  /// and was not deleted, so once `PRAGMA foreign_keys` was turned on this
+  /// threw `FOREIGN KEY constraint failed` — and because the deletes were not
+  /// in a transaction, the source's imported history was already gone by the
+  /// time it threw, leaving the source listed with its history destroyed.
   Future<void> deleteSource(int id) async {
-    await (db.delete(db.importedTransactions)
-          ..where((t) => t.sourceId.equals(id)))
-        .go();
-    await (db.delete(db.importSources)..where((t) => t.id.equals(id))).go();
+    await db.transaction(() async {
+      await (db.delete(db.descriptionCategoryMappings)
+            ..where((t) => t.sourceId.equals(id)))
+          .go();
+      await (db.delete(db.importedTransactions)
+            ..where((t) => t.sourceId.equals(id)))
+          .go();
+      await (db.delete(db.importSources)..where((t) => t.id.equals(id))).go();
+    });
   }
 
   /// Returns imported transactions for [sourceId], newest first.
@@ -1924,7 +1980,11 @@ FILE CONTENT:
       'clothing', 'apparel', 'shoes', 'shop',
     ],
     'Entertainment': [
-      'cinema', 'movie', 'theater', 'concert', 'ticket',
+      // Not a bare 'ticket': at six characters it outscored Transport's
+      // 'train', 'bus' and 'metro' under the longest-match rule, so TRAIN
+      // TICKET and BUS TICKET LONDON both came out as Entertainment. Length
+      // is a proxy for specificity and this is where it fails.
+      'cinema', 'movie', 'theater', 'concert', 'ticketmaster',
       'eventbrite', 'ticketmaster', 'amc ', 'regal ', 'bar ',
       'bowling', 'gym', 'fitness', 'sport', 'steam ',
     ],
