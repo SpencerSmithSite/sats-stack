@@ -276,6 +276,9 @@ class _EditCategorySheetState extends State<_EditCategorySheet> {
   String _selectedIcon = 'more_horiz';
   bool _saving = false;
 
+  /// Set when the name is already taken — see [DuplicateCategoryNameException].
+  String? _nameError;
+
   bool get _isEditing => widget.existing != null;
 
   @override
@@ -314,6 +317,9 @@ class _EditCategorySheetState extends State<_EditCategorySheet> {
         );
       }
       if (mounted) Navigator.of(context).pop();
+    } on DuplicateCategoryNameException catch (e) {
+      // Shown on the field, where the fix is, rather than as a raw error.
+      if (mounted) setState(() => _nameError = e.toString());
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -369,9 +375,15 @@ class _EditCategorySheetState extends State<_EditCategorySheet> {
                   // Name
                   TextFormField(
                     controller: _nameCtrl,
-                    decoration: const InputDecoration(labelText: 'Name'),
+                    decoration: InputDecoration(
+                      labelText: 'Name',
+                      errorText: _nameError,
+                    ),
                     textCapitalization: TextCapitalization.words,
                     autofocus: !_isEditing,
+                    onChanged: (_) {
+                      if (_nameError != null) setState(() => _nameError = null);
+                    },
                     validator: (v) =>
                         (v == null || v.trim().isEmpty) ? 'Enter a name' : null,
                   ),

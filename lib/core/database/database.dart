@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../../shared/constants/app_constants.dart';
+import '../../shared/utils/hash_utils.dart';
 
 import 'tables/wallets_table.dart';
 import 'tables/transactions_table.dart';
@@ -42,7 +43,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -71,6 +72,9 @@ class AppDatabase extends _$AppDatabase {
           }
           if (from < 7) {
             await migrateToV7(m);
+          }
+          if (from < 8) {
+            await migrateToV8(m);
           }
         },
         beforeOpen: (details) async {
@@ -121,6 +125,61 @@ class AppDatabase extends _$AppDatabase {
     await m.createIndex(idxTransactionsRecurringPeriod);
     await m.createIndex(idxImportedTransactionsSourceId);
     await m.createIndex(idxDescriptionMappingsSourceDescription);
+  }
+
+  /// v7 → v8: unique category names, and xpub rows scoped to their wallet.
+  ///
+  /// **Categories.** The index cannot be created over duplicate names, and a
+  /// pre-v8 install could hold them. Unlike the earlier migrations this does
+  /// not delete: a category has budgets pointing at its id. Every duplicate
+  /// after the oldest is renamed "Name (2)", "Name (3)" instead, keeping its
+  /// id, colour and budget. The transactions stay with the oldest, under the
+  /// original name — they were matched by name, so there was never a way to
+  /// tell whose they were, and that is the category the user made first.
+  ///
+  /// **xpub rows.** Their dedup hash was salted with the txid alone, and the
+  /// sync skipped any hash already present in *any* wallet, so adding the same
+  /// xpub twice gave the second wallet zero rows while reporting them all as
+  /// skipped. The hash is now scoped to the wallet with
+  /// [HashUtils.scopedToWallet], applied here to every stored xpub row so the
+  /// next sync recognises them rather than deleting and re-adding them — which
+  /// would have dropped every category and note the user had set.
+  Future<void> migrateToV8(Migrator m) async {
+    final all = await (select(categories)
+          ..orderBy([(c) => OrderingTerm.asc(c.id)]))
+        .get();
+    final taken = {for (final c in all) c.name};
+    final seen = <String>{};
+    for (final c in all) {
+      if (seen.add(c.name)) continue;
+      var n = 2;
+      String candidate;
+      do {
+        candidate = _withSuffix(c.name, n++);
+      } while (taken.contains(candidate));
+      taken.add(candidate);
+      await (update(categories)..where((t) => t.id.equals(c.id)))
+          .write(CategoriesCompanion(name: Value(candidate)));
+    }
+    await m.createIndex(idxCategoriesName);
+
+    final xpubRows = await (select(transactions)
+          ..where((t) => t.source.equals('xpub')))
+        .get();
+    for (final row in xpubRows) {
+      await (update(transactions)..where((t) => t.id.equals(row.id))).write(
+        TransactionsCompanion(
+          dedupHash: Value(HashUtils.scopedToWallet(row.dedupHash, row.walletId)),
+        ),
+      );
+    }
+  }
+
+  /// "Name (n)", trimmed so it still fits the 60-character name column.
+  static String _withSuffix(String name, int n) {
+    final suffix = ' ($n)';
+    final room = 60 - suffix.length;
+    return '${name.length > room ? name.substring(0, room) : name}$suffix';
   }
 
   /// Deletes all user data and re-seeds the factory defaults.

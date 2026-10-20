@@ -126,14 +126,16 @@ List<String> deriveAddressWindow(List<Object> message) {
 // ── Service ───────────────────────────────────────────────────────────────────
 
 class XpubService {
-  XpubService(this._db);
+  /// [client] is for tests, which answer from memory instead of the network.
+  XpubService(this._db, {http.Client? client})
+      : _client = client ?? http.Client();
 
   final AppDatabase _db;
 
   /// One client for the whole app rather than one per request: a scan makes
   /// dozens of calls to the same host and `http.get` would open a fresh
   /// connection for each. Never closed — the service lives as long as the app.
-  final http.Client _client = http.Client();
+  final http.Client _client;
 
   String _esploraBaseUrl = AppConstants.mempoolBaseUrl;
 
@@ -591,9 +593,12 @@ class XpubService {
 
     final currency = btcPriceService.currency;
 
-    // Only the hashes are needed, not every column of every row.
+    // Only the hashes are needed, not every column of every row — and only
+    // this wallet's. Checking every wallet's made a second wallet on the same
+    // xpub sync to zero rows while reporting them all as skipped.
     final hashRows = await (_db.selectOnly(_db.transactions)
-          ..addColumns([_db.transactions.dedupHash]))
+          ..addColumns([_db.transactions.dedupHash])
+          ..where(_db.transactions.walletId.equals(wallet.id)))
         .get();
     final existingHashes = hashRows
         .map((r) => r.read(_db.transactions.dedupHash))
@@ -687,12 +692,17 @@ class XpubService {
       final shortId = txid.substring(0, txid.length >= 8 ? 8 : txid.length);
       final description = 'BTC $shortId';
       // Salted with the txid: one on-chain transaction is one row, however many
-      // of the wallet's addresses it touched.
-      final hash = HashUtils.transactionDedupHash(
-        date: date,
-        amount: netSats.toDouble(),
-        description: description,
-        salt: 'xpub_$txid',
+      // of the wallet's addresses it touched. Then scoped to the wallet, so the
+      // same transaction in a second wallet is its own row rather than a
+      // collision on the unique index — see `AppDatabase.migrateToV8`.
+      final hash = HashUtils.scopedToWallet(
+        HashUtils.transactionDedupHash(
+          date: date,
+          amount: netSats.toDouble(),
+          description: description,
+          salt: 'xpub_$txid',
+        ),
+        wallet.id,
       );
 
       rows.add(_RawTx(

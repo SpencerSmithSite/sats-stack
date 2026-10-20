@@ -10,7 +10,7 @@
 /// | statement import | `wallet_<id>` | re-importing the same file must dedupe |
 /// | manual entry | microsecond timestamp | an intentional duplicate must be kept |
 /// | recurring series | `recurring_<anchor>_<due>` | one row per due date, idempotent |
-/// | xpub sync | `xpub_<txid>` | one row per on-chain transaction |
+/// | xpub sync | `xpub_<txid>`, then `HashUtils.scopedToWallet` | one row per on-chain transaction, per wallet |
 ///
 /// Nothing asserted the distinctions, and getting one wrong is invisible until
 /// a user notices a missing row. The audit found exactly that: the import path

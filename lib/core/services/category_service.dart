@@ -1,6 +1,18 @@
 import 'package:drift/drift.dart';
 import '../database/database.dart';
 
+/// A category with this name already exists.
+///
+/// Names are the key that transactions, budgets and imports use, so they must
+/// be unique — see the index on `Categories`.
+class DuplicateCategoryNameException implements Exception {
+  const DuplicateCategoryNameException(this.name);
+  final String name;
+
+  @override
+  String toString() => 'A category called "$name" already exists';
+}
+
 class CategoryService {
   CategoryService(this._db);
 
@@ -20,12 +32,25 @@ class CategoryService {
     return _db.select(_db.categories).get();
   }
 
+  /// Throws [DuplicateCategoryNameException] if [name] is taken by another
+  /// category than [exceptId].
+  ///
+  /// Case-insensitive, which is stricter than the index: "Food" and "food"
+  /// would be two keys to the database but one to anybody reading the list.
+  Future<void> _checkNameFree(String name, {int? exceptId}) async {
+    final lower = name.toLowerCase();
+    final clash = (await getAll()).any(
+        (c) => c.id != exceptId && c.name.toLowerCase() == lower);
+    if (clash) throw DuplicateCategoryNameException(name);
+  }
+
   Future<void> createCategory({
     required String name,
     required String color,
     required String icon,
-  }) {
-    return _db.into(_db.categories).insert(
+  }) async {
+    await _checkNameFree(name);
+    await _db.into(_db.categories).insert(
           CategoriesCompanion.insert(
             name: name,
             color: color,
@@ -54,6 +79,7 @@ class CategoryService {
     required String icon,
   }) async {
     await _db.transaction(() async {
+      await _checkNameFree(name, exceptId: id);
       final existing = await (_db.select(_db.categories)
             ..where((t) => t.id.equals(id)))
           .getSingleOrNull();

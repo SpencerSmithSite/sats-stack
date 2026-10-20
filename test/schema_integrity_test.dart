@@ -10,6 +10,7 @@ import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sats_stack/core/database/database.dart';
+import 'package:sats_stack/shared/utils/hash_utils.dart';
 
 void main() {
   late AppDatabase db;
@@ -191,6 +192,84 @@ void main() {
             ),
         throwsA(isA<Exception>()),
       );
+    });
+  });
+
+  group('migrateToV8', () {
+    Future<int> walletId() async => (await db.select(db.wallets).get()).first.id;
+
+    test('renames duplicate category names instead of deleting them',
+        () async {
+      await open();
+      // A v7 database could hold two categories with one name.
+      await db.customStatement('DROP INDEX IF EXISTS idx_categories_name');
+      final first = await db.into(db.categories).insert(
+          CategoriesCompanion.insert(name: 'Pets', color: '#F7931A', icon: 'pets'));
+      final second = await db.into(db.categories).insert(
+          CategoriesCompanion.insert(name: 'Pets', color: '#E24B4A', icon: 'pets'));
+      // The second has a budget, which deleting it would have broken.
+      await db.into(db.budgets).insert(BudgetsCompanion.insert(
+          categoryId: second, amountFiat: 50, period: 'monthly'));
+
+      await db.migrateToV8(Migrator(db));
+
+      final byId = {for (final c in await db.select(db.categories).get()) c.id: c};
+      expect(byId[first]!.name, 'Pets', reason: 'the oldest keeps the name');
+      expect(byId[second]!.name, 'Pets (2)');
+      expect(await db.select(db.budgets).get(), hasLength(1));
+
+      // And the index now prevents it recurring.
+      await expectLater(
+        db.into(db.categories).insert(CategoriesCompanion.insert(
+            name: 'Pets', color: '#1D9E75', icon: 'pets')),
+        throwsA(isA<Exception>()),
+      );
+    });
+
+    test('a renamed duplicate never takes a name that is already used',
+        () async {
+      await open();
+      await db.customStatement('DROP INDEX IF EXISTS idx_categories_name');
+      for (final name in const ['Pets', 'Pets', 'Pets (2)']) {
+        await db.into(db.categories).insert(
+            CategoriesCompanion.insert(name: name, color: '#F7931A', icon: 'pets'));
+      }
+      await db.migrateToV8(Migrator(db));
+      final names = (await db.select(db.categories).get()).map((c) => c.name);
+      expect(names.where((n) => n.startsWith('Pets')).toSet(),
+          {'Pets', 'Pets (2)', 'Pets (3)'});
+    });
+
+    test('rescopes stored xpub hashes to their wallet, keeping the rows',
+        () async {
+      await open();
+      await db.customStatement('DROP INDEX IF EXISTS idx_categories_name');
+      final wallet = await walletId();
+      Future<void> add(String hash, String source) =>
+          db.into(db.transactions).insert(TransactionsCompanion.insert(
+                walletId: wallet,
+                date: DateTime(2026, 3, 1),
+                description: 'BTC abcd1234',
+                amountSats: 1000,
+                amountFiat: 1,
+                fiatCurrency: 'USD',
+                source: source,
+                category: const Value('Groceries — set by the user'),
+                dedupHash: hash,
+              ));
+      await add('xpubhash', 'xpub');
+      await add('csvhash', 'csv');
+
+      await db.migrateToV8(Migrator(db));
+
+      final rows = {
+        for (final t in await db.select(db.transactions).get()) t.source: t
+      };
+      expect(rows['xpub']!.dedupHash,
+          HashUtils.scopedToWallet('xpubhash', wallet));
+      // What a delete-and-resync would have lost.
+      expect(rows['xpub']!.category, 'Groceries — set by the user');
+      expect(rows['csv']!.dedupHash, 'csvhash', reason: 'only xpub rows move');
     });
   });
 }

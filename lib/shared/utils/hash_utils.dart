@@ -17,4 +17,15 @@ abstract final class HashUtils {
     final bytes = utf8.encode(input);
     return sha256.convert(bytes).toString();
   }
+
+  /// [hash] scoped to one wallet, so the same transaction can be a row in two
+  /// wallets without the two colliding on the unique `dedupHash` index.
+  ///
+  /// Derived from the existing hash rather than added to its salt, because a
+  /// stored xpub row keeps only the first eight characters of its txid: a
+  /// migration could not recompute a salted hash, but it can apply this to
+  /// the one already stored — so the move to wallet scoping keeps every row,
+  /// and every category or note the user set on it.
+  static String scopedToWallet(String hash, int walletId) =>
+      sha256.convert(utf8.encode('$hash|wallet_$walletId')).toString();
 }
