@@ -13,7 +13,6 @@ import '../models/ai_provider.dart';
 import 'inference/cloud_backend.dart';
 import 'inference/gemini_nano_backend.dart';
 import 'inference/inference_backend.dart';
-import 'inference/local_model_backend.dart';
 import 'inference/platform_llm_backend.dart';
 import 'inference/remote_backends.dart';
 import 'secure_key_store.dart';
@@ -72,16 +71,6 @@ class OllamaService {
   final Map<String, String> _cloudKeys = {};
   final Map<String, bool> _cloudConnected = {};
 
-  // ── On-device fields ──────────────────────────────────────────────────────
-
-  /// Which model in the downloadable catalogue is selected.
-  ///
-  /// Seeded with the conservative fallback rather than the recommendation,
-  /// because picking the recommendation requires reading device memory and that
-  /// is asynchronous. [loadSettings] replaces it with what this machine can
-  /// actually hold.
-  String _localModelId = LocalModelChoice.fallback().id;
-
   // ── Active provider ───────────────────────────────────────────────────────
 
   AiProvider _activeProvider = AiProvider.ollama;
@@ -89,8 +78,6 @@ class OllamaService {
   // ── Public getters ────────────────────────────────────────────────────────
 
   AiProvider get activeProvider => _activeProvider;
-
-  LocalModelChoice get localModel => LocalModelChoice.byId(_localModelId);
 
   /// The backend for the current selection, constructed fresh each time so a
   /// configuration edit takes effect without anything having to invalidate a
@@ -138,7 +125,6 @@ class OllamaService {
     ),
     AiProvider.appleIntelligence => const PlatformLlmBackend(),
     AiProvider.geminiNano => const GeminiNanoBackend(),
-    AiProvider.localModel => LocalModelBackend(choice: localModel),
     AiProvider.claude ||
     AiProvider.chatGpt ||
     AiProvider.gemini ||
@@ -246,12 +232,11 @@ class OllamaService {
   ///
   /// Null for Apple Intelligence and Gemini Nano: each ships exactly one model
   /// that the OS owns and does not name, so there is nothing for a model picker
-  /// to show. The downloadable backend does have a choice, so it reports one.
+  /// to show.
   String? get selectedModel => switch (_activeProvider) {
     AiProvider.ollama => _selectedModel,
     AiProvider.lmStudio => _lmStudioSelectedModel,
     AiProvider.maple => _mapleSelectedModel,
-    AiProvider.localModel => localModel.name,
     AiProvider.appleIntelligence || AiProvider.geminiNano => null,
     AiProvider.claude ||
     AiProvider.chatGpt ||
@@ -276,9 +261,7 @@ class OllamaService {
     AiProvider.ollama => _isConnected,
     AiProvider.lmStudio => _lmStudioConnected,
     AiProvider.maple => _mapleConnected,
-    AiProvider.appleIntelligence ||
-    AiProvider.geminiNano ||
-    AiProvider.localModel => _onDeviceReady,
+    AiProvider.appleIntelligence || AiProvider.geminiNano => _onDeviceReady,
     AiProvider.claude ||
     AiProvider.chatGpt ||
     AiProvider.gemini ||
@@ -306,9 +289,7 @@ class OllamaService {
       // There is no host to reach. Readiness is the OS's answer, re-asked on
       // every launch, so the tab must not wait on a probe that has not
       // returned — the AI screen reports an unavailable backend itself.
-      AiProvider.appleIntelligence ||
-      AiProvider.geminiNano ||
-      AiProvider.localModel => true,
+      AiProvider.appleIntelligence || AiProvider.geminiNano => true,
       // A key is all a hosted provider needs: no local server is involved, so
       // the tab belongs on a phone.
       AiProvider.claude ||
@@ -389,16 +370,26 @@ class OllamaService {
     await _migrateMapleKeyToKeychain(map);
 
     // Active provider
-    _activeProvider = AiProvider.fromKey(map[AppConstants.settingAiProvider]);
-
-    // Downloadable model. Only when the user has not chosen: an explicit pick
-    // is theirs to keep, including a smaller model than the device could
-    // manage. Otherwise the recommendation is made from what this machine can
-    // actually hold, so a capable Mac is pointed at a capable model without
-    // anyone having to discover the picker.
-    _localModelId =
-        map[AppConstants.settingLocalModelId] ??
-        (await LocalModelChoice.recommendedHere()).id;
+    var providerKey = map[AppConstants.settingAiProvider];
+    if (providerKey == AiProvider.removedLocalModelKey) {
+      // The downloadable-model backend is gone. Someone who chose it chose an
+      // on-device model, so they move to the platform's built-in one rather
+      // than falling back to Ollama — which on a phone means no AI tab at all
+      // — and certainly not to anything hosted. If it is unavailable, the
+      // status panel says why and what to do.
+      final replacement = replacementForRemovedLocalModel(
+        appleBridged: PlatformLlmBackend.bridgedHere,
+        androidBridged: GeminiNanoBackend.bridgedHere,
+      );
+      providerKey = replacement.key;
+      await _upsertSetting(AppConstants.settingAiProvider, providerKey);
+    }
+    _activeProvider = AiProvider.fromKey(providerKey);
+    if (map.containsKey(AppConstants.settingRemovedLocalModelId)) {
+      await (_db.delete(_db.appSettings)..where(
+        (t) => t.key.equals(AppConstants.settingRemovedLocalModelId),
+      )).go();
+    }
 
     // Availability is never read from disk — see [refreshOnDeviceReadiness].
     if (_activeProvider.isOnDevice) {
@@ -450,10 +441,15 @@ class OllamaService {
     return normalizeServerUrl(raw, defaultScheme: scheme) ?? raw.trim();
   }
 
-  /// Persist the downloadable-model choice.
-  Future<void> saveLocalModel(LocalModelChoice choice) async {
-    _localModelId = choice.id;
-    await _upsertSetting(AppConstants.settingLocalModelId, choice.id);
+  /// Where a stored choice of the removed downloadable-model backend moves to:
+  /// the platform's own on-device model, or Ollama where there is none.
+  static AiProvider replacementForRemovedLocalModel({
+    required bool appleBridged,
+    required bool androidBridged,
+  }) {
+    if (appleBridged) return AiProvider.appleIntelligence;
+    if (androidBridged) return AiProvider.geminiNano;
+    return AiProvider.ollama;
   }
 
   /// Persist Ollama settings (URL and/or model).
@@ -566,13 +562,6 @@ class OllamaService {
         await saveLmStudioSettings(model: model);
       case AiProvider.maple:
         await saveMapleSettings(model: model);
-      case AiProvider.localModel:
-        await saveLocalModel(
-          LocalModelChoice.catalogue.firstWhere(
-            (m) => m.name == model,
-            orElse: () => localModel,
-          ),
-        );
       case AiProvider.claude:
       case AiProvider.chatGpt:
       case AiProvider.gemini:
@@ -627,7 +616,6 @@ class OllamaService {
         );
       case AiProvider.appleIntelligence:
       case AiProvider.geminiNano:
-      case AiProvider.localModel:
         // Not persisted — the OS owns this answer and it can change between
         // launches without the app doing anything.
         _onDeviceReady = value;
@@ -665,7 +653,6 @@ class OllamaService {
     _mapleApiKey.isNotEmpty,
     for (final id in _cloudKeys.keys.toList()..sort())
       '$id:${_cloudKeys[id]!.isNotEmpty}',
-    _localModelId,
   ].join('|');
 
   // ── Connectivity ──────────────────────────────────────────────────────────
@@ -875,11 +862,9 @@ Top spending categories this month:
         );
       case AiProvider.appleIntelligence:
       case AiProvider.geminiNano:
-      case AiProvider.localModel:
-        // None of the on-device backends takes an image on the path this app
-        // uses: Apple's Foundation Models bridge here is text-only, ML Kit's
-        // Prompt API exposes multimodal input separately from the text stream,
-        // and the Qwen builds in the catalogue are text-only altogether.
+        // Neither on-device backend takes an image on the path this app uses:
+        // Apple's Foundation Models bridge here is text-only, and ML Kit's
+        // Prompt API exposes multimodal input separately from the text stream.
         //
         // Thrown rather than silently returning nothing, because the caller is
         // the receipt-photo import — a blank answer there looks like the model

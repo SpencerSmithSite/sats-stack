@@ -10,7 +10,7 @@ import '../services/inference/cloud_backend.dart';
 /// The values fall into three groups, which is how both Settings and onboarding
 /// present them:
 ///
-/// * **On device** — [appleIntelligence], [geminiNano], [localModel]. No URL and
+/// * **On device** — [appleIntelligence], [geminiNano]. No URL and
 ///   no user-supplied model name; availability is owned by the OS rather than by
 ///   whether a server is reachable, which is why the picker asks each backend
 ///   for its own status instead of pinging a host.
@@ -23,7 +23,6 @@ enum AiProvider {
   maple,
   appleIntelligence,
   geminiNano,
-  localModel,
   claude,
   chatGpt,
   gemini,
@@ -37,7 +36,6 @@ enum AiProvider {
     AiProvider.maple => 'maple',
     AiProvider.appleIntelligence => 'appleIntelligence',
     AiProvider.geminiNano => 'geminiNano',
-    AiProvider.localModel => 'localModel',
     AiProvider.claude => 'claude',
     AiProvider.chatGpt => 'chatGpt',
     AiProvider.gemini => 'gemini',
@@ -46,12 +44,15 @@ enum AiProvider {
 
   /// Falls back to Ollama for an unknown value — a backend removed in a later
   /// build, most likely — rather than throwing on a settings read.
+  ///
+  /// `'localModel'`, the downloadable-model backend removed on 2026-10-20, is
+  /// one such value; `OllamaService.loadSettings` moves it to the platform's
+  /// built-in on-device model before it gets here — see [removedLocalModelKey].
   static AiProvider fromKey(String? key) => switch (key) {
     'lmStudio' => AiProvider.lmStudio,
     'maple' => AiProvider.maple,
     'appleIntelligence' => AiProvider.appleIntelligence,
     'geminiNano' => AiProvider.geminiNano,
-    'localModel' => AiProvider.localModel,
     'claude' => AiProvider.claude,
     'chatGpt' => AiProvider.chatGpt,
     'gemini' => AiProvider.gemini,
@@ -62,11 +63,15 @@ enum AiProvider {
   /// Whether this backend runs entirely on the device, with no server to
   /// configure and no host to reach.
   bool get isOnDevice => switch (this) {
-    AiProvider.appleIntelligence ||
-    AiProvider.geminiNano ||
-    AiProvider.localModel => true,
+    AiProvider.appleIntelligence || AiProvider.geminiNano => true,
     _ => false,
   };
+
+  /// The persisted key of the downloadable-model backend, removed on
+  /// 2026-10-20 with the discontinued `flutter_gemma` package. Kept only so a
+  /// stored choice of it can be recognised and moved — see
+  /// `OllamaService.loadSettings`.
+  static const removedLocalModelKey = 'localModel';
 
   /// The hosted provider behind this choice, or null if there is none.
   ///
@@ -96,7 +101,6 @@ enum AiProvider {
     AiProvider.maple => 'Maple',
     AiProvider.appleIntelligence => 'Apple Intelligence',
     AiProvider.geminiNano => 'Gemini Nano',
-    AiProvider.localModel => 'Downloaded model',
     AiProvider.claude ||
     AiProvider.chatGpt ||
     AiProvider.gemini ||
@@ -118,7 +122,6 @@ enum AiProvider {
     AiProvider.maple => 'http://localhost:8080/v1',
     AiProvider.appleIntelligence ||
     AiProvider.geminiNano ||
-    AiProvider.localModel ||
     AiProvider.claude ||
     AiProvider.chatGpt ||
     AiProvider.gemini ||

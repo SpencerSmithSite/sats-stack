@@ -78,8 +78,8 @@ What leaves the device, and when:
 
 Pick one provider in Settings or during onboarding:
 
-- **On this device** — Apple Intelligence, Gemini Nano, or a downloadable
-  model. Nothing leaves the device.
+- **On this device** — Apple Intelligence or Gemini Nano, where the device
+  has one. Nothing leaves the device.
 - **Your own server** — [Ollama](https://ollama.com/) or LM Studio, on this
   machine or your network. A server on the internet is shown as such.
 - **Hosted, needs your API key** — Claude, ChatGPT, Gemini, Grok or Maple. Your
@@ -128,8 +128,8 @@ dart run build_runner build --delete-conflicting-outputs
 
 ### iOS note
 
-The minimum is iOS 16, set in `ios/Podfile` and the Xcode project; the
-on-device model package requires it. `pod install` needs a UTF-8 locale
+The minimum is iOS 15, set in `ios/Podfile` and the Xcode project — the
+lowest the current Xcode supports. `pod install` needs a UTF-8 locale
 (`LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8`).
 
 ## Project Structure

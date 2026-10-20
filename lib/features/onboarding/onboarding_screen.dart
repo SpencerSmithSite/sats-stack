@@ -144,11 +144,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         }
       case AiProvider.appleIntelligence:
       case AiProvider.geminiNano:
-      case AiProvider.localModel:
         // Nothing to persist beyond the provider choice itself, which
-        // `setActiveProvider` above already wrote. The downloadable model still
-        // has to be fetched — Settings is where that happens, since it needs
-        // progress and a size the onboarding flow has no room for.
+        // `setActiveProvider` above already wrote.
         break;
     }
     // One rule, owned by OllamaService: an on-device backend needs no server,
@@ -201,7 +198,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       _catalogue = AiBackendCatalogue(
         appleIntelligenceOffered: apple?.state.worthOffering ?? false,
         geminiNanoOffered: nano?.state.worthOffering ?? false,
-        downloadableOffered: AiBackendCatalogue.downloadableRunsHere,
       );
       if (!_aiProviderTouched) {
         _aiProvider = _catalogue.suggestedDefault;

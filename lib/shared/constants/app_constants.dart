@@ -63,13 +63,10 @@ abstract final class AppConstants {
   static String cloudConnectedKey(String providerId) =>
       'cloud_connected_$providerId';
 
-  // On-device model settings
-  //
-  // Only the downloadable backend needs one: which model in the Qwen catalogue
-  // the user chose. Apple Intelligence and Gemini Nano each ship exactly one
-  // model that the OS owns, so there is nothing to persist for them beyond the
-  // provider selection itself.
-  static const settingLocalModelId = 'local_model_id';
+  // Which model the removed downloadable-model backend had selected. Nothing
+  // writes it any more; `OllamaService.loadSettings` deletes it where an
+  // earlier build left it.
+  static const settingRemovedLocalModelId = 'local_model_id';
 
   /// How far a recurring series has been generated — a high-water mark.
   ///

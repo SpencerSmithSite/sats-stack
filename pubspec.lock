@@ -49,14 +49,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.12.0"
-  background_downloader:
-    dependency: transitive
-    description:
-      name: background_downloader
-      sha256: "2ea4d638b12690d58ba5f797453f9f9e322bc2848f1f38cfe67aa56ece1ad072"
-      url: "https://pub.dev"
-    source: hosted
-    version: "9.5.7"
   bech32:
     dependency: "direct main"
     description:
@@ -169,14 +161,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.1.2"
-  code_assets:
-    dependency: transitive
-    description:
-      name: code_assets
-      sha256: bf394f466ba9205f1812a0433b392d6af280f155f56651eda7c18cc32ed493b8
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.2.1"
   code_builder:
     dependency: transitive
     description:
@@ -371,22 +355,6 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
-  flutter_gemma:
-    dependency: "direct main"
-    description:
-      name: flutter_gemma
-      sha256: "096b92b364f68b9c0086bd9e4b507fb5205fcd2ababa9fea1af02a1ce66a0d26"
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.4.2"
-  flutter_gemma_litertlm:
-    dependency: "direct main"
-    description:
-      name: flutter_gemma_litertlm
-      sha256: "34f5d0e83d9aaa9077f43d41a0d4f2c2f92a7c93e7b44db3967a5342640f812b"
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.3.1"
   flutter_launcher_icons:
     dependency: "direct dev"
     description:
@@ -546,14 +514,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.2.0"
-  hooks:
-    dependency: transitive
-    description:
-      name: hooks
-      sha256: "9a62a50b50b769a737bc0a8ff381f333529df3ab746b2f6b02e83760231455ba"
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.0.2"
   html:
     dependency: transitive
     description:
@@ -695,14 +655,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.9.0"
-  large_file_handler:
-    dependency: transitive
-    description:
-      name: large_file_handler
-      sha256: "234eda71f32b6a772349299d0ed185a5f3e10c59235576fd178f4d720dd956ec"
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.5.0"
   leak_tracker:
     dependency: transitive
     description:
@@ -775,14 +727,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.0.0"
-  mutex:
-    dependency: transitive
-    description:
-      name: mutex
-      sha256: "8827da25de792088eb33e572115a5eb0d61d61a3c01acbc8bcbe76ed78f1a1f2"
-      url: "https://pub.dev"
-    source: hosted
-    version: "3.1.0"
   package_config:
     dependency: transitive
     description:
@@ -943,70 +887,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.1.0"
-  record_use:
-    dependency: transitive
-    description:
-      name: record_use
-      sha256: "2551bd8eecfe95d14ae75f6021ad0248be5c27f138c2ec12fcb52b500b3ba1ed"
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.6.0"
-  shared_preferences:
-    dependency: transitive
-    description:
-      name: shared_preferences
-      sha256: "6e8bf70b7fef813df4e9a36f658ac46d107db4b4cfe1048b477d4e453a8159f5"
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.5.3"
-  shared_preferences_android:
-    dependency: transitive
-    description:
-      name: shared_preferences_android
-      sha256: bd14436108211b0d4ee5038689a56d4ae3620fd72fd6036e113bf1345bc74d9e
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.4.13"
-  shared_preferences_foundation:
-    dependency: transitive
-    description:
-      name: shared_preferences_foundation
-      sha256: "6a52cfcdaeac77cad8c97b539ff688ccfc458c007b4db12be584fbe5c0e49e03"
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.5.4"
-  shared_preferences_linux:
-    dependency: transitive
-    description:
-      name: shared_preferences_linux
-      sha256: "580abfd40f415611503cae30adf626e6656dfb2f0cee8f465ece7b6defb40f2f"
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.4.1"
-  shared_preferences_platform_interface:
-    dependency: transitive
-    description:
-      name: shared_preferences_platform_interface
-      sha256: "57cbf196c486bc2cf1f02b85784932c6094376284b3ad5779d1b1c6c6a816b80"
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.4.1"
-  shared_preferences_web:
-    dependency: transitive
-    description:
-      name: shared_preferences_web
-      sha256: c49bd060261c9a3f0ff445892695d6212ff603ef3115edbb448509d407600019
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.4.3"
-  shared_preferences_windows:
-    dependency: transitive
-    description:
-      name: shared_preferences_windows
-      sha256: "94ef0f72b2d71bc3e700e025db3710911bd51a71cefb65cc609dd0d9a982e3c1"
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.4.1"
   shelf:
     dependency: transitive
     description:

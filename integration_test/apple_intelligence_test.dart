@@ -1,7 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
-import 'package:sats_stack/core/services/device_memory.dart';
-import 'package:sats_stack/core/services/device_storage.dart';
 import 'package:sats_stack/core/services/inference/platform_llm_backend.dart';
 
 /// Exercises the Apple Intelligence bridge against the real framework.
@@ -134,20 +132,5 @@ void main() {
           ]).join();
       expect(second.trim(), isNotEmpty);
     }, timeout: const Timeout(Duration(minutes: 2)));
-  });
-
-  group('Device probes', () {
-    test('memory reads a plausible figure', () async {
-      final mb = await DeviceMemory.totalMb();
-      // Null is permitted by design, but on macOS the sysctl path should work.
-      expect(mb, isNotNull);
-      expect(mb, greaterThan(1000));
-    });
-
-    test('free disk reads a plausible figure', () async {
-      final mb = await DeviceStorage.freeMb();
-      expect(mb, isNotNull);
-      expect(mb, greaterThanOrEqualTo(0));
-    });
   });
 }

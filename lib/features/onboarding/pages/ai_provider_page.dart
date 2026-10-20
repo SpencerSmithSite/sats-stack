@@ -52,13 +52,6 @@ class AiProviderPage extends StatelessWidget {
           'no account — your figures never leave the device.',
       icon: Icons.auto_awesome_outlined,
     ),
-    AiProvider.localModel => (
-      subtitle: 'Download once',
-      description:
-          'A small open model you download once, then run offline '
-          'anywhere. Sats Stack picks a size that fits this device.',
-      icon: Icons.download_outlined,
-    ),
     AiProvider.ollama => (
       subtitle: 'Self-hosted',
       description:
@@ -306,21 +299,15 @@ class ProviderCard extends StatelessWidget {
 }
 
 class NoteBanner extends StatelessWidget {
-  const NoteBanner({
-    super.key,
-    required this.isDark,
-    required this.isWarning,
-    required this.text,
-  });
+  const NoteBanner({super.key, required this.isDark, required this.text});
 
   final bool isDark;
-  final bool isWarning;
   final String text;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final color = isWarning ? const Color(0xFFF7931A) : const Color(0xFF6AC86A);
+    const color = Color(0xFF6AC86A);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -334,17 +321,13 @@ class NoteBanner extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            isWarning ? Icons.warning_amber_rounded : Icons.info_outline,
-            size: 15,
-            color: color,
-          ),
+          const Icon(Icons.info_outline, size: 15, color: color),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               text,
-              // Legible accent — this is also the warning state, which is the
-              // one the user most needs to be able to read.
+              // Legible accent: green on its own tint fails contrast in light
+              // mode otherwise.
               style: theme.textTheme.bodySmall?.copyWith(
                 color: context.legibleAccent(color),
                 height: 1.5,
@@ -406,7 +389,6 @@ class ProviderConfigSection extends StatelessWidget {
             const SizedBox(height: 10),
             NoteBanner(
               isDark: isDark,
-              isWarning: false,
               text:
                   'Defaults to ${cloud.defaultModel}. You can pick a '
                   'different model in Settings → Servers.',
@@ -417,26 +399,19 @@ class ProviderConfigSection extends StatelessWidget {
     }
 
     // The on-device backends have no server and no key. Rather than render an
-    // empty URL box that would be ignored, say what will happen instead — and
-    // for the downloadable model, say plainly that a download is still needed,
-    // since selecting it here is not the same as having it.
+    // empty URL box that would be ignored, say what will happen instead.
     if (provider.isOnDevice) {
       return Padding(
         padding: const EdgeInsets.only(top: 12),
         child: NoteBanner(
           isDark: isDark,
-          isWarning: provider == AiProvider.localModel,
           text: switch (provider) {
             AiProvider.appleIntelligence =>
               'Nothing to configure. Sats Stack will use the model already on '
                   'this device, and your figures never leave it.',
-            AiProvider.geminiNano =>
+            _ =>
               'Nothing to configure. Sats Stack will use the model built into '
                   'this phone, and your figures never leave it.',
-            _ =>
-              'You will need to download a model before this works. Sats '
-                  'Stack will offer one sized to this device in Settings → '
-                  'Servers.',
           },
         ),
       );

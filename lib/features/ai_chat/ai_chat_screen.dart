@@ -289,7 +289,6 @@ class _AiChatScreenState extends State<AiChatScreen> {
       // ignored — or, worse, one they could mistype and send their finances to.
       AiProvider.appleIntelligence ||
       AiProvider.geminiNano ||
-      AiProvider.localModel ||
       AiProvider.claude ||
       AiProvider.chatGpt ||
       AiProvider.gemini ||
@@ -331,9 +330,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
                   );
                 case AiProvider.appleIntelligence:
                 case AiProvider.geminiNano:
-                case AiProvider.localModel:
-                  // Nothing to save: no URL, and the model is either fixed by the
-                  // OS or chosen in Settings, not here.
+                  // Nothing to save: no URL, and the OS owns the model.
                   break;
               }
               if (mounted) setState(() {});

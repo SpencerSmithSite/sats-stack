@@ -1,7 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
-import 'package:sats_stack/core/services/device_memory.dart';
-import 'package:sats_stack/core/services/device_storage.dart';
 import 'package:sats_stack/core/services/inference/gemini_nano_backend.dart';
 
 /// Exercises the Gemini Nano bridge against the real ML Kit GenAI API.
@@ -88,24 +86,5 @@ void main() {
         );
       }
     }, timeout: const Timeout(Duration(minutes: 3)));
-  });
-
-  group('Android device probes', () {
-    // DeviceBridge.kt has no other coverage — these are the only things that
-    // run its two methods.
-    test('memory reads a plausible figure via ActivityManager', () async {
-      final mb = await DeviceMemory.totalMb();
-      expect(mb, isNotNull, reason: 'the device channel returned nothing');
-      expect(mb, greaterThan(500));
-      // The OS reports materially less than the advertised figure; the model
-      // catalogue's thresholds are set against this number, not marketing.
-      expect(mb, lessThan(1024 * 1024));
-    });
-
-    test('free disk reads a plausible figure via StatFs', () async {
-      final mb = await DeviceStorage.freeMb();
-      expect(mb, isNotNull, reason: 'the device channel returned nothing');
-      expect(mb, greaterThanOrEqualTo(0));
-    });
   });
 }

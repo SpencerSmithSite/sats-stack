@@ -1,9 +1,8 @@
-import '../services/inference/local_model_backend.dart';
 import 'ai_provider.dart';
 
 /// How the backends are grouped for the user.
 ///
-/// Ten options is too many to present as one flat list, and the differences
+/// Nine options is too many to present as one flat list, and the differences
 /// that matter to someone choosing are not technical — they are "do I need to
 /// set anything up?" and "does my money data leave this device?". The groups
 /// answer both before the user reads a single provider name.
@@ -36,7 +35,6 @@ class AiBackendCatalogue {
   const AiBackendCatalogue({
     required this.appleIntelligenceOffered,
     required this.geminiNanoOffered,
-    required this.downloadableOffered,
     this.keepSelected,
   });
 
@@ -47,7 +45,6 @@ class AiBackendCatalogue {
     : this(
         appleIntelligenceOffered: false,
         geminiNanoOffered: false,
-        downloadableOffered: false,
         keepSelected: keepSelected,
       );
 
@@ -56,9 +53,6 @@ class AiBackendCatalogue {
   /// iOS 26 qualifies while an iPhone 14 on a newer iOS does not.
   final bool appleIntelligenceOffered;
   final bool geminiNanoOffered;
-
-  /// Whether the downloadable-model engine runs on this platform at all.
-  final bool downloadableOffered;
 
   /// A backend that stays listed even if it has since become unavailable.
   ///
@@ -71,7 +65,6 @@ class AiBackendCatalogue {
   bool _offered(AiProvider p) => switch (p) {
     AiProvider.appleIntelligence => appleIntelligenceOffered,
     AiProvider.geminiNano => geminiNanoOffered,
-    AiProvider.localModel => downloadableOffered,
     // Everything else depends on something the user sets up — a server, a
     // key — rather than on the hardware, so it is always offered.
     _ => true,
@@ -82,7 +75,6 @@ class AiBackendCatalogue {
       AiBackendGroup.onDevice => const [
         AiProvider.appleIntelligence,
         AiProvider.geminiNano,
-        AiProvider.localModel,
       ],
       AiBackendGroup.ownServer => const [
         AiProvider.ollama,
@@ -126,13 +118,4 @@ class AiBackendCatalogue {
   /// True when the device can answer questions with nothing installed and no
   /// key — the case onboarding leads with.
   bool get hasZeroConfigOption => appleIntelligenceOffered || geminiNanoOffered;
-
-  /// Whether the downloadable engine runs on this platform.
-  ///
-  /// A separate probe from the two platform models, and deliberately not
-  /// suppressed by them: having Apple Intelligence is a reason to *default* to
-  /// it, not a reason to withhold the alternative. The built-in model is a
-  /// fixed, modest one, and someone on a Mac with plenty of memory may well
-  /// prefer a larger model they choose themselves.
-  static bool get downloadableRunsHere => LocalModelChoice.runsHere;
 }

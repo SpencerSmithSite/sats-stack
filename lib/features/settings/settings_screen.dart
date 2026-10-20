@@ -177,12 +177,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         if (mounted) setState(() => _cloudModels[p.id] = models);
       case AiProvider.appleIntelligence:
       case AiProvider.geminiNano:
-      case AiProvider.localModel:
         // No model list to fetch: Apple and Google each ship one model the OS
-        // owns, and the downloadable catalogue is a fixed list rendered by
-        // `_LocalModelSection` rather than something queried from a server.
-        // Ask instead whether the backend can answer, which is the equivalent
-        // question for these.
+        // owns. Ask instead whether the backend can answer, which is the
+        // equivalent question for these.
         await app.ollamaService.refreshOnDeviceReadiness();
         if (mounted) setState(() {});
     }
@@ -1367,8 +1364,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 if (_selectedProvider == AiProvider.geminiNano &&
                     !(_onDeviceStatus?.available ?? true))
                   GeminiNanoDownloadSection(onFinished: _refreshOnDeviceStatus),
-                if (_selectedProvider == AiProvider.localModel)
-                  LocalModelSection(onChanged: _refreshOnDeviceStatus),
                 const ImportConsentSection(),
 
                 const Divider(indent: 16, endIndent: 16),
@@ -1665,7 +1660,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   AiBackendCatalogue get _catalogue => AiBackendCatalogue(
     appleIntelligenceOffered: _appleLlm?.state.worthOffering ?? false,
     geminiNanoOffered: _nano?.state.worthOffering ?? false,
-    downloadableOffered: AiBackendCatalogue.downloadableRunsHere,
     keepSelected: _selectedProvider,
   );
 
@@ -1734,8 +1728,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         'The model already on this Mac or iPhone. No download, no key.',
       AiProvider.geminiNano =>
         'The model built into this phone, run by Android. No key.',
-      AiProvider.localModel =>
-        'A small open model you download once, then run offline anywhere.',
       AiProvider.claude ||
       AiProvider.chatGpt ||
       AiProvider.gemini ||

@@ -41,7 +41,6 @@ void main() {
         AiProvider.lmStudio,
         AiProvider.appleIntelligence,
         AiProvider.geminiNano,
-        AiProvider.localModel,
       ]) {
         expect(p.isPrivate, isTrue, reason: '${p.label} keeps data on device');
       }
@@ -772,7 +771,6 @@ void main() {
     const bare = AiBackendCatalogue(
       appleIntelligenceOffered: false,
       geminiNanoOffered: false,
-      downloadableOffered: false,
     );
 
     test('hosted and self-hosted backends are always offered', () {
@@ -800,7 +798,6 @@ void main() {
       const withApple = AiBackendCatalogue(
         appleIntelligenceOffered: true,
         geminiNanoOffered: false,
-        downloadableOffered: false,
       );
       expect(withApple.providersIn(AiBackendGroup.onDevice), [
         AiProvider.appleIntelligence,
@@ -813,7 +810,6 @@ void main() {
       const stale = AiBackendCatalogue(
         appleIntelligenceOffered: false,
         geminiNanoOffered: false,
-        downloadableOffered: false,
         keepSelected: AiProvider.appleIntelligence,
       );
       expect(
@@ -826,7 +822,6 @@ void main() {
       const withApple = AiBackendCatalogue(
         appleIntelligenceOffered: true,
         geminiNanoOffered: false,
-        downloadableOffered: false,
       );
       expect(withApple.nonEmptyGroups.first, AiBackendGroup.onDevice);
     });
@@ -835,12 +830,10 @@ void main() {
       const withApple = AiBackendCatalogue(
         appleIntelligenceOffered: true,
         geminiNanoOffered: false,
-        downloadableOffered: false,
       );
       const withNano = AiBackendCatalogue(
         appleIntelligenceOffered: false,
         geminiNanoOffered: true,
-        downloadableOffered: false,
       );
       expect(withApple.suggestedDefault, AiProvider.appleIntelligence);
       expect(withNano.suggestedDefault, AiProvider.geminiNano);
@@ -858,12 +851,10 @@ void main() {
         const AiBackendCatalogue(
           appleIntelligenceOffered: true,
           geminiNanoOffered: false,
-          downloadableOffered: true,
         ),
         const AiBackendCatalogue(
           appleIntelligenceOffered: false,
           geminiNanoOffered: true,
-          downloadableOffered: true,
         ),
       ]) {
         expect(c.suggestedDefault.needsApiKey, isFalse);
@@ -875,7 +866,6 @@ void main() {
       const full = AiBackendCatalogue(
         appleIntelligenceOffered: true,
         geminiNanoOffered: true,
-        downloadableOffered: true,
       );
       expect(full.all.toSet(), AiProvider.values.toSet());
       expect(full.all.length, AiProvider.values.length);
