@@ -109,7 +109,7 @@ dev_dependencies:
   # `flutter test` has no engine, so a MethodChannel there always returns null.
   integration_test:
     sdk: flutter
-  flutter_lints: ^5.0.0
+  flutter_lints: ^6.0.0
   drift_dev: ^2.23.0
   build_runner: ^2.4.14
   flutter_launcher_icons: ^0.14.3

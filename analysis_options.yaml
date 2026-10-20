@@ -1,12 +1,10 @@
-# This file configures the analyzer, which statically analyzes Dart code to
-# check for errors, warnings, and lints.
+# Analyzer and lint configuration.
 #
-# The issues identified by the analyzer are surfaced in the UI of Dart-enabled
-# IDEs (https://dart.dev/tools#ides-and-editors). The analyzer can also be
-# invoked from the command line by running `flutter analyze`.
+# CI runs a bare `flutter analyze`, which fails on any issue including infos,
+# so every rule here is held at zero. A rule belongs here when it catches a
+# bug class this codebase has actually had, or keeps a convention it already
+# follows from regressing.
 
-# The following line activates a set of recommended lints for Flutter apps,
-# packages, and plugins designed to encourage good coding practices.
 analyzer:
   exclude:
     - build/**
@@ -18,19 +16,35 @@ analyzer:
 include: package:flutter_lints/flutter.yaml
 
 linter:
-  # The lint rules applied to this project can be customized in the
-  # section below to disable rules from the `package:flutter_lints/flutter.yaml`
-  # included above or to enable additional rules. A list of all available lints
-  # and their documentation is published at https://dart.dev/lints.
-  #
-  # Instead of disabling a lint rule for the entire project in the
-  # section below, it can also be suppressed for a single line of code
-  # or a specific dart file by using the `// ignore: name_of_lint` and
-  # `// ignore_for_file: name_of_lint` syntax on the line or in the file
-  # producing the lint.
   rules:
-    # avoid_print: false  # Uncomment to disable the `avoid_print` rule
-    # prefer_single_quotes: true  # Uncomment to enable the `prefer_single_quotes` rule
+    # Bug classes this codebase has had.
+    #
+    # A future dropped on the floor: errors vanish and ordering is lost — the
+    # import consent write and the insight generation both had this shape.
+    unawaited_futures: true
+    # A subscription or controller nobody closes keeps its stream, and with a
+    # Drift stream a live query, running after the screen has gone.
+    cancel_subscriptions: true
+    close_sinks: true
+    # An `async` function returning void cannot be awaited, so its errors are
+    # unhandled and a caller cannot know when it has finished.
+    avoid_void_async: true
+    # Throwing a String loses the type a caller would catch on.
+    only_throw_errors: true
 
-# Additional information about this file can be found at
-# https://dart.dev/guides/language/analysis-options
+    # Conventions the code already follows everywhere.
+    prefer_single_quotes: true
+    always_declare_return_types: true
+    use_super_parameters: true
+    prefer_final_locals: true
+    directives_ordering: true
+
+    # Considered and not enabled:
+    #
+    # require_trailing_commas — the formatter manages trailing commas itself
+    #   from language version 3.7 (the "tall" style), so the two would fight.
+    # avoid_dynamic_calls — 43 sites, nearly all JSON decoding; worth doing as
+    #   typed parsing rather than as 43 casts to silence it. Tracked in TODO.md.
+    # discarded_futures — 47 sites, mostly fire-and-forget calls from
+    #   synchronous callbacks; `unawaited_futures` covers the async case that
+    #   matters, and `unawaited(...)` marks the rest where it is deliberate.

@@ -2,14 +2,16 @@
 /// select the range.
 library;
 
+import 'dart:math';
+
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+
 import '../../../shared/theme/app_colors.dart';
 import '../../../shared/utils/sat_converter.dart';
 import 'period_chip.dart';
 import 'stack_period.dart';
-import 'dart:math';
 
 class HistoryChartCard extends StatelessWidget {
   const HistoryChartCard({

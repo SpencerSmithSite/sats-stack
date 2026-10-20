@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../core/database/database.dart';
 import '../../../core/services/category_service.dart';
 import '../../../shared/theme/app_colors.dart';
-import '../../../shared/widgets/tappable.dart';
 import '../../../shared/utils/colour_names.dart';
+import '../../../shared/widgets/tappable.dart';
 
 // ── Public entry point ─────────────────────────────────────────────────────────
 
@@ -187,7 +187,7 @@ class _CategoryTile extends StatelessWidget {
       if (counts.budgets > 0) {
         parts.add('${counts.budgets} budget${counts.budgets == 1 ? '' : 's'}');
       }
-      showDialog(
+      await showDialog<void>(
         context: context,
         builder:
             (ctx) => AlertDialog(

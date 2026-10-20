@@ -1,17 +1,18 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+
 import '../../core/models/budget_progress.dart';
+import '../../main.dart' as app;
 import '../../shared/theme/app_colors.dart';
 import '../../shared/theme/app_text_styles.dart';
 import '../../shared/utils/currency_utils.dart';
+import '../../shared/utils/month_cursor.dart';
 import '../../shared/widgets/btc_price_chip.dart';
 import '../../shared/widgets/empty_state.dart';
+import '../../shared/widgets/month_selector.dart';
 import 'widgets/budget_card.dart';
 import 'widgets/set_budget_sheet.dart';
-import '../../main.dart' as app;
-import '../../shared/utils/month_cursor.dart';
-import '../../shared/widgets/month_selector.dart';
 
 class BudgetsScreen extends StatefulWidget {
   const BudgetsScreen({super.key});
@@ -97,7 +98,7 @@ class _BudgetsScreenState extends State<BudgetsScreen> {
     );
   }
 
-  void _deleteBudget(int id) async {
+  Future<void> _deleteBudget(int id) async {
     await app.budgetService.deleteById(id);
   }
 

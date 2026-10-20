@@ -3,11 +3,12 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+
 import '../../../shared/theme/app_colors.dart';
+import '../../../shared/theme/app_text_styles.dart';
 import '../../../shared/utils/currency_utils.dart';
 import '../../../shared/utils/sat_converter.dart';
-import '../../../shared/theme/app_text_styles.dart';
-import 'package:intl/intl.dart';
 
 class StackHero extends StatelessWidget {
   const StackHero({

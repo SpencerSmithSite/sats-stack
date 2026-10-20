@@ -3,12 +3,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+
 import '../../core/models/ai_provider.dart';
+import '../../main.dart' as app;
 import '../../shared/constants/app_constants.dart';
 import '../../shared/theme/app_colors.dart';
 import '../../shared/theme/app_text_styles.dart';
 import '../../shared/utils/platform_utils.dart';
-import '../../main.dart' as app;
 import '../../shared/widgets/tappable.dart';
 
 // ── Message model ─────────────────────────────────────────────────────────────
@@ -694,7 +695,7 @@ class _CursorState extends State<_Cursor> with SingleTickerProviderStateMixin {
     return AnimatedBuilder(
       animation: _ctrl,
       builder:
-          (_, __) => Container(
+          (_, _) => Container(
             width: 2,
             height: 14,
             color:

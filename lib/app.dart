@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import 'features/dashboard/dashboard_screen.dart';
-import 'features/transactions/transactions_screen.dart';
-import 'features/budgets/budgets_screen.dart';
-import 'features/stack/stack_screen.dart';
 import 'features/ai_chat/ai_chat_screen.dart';
-import 'features/settings/settings_screen.dart';
-import 'features/onboarding/onboarding_screen.dart';
 import 'features/analytics/analytics_screen.dart';
-import 'screens/import/import_file_screen.dart';
+import 'features/budgets/budgets_screen.dart';
+import 'features/dashboard/dashboard_screen.dart';
+import 'features/onboarding/onboarding_screen.dart';
+import 'features/settings/settings_screen.dart';
+import 'features/stack/stack_screen.dart';
+import 'features/transactions/transactions_screen.dart';
 import 'main.dart' as app;
+import 'screens/import/import_file_screen.dart';
 import 'shared/theme/app_theme.dart';
 
 class SatsStackApp extends StatelessWidget {

@@ -2,23 +2,24 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../core/database/database.dart';
 import '../../core/models/dashboard_data.dart';
 import '../../core/models/wallet_summary.dart';
-import '../../shared/theme/app_colors.dart';
-import '../../shared/widgets/btc_price_chip.dart';
 import '../../features/transactions/widgets/transaction_list_item.dart';
+import '../../main.dart' as app;
+import '../../shared/theme/app_colors.dart';
 import '../../shared/utils/currency_utils.dart';
+import '../../shared/utils/month_cursor.dart';
+import '../../shared/utils/sat_converter.dart';
+import '../../shared/widgets/btc_price_chip.dart';
+import '../../shared/widgets/month_selector.dart';
+import '../../shared/widgets/shrink_to_fit.dart';
+import '../../shared/widgets/tappable.dart';
+import 'widgets/ai_insight_card.dart';
 import 'widgets/hero_card.dart';
 import 'widgets/metric_tile.dart';
 import 'widgets/spending_chart.dart';
-import 'widgets/ai_insight_card.dart';
-import '../../main.dart' as app;
-import '../../shared/utils/sat_converter.dart';
-import '../../shared/utils/month_cursor.dart';
-import '../../shared/widgets/month_selector.dart';
-import '../../shared/widgets/tappable.dart';
-import '../../shared/widgets/shrink_to_fit.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -108,7 +109,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (mounted) setState(() {});
     if (offDevice) return;
     final stale = await app.ollamaService.isInsightStale();
-    if (stale) _generateInsight(userAsked: false);
+    // Not awaited: the card shows the cached insight meanwhile, and the
+    // generator handles its own failures.
+    if (stale) unawaited(_generateInsight(userAsked: false));
   }
 
   /// Generates on an explicit tap. For a hosted provider this is the only way
@@ -555,7 +558,7 @@ class _DashboardContent extends StatelessWidget {
         ValueListenableBuilder<bool>(
           valueListenable: app.aiEnabledNotifier,
           builder:
-              (_, aiEnabled, __) => AiInsightCard(
+              (_, aiEnabled, _) => AiInsightCard(
                 aiEnabled: aiEnabled,
                 cachedInsight: cachedInsight,
                 isGenerating: isGeneratingInsight,

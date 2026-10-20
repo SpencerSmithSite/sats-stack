@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../main.dart' as app;
+import '../../core/database/database.dart';
 import '../../core/models/ai_backend_group.dart';
 import '../../core/models/ai_provider.dart';
 import '../../core/services/inference/cloud_backend.dart';
 import '../../core/services/inference/gemini_nano_backend.dart';
 import '../../core/services/inference/platform_llm_backend.dart';
+import '../../main.dart' as app;
 import '../../shared/constants/app_constants.dart';
-import '../../core/database/database.dart';
 import 'pages/ai_provider_page.dart';
 import 'pages/bitcoin_server_page.dart';
 import 'pages/currency_page.dart';

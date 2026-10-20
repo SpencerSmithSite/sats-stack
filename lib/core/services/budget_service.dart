@@ -1,11 +1,13 @@
 import 'dart:async';
+
 // Comparison operators on columns (`isBiggerOrEqualValue`) come from drift
 // extensions, which a `show` clause would hide.
 import 'package:drift/drift.dart';
+
+import '../../shared/utils/date_range.dart';
 import '../database/database.dart';
 import '../models/budget_progress.dart';
 import '../models/fx_rates.dart';
-import '../../shared/utils/date_range.dart';
 import 'notification_service.dart';
 
 class BudgetService {

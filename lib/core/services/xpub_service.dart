@@ -3,17 +3,17 @@ import 'dart:convert';
 import 'package:bech32/bech32.dart';
 import 'package:bs58check/bs58check.dart' as bs58check;
 import 'package:crypto/crypto.dart';
-import 'package:flutter/foundation.dart';
 import 'package:drift/drift.dart' show InsertMode, Value;
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:pointycastle/digests/ripemd160.dart';
 import 'package:pointycastle/ecc/curves/secp256k1.dart';
 
-import '../database/database.dart';
-import '../services/btc_price_service.dart';
 import '../../shared/constants/app_constants.dart';
 import '../../shared/utils/hash_utils.dart';
 import '../../shared/utils/url_utils.dart';
+import '../database/database.dart';
+import '../services/btc_price_service.dart';
 
 // ── Public types ─────────────────────────────────────────────────────────────
 
@@ -771,7 +771,7 @@ class XpubService {
     // a single change rather than one per row.
     final wanted = {for (final r in rows) r.dedupHash};
     var imported = 0;
-    var skipped = rows.length - newRows.length;
+    final skipped = rows.length - newRows.length;
     var removed = 0;
 
     await _db.transaction(() async {

@@ -1,9 +1,11 @@
 import 'dart:convert';
+
 import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import '../database/database.dart';
+
 import '../../shared/constants/app_constants.dart';
+import '../database/database.dart';
 
 class BtcPriceService {
   /// [clock] is for tests that need "today" to be a known date.

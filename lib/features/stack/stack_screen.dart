@@ -4,10 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/database/database.dart';
+import '../../main.dart' as app;
 import '../../shared/constants/app_constants.dart';
 import '../../shared/widgets/btc_price_chip.dart';
 import '../../shared/widgets/empty_state.dart';
-import '../../main.dart' as app;
 import 'widgets/dca_simulator.dart';
 import 'widgets/stack_goal_card.dart';
 import 'widgets/stack_hero.dart';

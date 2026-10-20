@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
-import '../../../core/services/xpub_service.dart';
-import '../../../core/services/wallet_service.dart';
+
 import '../../../core/services/btc_price_service.dart';
+import '../../../core/services/wallet_service.dart';
+import '../../../core/services/xpub_service.dart';
 import '../../../shared/constants/app_constants.dart';
 import '../../../shared/theme/app_colors.dart';
-import '../../../shared/widgets/tappable.dart';
 import '../../../shared/utils/colour_names.dart';
+import '../../../shared/widgets/tappable.dart';
 
 class AddWalletSheet extends StatefulWidget {
   const AddWalletSheet({
@@ -234,7 +235,7 @@ class _FormBody extends StatelessWidget {
             // Format hint
             ListenableBuilder(
               listenable: xpubController,
-              builder: (_, __) {
+              builder: (_, _) {
                 final text = xpubController.text.trim();
                 if (text.isEmpty) return const SizedBox.shrink();
                 String hint;

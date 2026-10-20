@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+
+import '../../core/services/btc_price_service.dart';
+import '../../main.dart' as app;
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import '../utils/currency_utils.dart';
 import 'tappable.dart';
-import '../../core/services/btc_price_service.dart';
-import '../../main.dart' as app;
 
 /// A compact chip showing the current BTC/USD price with a last-updated
 /// timestamp. Tapping triggers a manual refresh.

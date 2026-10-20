@@ -4,8 +4,8 @@ import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 
-import '../database/database.dart';
 import '../../shared/constants/app_constants.dart';
+import '../database/database.dart';
 
 /// Lightweight Electrum JSON-RPC client (electrs / Fulcrum).
 ///
@@ -125,6 +125,8 @@ class ElectrumService {
 
   /// Opens a new TCP/SSL connection and performs the Electrum version handshake.
   Future<ElectrumSession> openSession() async {
+    // Closed by the session it is handed to, which the lint cannot follow.
+    // ignore: close_sinks
     final Socket socket;
     if (_ssl) {
       socket = await SecureSocket.connect(
@@ -148,9 +150,17 @@ class ElectrumService {
         timeout: const Duration(seconds: 10),
       );
     }
+    // The session owns the socket from here, and closes it in
+    // [ElectrumSession.close] — which a failed handshake used to skip, leaking
+    // the socket and its listener on every server that refused the version.
     final session = ElectrumSession._(socket);
-    // Handshake — negotiate protocol version
-    await session.call('server.version', ['SatsStack/1.0', '1.4']);
+    try {
+      // Handshake — negotiate protocol version
+      await session.call('server.version', ['SatsStack/1.0', '1.4']);
+    } catch (_) {
+      session.close();
+      rethrow;
+    }
     return session;
   }
 

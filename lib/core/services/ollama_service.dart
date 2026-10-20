@@ -1,16 +1,15 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart' show ValueNotifier;
-
 import 'package:drift/drift.dart' show OrderingTerm;
+import 'package:flutter/foundation.dart' show ValueNotifier;
 import 'package:http/http.dart' as http;
 
-import '../database/database.dart';
-import '../models/ai_provider.dart';
 import '../../shared/constants/app_constants.dart';
 import '../../shared/utils/platform_utils.dart';
 import '../../shared/utils/url_utils.dart';
+import '../database/database.dart';
+import '../models/ai_provider.dart';
 import 'inference/cloud_backend.dart';
 import 'inference/gemini_nano_backend.dart';
 import 'inference/inference_backend.dart';

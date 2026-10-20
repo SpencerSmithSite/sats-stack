@@ -6,20 +6,20 @@ import 'dart:ui' as ui;
 
 import 'package:crypto/crypto.dart';
 import 'package:csv/csv.dart';
-import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:drift/drift.dart'
     show DoUpdate, InsertMode, OrderingTerm, Value;
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:http/http.dart' as http;
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 
+import '../../data/institution_profiles.dart';
+import '../../shared/constants/app_constants.dart';
+import '../../shared/utils/hash_utils.dart';
 import '../database/database.dart';
 import '../models/ai_provider.dart';
 import 'btc_price_service.dart';
 import 'inference/inference_backend.dart';
 import 'ollama_service.dart';
-import '../../data/institution_profiles.dart';
-import '../../shared/constants/app_constants.dart';
-import '../../shared/utils/hash_utils.dart';
 
 /// Thrown when [ImportService.cancelImport] is called during an active import.
 class ImportCancelledException implements Exception {

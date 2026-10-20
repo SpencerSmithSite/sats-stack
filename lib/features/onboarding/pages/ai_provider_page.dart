@@ -3,10 +3,11 @@
 library;
 
 import 'package:flutter/material.dart';
-import '../../../shared/theme/app_colors.dart';
+
 import '../../../core/models/ai_backend_group.dart';
 import '../../../core/models/ai_provider.dart';
 import '../../../shared/constants/app_constants.dart';
+import '../../../shared/theme/app_colors.dart';
 import '../../../shared/utils/platform_utils.dart';
 import '../../../shared/widgets/ai_privacy_disclosure.dart';
 import '../../../shared/widgets/tappable.dart';

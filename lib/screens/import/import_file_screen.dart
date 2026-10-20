@@ -219,7 +219,7 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
                       padding: const EdgeInsets.all(16),
                       sliver: SliverList.separated(
                         itemCount: sources.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 10),
+                        separatorBuilder: (_, _) => const SizedBox(height: 10),
                         itemBuilder:
                             (context, i) => _SourceCard(
                               source: sources[i],
@@ -562,7 +562,7 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
     if (!OllamaService.looksLikeVisionModel(model)) {
       final action = await _showVisionWarningDialog(model ?? 'unknown');
       if (action == 'settings') {
-        if (mounted) context.push('/settings');
+        if (mounted) unawaited(context.push('/settings'));
         return;
       }
       if (action != 'continue') return;

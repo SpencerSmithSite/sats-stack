@@ -3,8 +3,8 @@ import 'package:sats_stack/core/models/ai_provider.dart';
 import 'package:sats_stack/core/services/device_memory.dart';
 import 'package:sats_stack/core/services/inference/gemini_nano_backend.dart';
 import 'package:sats_stack/core/services/inference/inference_backend.dart';
-import 'package:sats_stack/core/services/inference/platform_llm_backend.dart';
 import 'package:sats_stack/core/services/inference/local_model_backend.dart';
+import 'package:sats_stack/core/services/inference/platform_llm_backend.dart';
 import 'package:sats_stack/core/services/ollama_service.dart';
 
 void main() {

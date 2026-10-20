@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/device_storage.dart';
 import '../../../core/services/inference/gemini_nano_backend.dart';
 import '../../../core/services/inference/local_model_backend.dart';
-import '../../../core/services/device_storage.dart';
 import '../../../main.dart' as app;
 import '../../../shared/theme/app_colors.dart';
 

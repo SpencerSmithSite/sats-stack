@@ -2,10 +2,10 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
-import '../database/database.dart';
 import '../../shared/constants/app_constants.dart';
-import 'secure_key_store.dart';
 import '../../shared/utils/sat_converter.dart';
+import '../database/database.dart';
+import 'secure_key_store.dart';
 
 /// Bitcoin Core / Knots JSON-RPC client.
 ///

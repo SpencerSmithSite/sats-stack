@@ -1,18 +1,18 @@
 import 'dart:io';
 
-import 'package:fl_chart/fl_chart.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/models/analytics_data.dart';
-import '../../shared/theme/app_colors.dart';
-import '../../shared/theme/category_palette.dart';
-import '../../shared/theme/app_text_styles.dart';
-import '../../shared/utils/currency_utils.dart';
-import '../../shared/widgets/empty_state.dart';
 import '../../main.dart' as app;
+import '../../shared/theme/app_colors.dart';
+import '../../shared/theme/app_text_styles.dart';
+import '../../shared/theme/category_palette.dart';
+import '../../shared/utils/currency_utils.dart';
 import '../../shared/utils/month_cursor.dart';
+import '../../shared/widgets/empty_state.dart';
 import '../../shared/widgets/month_selector.dart';
 import '../../shared/widgets/tappable.dart';
 

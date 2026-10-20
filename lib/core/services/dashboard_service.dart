@@ -1,14 +1,14 @@
 import 'package:drift/drift.dart' show ResultSetImplementation;
 import 'package:intl/intl.dart';
 
+import '../../shared/constants/app_constants.dart';
+import '../../shared/utils/currency_utils.dart';
+import '../../shared/utils/date_range.dart';
 import '../database/database.dart';
 import '../models/analytics_data.dart';
 import '../models/dashboard_data.dart';
 import '../models/fx_rates.dart';
 import '../models/wallet_summary.dart';
-import '../../shared/constants/app_constants.dart';
-import '../../shared/utils/currency_utils.dart';
-import '../../shared/utils/date_range.dart';
 
 class DashboardService {
   /// [rates] supplies the display currency and today's BTC prices. Read at

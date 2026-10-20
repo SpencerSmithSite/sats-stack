@@ -7,18 +7,17 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../shared/constants/app_constants.dart';
 import '../../shared/utils/hash_utils.dart';
-
-import 'tables/wallets_table.dart';
-import 'tables/transactions_table.dart';
-import 'tables/categories_table.dart';
-import 'tables/budgets_table.dart';
-import 'tables/settings_table.dart';
+import 'tables/ai_conversations_table.dart';
 import 'tables/btc_price_cache_table.dart';
 import 'tables/btc_price_history_table.dart';
-import 'tables/ai_conversations_table.dart';
+import 'tables/budgets_table.dart';
+import 'tables/categories_table.dart';
+import 'tables/description_category_mappings_table.dart';
 import 'tables/import_sources_table.dart';
 import 'tables/import_transactions_table.dart';
-import 'tables/description_category_mappings_table.dart';
+import 'tables/settings_table.dart';
+import 'tables/transactions_table.dart';
+import 'tables/wallets_table.dart';
 
 part 'database.g.dart';
 

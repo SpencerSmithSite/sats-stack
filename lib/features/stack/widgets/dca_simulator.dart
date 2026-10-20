@@ -1,15 +1,17 @@
 /// The DCA simulator: what a fixed recurring buy would have accumulated.
 library;
 
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
+
 import '../../../shared/theme/app_colors.dart';
+import '../../../shared/theme/app_text_styles.dart';
 import '../../../shared/utils/currency_utils.dart';
 import '../../../shared/utils/sat_converter.dart';
 import 'period_chip.dart';
-import '../../../shared/theme/app_text_styles.dart';
-import 'package:intl/intl.dart';
-import 'dart:math';
 
 class DcaSimulator extends StatelessWidget {
   const DcaSimulator({

@@ -4,8 +4,8 @@ import 'package:intl/intl.dart';
 
 import '../../../core/database/database.dart';
 import '../../../core/services/import_service.dart';
-import '../../../shared/theme/app_colors.dart';
 import '../../../main.dart' as app;
+import '../../../shared/theme/app_colors.dart';
 
 /// A bottom sheet for editing a transaction.
 ///

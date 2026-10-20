@@ -3,9 +3,10 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
-import '../database/database.dart';
+
 import '../../shared/constants/app_constants.dart';
 import '../../shared/utils/hash_utils.dart';
+import '../database/database.dart';
 
 class TransactionService {
   TransactionService(this._db);

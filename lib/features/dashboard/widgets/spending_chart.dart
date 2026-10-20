@@ -1,9 +1,10 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+
 import '../../../shared/theme/app_colors.dart';
-import '../../../shared/theme/category_palette.dart';
 import '../../../shared/theme/app_text_styles.dart';
+import '../../../shared/theme/category_palette.dart';
 import '../../../shared/utils/currency_utils.dart';
 import '../../../shared/utils/sat_converter.dart';
 import '../../../shared/widgets/shrink_to_fit.dart';

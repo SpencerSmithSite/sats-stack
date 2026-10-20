@@ -3,8 +3,8 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:go_router/go_router.dart';
+import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../core/database/database.dart';
@@ -19,12 +19,12 @@ import '../../shared/constants/app_constants.dart';
 import '../../shared/theme/app_colors.dart';
 import '../../shared/utils/currency_utils.dart';
 import '../../shared/utils/platform_utils.dart';
-import 'widgets/settings_widgets.dart';
+import '../../shared/utils/sat_converter.dart';
 import '../../shared/widgets/ai_privacy_disclosure.dart';
 import 'widgets/categories_sheet.dart';
 import 'widgets/import_consent_section.dart';
 import 'widgets/on_device_ai_section.dart';
-import '../../shared/utils/sat_converter.dart';
+import 'widgets/settings_widgets.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -1401,7 +1401,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ValueListenableBuilder<TextEditingValue>(
                       valueListenable: _esploraUrlCtrl,
                       builder:
-                          (_, __, ___) => DataRoutingBanner(
+                          (_, _, _) => DataRoutingBanner(
                             usingDefault: _usingDefaultServer,
                           ),
                     ),
@@ -1569,7 +1569,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       // actually decides is the advisory helper line below.
       ValueListenableBuilder<TextEditingValue>(
         valueListenable: ctrl,
-        builder: (_, value, __) {
+        builder: (_, value, _) {
           // Advisory only. A key whose prefix has changed is still a valid
           // key, and refusing it would be far worse than accepting one that
           // turns out to be wrong — the connection test is what decides.
