@@ -86,70 +86,6 @@ no engine, so it exercises the Dart queue alone. Net effect: cancelling one
 answer can corrupt or fail the next one, and on Android the model stays busy
 after the queue has moved on. Fix needs native work on both sides.
 
-### 6. Accessibility
-
-- **There is no `Semantics` or `semanticLabel` anywhere in the UI layer** —
-  zero matches across `lib/features`, `lib/shared`, `lib/screens`. Anything
-  built from `GestureDetector` is announced as an unlabeled button or not at
-  all, including both month selectors, the insight refresh, the price chip, the
-  period chips and the colour swatches. The charts expose no values.
-- **Tap targets below the 44×44 floor**: month-selector arrows are 20px and
-  22px (`month_selector.dart:57`, `budgets_screen.dart:353,363`), the insight
-  refresh is **14px** (`ai_insight_card.dart:92`), the price chip is 21px tall
-  (`btc_price_chip.dart:59`), the pill chips ~20–24px.
-  `analytics_screen.dart:186` already uses `IconButton` correctly — copy it.
-- **Overflow at large text scale**: in `transaction_list_item.dart:109-129`,
-  `dashboard_screen.dart:614-643` and `spending_chart.dart:142-160` the
-  trailing amount `Column` is not flex, so the row overflows rather than
-  shrinking; `_CategoryBar` also hardcodes a 100px label. The app-bar month
-  selectors overflow at 2× scale — `transactions_screen.dart:143` already uses
-  `FittedBox` and the other three screens do not.
-
-### 7. Parsing gaps the import rework did not reach
-
-- **Dot-grouped thousands.** `_normalizeDecimalSeparator` has a 3-digit rule
-  for commas and no mirror for dots, so a German `2.500` becomes **2.5** — a
-  1000× understatement with nothing to tell the user — and `1.234.567` drops
-  the row. A naive mirror rule would break BTC amounts (`0.123`), so this needs
-  the per-file inference treatment `_inferDayFirst` got.
-- **`_inferDayFirst` takes the first decisive sample, not a vote**, so one
-  US-formatted row in a merged UK export decides the whole file.
-- **The PDF heuristic tier got none of the date work**: `_parseDate` is called
-  with the default `dayFirst: false` and `datePats` has no dotted pattern, so a
-  UK PDF line `04/03/2025` is booked as 3 April and a German `01.02.2025`
-  matches nothing at all. This is the tier a user lands on when they decline
-  off-device consent. Its amount regex has the same dot-grouping gap.
-- **The delimiter sniffer reads the first non-empty line**, which for the many
-  exports that start with a title or account summary is not the header; and
-  only `\r\n` is normalised, so a classic `\r`-only export is one row.
-
-### 8. The import consent gate needs a way out
-
-- Consent is persisted at the tap, permanently, per provider, with **no revoke
-  UI anywhere** — and nothing afterwards tells the user the upload happened.
-  One "Send to Anthropic" tap and every later CSV, PDF and photo import
-  uploads silently, while the preview screen labels the result "Parsed via
-  **Ollama AI**" regardless of provider and `AiPrivacyDisclosure` promises
-  "Nothing is sent unless you ask for it". Add a revocable Settings row, label
-  the tier with the real provider, and show the recipient on the preview.
-- `setOffDeviceImportAllowed(true)` is written before anything is sent and is
-  not rolled back if the import is then cancelled.
-- The consent dialog's copy is file-specific ("the file is read on this device
-  with the built-in rules instead") but is shared with the image flow, which
-  has no local fallback at all.
-- The 5-minute timeout keeps running while the dialog is open, so it can fire
-  behind it and stack a second dialog.
-- `isLocalEndpoint` returns **true** for a URL Dart cannot extract a host from
-  — `ollama.example.com:11434` parses as a *scheme* — so a plausible bare
-  `host:port` entry is treated as local: no consent prompt, auto-insight on,
-  and a false privacy claim, while the request fails anyway. Normalise on save
-  (`XpubService.normalizeBaseUrl` already does exactly this, tested) and fail
-  **closed** for an unparseable URL.
-- `_handleImage` swallows the `InferenceException` that says *why* ("Apple
-  Intelligence cannot read images"), showing generic advice about llava
-  instead; and it asks for consent before checking the backend can serve the
-  request at all.
-
 ### 9. Smaller correctness items
 
 - A category *rename* can silently move another category's transactions:
@@ -174,22 +110,21 @@ after the queue has moved on. Fix needs native work on both sides.
 - Four moved widgets read `app.currencyNotifier.value` in `build` without
   subscribing — they work only because `stack_screen.dart:151` wraps them in a
   `ValueListenableBuilder` that *discards* the value purely to force a rebuild.
-- `TransactionListItem` carries its own currency-symbol table, duplicating
-  `CurrencyUtils.symbolFor`.
 - Three more unguarded `setState`-after-`await` (`add_transaction_sheet.dart:130`,
   `transaction_edit_sheet.dart:136`, `import_file_screen.dart:563`).
 - `SetGoalSheetState` is public and should not be; four constructors the split
   touched have `super.key,required this.x` crammed onto one line.
 - `_generateInsight` swallows every failure, including the specific messages
   `CloudBackend.describeError` already produced.
-- Stale copy: image import still says "Connect Ollama, LM Studio, or Maple".
 
 ### 10. CI, lints and docs
 
 - **CI compiles nothing native.** `flutter analyze` + `flutter test` on ubuntu
   cannot reach a single platform finding above: no Podfile is evaluated, no
   entitlement read, the Android manifest merge never runs, neither bridge is
-  compiled. In value order: `dart format --set-exit-if-changed`,
+  compiled. In value order: `dart format --set-exit-if-changed` (which needs
+  a format-only PR first — 97 of the 126 Dart files would change, so mixing
+  it into any other change buries that change),
   `flutter build apk --debug` (would have caught the INTERNET permission),
   and a `macos-latest` job running `flutter build ios --no-codesign` and
   `flutter build macos`. Also use `--enforce-lockfile`.

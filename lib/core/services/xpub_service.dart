@@ -13,6 +13,7 @@ import '../database/database.dart';
 import '../services/btc_price_service.dart';
 import '../../shared/constants/app_constants.dart';
 import '../../shared/utils/hash_utils.dart';
+import '../../shared/utils/url_utils.dart';
 
 // ── Public types ─────────────────────────────────────────────────────────────
 
@@ -185,22 +186,8 @@ class XpubService {
   }
 
   /// Cleans up a user-typed server URL, or returns null if it cannot be used.
-  ///
-  /// Accepts `mempool.local/api` (assumes https), strips trailing slashes that
-  /// would produce `//address/…`, and rejects anything without an http(s)
-  /// scheme and a host — `Uri.parse` happily yields a hostless relative URI,
-  /// which only fails later as an unrelated-looking error.
-  static String? normalizeBaseUrl(String raw) {
-    var text = raw.trim();
-    if (text.isEmpty) return null;
-    if (!text.contains('://')) text = 'https://$text';
-    text = text.replaceAll(RegExp(r'/+$'), '');
-    final uri = Uri.tryParse(text);
-    if (uri == null) return null;
-    if (uri.scheme != 'http' && uri.scheme != 'https') return null;
-    if (uri.host.isEmpty) return null;
-    return text;
-  }
+  /// A bare host is assumed to be https — see [normalizeServerUrl].
+  static String? normalizeBaseUrl(String raw) => normalizeServerUrl(raw);
 
   // ECCurve_secp256k1 extends ECDomainParametersImpl — it IS the domain params.
   static final _curve = ECCurve_secp256k1();

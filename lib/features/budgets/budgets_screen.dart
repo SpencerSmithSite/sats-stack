@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import '../../core/models/budget_progress.dart';
 import '../../shared/theme/app_colors.dart';
 import '../../shared/theme/app_text_styles.dart';
@@ -12,6 +11,7 @@ import 'widgets/budget_card.dart';
 import 'widgets/set_budget_sheet.dart';
 import '../../main.dart' as app;
 import '../../shared/utils/month_cursor.dart';
+import '../../shared/widgets/month_selector.dart';
 
 class BudgetsScreen extends StatefulWidget {
   const BudgetsScreen({super.key});
@@ -122,7 +122,7 @@ class _BudgetsScreenState extends State<BudgetsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: _MonthSelector(
+        title: MonthSelector(
           month: _selectedMonth,
           onPrevious: _previousMonth,
           onNext: _isCurrentMonth ? null : _nextMonth,
@@ -332,44 +332,6 @@ class _SummaryItem extends StatelessWidget {
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
             color: context.textSecondary,
             fontSize: 11,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ── Month selector (local copy for budgets) ───────────────────────────────────
-
-class _MonthSelector extends StatelessWidget {
-  const _MonthSelector({required this.month, required this.onPrevious, this.onNext});
-
-  final DateTime month;
-  final VoidCallback onPrevious;
-  final VoidCallback? onNext;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        GestureDetector(
-          onTap: onPrevious,
-          child: Icon(Icons.chevron_left, size: 22, color: theme.colorScheme.onSurface),
-        ),
-        const SizedBox(width: 4),
-        Text(
-          DateFormat('MMMM yyyy').format(month),
-          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(width: 4),
-        GestureDetector(
-          onTap: onNext,
-          child: Icon(
-            Icons.chevron_right,
-            size: 22,
-            color: onNext != null ? theme.colorScheme.onSurface : context.textSecondary.withAlpha(80),
           ),
         ),
       ],

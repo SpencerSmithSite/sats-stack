@@ -13,6 +13,7 @@ import '../../../shared/utils/sat_converter.dart';
 import '../../../shared/utils/hash_utils.dart';
 import '../../../shared/utils/currency_utils.dart';
 import '../../../main.dart' as app;
+import '../../../shared/widgets/tappable.dart';
 
 class AddTransactionSheet extends StatefulWidget {
   const AddTransactionSheet({
@@ -284,7 +285,14 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                       // Fiat / Sats toggle
                       Padding(
                         padding: const EdgeInsets.only(top: 14),
-                        child: GestureDetector(
+                        child: Tappable(
+                          label: _isFiatMode
+                              ? 'Amount in ${app.currencyNotifier.value}'
+                              : 'Amount in sats',
+                          hint: _isFiatMode
+                              ? 'Switches to entering sats'
+                              : 'Switches to entering '
+                                  '${app.currencyNotifier.value}',
                           onTap: () => setState(() => _isFiatMode = !_isFiatMode),
                           child: Container(
                             padding: const EdgeInsets.symmetric(
@@ -392,7 +400,8 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                   const SizedBox(height: 12),
 
                   // Notes toggle
-                  GestureDetector(
+                  Tappable(
+                    toggled: _showNotes,
                     onTap: () => setState(() => _showNotes = !_showNotes),
                     child: Row(
                       children: [
@@ -428,7 +437,8 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                   const SizedBox(height: 12),
 
                   // Repeat toggle
-                  GestureDetector(
+                  Tappable(
+                    toggled: _isRecurring,
                     onTap: () => setState(() => _isRecurring = !_isRecurring),
                     child: Row(
                       children: [
@@ -446,7 +456,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                           'Repeat',
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: _isRecurring
-                                ? AppColors.bitcoinOrange
+                                ? context.bitcoinOrangeText
                                 : context.textSecondary,
                           ),
                         ),
@@ -535,7 +545,8 @@ class _Chip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return Tappable(
+      selected: selected,
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
@@ -582,7 +593,7 @@ class _CategoryChips extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 34,
+      height: 48,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: categories.length,
@@ -592,7 +603,8 @@ class _CategoryChips extends StatelessWidget {
           final isSelected = selected?.id == cat.id;
           final color = _parseColor(cat.color) ?? context.textSecondary;
 
-          return GestureDetector(
+          return Tappable(
+            selected: isSelected,
             onTap: () => onSelect(cat),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 120),
@@ -671,7 +683,8 @@ class _PeriodChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = AppColors.bitcoinOrange;
-    return GestureDetector(
+    return Tappable(
+      selected: selected,
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 120),
@@ -689,7 +702,7 @@ class _PeriodChip extends StatelessWidget {
           style: TextStyle(
             fontSize: 12,
             fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-            color: selected ? color : context.textSecondary,
+            color: selected ? context.bitcoinOrangeText : context.textSecondary,
           ),
         ),
       ),

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../core/database/database.dart';
 import '../../../core/services/category_service.dart';
 import '../../../shared/theme/app_colors.dart';
+import '../../../shared/widgets/tappable.dart';
+import '../../../shared/utils/colour_names.dart';
 
 // ── Public entry point ─────────────────────────────────────────────────────────
 
@@ -389,7 +391,9 @@ class _EditCategorySheetState extends State<_EditCategorySheet> {
                       final color = Color(
                           int.parse('FF${hex.replaceFirst('#', '')}', radix: 16));
                       final selected = _selectedColor == hex;
-                      return GestureDetector(
+                      return Tappable(
+                        label: colourName(color),
+                        selected: selected,
                         onTap: () => setState(() => _selectedColor = hex),
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 120),
@@ -480,7 +484,9 @@ class _IconGrid extends StatelessWidget {
       itemBuilder: (context, index) {
         final (key, iconData) = _kIconOptions[index];
         final selected = selectedIcon == key;
-        return GestureDetector(
+        return Tappable(
+          label: key.replaceAll('_', ' '),
+          selected: selected,
           onTap: () => onSelect(key),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 120),

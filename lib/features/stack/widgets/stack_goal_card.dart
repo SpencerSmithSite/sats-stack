@@ -9,6 +9,7 @@ import '../../../shared/utils/currency_utils.dart';
 import '../../../shared/utils/sat_converter.dart';
 import '../../../main.dart' as app;
 import '../../../shared/theme/app_text_styles.dart';
+import '../../../shared/widgets/tappable.dart';
 
 class StackGoalCard extends StatelessWidget {
   const StackGoalCard({
@@ -42,7 +43,7 @@ class StackGoalCard extends StatelessWidget {
     if (goalSats == null || goalSats! <= 0) {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: GestureDetector(
+        child: Tappable(
           onTap: onEdit,
           child: Container(
             padding: const EdgeInsets.all(16),
@@ -84,7 +85,8 @@ class StackGoalCard extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: GestureDetector(
+      child: Tappable(
+        hint: 'Edits the goal',
         onTap: onEdit,
         child: Container(
           padding: const EdgeInsets.all(16),

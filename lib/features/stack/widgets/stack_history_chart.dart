@@ -85,8 +85,7 @@ class HistoryChartCard extends StatelessWidget {
 }
 
 class StackLineChart extends StatelessWidget {
-  const StackLineChart({
-    super.key,required this.entries, this.btcPrice});
+  const StackLineChart({super.key, required this.entries, this.btcPrice});
 
   final List<MapEntry<DateTime, int>> entries;
   final double? btcPrice;
@@ -101,7 +100,14 @@ class StackLineChart extends StatelessWidget {
     final minY = entries.map((e) => e.value).reduce(min).toDouble();
     final yPad = max((maxY - minY) * 0.1, 1.0);
 
-    return LineChart(
+    return Semantics(
+      // The chart itself says nothing to a screen reader: give it the
+      // numbers a sighted user reads off it.
+      label: 'Stack history: from ${SatConverter.formatSats(entries.first.value)} '
+          'to ${SatConverter.formatSats(entries.last.value)} sats, '
+          'peaking at ${SatConverter.formatSats(maxY.round())}',
+      excludeSemantics: true,
+      child: LineChart(
       LineChartData(
         minY: max(0, minY - yPad),
         maxY: maxY + yPad,
@@ -194,6 +200,7 @@ class StackLineChart extends StatelessWidget {
           ),
         ),
       ),
+    ),
     );
   }
 

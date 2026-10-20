@@ -93,10 +93,13 @@ class AiPrivacyDisclosure extends StatelessWidget {
                     // True of every path: the monthly insight is only ever
                     // generated on an explicit tap for a provider like this
                     // one, and the import parser asks before it uploads a
-                    // statement. Keep it that way, or change this sentence.
-                    'Nothing is sent unless you ask for it — no background '
-                    'analysis, and nothing on launch. Your wallet keys and '
-                    'xpubs are never included.',
+                    // statement — once per provider, withdrawable in Settings,
+                    // which is why imports are named here rather than implied.
+                    // Keep it that way, or change this sentence.
+                    'Nothing is sent unless you ask for it: a question you '
+                    'type, an insight you tap for, or a statement import you '
+                    'agreed to. No background analysis, and nothing on '
+                    'launch. Your wallet keys and xpubs are never included.',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: context.textSecondary,
                       height: 1.45,

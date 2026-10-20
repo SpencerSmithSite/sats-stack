@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../core/services/import_service.dart';
 import '../../features/transactions/widgets/transaction_edit_sheet.dart';
 import '../../main.dart' as app;
+import '../../shared/theme/app_colors.dart';
 import 'import_summary_screen.dart';
 
 class ImportPreviewScreen extends StatefulWidget {
@@ -139,6 +140,10 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen> {
                               ?.copyWith(color: cs.primary),
                         ),
                       ],
+                      if (widget.result.sentTo != null) ...[
+                        const SizedBox(height: 4),
+                        _SentToNote(recipient: widget.result.sentTo!),
+                      ],
                       if (widget.result.tierUsed ==
                           ImportTier.pdfHeuristic) ...[
                         const SizedBox(height: 8),
@@ -256,34 +261,17 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen> {
                         style: Theme.of(context).textTheme.titleMedium),
                     const SizedBox(height: 8),
                     Text(
-                      widget.result.aiConsentDeclined
-                          ? widget.result.fileType == ImportFileType.image
-                              ? 'A photo of a statement can only be read by an '
-                                  'AI model, and you chose not to send it. '
-                                  "Nothing left your device. Export a CSV from "
-                                  "your bank, or pick an on-device AI provider "
-                                  'in Settings → AI.'
-                              : 'This statement needs an AI model to read, and '
-                                  'you chose not to send it. Nothing left your '
-                                  'device — try a CSV export, or pick an '
-                                  'on-device AI provider in Settings → AI.'
-                          : widget.result.pdfScanned
-                          ? 'This appears to be a scanned PDF with no text layer. Connect an AI provider with vision support to import scanned documents, or export as CSV from your bank\'s website.'
-                          : widget.result.pdfAiNotReady
-                              ? 'Heuristic detection couldn\'t find enough transactions. Connect an AI provider for accurate PDF import, or export as CSV from your bank\'s website.'
-                              : widget.result.isPdfNoAi
-                              ? widget.result.fileType == ImportFileType.image
-                                  ? 'The AI could not extract any transactions from this image. Make sure your model supports vision (e.g. llava, llama3.2-vision) and the image clearly shows transaction data.'
-                                  : 'The AI could not extract any transactions from this PDF. Try a different model or check that the PDF contains readable transaction data.'
-                                  : widget.result.tierUsed == ImportTier.manual
-                                      ? 'No transactions could be extracted with the current column mapping — go back and check your column assignments.'
-                                      : 'Could not parse this file automatically.',
+                      _emptyMessage(),
                       textAlign: TextAlign.center,
                       style: Theme.of(context)
                           .textTheme
                           .bodyMedium
                           ?.copyWith(color: cs.onSurfaceVariant),
                     ),
+                    if (widget.result.sentTo != null) ...[
+                      const SizedBox(height: 12),
+                      _SentToNote(recipient: widget.result.sentTo!),
+                    ],
                     if (widget.result.pdfScanned ||
                         widget.result.pdfAiNotReady ||
                         widget.result.aiConsentDeclined) ...[
@@ -342,13 +330,55 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen> {
     );
   }
 
+  /// Why the preview is empty, most specific cause first.
+  String _emptyMessage() {
+    final r = widget.result;
+    final isImage = r.fileType == ImportFileType.image;
+    if (r.errorMessage != null) return r.errorMessage!;
+    if (r.aiConsentDeclined) {
+      return isImage
+          ? 'A photo of a statement can only be read by an AI model, and you '
+              'chose not to send it. Nothing left your device. Export a CSV '
+              'from your bank, or pick an on-device AI provider in Settings → '
+              'Servers.'
+          : 'This statement needs an AI model to read, and you chose not to '
+              'send it. Nothing left your device — try a CSV export, or pick '
+              'an on-device AI provider in Settings → Servers.';
+    }
+    if (r.pdfScanned) {
+      return 'This appears to be a scanned PDF with no text layer. Connect an '
+          'AI provider with vision support to import scanned documents, or '
+          "export as CSV from your bank's website.";
+    }
+    if (r.pdfAiNotReady) {
+      return "Heuristic detection couldn't find enough transactions. Connect "
+          'an AI provider for accurate PDF import, or export as CSV from your '
+          "bank's website.";
+    }
+    if (r.isPdfNoAi) {
+      return isImage
+          ? 'The AI could not extract any transactions from this image. Make '
+              'sure your model supports vision (e.g. llava, llama3.2-vision) '
+              'and the image clearly shows transaction data.'
+          : 'The AI could not extract any transactions from this PDF. Try a '
+              'different model or check that the PDF contains readable '
+              'transaction data.';
+    }
+    if (r.tierUsed == ImportTier.manual) {
+      return 'No transactions could be extracted with the current column '
+          'mapping — go back and check your column assignments.';
+    }
+    return 'Could not parse this file automatically.';
+  }
+
+  /// The AI tiers are named after the provider that actually read the file.
   String _tierLabel(ImportTier tier) => switch (tier) {
-        ImportTier.ollama => 'Ollama AI',
+        ImportTier.ollama => widget.result.aiLabel ?? 'AI',
         ImportTier.rules => 'Smart Rules',
         ImportTier.manual => 'Saved Mapping',
         ImportTier.pdfExtracted => 'PDF + AI',
         ImportTier.pdfHeuristic => 'PDF Heuristics',
-        ImportTier.image => 'Image + AI',
+        ImportTier.image => '${widget.result.aiLabel ?? 'AI'} (image)',
       };
 
   String _formatAmount(double amount, String currency) {
@@ -356,5 +386,30 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen> {
     if (currency == 'SATS') return '${amount.round()} sats';
     return NumberFormat.currency(symbol: '', decimalDigits: 2)
         .format(amount);
+  }
+}
+
+/// Says the file was uploaded, and to whom.
+class _SentToNote extends StatelessWidget {
+  const _SentToNote({required this.recipient});
+  final String recipient;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = Theme.of(context)
+        .textTheme
+        .bodySmall
+        ?.copyWith(color: context.textSecondary);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.cloud_upload_outlined, size: 14, color: context.textSecondary),
+        const SizedBox(width: 6),
+        Flexible(
+          child: Text('This file was sent to $recipient to be read.',
+              style: style),
+        ),
+      ],
+    );
   }
 }

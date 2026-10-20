@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import '../utils/currency_utils.dart';
+import 'tappable.dart';
 import '../../core/services/btc_price_service.dart';
 import '../../main.dart' as app;
 
@@ -35,6 +36,19 @@ class _BtcPriceChipState extends State<BtcPriceChip> {
     return DateFormat('MMM d').format(fetchedAt);
   }
 
+  /// [_ageLabel] for a screen reader, which reads "2m" as "two metres".
+  String _spokenAge(DateTime fetchedAt) {
+    final diff = DateTime.now().difference(fetchedAt);
+    if (diff.inSeconds < 60) return 'just now';
+    if (diff.inMinutes < 60) {
+      return '${diff.inMinutes} minute${diff.inMinutes == 1 ? '' : 's'} ago';
+    }
+    if (diff.inHours < 24) {
+      return '${diff.inHours} hour${diff.inHours == 1 ? '' : 's'} ago';
+    }
+    return 'on ${DateFormat('MMMM d').format(fetchedAt)}';
+  }
+
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<bool>(
@@ -56,8 +70,13 @@ class _BtcPriceChipState extends State<BtcPriceChip> {
           final lastUpdated = widget.service.lastFetchedAt;
           final symbol = CurrencyUtils.symbolFor(currency);
 
-          return GestureDetector(
-          onTap: _refresh,
+          return Tappable(
+          label: price == null
+              ? 'Bitcoin price not loaded'
+              : 'Bitcoin price ${CurrencyUtils.format(price, currency, decimalDigits: 0)}'
+                  '${lastUpdated == null ? '' : ', updated ${_spokenAge(lastUpdated)}'}',
+          hint: 'Refreshes the price',
+          onTap: _refreshing ? null : _refresh,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(

@@ -4,6 +4,8 @@ import '../../../core/services/wallet_service.dart';
 import '../../../core/services/btc_price_service.dart';
 import '../../../shared/constants/app_constants.dart';
 import '../../../shared/theme/app_colors.dart';
+import '../../../shared/widgets/tappable.dart';
+import '../../../shared/utils/colour_names.dart';
 
 class AddWalletSheet extends StatefulWidget {
   const AddWalletSheet({
@@ -475,7 +477,9 @@ class _ColorDot extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = _parse(hex);
-    return GestureDetector(
+    return Tappable(
+      label: colourName(color),
+      selected: selected,
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 120),

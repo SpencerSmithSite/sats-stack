@@ -1,9 +1,12 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import '../../../shared/theme/app_colors.dart';
 import '../../../shared/theme/category_palette.dart';
 import '../../../shared/theme/app_text_styles.dart';
 import '../../../shared/utils/currency_utils.dart';
 import '../../../shared/utils/sat_converter.dart';
+import '../../../shared/widgets/shrink_to_fit.dart';
 
 class SpendingChart extends StatelessWidget {
   const SpendingChart({
@@ -93,9 +96,14 @@ class _CategoryBar extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 5),
       child: Row(
         children: [
-          // Category name
+          // Category name. Its width follows the text size, so a large
+          // accessibility setting does not cut every name to two letters —
+          // but never more than a third of the row, so the bar survives.
           SizedBox(
-            width: 100,
+            width: math.min(
+              MediaQuery.textScalerOf(context).scale(100),
+              MediaQuery.sizeOf(context).width / 3,
+            ),
             child: Text(
               category,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -139,7 +147,9 @@ class _CategoryBar extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           // Amount
-          Column(
+          ShrinkToFit(
+            maxFraction: 0.3,
+            child: Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
@@ -157,6 +167,7 @@ class _CategoryBar extends StatelessWidget {
                   ),
                 ),
             ],
+            ),
           ),
         ],
       ),

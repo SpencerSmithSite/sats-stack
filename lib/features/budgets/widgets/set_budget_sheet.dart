@@ -8,6 +8,7 @@ import '../../../main.dart' as app;
 import '../../../shared/theme/app_colors.dart';
 import '../../../shared/theme/app_text_styles.dart';
 import '../../../shared/utils/currency_utils.dart';
+import '../../../shared/widgets/tappable.dart';
 
 class SetBudgetSheet extends StatefulWidget {
   const SetBudgetSheet({
@@ -247,7 +248,8 @@ class _CategoryChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = _parseColor(category.color) ?? context.textSecondary;
-    return GestureDetector(
+    return Tappable(
+      selected: isSelected,
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 120),

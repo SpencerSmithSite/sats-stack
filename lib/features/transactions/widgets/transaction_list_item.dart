@@ -3,6 +3,8 @@ import '../../../core/database/database.dart';
 import '../../../shared/theme/app_colors.dart';
 import '../../../shared/theme/app_text_styles.dart';
 import '../../../shared/utils/sat_converter.dart';
+import '../../../shared/utils/currency_utils.dart';
+import '../../../shared/widgets/shrink_to_fit.dart';
 
 class TransactionListItem extends StatelessWidget {
   const TransactionListItem({
@@ -74,7 +76,7 @@ class TransactionListItem extends StatelessWidget {
                         : transaction.description,
                     style: theme.textTheme.bodyMedium?.copyWith(
                       fontWeight: FontWeight.w500,
-                      color: isBtc ? AppColors.bitcoinOrange : null,
+                      color: isBtc ? context.bitcoinOrangeText : null,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -106,11 +108,12 @@ class TransactionListItem extends StatelessWidget {
             ),
 
             // Amounts
-            Column(
+            ShrinkToFit(
+              child: Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  '${isExpense ? '-' : '+'}${_fiatString(transaction.amountFiat.abs(), transaction.fiatCurrency)}',
+                  '${isExpense ? '-' : '+'}${CurrencyUtils.format(transaction.amountFiat.abs(), transaction.fiatCurrency)}',
                   style: theme.textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.w600,
                     color: isExpense
@@ -126,6 +129,7 @@ class TransactionListItem extends StatelessWidget {
                     ),
                   ),
               ],
+              ),
             ),
           ],
         ),
@@ -133,17 +137,6 @@ class TransactionListItem extends StatelessWidget {
     );
   }
 
-  String _fiatString(double amount, String currency) {
-    final symbols = {
-      'USD': r'$',
-      'GBP': '£',
-      'EUR': '€',
-      'CAD': r'CA$',
-      'AUD': r'A$',
-    };
-    final sym = symbols[currency.toUpperCase()] ?? '$currency ';
-    return '$sym${amount.toStringAsFixed(2)}';
-  }
 
   Color? _parseColor(String? hex) {
     if (hex == null) return null;
