@@ -1054,6 +1054,11 @@ Top spending categories this month:
       buffer.write(token);
     }
     final insight = buffer.toString().trim();
+    // Not cached: an empty answer saved as the month's insight would stand
+    // until the next month made it stale.
+    if (insight.isEmpty) {
+      throw InferenceException('${backend.displayName} returned an empty answer.');
+    }
 
     await _upsertSetting(AppConstants.settingMonthlyInsight, insight);
     await _upsertSetting(

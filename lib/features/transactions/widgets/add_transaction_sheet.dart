@@ -103,7 +103,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       firstDate: DateTime(2009, 1, 3), // Bitcoin genesis block
       lastDate: DateTime.now(),
     );
-    if (picked != null) setState(() => _selectedDate = picked);
+    if (picked != null && mounted) setState(() => _selectedDate = picked);
   }
 
   Future<void> _save() async {

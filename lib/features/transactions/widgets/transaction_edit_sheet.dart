@@ -133,7 +133,7 @@ class _TransactionEditSheetState extends State<TransactionEditSheet> {
       firstDate: DateTime(2009, 1, 3),
       lastDate: DateTime.now().add(const Duration(days: 1)),
     );
-    if (picked != null) setState(() => _date = picked);
+    if (picked != null && mounted) setState(() => _date = picked);
   }
 
   Future<void> _save() async {

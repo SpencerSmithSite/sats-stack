@@ -301,6 +301,8 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
     if (result == null || result.files.isEmpty) return;
     final file = result.files.first;
     if (file.path == null) return;
+    // The picker can stay open while the screen is closed behind it.
+    if (!mounted) return;
 
     final isPdf = file.name.toLowerCase().endsWith('.pdf');
     final aiConnected = app.aiEnabledNotifier.value;
@@ -352,6 +354,9 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
     required String fileName,
     required ImportSource source,
   }) async {
+    // Called straight after a picker returns, and the screen may have been
+    // closed while it was open.
+    if (!mounted) return;
     setState(() {
       _isProcessing = true;
       _currentStage = 'Reading your statement…';
@@ -607,6 +612,8 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
     required String fileName,
     required ImportSource source,
   }) async {
+    // See [_processFile].
+    if (!mounted) return;
     setState(() {
       _isProcessing = true;
       _currentStage = 'Preparing image…';

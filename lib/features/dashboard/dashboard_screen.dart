@@ -92,6 +92,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   /// re-emit when a table changes, and the currency is not in a table.
   void _onCurrencyChange() => setState(_rebuildStreams);
 
+  void _showInsightError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
   Future<void> _initInsight() async {
     _cachedInsight = await app.ollamaService.loadCachedInsight();
     // A hosted provider is told nothing unless the user asks. Generating this
@@ -104,15 +108,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (mounted) setState(() {});
     if (offDevice) return;
     final stale = await app.ollamaService.isInsightStale();
-    if (stale) _generateInsight();
+    if (stale) _generateInsight(userAsked: false);
   }
 
   /// Generates on an explicit tap. For a hosted provider this is the only way
   /// an insight is ever generated.
-  Future<void> _generateInsight() async {
+  /// [userAsked] is whether this came from a tap. A tap that fails says why;
+  /// the automatic refresh stays quiet, since a stopped Ollama would otherwise
+  /// greet every Dashboard visit with an error. Both used to stay quiet, so a
+  /// tap on Generate with a rejected key or an unreachable server did nothing
+  /// visible at all — and the backend's own explanation, which
+  /// `CloudBackend.describeError` takes care to make readable, was dropped.
+  Future<void> _generateInsight({bool userAsked = true}) async {
     if (_isGeneratingInsight) return;
     final available = await app.ollamaService.isAvailable();
-    if (!available || !mounted) return;
+    if (!mounted) return;
+    if (!available) {
+      if (userAsked) {
+        _showInsightError(
+            '${app.ollamaService.backend.displayName} is not available right '
+            'now. Check it in Settings → Servers.');
+      }
+      return;
+    }
 
     setState(() => _isGeneratingInsight = true);
     try {
@@ -130,8 +148,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         stackGoalSats: data.stackGoalSats,
       );
       if (mounted) setState(() => _cachedInsight = insight);
-    } catch (_) {
-      // Insight generation is best-effort — fail silently
+    } catch (e) {
+      debugPrint('Insight generation failed: $e');
+      if (userAsked && mounted) _showInsightError('No insight: $e');
     } finally {
       if (mounted) setState(() => _isGeneratingInsight = false);
     }
