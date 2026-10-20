@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ffi' show Abi;
 import 'dart:io';
 
 import 'package:flutter_gemma/flutter_gemma.dart';
@@ -452,17 +453,18 @@ class LocalModelChoice {
   static LocalModelChoice byId(String id) =>
       catalogue.firstWhere((m) => m.id == id, orElse: fallback);
 
-  /// Whether a downloaded model can run on this platform at all.
+  /// Whether a downloaded model can run on this device at all.
   ///
-  /// Every platform Sats Stack targets, now that LiteRT-LM is the engine. The
-  /// architecture caveats are LiteRT-LM's: macOS on Apple silicon (not Intel),
-  /// Windows x64 (not arm64), Linux on both.
-  static bool get runsHere =>
-      Platform.isAndroid ||
-      Platform.isIOS ||
-      Platform.isMacOS ||
-      Platform.isWindows ||
-      Platform.isLinux;
+  /// Decided by CPU, not by OS: LiteRT-LM as packaged here ships arm64
+  /// binaries only — for Android, iOS and macOS. This used to check the OS
+  /// alone while its comment said "Apple silicon (not Intel)", so an Intel Mac
+  /// (or a 32-bit or x86 Android device) was offered a multi-gigabyte
+  /// download that could never load. Windows and Linux are not built.
+  static bool get runsHere => runsOn(Abi.current());
+
+  /// [runsHere] for a given [abi], so the rule is testable off-device.
+  static bool runsOn(Abi abi) =>
+      const {Abi.androidArm64, Abi.iosArm64, Abi.macosArm64}.contains(abi);
 
   /// The two or three models worth putting in front of this user.
   ///

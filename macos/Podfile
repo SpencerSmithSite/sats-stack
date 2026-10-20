@@ -108,12 +108,38 @@ post_install do |installer|
         '$(BUILT_PRODUCTS_DIR)/$(PRODUCT_NAME).app/Contents/Frameworks/LiteRtLm.framework/Versions/A/LiteRtLm',
       ]
       phase.output_paths = ['$(DERIVED_FILE_DIR)/flutter_gemma_litertlm_macos.stamp']
+      # Every failure here fails the build. Each install_name_tool and codesign
+      # used to end in `2>/dev/null || true`, so a broken patch or signature
+      # was invisible until the first question failed at runtime.
       phase.shell_script = <<~SHELL
-        set -e
+        set -euo pipefail
         FRAMEWORKS="${BUILT_PRODUCTS_DIR}/${PRODUCT_NAME}.app/Contents/Frameworks"
         if [ ! -d "${FRAMEWORKS}" ]; then
           exit 0
         fi
+        # LiteRT-LM ships arm64 only. An Intel-only build has nothing to
+        # install and the app does not offer the backend there
+        # (LocalModelChoice.runsHere); a universal build still needs the
+        # arm64 dylibs for its arm64 slice.
+        case " ${ARCHS} " in
+          *" arm64 "*) ;;
+          *)
+            echo "[flutter_gemma] ARCHS='${ARCHS}' has no arm64 — LiteRT-LM is arm64 only; skipping."
+            exit 0
+            ;;
+        esac
+        # The identity Xcode is signing the app with: "-" (ad hoc) for a local
+        # build, a Developer ID for distribution. These frameworks used to be
+        # signed ad hoc unconditionally, which library validation refuses to
+        # load into a Developer ID-signed app and notarization rejects.
+        SIGN_IDENTITY="${EXPANDED_CODE_SIGN_IDENTITY:--}"
+        sign() {
+          if [ "${SIGN_IDENTITY}" = "-" ]; then
+            codesign --force --sign - "$1"
+          else
+            codesign --force --sign "${SIGN_IDENTITY}" --options runtime --timestamp "$1"
+          fi
+        }
         for base in LiteRtMetalAccelerator LiteRtTopKMetalSampler GemmaModelConstraintProvider; do
           rm -f "${FRAMEWORKS}/lib${base}.dylib"
         done
@@ -131,17 +157,28 @@ post_install do |installer|
           exit 1
         fi
         echo "[flutter_gemma] Using companion dylibs from: ${PLUGIN_PREBUILT}"
+        # Required: LiteRtLm links the constraint provider and loads the Metal
+        # accelerator by path, so a missing one breaks the backend — fail
+        # here, not at the first question. Optional: the TopK Metal sampler is
+        # loaded only if present, and LiteRT falls back to CPU sampling
+        # without it ("GPU sampler unavailable"); flutter_gemma 1.4.2 does not
+        # ship it. The old phase treated all three alike and warned on any,
+        # so the warning about this one was the only one ever printed.
         for base in GemmaModelConstraintProvider LiteRtMetalAccelerator LiteRtTopKMetalSampler; do
           src="${PLUGIN_PREBUILT}/lib${base}.dylib"
           if [ ! -f "${src}" ]; then
-            echo "[flutter_gemma] WARNING: ${src} not found — runtime dlopen will fail"
-            continue
+            if [ "${base}" = "LiteRtTopKMetalSampler" ]; then
+              echo "[flutter_gemma] skipped ${base} (not in this flutter_gemma version; LiteRT samples on the CPU)"
+              continue
+            fi
+            echo "[flutter_gemma] ERROR: ${src} not found."
+            exit 1
           fi
           fw_dir="${FRAMEWORKS}/${base}.framework"
           mkdir -p "${fw_dir}/Versions/A/Resources"
           cp "${src}" "${fw_dir}/Versions/A/${base}"
           install_name_tool -id "@rpath/${base}.framework/Versions/A/${base}" \\
-            "${fw_dir}/Versions/A/${base}" 2>/dev/null || true
+            "${fw_dir}/Versions/A/${base}"
           (cd "${fw_dir}" && ln -sfh A Versions/Current && ln -sfh "Versions/Current/${base}" "${base}" && ln -sfh "Versions/Current/Resources" Resources)
           cat > "${fw_dir}/Versions/A/Resources/Info.plist" <<EOF
         <?xml version="1.0" encoding="UTF-8"?>
@@ -159,7 +196,7 @@ post_install do |installer|
           # install_name_tool invalidated the signature, and unlike LiteRtLm these
           # hand-copied frameworks are not re-signed by Xcode — an unsigned page
           # trips CODESIGNING "Invalid Page" at dlopen.
-          codesign --force --sign - "${fw_dir}/Versions/A/${base}" 2>/dev/null || true
+          sign "${fw_dir}/Versions/A/${base}"
           echo "[flutter_gemma] copied ${base}.framework"
         done
         LITERTLM="${FRAMEWORKS}/LiteRtLm.framework/Versions/A/LiteRtLm"
@@ -167,8 +204,8 @@ post_install do |installer|
           install_name_tool -change \\
             @rpath/libGemmaModelConstraintProvider.dylib \\
             @rpath/GemmaModelConstraintProvider.framework/Versions/A/GemmaModelConstraintProvider \\
-            "${LITERTLM}" 2>/dev/null || true
-          codesign --force --sign - "${LITERTLM}" 2>/dev/null || true
+            "${LITERTLM}"
+          sign "${LITERTLM}"
         fi
         mkdir -p "$(dirname "${SCRIPT_OUTPUT_FILE_0}")"
         touch "${SCRIPT_OUTPUT_FILE_0}"

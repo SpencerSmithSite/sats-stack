@@ -1,3 +1,5 @@
+import 'dart:ffi' show Abi;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sats_stack/core/models/ai_provider.dart';
 import 'package:sats_stack/core/services/device_memory.dart';
@@ -294,6 +296,31 @@ void main() {
         spending.length,
         reason: 'a hosted model should get the full picture',
       );
+    });
+  });
+
+  group('where a downloaded model can run', () {
+    test('only on the arm64 builds LiteRT-LM ships', () {
+      for (final abi in const [
+        Abi.macosArm64,
+        Abi.iosArm64,
+        Abi.androidArm64,
+      ]) {
+        expect(LocalModelChoice.runsOn(abi), isTrue, reason: '$abi');
+      }
+    });
+
+    test('not on an Intel Mac or a 32-bit or x86 Android device', () {
+      // All three used to be offered a multi-gigabyte download that could
+      // never load: the check looked at the OS, not the CPU.
+      for (final abi in const [
+        Abi.macosX64,
+        Abi.androidArm,
+        Abi.androidX64,
+        Abi.androidIA32,
+      ]) {
+        expect(LocalModelChoice.runsOn(abi), isFalse, reason: '$abi');
+      }
     });
   });
 
