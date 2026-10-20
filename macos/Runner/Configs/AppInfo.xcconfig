@@ -5,7 +5,11 @@
 // 'flutter create' template.
 
 // The application's name. By default this is also the title of the Flutter window.
-PRODUCT_NAME = sats_stack
+// The app's name in Finder, the menu bar and the window title, which read
+// "sats_stack" while this was the template default. Safe to change: the
+// sandbox container — and with it the database — follows the bundle
+// identifier below, not this.
+PRODUCT_NAME = Sats Stack
 
 // The application's bundle identifier
 PRODUCT_BUNDLE_IDENTIFIER = com.satsstack.satsStack
