@@ -1055,6 +1055,26 @@ Covered by `removed_local_model_test.dart`. All three platforms build; the
 Apple Intelligence integration test passes on macOS under the new id, and the
 container appears where the README says it will.
 
+### Android no longer backs up the database or the API keys
+
+Addressed 2026-10-20; found while writing the encryption plan.
+
+The manifest set no backup rules, so Android Auto Backup was on with its
+defaults. **The plaintext database went to the user's Google Drive.** The API
+keys went with it, in `flutter_secure_storage`'s EncryptedSharedPreferences,
+but the Keystore master key that decrypts them never leaves the device, so on a
+restored phone they could not be read.
+
+`data_extraction_rules.xml` (Android 12+) now keeps both out of cloud backup,
+and keeps the keys out of device-to-device transfer, which cannot move a
+Keystore key either. `backup_rules.xml` (Android 8–11) cannot tell the two
+apart, so it excludes both everywhere. Moving to a new phone is Settings →
+Data → Export and Import.
+
+Checked by building the APK and dumping the compiled rule files and the merged
+manifest. **Not exercised with `bmgr` on a device** — that needs an emulator
+with a backup transport, and the rules are declarative.
+
 ### Test gaps
 
 The suite went from 102 tests to 209 over this work. Month boundaries, category
