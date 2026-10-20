@@ -82,14 +82,29 @@ class ImportSummaryScreen extends StatelessWidget {
                 Expanded(
                   child: _StatCard(
                     label: 'Skipped',
-                    value: summary.duplicatesSkipped.toString(),
+                    value: (summary.duplicatesSkipped + summary.alreadyInLedger)
+                        .toString(),
                     color: cs.onSurfaceVariant,
                     icon: Icons.content_copy_outlined,
-                    subtitle: 'duplicates',
+                    subtitle: 'already there',
                   ),
                 ),
               ],
             ),
+            if (summary.alreadyInLedger > 0) ...[
+              const SizedBox(height: 12),
+              Text(
+                '${summary.alreadyInLedger} '
+                '${summary.alreadyInLedger == 1 ? 'was' : 'were'} already in '
+                'your transactions from another import, so '
+                '${summary.alreadyInLedger == 1 ? 'it was' : 'they were'} '
+                'not added twice.',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: cs.onSurfaceVariant),
+              ),
+            ],
 
             const SizedBox(height: 12),
 

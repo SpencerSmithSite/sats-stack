@@ -216,4 +216,42 @@ void main() {
     // once rather than 25 times.
     expect(notifications, 1);
   });
+
+  group('the import summary', () {
+    Future<ImportSummary> save(int sourceId) => service.saveTransactions(
+          transactions: [
+            row(amount: 12.5, currency: 'USD', direction: 'debit',
+                description: 'Coffee'),
+            row(amount: 40, currency: 'USD', direction: 'debit',
+                description: 'Groceries'),
+          ],
+          sourceId: sourceId,
+          sourceName: 'Test',
+          btcPriceService: prices,
+        );
+
+    test('counts what reached the ledger, not what reached the source',
+        () async {
+      final first = await save(await newSource('USD'));
+      // The same statement, imported again under a second source.
+      final second = await save(await newSource('USD'));
+
+      expect(first.imported, 2);
+      // Was 2: the rows were new to the second source, but the ledger —
+      // deduplicated per wallet — gained nothing.
+      expect(second.imported, 0);
+      expect(second.alreadyInLedger, 2);
+      expect(await db.select(db.transactions).get(), hasLength(2));
+    });
+
+    test('a re-import into the same source is a plain duplicate', () async {
+      final source = await newSource('USD');
+      await save(source);
+      final again = await save(source);
+
+      expect(again.imported, 0);
+      expect(again.duplicatesSkipped, 2);
+      expect(again.alreadyInLedger, 0);
+    });
+  });
 }

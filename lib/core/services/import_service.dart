@@ -200,6 +200,7 @@ class ImportSummary {
   const ImportSummary({
     required this.imported,
     required this.duplicatesSkipped,
+    this.alreadyInLedger = 0,
     required this.total,
     required this.sourceName,
     required this.sourceId,
@@ -207,8 +208,19 @@ class ImportSummary {
     this.endDate,
   });
 
+  /// Rows that are now in the Transactions screen and were not before.
+  ///
+  /// It used to count rows recorded against the *source*, so importing a
+  /// statement into a second source reported every row as imported while the
+  /// ledger — deduplicated per wallet — gained nothing.
   final int imported;
+
+  /// Rows this source had already imported.
   final int duplicatesSkipped;
+
+  /// Rows new to this source but already in the ledger, typically from the
+  /// same statement imported under another source. Recorded, not added twice.
+  final int alreadyInLedger;
   final int total;
   final String sourceName;
   final int sourceId;
@@ -1406,6 +1418,7 @@ FILE CONTENT:
 
     int imported = 0;
     int duplicatesSkipped = 0;
+    int alreadyInLedger = 0;
     DateTime? startDate;
     DateTime? endDate;
 
@@ -1451,7 +1464,10 @@ FILE CONTENT:
         }
 
         try {
-          await db.into(db.importedTransactions).insert(
+          // `insertReturningOrNull` says whether a row was actually written;
+          // `insert` with insertOrIgnore returns a rowid either way.
+          final recorded = await db.into(db.importedTransactions)
+              .insertReturningOrNull(
             ImportedTransactionsCompanion.insert(
               sourceId: sourceId,
               date: tx.date,
@@ -1466,7 +1482,11 @@ FILE CONTENT:
             mode: InsertMode.insertOrIgnore,
           );
           existingHashes.add(hash);
-          imported++;
+          if (recorded == null) {
+            duplicatesSkipped++;
+            continue;
+          }
+          if (walletId == null) imported++;
           // Explicit `!`: captured by the transaction closure, these no longer
           // promote on a null check.
           if (startDate == null || tx.date.isBefore(startDate!)) {
@@ -1517,7 +1537,7 @@ FILE CONTENT:
             salt: 'wallet_$walletId',
           );
           try {
-            await db.into(db.transactions).insert(
+            final added = await db.into(db.transactions).insertReturningOrNull(
               TransactionsCompanion.insert(
                 walletId: walletId,
                 date: tx.date,
@@ -1532,8 +1552,10 @@ FILE CONTENT:
               ),
               mode: InsertMode.insertOrIgnore,
             );
+            added == null ? alreadyInLedger++ : imported++;
           } catch (_) {
-            // Unique constraint violation — transaction already exists in main table
+            // Unique constraint violation — already in the main table.
+            alreadyInLedger++;
           }
         }
       }
@@ -1546,6 +1568,7 @@ FILE CONTENT:
     return ImportSummary(
       imported: imported,
       duplicatesSkipped: duplicatesSkipped,
+      alreadyInLedger: alreadyInLedger,
       total: toInsert.length,
       sourceName: sourceName,
       sourceId: sourceId,

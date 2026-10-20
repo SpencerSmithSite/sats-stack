@@ -6,9 +6,12 @@ import '../database/database.dart';
 import '../../shared/constants/app_constants.dart';
 
 class BtcPriceService {
-  BtcPriceService(this._db);
+  /// [clock] is for tests that need "today" to be a known date.
+  BtcPriceService(this._db, {DateTime Function()? clock})
+      : _now = clock ?? DateTime.now;
 
   final AppDatabase _db;
+  final DateTime Function() _now;
 
   /// Reactive price notifier — always reflects the price in [_currency].
   final ValueNotifier<double?> priceNotifier = ValueNotifier(null);
@@ -285,17 +288,31 @@ class BtcPriceService {
 
   /// Returns the BTC price for [date] in [currency].
   /// Serves from the local cache if available; otherwise fetches from the API
-  /// (mempool.space primary, CoinGecko fallback) and caches permanently.
+  /// (mempool.space primary, CoinGecko fallback) and caches it.
   /// Network calls are throttled to at most 1 per second.
+  ///
+  /// Only a settled day — see [_isSettled] — is cached permanently. Today's
+  /// figure is a moving intraday quote, and caching it the first time it was
+  /// asked for meant every transaction dated today kept that mid-day price
+  /// forever, including ones re-priced days later. An unsettled day is cached
+  /// in memory for [_unsettledTtl] instead, so one import still fetches it
+  /// once.
   Future<double?> getHistoricalPrice(DateTime date, String currency) async {
     final dateStr = _dateKey(date);
     final cur = currency.toUpperCase();
+    final settled = _isSettled(date);
 
-    // Cache hit
-    final cached = await (_db.select(_db.btcPriceHistory)
-          ..where((t) => t.date.equals(dateStr) & t.currency.equals(cur)))
-        .getSingleOrNull();
-    if (cached != null) return cached.price;
+    if (settled) {
+      final cached = await (_db.select(_db.btcPriceHistory)
+            ..where((t) => t.date.equals(dateStr) & t.currency.equals(cur)))
+          .getSingleOrNull();
+      if (cached != null) return cached.price;
+    } else {
+      final recent = _unsettled[dateStr];
+      if (recent != null && _now().difference(recent.at) < _unsettledTtl) {
+        return recent.prices[cur];
+      }
+    }
 
     // Throttle network calls to 1 req/sec.
     final now = DateTime.now();
@@ -307,13 +324,29 @@ class BtcPriceService {
     }
     _lastHistoricalFetch = DateTime.now();
 
-    return _fetchAndCacheHistorical(date, cur);
+    return _fetchAndCacheHistorical(date, cur, settled: settled);
   }
+
+  /// Whether [date]'s price is final. A two-day margin rather than "before
+  /// today": the key is a local date while the price sources bucket by UTC,
+  /// so "yesterday" here can still be "today" there.
+  bool _isSettled(DateTime date) =>
+      _now().difference(DateTime(date.year, date.month, date.day)) >
+      const Duration(days: 2);
+
+  static const _unsettledTtl = Duration(minutes: 15);
+
+  /// Prices for days that have not settled, by date key, with when fetched.
+  final _unsettled = <String, ({Map<String, double> prices, DateTime at})>{};
 
   String _dateKey(DateTime date) =>
       '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 
-  Future<double?> _fetchAndCacheHistorical(DateTime date, String currency) async {
+  Future<double?> _fetchAndCacheHistorical(
+    DateTime date,
+    String currency, {
+    required bool settled,
+  }) async {
     final customBase = _esploraBaseUrl;
     final hasCustomServer = customBase != null &&
         customBase.isNotEmpty &&
@@ -329,8 +362,18 @@ class BtcPriceService {
 
     if (prices == null || prices.isEmpty) return null;
 
-    // Persist all returned currencies for this date (permanent cache).
     final dateStr = _dateKey(date);
+    if (!settled) {
+      _unsettled[dateStr] = (prices: prices, at: _now());
+      // A row an earlier build wrote for this date mid-day would otherwise be
+      // served as final once the day settles.
+      await (_db.delete(_db.btcPriceHistory)
+            ..where((t) => t.date.equals(dateStr)))
+          .go();
+      return prices[currency];
+    }
+
+    // Persist all returned currencies for this date (permanent cache).
     await _db.batch((b) {
       for (final entry in prices!.entries) {
         b.insert(
