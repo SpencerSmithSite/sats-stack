@@ -86,37 +86,6 @@ no engine, so it exercises the Dart queue alone. Net effect: cancelling one
 answer can corrupt or fail the next one, and on Android the model stays busy
 after the queue has moved on. Fix needs native work on both sides.
 
-### 9. Smaller correctness items
-
-- A category *rename* can silently move another category's transactions:
-  `Categories.name` has no unique constraint and the update matches on name, so
-  two categories can share a name and a later rename rewrites both. Budget
-  progress and the CSV export are keyed by name too, so one of the pair reads
-  zero spend forever and neither can be deleted. Needs a unique index (v8) and
-  a check in the sheet.
-- A failed database restore leaves `app.db` **closed** for the rest of the
-  session — every later query throws. Restore from the `.bak` and tell the user
-  to relaunch.
-- Today's intraday BTC price is cached permanently (`DoNothing()` on a
-  same-day row), so every transaction imported today keeps a mid-day quote.
-- `ImportSummary.imported` counts `importedTransactions` writes, not main-table
-  writes, so re-importing a file into a new source reports N imported while the
-  Transactions screen gains nothing.
-- The xpub scan dedupes against **every** wallet, so adding the same xpub twice
-  syncs the second to zero rows while reporting them all as skipped.
-- The Stack screen recomputes four O(n) aggregates on every BTC price tick;
-  the Dashboard's price and currency `ValueListenableBuilder`s wrap the whole
-  content subtree, so a price poll rebuilds all ten transaction rows.
-- Four moved widgets read `app.currencyNotifier.value` in `build` without
-  subscribing — they work only because `stack_screen.dart:151` wraps them in a
-  `ValueListenableBuilder` that *discards* the value purely to force a rebuild.
-- Three more unguarded `setState`-after-`await` (`add_transaction_sheet.dart:130`,
-  `transaction_edit_sheet.dart:136`, `import_file_screen.dart:563`).
-- `SetGoalSheetState` is public and should not be; four constructors the split
-  touched have `super.key,required this.x` crammed onto one line.
-- `_generateInsight` swallows every failure, including the specific messages
-  `CloudBackend.describeError` already produced.
-
 ### 10. CI, lints and docs
 
 - **CI compiles nothing native.** `flutter analyze` + `flutter test` on ubuntu
@@ -205,7 +174,7 @@ answer about many addresses at once, which is the Electrum work in item 1
 
 ### 13. Close the named test gaps
 
-- **A v1 → v7 migration against a fresh `onCreate`.** There is no generated
+- **A v1 → v8 migration against a fresh `onCreate`.** There is no generated
   schema history to migrate against, which is why `migrateToV6` and
   `migrateToV7` are named methods the tests call directly. Real coverage means
   generating drift's schema history, then asserting an upgraded database
@@ -216,6 +185,9 @@ answer about many addresses at once, which is the Electrum work in item 1
 - **Widget-level stream reactivity.** The import path's single-commit guarantee
   is asserted at the service level, but nothing checks that a screen subscribes
   once and survives a rebuild — which is the bug class the split just fixed.
+  `dashboard_rebuild_test.dart` now shows how to pump a whole screen against
+  real services on an in-memory database (including the teardown drift needs),
+  so the other four tabs can follow the same pattern.
 
 ### 14. Decompose Settings properly
 

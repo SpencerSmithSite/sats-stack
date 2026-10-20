@@ -835,6 +835,86 @@ passed against the row that overflowed: it faked the screen width with a
 out in. It sets the test view now, and fails against the old row at 2× and
 3×. Not yet checked with VoiceOver or TalkBack on a device.
 
+### The smaller correctness items
+
+Addressed 2026-10-20 (`TODO.md` item 9).
+
+- **Two categories could share a name** (schema v8). Transactions, budget
+  progress, imports and learned mappings all key on the *name*, so a pair was
+  indistinguishable: a rename rewrote both, one read zero spend forever, and
+  neither could be deleted. `Categories.name` now has a unique index, and the
+  service rejects a clash — case-insensitively, which is stricter than the
+  index — with a message on the name field instead of a raw SQLite error.
+  `migrateToV8` **renames** existing duplicates ("Pets (2)") rather than
+  deleting them, unlike v6 and v7, because a category has budgets pointing at
+  its id; the transactions stay with the oldest, since they were matched by
+  name and there was never a way to tell whose they were.
+- **The same xpub in two wallets synced the second to nothing** while
+  reporting every row as skipped: the dedupe looked at every wallet's hashes,
+  and the hash was salted with the txid alone. The scan now dedupes against
+  its own wallet, and the hash is scoped with `HashUtils.scopedToWallet` —
+  derived from the stored hash rather than added to the salt, because a row
+  keeps only eight characters of its txid. That let `migrateToV8` rescope
+  every stored xpub row in place: a delete-and-resync would have dropped every
+  category and note the user had set on them. `XpubService` takes an optional
+  HTTP client, so the sync is now tested end to end against a fake chain.
+- **A failed restore left the database closed** for the rest of the session,
+  so every later query threw, and a copy that stopped partway left a torn file
+  for the next launch. `replaceDatabaseFile` copies the original back over a
+  failed copy, and every outcome now ends at a dialog that can only be left by
+  quitting — the database cannot be reopened under the running services.
+- **Today's BTC price was cached permanently** on first request, so anything
+  dated today kept that mid-day quote for good. Only a settled day — more than
+  two days old, since the key is a local date and the sources bucket by UTC —
+  goes into the permanent cache; an unsettled day is cached in memory for 15
+  minutes, so one import still fetches it once. A mid-day row an earlier build
+  wrote for an unsettled day is deleted rather than later served as final.
+  Rows such builds wrote for days that have since settled cannot be told
+  apart, and are left.
+- **"Imported" counted rows recorded against the source, not the ledger**, so
+  importing a statement under a second source reported every row while the
+  Transactions screen gained nothing. Both inserts use
+  `insertReturningOrNull`, which says whether a row was written (`insert`
+  with insertOrIgnore returns a rowid either way), and the summary reports
+  rows already in the ledger separately and says why.
+- **The Stack screen walked every transaction four times per BTC price
+  tick**, through getters on its content widget. `StackStats` does it in one
+  pass when the rows change, and recomputes when the calendar month turns.
+- **The Dashboard rebuilt every section and every row on each price poll**:
+  its price and currency listeners wrapped the whole content. Each section
+  that shows a price-derived figure now listens for itself, and a
+  transaction row with stored sats — almost all of them — does not listen at
+  all.
+- **Four Stack widgets read `app.currencyNotifier.value` in `build`** without
+  subscribing, kept correct only by a parent listener that discarded the value.
+  They take the currency as a parameter now, and no longer import `main.dart`.
+- **`setState` after an await without a `mounted` check**: two date pickers,
+  and the two import entry points, which are only ever called straight after
+  a picker returns and so ran `setState` first thing on a possibly closed
+  screen.
+- **Insight failures were silent.** A tap on Generate with an unreachable
+  server or a rejected key did nothing visible, dropping the readable message
+  `CloudBackend.describeError` builds. A tap now says why; the automatic
+  refresh stays quiet. An empty answer is an error rather than being cached as
+  the month's insight.
+- Tidied: `SetGoalSheetState` is private, and the constructors with
+  `super.key,required` crammed on one line are formatted.
+
+Found while testing: the Dashboard's section header ("Spending Breakdown …
+View Analytics") overflowed at large text sizes — the same bug as the
+transaction row, in a header the accessibility pass missed. Its title gives
+way now.
+
+`dashboard_rebuild_test.dart` is the first test to pump a whole screen against
+real services on an in-memory database. It measures rebuild scope by widget
+identity — a row whose parent did not rebuild keeps the same widget object —
+and fails against the old structure. The other fixes are covered in
+`schema_integrity_test.dart`, `xpub_service_test.dart`,
+`database_restore_test.dart`, `btc_price_service_test.dart`,
+`import_service_test.dart`, `stack_stats_test.dart` and `insight_test.dart`;
+the xpub test was also run against the old sync, which gives the second wallet
+0 rows. The restore dialog and the insight snackbar were not exercised by hand.
+
 ### Test gaps
 
 The suite went from 102 tests to 209 over this work. Month boundaries, category
