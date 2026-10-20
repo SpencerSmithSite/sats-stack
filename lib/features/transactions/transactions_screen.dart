@@ -172,7 +172,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
           IconButton(
             icon: const Icon(Icons.account_balance_wallet_outlined),
             onPressed: _openAddWallet,
-            tooltip: 'Add xpub wallet',
+            tooltip: 'Add Bitcoin wallet (xpub, ypub or zpub)',
             padding: const EdgeInsets.all(8),
             visualDensity: VisualDensity.compact,
           ),

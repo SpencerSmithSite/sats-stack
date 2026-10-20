@@ -915,6 +915,61 @@ and fails against the old structure. The other fixes are covered in
 the xpub test was also run against the old sync, which gives the second wallet
 0 rows. The restore dialog and the insight snackbar were not exercised by hand.
 
+### CI, lints and docs
+
+Addressed 2026-10-20 (`TODO.md` item 10), in two PRs: a format-only one, so
+nothing else had to be read through 7,000 lines of re-indentation, and this.
+
+- **Android did not build at all** on the pinned Flutter 3.47.2. It now
+  refuses Gradle below 8.14, AGP below 8.11.1 and Kotlin below 2.2.20, and the
+  project was on 8.11.1 / 8.9.1 / 2.1.0. Nothing noticed, because CI built
+  nothing native. Raised to exactly those floors; Flutter already warns that
+  Gradle 9.1, AGP 9.0.1 and Kotlin 2.3.20 are next (`TODO.md`).
+- **CI compiled nothing native.** It now also checks `dart format`, resolves
+  with `--enforce-lockfile`, builds a debug APK on ubuntu, and builds iOS
+  (unsigned) and macOS in parallel on a Mac runner — the cheapest checks that
+  reach the manifest merge, the Podfiles, the entitlements and both native AI
+  bridges. The Android build above is what it would have caught.
+- **`claude.yml` ran for anyone** who wrote "@claude" on this public repo. It
+  now requires an owner, member or collaborator, and queues per issue rather
+  than running in parallel. The review workflow cancels a superseded run, and
+  skips drafts and fork PRs (which run without the secret and could only
+  fail).
+- **No lint rules were enabled.** `flutter_lints` is on 6.0.0, and the rules
+  added are the ones that catch bug classes this code has had —
+  `unawaited_futures`, `cancel_subscriptions`, `close_sinks`,
+  `avoid_void_async`, `only_throw_errors` — plus conventions it already
+  follows. `close_sinks` found a real leak: a failed Electrum handshake never
+  closed its socket. `require_trailing_commas` is deliberately off: from
+  language 3.7 the formatter owns trailing commas. `avoid_dynamic_calls` (43
+  sites) and `discarded_futures` (47) are recorded as not enabled, with why.
+- **The onboarding screen's first privacy claim was false**: "an encrypted
+  SQLite database … Nothing leaves." The database is plain SQLite, and a
+  wallet sync sends addresses to a block explorer. It now says what is true;
+  the README's privacy section is rewritten the same way and lists what
+  leaves the device and when. Real encryption is a decision in `TODO.md`.
+- **Android declared CAMERA and READ_MEDIA_IMAGES.** The audit's version of
+  this was wrong — `image_picker` *does* request CAMERA at runtime when the
+  manifest declares it, so nothing crashed. But neither is needed: the capture
+  intent and the system photo picker work without them, declaring CAMERA only
+  added a prompt, and Google Play's photo-permission policy rejects
+  READ_MEDIA_IMAGES for occasional picking. Both removed; the merged manifest
+  of a real build confirms neither comes back from a plugin.
+- `ITSAppUsesNonExemptEncryption` is `false` in both Apple Info.plists, with
+  the reasoning beside it, so uploads stop asking.
+- `dedup_hash_test.dart` now also runs the real import and recurring call
+  sites and checks what they stored, including two series started the same
+  day; the xpub call site is covered in `xpub_service_test.dart`.
+- `SatsStackNotes.md` is deleted: four of its five items had shipped, and the
+  fifth (a tab roadmap) is now in `TODO.md`. The README's stale lines are
+  fixed, as is the "Add xpub wallet" tooltip. `CLAUDE.md` is gitignored, so its
+  corrections (SDK, pins, schema notes, Podfile, Info.plist rationale) are
+  local.
+
+`flutter build apk --debug`, `flutter build ios --debug --no-codesign` and
+`flutter build macos --debug` were run locally before the workflow was
+pushed; the workflow itself is proven only by its first run on the PR.
+
 ### Test gaps
 
 The suite went from 102 tests to 209 over this work. Month boundaries, category

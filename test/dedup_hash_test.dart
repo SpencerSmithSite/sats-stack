@@ -18,7 +18,14 @@
 /// the refund vanished.
 library;
 
+import 'package:drift/drift.dart' hide isNull, isNotNull;
+import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sats_stack/core/database/database.dart';
+import 'package:sats_stack/core/services/btc_price_service.dart';
+import 'package:sats_stack/core/services/import_service.dart';
+import 'package:sats_stack/core/services/ollama_service.dart';
+import 'package:sats_stack/core/services/transaction_service.dart';
 import 'package:sats_stack/shared/utils/hash_utils.dart';
 
 void main() {
@@ -234,6 +241,131 @@ void main() {
           ),
         ),
       );
+    });
+  });
+
+  // Everything above pins the salt table against itself: each salt is typed
+  // out by hand, so a caller that changed its salt would pass untouched. These
+  // run the real call sites and check what they stored. (The xpub sync's call
+  // site is exercised in xpub_service_test.dart; a manual entry's hash is
+  // built inline in the add sheet from the clock, which is the point of it.)
+  group('the call sites use the salts above', () {
+    late AppDatabase db;
+    late int walletId;
+
+    setUp(() async {
+      driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
+      db = AppDatabase.forTesting(NativeDatabase.memory());
+      walletId = (await db.select(db.wallets).getSingle()).id;
+    });
+    tearDown(() => db.close());
+
+    test(
+      'statement import hashes the signed amount with the wallet salt',
+      () async {
+        final service = ImportService(db, OllamaService(db));
+        final prices = BtcPriceService(db);
+        final day = DateTime(2025, 3, 4);
+        await db
+            .into(db.btcPriceHistory)
+            .insert(
+              BtcPriceHistoryCompanion.insert(
+                date: '2025-03-04',
+                currency: prices.currency,
+                price: 80000,
+              ),
+            );
+        final source = await service.createSource(
+          name: 'Card',
+          type: 'bank',
+          currency: 'USD',
+        );
+
+        await service.saveTransactions(
+          transactions: [
+            ParsedTransaction(
+              date: day,
+              amount: 49.99,
+              direction: 'debit',
+              description: 'Amazon',
+              rawDescription: 'AMAZON MKTPLACE',
+              currency: 'USD',
+            ),
+          ],
+          sourceId: source,
+          sourceName: 'Card',
+          btcPriceService: prices,
+        );
+
+        final row = await db.select(db.transactions).getSingle();
+        expect(
+          row.dedupHash,
+          HashUtils.transactionDedupHash(
+            date: day,
+            amount: -49.99,
+            description: 'AMAZON MKTPLACE',
+            salt: 'wallet_$walletId',
+          ),
+        );
+      },
+    );
+
+    group('recurring series', () {
+      Future<void> seed(String description, DateTime anchor, String hash) => db
+          .into(db.transactions)
+          .insert(
+            TransactionsCompanion.insert(
+              walletId: walletId,
+              date: anchor,
+              description: description,
+              amountSats: -1000000,
+              amountFiat: -1200,
+              fiatCurrency: 'USD',
+              source: 'manual',
+              dedupHash: hash,
+              recurringPeriod: const Value('monthly'),
+              recurringAnchorDate: Value(anchor),
+            ),
+          );
+
+      test('a generated row carries the anchor-and-due-date salt', () async {
+        final anchor = DateTime(2026, 1, 15);
+        await seed('Rent', anchor, 'seed');
+        await TransactionService(
+          db,
+        ).generateDueRecurring(now: DateTime(2026, 2, 20));
+
+        final feb =
+            await (db.select(db.transactions)
+              ..where((t) => t.date.equals(DateTime(2026, 2, 15)))).getSingle();
+        expect(
+          feb.dedupHash,
+          HashUtils.transactionDedupHash(
+            date: DateTime(2026, 2, 15),
+            amount: -1200,
+            description: 'Rent',
+            salt:
+                'recurring_${anchor.millisecondsSinceEpoch}'
+                '_${DateTime(2026, 2, 15).millisecondsSinceEpoch}',
+          ),
+        );
+      });
+
+      test('two series started the same day both generate', () async {
+        // The collision that actually bit: the date picker returns midnight,
+        // so two series started on one day had identical anchors, and one of
+        // them never generated.
+        final anchor = DateTime(2026, 1, 15);
+        await seed('Rent', anchor, 'seed-rent');
+        await seed('Car loan', anchor, 'seed-car');
+        await TransactionService(
+          db,
+        ).generateDueRecurring(now: DateTime(2026, 3, 20));
+
+        final rows = await db.select(db.transactions).get();
+        expect(rows.where((t) => t.description == 'Rent'), hasLength(3));
+        expect(rows.where((t) => t.description == 'Car loan'), hasLength(3));
+      });
     });
   });
 }

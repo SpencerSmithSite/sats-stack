@@ -86,56 +86,24 @@ no engine, so it exercises the Dart queue alone. Net effect: cancelling one
 answer can corrupt or fail the next one, and on Android the model stays busy
 after the queue has moved on. Fix needs native work on both sides.
 
-### 10. CI, lints and docs
+### 10. Decisions and upgrades the CI pass surfaced
 
-- **CI compiles nothing native.** `flutter analyze` + `flutter test` on ubuntu
-  cannot reach a single platform finding above: no Podfile is evaluated, no
-  entitlement read, the Android manifest merge never runs, neither bridge is
-  compiled. In value order: `dart format --set-exit-if-changed` (which needs
-  a format-only PR first — 97 of the 126 Dart files would change, so mixing
-  it into any other change buries that change),
-  `flutter build apk --debug` (would have caught the INTERNET permission),
-  and a `macos-latest` job running `flutter build ios --no-codesign` and
-  `flutter build macos`. Also use `--enforce-lockfile`.
-- `claude.yml` runs on an `@claude` mention from **any** account on a public
-  repo, with no `author_association` guard — unbounded token and compute use.
-  Neither Claude workflow has `concurrency`, so three pushes start three
-  reviews. (Both correctly use `pull_request`, not `pull_request_target`, so a
-  fork PR cannot reach the secret.)
-- `analysis_options.yaml` enables **no rules** — the `linter.rules` block is
-  entirely commented out — so "zero analyzer issues" is only as strong as
-  `flutter_lints` defaults. Nothing enables `prefer_single_quotes`,
-  `require_trailing_commas`, `unawaited_futures` or `avoid_print`.
-  `flutter_lints` is `^5.0.0`; 6.0.0 is current. The `analyzer.exclude` list
-  names five directories that contain no Dart and is inert.
-- Two of the four "Critical package version pins" in `CLAUDE.md` no longer have
-  a live reason: `fl_chart` 1.2.0 and `drift_flutter` 0.3.1 both appear in
-  `pub outdated`'s *Resolvable* column, so the stated conflicts are gone (each
-  is still a real API change, so this is about correcting the table, not
-  upgrading blind). `url_launcher ^6.3.0` is not a pin at all. The
-  `flutter_secure_storage` pin does still hold, but is holding a discontinued
-  transitive package.
-- `CLAUDE.md` is stale in more places than item 5 of this file admitted: Dart
-  3.11.3 → **3.13.2**, the iOS Podfile platform is **16.0** not 12.0, the
-  schema notes describe three migrations where there are seven, and the
-  `NSPhotoLibraryUsageDescription` rationale is now wrong (the app uses the
-  photo library directly). `README.md:26,50,63,65,110` repeats some of it and
-  still describes AI as Ollama-on-desktop.
-- `SatsStackNotes.md` is tracked at the repo root and contradicts this file —
-  it asks for zpub import and category editing, both shipped. Fold its one live
-  item (user-editable inflation rate) in and delete it.
-- `test/dedup_hash_test.dart` pins the salt table against itself rather than
-  against the call sites: every salt is hand-typed and no call site is invoked,
-  so a regression where a caller changes its salt passes untouched. It also
-  misses the collision that actually bit (two series with the *same* anchor).
-- `ITSAppUsesNonExemptEncryption` is absent from `ios/Runner/Info.plist`, so
-  every Transporter upload stops for the export-compliance question.
-- Android declares `CAMERA` with no runtime permission handling anywhere (no
-  `permission_handler` in pubspec, no request in `lib/`). Declaring it is what
-  *creates* the requirement for `ACTION_IMAGE_CAPTURE`, so the camera import
-  can throw `SecurityException` on device; undeclared, the capture intent needs
-  no grant. Needs device verification either way.
-
+- **Encrypt the database, or keep saying it is not.** Onboarding claimed an
+  encrypted database; it never was, and now says so. Encrypting it means
+  SQLCipher (`sqlcipher_flutter_libs` with drift), a key held in the keychain,
+  a migration that rewrites the existing file, and flipping
+  `ITSAppUsesNonExemptEncryption` — non-exempt encryption brings an export
+  compliance filing. Worth it for a finance app; it is a product decision.
+- **Android toolchain, next floor.** Flutter 3.47.2 warns that Gradle 9.1,
+  AGP 9.0.1 and Kotlin 2.3.20 will be required soon. AGP 9 is a major
+  release (built-in Kotlin, changed DSL defaults), so do it on its own and
+  check every plugin builds.
+- **Typed JSON parsing** in place of the 43 `dynamic` calls
+  `avoid_dynamic_calls` would flag, then enable the rule.
+- **Recurring series ignore the wallet.** The series key and the hash both
+  leave it out, so two identical series started the same day in two manual
+  accounts are treated as one. Rare; changing the key orphans every stored
+  cursor, so it needs a migration rather than a one-line fix.
 
 > Items 11–14 were already tracked before the second pass. They are still
 > open and still worth doing; they are simply less urgent than 1–10.
@@ -179,9 +147,6 @@ answer about many addresses at once, which is the Electrum work in item 1
   `migrateToV7` are named methods the tests call directly. Real coverage means
   generating drift's schema history, then asserting an upgraded database
   matches a freshly created one.
-- **The dedup-hash contract across its three salts** — `''` for CSV re-import,
-  a timestamp for manual entries, `xpub_<txid>` for chain rows. Each salt means
-  something specific and nothing pins the distinction.
 - **Widget-level stream reactivity.** The import path's single-commit guarantee
   is asserted at the service level, but nothing checks that a screen subscribes
   once and survives a rebuild — which is the bug class the split just fixed.
@@ -201,9 +166,8 @@ worth doing on purpose rather than as a move.
 
 ## Smaller items
 
-- **"Add xpub wallet"** is the tooltip at `transactions_screen.dart:167`, but
-  ypub and zpub have always worked and testnet keys work now too. Reword it to
-  match what it actually accepts.
+- **Tab roadmap**, from the deleted `SatsStackNotes.md`: Accounts and Goals
+  as tabs of their own, and a Cash flow view.
 - **Transaction search/filter polish** — fuzzy matching, date-range picker.
 - **Home screen widget** — stack balance + BTC price. Needs `home_widget` and
   an app group entitlement.
