@@ -604,37 +604,60 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final dbFile = await databaseFile();
 
       await app.db.close();
-      // Keep the database we are about to replace. Without this, picking the
-      // wrong backup is unrecoverable — and if the restored file turns out to
-      // be unreadable the app cannot even start, because AppDatabase is opened
-      // before runApp.
-      if (dbFile.existsSync()) {
-        await dbFile.copy('${dbFile.path}.bak');
-      }
-      await srcFile.copy(dbFile.path);
-
-      // Restart prompt — hot reload / full restart needed to reopen DB
-      if (mounted) {
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (ctx) => AlertDialog(
-            title: const Text('Import complete'),
-            content: const Text(
-              'The database has been replaced. Please restart the app to load the imported data.',
-            ),
-            actions: [
-              FilledButton(
-                onPressed: () => exit(0),
-                child: const Text('Quit & Restart'),
-              ),
-            ],
-          ),
-        );
-      }
+      // From here the database is closed for the rest of this process —
+      // `AppDatabase` is opened once, before runApp, and cannot be reopened
+      // underneath the services holding it. So every outcome ends at "quit and
+      // relaunch". A failure used to show a snackbar and carry on, and every
+      // query after it threw.
+      final restore =
+          await replaceDatabaseFile(source: srcFile, target: dbFile);
+      if (!mounted) return;
+      await _showRelaunchDialog(
+        title: restore.outcome == RestoreOutcome.replaced
+            ? 'Import complete'
+            : 'Import failed',
+        body: switch (restore.outcome) {
+          RestoreOutcome.replaced => 'The database has been replaced. Quit '
+              'and reopen Sats Stack to load the imported data.',
+          RestoreOutcome.failedOriginalRestored => 'The backup could not be '
+              'copied in (${restore.error}). Your previous data has been put '
+              'back. Quit and reopen Sats Stack to keep using it.',
+          RestoreOutcome.failedOriginalLost => 'The backup could not be '
+              'copied in (${restore.error}), and your previous database could '
+              'not be put back automatically. A copy of it is at '
+              '${dbFile.path}.bak. Quit and reopen Sats Stack.',
+        },
+      );
     } catch (e) {
+      // Only reached before the database is closed — the picker or the
+      // header check — so carrying on is safe here.
       if (mounted) _showSnack('Import failed: $e');
     }
+  }
+
+  /// A dialog that can only be left by quitting, for when the database has
+  /// been closed and this process can no longer use it.
+  Future<void> _showRelaunchDialog({
+    required String title,
+    required String body,
+  }) {
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => PopScope(
+        canPop: false,
+        child: AlertDialog(
+          title: Text(title),
+          content: Text(body),
+          actions: [
+            FilledButton(
+              onPressed: () => exit(0),
+              child: const Text('Quit'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _saveBitcoinServers() async {

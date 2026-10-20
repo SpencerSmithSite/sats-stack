@@ -288,3 +288,42 @@ Future<File> databaseFile() async {
   final dir = await getApplicationDocumentsDirectory();
   return File(p.join(dir.path, '${AppConstants.dbName}.sqlite'));
 }
+
+/// How [replaceDatabaseFile] ended.
+enum RestoreOutcome {
+  /// [replaceDatabaseFile]'s source is now the database.
+  replaced,
+
+  /// The copy failed, and the previous database was put back.
+  failedOriginalRestored,
+
+  /// The copy failed and the previous database could not be put back; it is
+  /// still in the `.bak` beside the database, if one could be made.
+  failedOriginalLost,
+}
+
+/// Replaces [target] with [source], keeping the original as `<target>.bak`.
+///
+/// The caller must already have closed the database. On failure the copy may
+/// have stopped partway, so the original is copied back over the torn file
+/// before returning: a relaunch should open the user's own data, not half of
+/// a backup.
+Future<({RestoreOutcome outcome, Object? error})> replaceDatabaseFile({
+  required File source,
+  required File target,
+}) async {
+  final backup = File('${target.path}.bak');
+  try {
+    if (target.existsSync()) await target.copy(backup.path);
+    await source.copy(target.path);
+    return (outcome: RestoreOutcome.replaced, error: null);
+  } catch (e) {
+    try {
+      if (backup.existsSync()) {
+        await backup.copy(target.path);
+        return (outcome: RestoreOutcome.failedOriginalRestored, error: e);
+      }
+    } catch (_) {}
+    return (outcome: RestoreOutcome.failedOriginalLost, error: e);
+  }
+}
