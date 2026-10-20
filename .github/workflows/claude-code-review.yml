@@ -10,13 +10,20 @@ on:
     #   - "src/**/*.js"
     #   - "src/**/*.jsx"
 
+# A new push supersedes the review of the previous one — three quick pushes
+# used to start three full reviews.
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   claude-review:
-    # Optional: Filter by PR author
-    # if: |
-    #   github.event.pull_request.user.login == 'external-contributor' ||
-    #   github.event.pull_request.user.login == 'new-developer' ||
-    #   github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR'
+    # Same-repo PRs only, and not drafts. A fork's PR runs without secrets
+    # under `pull_request`, so the review could only fail; and a draft is not
+    # ready to be reviewed.
+    if: |
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      !github.event.pull_request.draft
 
     runs-on: ubuntu-latest
     permissions:
