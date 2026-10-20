@@ -91,6 +91,7 @@ void main() {
       const backend = PlatformLlmBackend();
       // Leaving the chat screen mid-answer must cancel the Swift Task rather
       // than leaving it running.
+      final errors = <Object>[];
       final sub = backend
           .chat([
             {
@@ -98,10 +99,41 @@ void main() {
               'content': 'Write a long paragraph about budgeting.',
             },
           ])
-          .listen(null);
+          .listen(null, onError: errors.add);
       await Future<void>.delayed(const Duration(milliseconds: 300));
       await sub.cancel();
+      // A cancel is not a failure. The bridge used to catch the
+      // CancellationError like any other and report "generation_failed".
+      await Future<void>.delayed(const Duration(seconds: 1));
+      expect(errors, isEmpty);
     }, timeout: const Timeout(Duration(minutes: 1)));
+
+    test('an answer straight after a cancelled one still arrives', () async {
+      final report = await PlatformLlmBackend.availability(refresh: true);
+      if (!report.isAvailable) {
+        markTestSkipped('Apple Intelligence unavailable: ${report.detail}');
+        return;
+      }
+
+      const backend = PlatformLlmBackend();
+      final first = backend
+          .chat([
+            {
+              'role': 'user',
+              'content': 'Write a long paragraph about budgeting.',
+            },
+          ])
+          .listen(null, onError: (_) {});
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      await first.cancel();
+
+      // Immediately, as a user who stops one answer and asks again would.
+      final second =
+          await backend.chat([
+            {'role': 'user', 'content': 'Say "ready" and nothing else.'},
+          ]).join();
+      expect(second.trim(), isNotEmpty);
+    }, timeout: const Timeout(Duration(minutes: 2)));
   });
 
   group('Device probes', () {

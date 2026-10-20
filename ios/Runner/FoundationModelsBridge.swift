@@ -166,8 +166,28 @@ enum FoundationModelsBridge {
 /// the newest fragment, so this sends the delta — otherwise every token would
 /// arrive with the entire answer prepended and the chat bubble would repeat
 /// itself.
+///
+/// **Cancellation.** A cancelled generation used to keep talking: its task
+/// unwound by throwing `CancellationError`, which the catch reported as
+/// `generation_failed`, and then sent end-of-stream — through a sink that by
+/// then belonged to the *next* request, so an answer asked for straight after
+/// a cancelled one arrived empty. Each generation now has an id, every
+/// emission is dropped unless that id is still current (checked on the main
+/// actor, where `onCancel` also runs, so the two cannot race), and a new
+/// generation waits for the cancelled one to unwind before it starts.
 final class GenerationStreamHandler: NSObject, FlutterStreamHandler {
     private var task: Task<Void, Never>?
+
+    /// Which generation may emit.
+    ///
+    /// A box rather than a property, so the emitting closure can capture it
+    /// without capturing `self` in concurrent code. `@unchecked Sendable` is
+    /// sound because it is only ever touched on the main thread: Flutter calls
+    /// `onListen`/`onCancel` there, and every read is inside `MainActor.run`.
+    private final class Gate: @unchecked Sendable {
+        var currentID: UUID?
+    }
+    private let gate = Gate()
 
     func onListen(
         withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink
@@ -181,28 +201,46 @@ final class GenerationStreamHandler: NSObject, FlutterStreamHandler {
 
         #if canImport(FoundationModels)
         if #available(iOS 26.0, macOS 26.0, *) {
+            let id = UUID()
+            let gate = self.gate
+            gate.currentID = id
+            let previous = task
+            previous?.cancel()
+
+            /// Emits only while this generation is the current one.
+            let emit: @Sendable (Any) async -> Void = { value in
+                await MainActor.run {
+                    guard gate.currentID == id else { return }
+                    events(value)
+                }
+            }
+
             task = Task {
+                // The system model answers one request at a time; starting
+                // before the cancelled one has unwound races it.
+                _ = await previous?.value
                 do {
                     let session = system.map { LanguageModelSession(instructions: $0) }
                         ?? LanguageModelSession()
                     var sent = ""
                     for try await partial in session.streamResponse(to: prompt) {
-                        if Task.isCancelled { break }
+                        if Task.isCancelled { return }
                         let whole = partial.content
                         guard whole.count > sent.count else { continue }
                         let delta = String(whole.dropFirst(sent.count))
                         sent = whole
-                        await MainActor.run { events(delta) }
+                        await emit(delta)
                     }
-                    await MainActor.run { events(FlutterEndOfEventStream) }
+                    if Task.isCancelled { return }
+                    await emit(FlutterEndOfEventStream)
                 } catch {
-                    await MainActor.run {
-                        events(FlutterError(
-                            code: "generation_failed",
-                            message: error.localizedDescription,
-                            details: nil))
-                        events(FlutterEndOfEventStream)
-                    }
+                    // A cancel is the caller's choice, not a failure.
+                    if error is CancellationError || Task.isCancelled { return }
+                    await emit(FlutterError(
+                        code: "generation_failed",
+                        message: error.localizedDescription,
+                        details: nil))
+                    await emit(FlutterEndOfEventStream)
                 }
             }
             return nil
@@ -219,9 +257,11 @@ final class GenerationStreamHandler: NSObject, FlutterStreamHandler {
 
     /// Cancels in flight. Dart cancelling its subscription — the user leaving
     /// the chat screen mid-answer — must stop the work, not leave it running.
+    ///
+    /// The task is kept, cancelled, so the next generation can wait for it.
     func onCancel(withArguments arguments: Any?) -> FlutterError? {
+        gate.currentID = nil
         task?.cancel()
-        task = nil
         return nil
     }
 }
