@@ -37,54 +37,35 @@ History lives elsewhere and is not duplicated into this file:
 > Those are fixed (see `AUDIT.md`). Everything below is what they found and is
 > still open, in the order I would do it.
 
-### 1. Ships broken or cannot ship
+### 1. Two decisions before the app can ship
 
-- **macOS: the hand-copied LiteRT-LM frameworks are ad-hoc signed** (`macos/
-  Podfile:162,171` run `codesign --sign -`) and `Release.entitlements` has no
-  `com.apple.security.cs.disable-library-validation`. This works *only* because
-  the whole app is ad-hoc signed; the moment the target is signed with a
-  Developer ID — which registering the bundle id requires anyway — library
-  validation refuses to `dlopen` them and notarization rejects ad-hoc nested
-  code. Every `install_name_tool`/`codesign` in that phase ends in `|| true`,
-  so the failure is swallowed at build time. Drop the `|| true`s.
-- **That build phase is arm64-only and reads `${HOME}/Library/Caches`**
-  (`macos/Podfile:120-137`). On an Intel Mac it warns and the build *succeeds*
-  with a broken app. Select from `$ARCHS` and `exit 1` rather than warn.
+The build-phase half of this item is fixed (see `AUDIT.md`). What is left
+needs a choice, not a patch.
+
 - **`flutter_gemma` and `flutter_gemma_litertlm` are both discontinued** on
   pub.dev (1.4.2 / 1.3.1 installed; 1.11.4 / 1.8.6 are the last versions that
   will ever exist). The pubspec comment chose this package *on maintenance
   grounds*; that reasoning has inverted. Options, with what breaks:
   (a) stay — nothing breaks today, no fix ever arrives, including for the
-  `-headerpad_max_install_names` workaround above; (b) move to the final
-  versions — resolvable, but `createModel`, the `FlutterGemma.*` statics and
-  `ModelFileType` all moved between 1.4 and 1.11, and the macOS build phase is
-  written against 1.3.1's layout; (c) replace with a direct LiteRT-LM FFI
-  binding — the only route that keeps the `.litertlm` catalogue and already
-  downloaded models; (d) drop the backend — it is the only one of six with a
-  hand-written Xcode phase, a multi-gigabyte download and an unmaintained
-  native dependency, and two other on-device backends exist.
-- **macOS bundle id and product name are still template placeholders.**
-  `AppInfo.xcconfig:11` is `com.satsstack.satsStack` against iOS's
-  `app.satsstack.SatsStack`, and `:8` makes the window title `sats_stack`.
-  (The copyright string on `:14` is fixed.)
-
-### 2. The native bridges do not stop generating when cancelled
-
-`android/.../GeminiNanoBridge.kt:132-163` and
-`ios/Runner/FoundationModelsBridge.swift:184-226`. Real on both platforms, for
-different reasons: Kotlin's `onCancel` cancels a job the collector never
-suspends on (and `scope` is a local in `onListen`, so it cannot be cancelled at
-all), while Swift's `catch` does not distinguish `CancellationError`, so
-cancelling emits `generation_failed` into a torn-down sink. Both hold a single
-`task`/`job` field on a single handler instance, so a second request orphans
-the first.
-
-**This narrows an `AUDIT.md` claim.** `serialisedOnChannel` releases its queue
-slot the instant the Dart subscription is cancelled, not when the native side
-stops — and `stream_resilience_test.dart` runs under `flutter test`, which has
-no engine, so it exercises the Dart queue alone. Net effect: cancelling one
-answer can corrupt or fail the next one, and on Android the model stays busy
-after the queue has moved on. Fix needs native work on both sides.
+  `-headerpad_max_install_names` workaround in `macos/Podfile`; (b) move to
+  the final versions — resolvable, but `createModel`, the `FlutterGemma.*`
+  statics and `ModelFileType` all moved between 1.4 and 1.11, and the macOS
+  build phase is written against 1.3.1's layout; (c) replace with a direct
+  LiteRT-LM FFI binding — the only route that keeps the `.litertlm` catalogue
+  and already downloaded models; (d) drop the backend — it is the only one of
+  six with a hand-written Xcode phase, a multi-gigabyte download and an
+  unmaintained native dependency, and two other on-device backends exist.
+  Dropping it would also let iOS go back to a 15.0 minimum.
+- **The macOS bundle id is still the template's**: `com.satsstack.satsStack`
+  against iOS's `app.satsstack.SatsStack`. Registering it with Apple (needed
+  for Developer ID signing, notarization and the data-protection keychain)
+  means choosing the final one now. **Changing it moves the app's data**: the
+  app is sandboxed, so its database lives in
+  `~/Library/Containers/com.satsstack.satsStack`, and a new id opens an empty
+  container — the app would look wiped, and stored API keys would be gone.
+  Export the database from Settings → Data first and import it after, or move
+  the container by hand. (The product name, which made the window title
+  `sats_stack`, is fixed; the container follows the id, not the name.)
 
 ### 10. Decisions and upgrades the CI pass surfaced
 
@@ -189,11 +170,9 @@ worth doing on purpose rather than as a move.
 
 ## Known broken / unfinished
 
-See **Next, items 1 and 2** — the second review pass found things that are
-genuinely broken rather than merely imperfect: the macOS framework signing,
-the discontinued on-device-model packages, and the native cancellation path.
-The GPL/Syncfusion licence conflict in item 1 is a decision waiting on the
-author, not a defect.
+See **Next, item 1**: the discontinued on-device-model packages, and the
+macOS bundle id that has to be settled before the app can be registered and
+signed for distribution. Both are decisions rather than defects.
 
 The only *dead* code is the Bitcoin data-source work in item 11, which is
 waiting on a screen rather than failing.

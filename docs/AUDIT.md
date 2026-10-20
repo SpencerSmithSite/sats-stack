@@ -970,6 +970,58 @@ nothing else had to be read through 7,000 lines of re-indentation, and this.
 `flutter build macos --debug` were run locally before the workflow was
 pushed; the workflow itself is proven only by its first run on the PR.
 
+### The macOS model build phase, and cancelling on-device answers
+
+Addressed 2026-10-20 (`TODO.md` items 1, in part, and 2).
+
+- **The LiteRT-LM build phase swallowed every failure.** Each
+  `install_name_tool` and `codesign` ended in `2>/dev/null || true`. With
+  those removed, the very first build failed: `libLiteRtTopKMetalSampler`
+  does not exist in this flutter_gemma version, and every earlier build had
+  printed a warning about it and carried on. It turns out to be optional —
+  LiteRT loads it if present and samples on the CPU without it — so it is now
+  skipped by name, while the two libraries LiteRT cannot run without fail the
+  build if missing.
+- **The copied frameworks were always signed ad hoc**, which library
+  validation refuses to load into a Developer ID-signed app and notarization
+  rejects. They are now signed with the identity Xcode is signing the app
+  with (`EXPANDED_CODE_SIGN_IDENTITY`), with the hardened runtime and a
+  timestamp when that is a real identity. No
+  `disable-library-validation` entitlement is needed: same-team code loads.
+- **Architecture.** LiteRT-LM ships arm64 only. The phase now skips an
+  arm64-less build instead of failing, and still installs for a universal
+  one. More importantly, `LocalModelChoice.runsHere` checked the OS rather
+  than the CPU — its comment said "Apple silicon (not Intel)" while the code
+  said any Mac — so an Intel Mac, or a 32-bit or x86 Android device, was
+  offered a multi-gigabyte download that could never load. It checks the ABI
+  now.
+- **The product name was the template's**, so the window title read
+  `sats_stack`. It is "Sats Stack"; the bundle id is a separate decision
+  (`TODO.md` item 1), because changing it moves the sandboxed data.
+- **Cancelling an on-device answer broke the next one.** Reproduced first, on
+  this Mac: an answer requested straight after a cancelled one arrived
+  **empty**. The cancelled Swift task unwound by throwing
+  `CancellationError`, which the catch reported as `generation_failed`, then
+  sent end-of-stream through a sink that by then belonged to the next request.
+  Both bridges now give each generation a token and drop any emission whose
+  token is no longer current — checked on the main thread, where `onCancel`
+  runs, so the two cannot race — treat cancellation as cancellation, and make
+  a new generation wait for the cancelled one to unwind. This also retires the
+  narrowed claim about `serialisedOnChannel`: its queue slot is released on
+  cancel, and the native side now waits for itself.
+
+  The TODO's account of the Kotlin side was partly wrong: `collect` does
+  suspend between chunks, so cancelling the job did stop it. The real faults
+  were the same two as Swift's — cancellation reported as failure, and no
+  wait before the next request.
+
+`integration_test/apple_intelligence_test.dart` gained the cancel-then-ask
+case; it fails against the old bridge and passes against the new one on macOS
+(three runs) and on the iOS 27 simulator. The Kotlin bridge compiles cleanly
+but is **not verified on a device** — Gemini Nano needs AICore on a physical
+phone. The renamed app also passes the native macOS `RunnerTests`, whose test
+host had the old name hardcoded.
+
 ### Test gaps
 
 The suite went from 102 tests to 209 over this work. Month boundaries, category
