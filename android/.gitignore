@@ -12,3 +12,7 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+
+# Gradle 8.14 writes its problems report here, before the build directory is
+# redirected to ../build.
+/build/
