@@ -51,7 +51,9 @@ void main() {
   testWidgets('entries are namespaced per provider', (_) async {
     // Four providers share one store; a collision would hand one provider's
     // key to another and produce a baffling 401.
-    expect(SecureKeyStore.entryName('anthropic'),
-        isNot(SecureKeyStore.entryName('openai')));
+    expect(
+      SecureKeyStore.entryName('anthropic'),
+      isNot(SecureKeyStore.entryName('openai')),
+    );
   });
 }

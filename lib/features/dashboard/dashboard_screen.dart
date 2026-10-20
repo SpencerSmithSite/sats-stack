@@ -28,10 +28,7 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  DateTime _selectedMonth = DateTime(
-    DateTime.now().year,
-    DateTime.now().month,
-  );
+  DateTime _selectedMonth = DateTime(DateTime.now().year, DateTime.now().month);
 
   String? _cachedInsight;
   bool _isGeneratingInsight = false;
@@ -93,7 +90,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void _onCurrencyChange() => setState(_rebuildStreams);
 
   void _showInsightError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _initInsight() async {
@@ -104,7 +103,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     // and full category breakdown to a third party with no user action and no
     // disclosure — while the disclosure widget promised the opposite.
     final offDevice = app.ollamaService.sendsDataOffDevice;
-    _insightRecipient = offDevice ? app.ollamaService.activeDataRecipient : null;
+    _insightRecipient =
+        offDevice ? app.ollamaService.activeDataRecipient : null;
     if (mounted) setState(() {});
     if (offDevice) return;
     final stale = await app.ollamaService.isInsightStale();
@@ -126,8 +126,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (!available) {
       if (userAsked) {
         _showInsightError(
-            '${app.ollamaService.backend.displayName} is not available right '
-            'now. Check it in Settings → Servers.');
+          '${app.ollamaService.backend.displayName} is not available right '
+          'now. Check it in Settings → Servers.',
+        );
       }
       return;
     }
@@ -239,17 +240,24 @@ class _ErrorState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.error_outline,
-                size: 48,
-                color: Theme.of(context).colorScheme.error.withAlpha(160)),
+            Icon(
+              Icons.error_outline,
+              size: 48,
+              color: Theme.of(context).colorScheme.error.withAlpha(160),
+            ),
             const SizedBox(height: 16),
-            Text('Something went wrong',
-                style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'Something went wrong',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: 8),
-            Text(message,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant),
-                textAlign: TextAlign.center),
+            Text(
+              message,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+              textAlign: TextAlign.center,
+            ),
           ],
         ),
       ),
@@ -263,16 +271,18 @@ class _Live extends StatelessWidget {
   const _Live({required this.builder});
 
   final Widget Function(BuildContext context, double? btcPrice, String currency)
-      builder;
+  builder;
 
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<double?>(
       valueListenable: app.btcPriceService.priceNotifier,
-      builder: (context, btcPrice, _) => ValueListenableBuilder<String>(
-        valueListenable: app.currencyNotifier,
-        builder: (context, currency, _) => builder(context, btcPrice, currency),
-      ),
+      builder:
+          (context, btcPrice, _) => ValueListenableBuilder<String>(
+            valueListenable: app.currencyNotifier,
+            builder:
+                (context, currency, _) => builder(context, btcPrice, currency),
+          ),
     );
   }
 }
@@ -315,12 +325,13 @@ class _DashboardContent extends StatelessWidget {
 
         // ── Hero card ─────────────────────────────────────────────────────
         _Live(
-          builder: (context, btcPrice, currency) => HeroCard(
-            totalStackSats: data.totalStackSats,
-            monthChangeSats: data.monthStackChangeSats,
-            btcPrice: btcPrice,
-            currency: currency,
-          ),
+          builder:
+              (context, btcPrice, currency) => HeroCard(
+                totalStackSats: data.totalStackSats,
+                monthChangeSats: data.monthStackChangeSats,
+                btcPrice: btcPrice,
+                currency: currency,
+              ),
         ),
         const SizedBox(height: 16),
 
@@ -333,8 +344,11 @@ class _DashboardContent extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.info_outline,
-                    size: 15, color: theme.colorScheme.onSurfaceVariant),
+                Icon(
+                  Icons.info_outline,
+                  size: 15,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
@@ -355,73 +369,88 @@ class _DashboardContent extends StatelessWidget {
 
         // ── 2×2 Metric grid ───────────────────────────────────────────────
         _Live(
-          builder: (context, btcPrice, currency) => Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: MetricTile(
-                        label: 'Monthly Surplus',
-                        value: CurrencyUtils.format(data.monthlySurplusFiat, currency),
-                        subValue: btcPrice != null && btcPrice > 0
-                            ? _satConversion(data.monthlySurplusFiat.abs(), btcPrice)
-                            : null,
-                        valueColor: data.monthlySurplusFiat >= 0
-                            ? AppColors.success
-                            : AppColors.danger,
-                        icon: Icons.savings_outlined,
-                        iconColor: data.monthlySurplusFiat >= 0
-                            ? AppColors.success
-                            : AppColors.danger,
-                      ),
+          builder:
+              (context, btcPrice, currency) => Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: MetricTile(
+                            label: 'Monthly Surplus',
+                            value: CurrencyUtils.format(
+                              data.monthlySurplusFiat,
+                              currency,
+                            ),
+                            subValue:
+                                btcPrice != null && btcPrice > 0
+                                    ? _satConversion(
+                                      data.monthlySurplusFiat.abs(),
+                                      btcPrice,
+                                    )
+                                    : null,
+                            valueColor:
+                                data.monthlySurplusFiat >= 0
+                                    ? AppColors.success
+                                    : AppColors.danger,
+                            icon: Icons.savings_outlined,
+                            iconColor:
+                                data.monthlySurplusFiat >= 0
+                                    ? AppColors.success
+                                    : AppColors.danger,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: MetricTile(
+                            label: 'Fiat Leak Rate',
+                            value: '${data.fiatLeakRate.toStringAsFixed(1)}%',
+                            subValue: 'of income spent',
+                            valueColor:
+                                data.fiatLeakRate > 80
+                                    ? AppColors.danger
+                                    : data.fiatLeakRate > 50
+                                    ? AppColors.bitcoinOrange
+                                    : AppColors.success,
+                            icon: Icons.water_drop_outlined,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: MetricTile(
-                        label: 'Fiat Leak Rate',
-                        value: '${data.fiatLeakRate.toStringAsFixed(1)}%',
-                        subValue: 'of income spent',
-                        valueColor: data.fiatLeakRate > 80
-                            ? AppColors.danger
-                            : data.fiatLeakRate > 50
-                                ? AppColors.bitcoinOrange
-                                : AppColors.success,
-                        icon: Icons.water_drop_outlined,
-                      ),
+                  ),
+                  const SizedBox(height: 10),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: StackGoalTile(
+                            progress: data.stackGoalProgress,
+                            currentSats: data.totalStackSats,
+                            goalSats: data.stackGoalSats,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: MetricTile(
+                            label: 'Inflation Cost',
+                            value: CurrencyUtils.format(
+                              data.inflationCostFiat,
+                              currency,
+                            ),
+                            subValue:
+                                'per month @ ${inflationRate % 1 == 0 ? inflationRate.toStringAsFixed(0) : inflationRate.toString()}%',
+                            valueColor: AppColors.danger,
+                            icon: Icons.trending_down_outlined,
+                            iconColor: AppColors.danger,
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 10),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: StackGoalTile(
-                        progress: data.stackGoalProgress,
-                        currentSats: data.totalStackSats,
-                        goalSats: data.stackGoalSats,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: MetricTile(
-                        label: 'Inflation Cost',
-                        value: CurrencyUtils.format(data.inflationCostFiat, currency),
-                        subValue: 'per month @ ${inflationRate % 1 == 0 ? inflationRate.toStringAsFixed(0) : inflationRate.toString()}%',
-                        valueColor: AppColors.danger,
-                        icon: Icons.trending_down_outlined,
-                        iconColor: AppColors.danger,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
         ),
         const SizedBox(height: 20),
 
@@ -429,20 +458,19 @@ class _DashboardContent extends StatelessWidget {
         StreamBuilder<List<WalletSummary>>(
           stream: perWallet,
           builder: (context, snapshot) {
-            final summaries = (snapshot.data ?? [])
-                .where((s) => s.hasActivity)
-                .toList();
+            final summaries =
+                (snapshot.data ?? []).where((s) => s.hasActivity).toList();
             if (summaries.length < 2) return const SizedBox.shrink();
             return Column(
               children: [
                 _SectionHeader(title: 'Wallets'),
                 _Live(
-                  builder: (context, btcPrice, currency) =>
-                      _WalletBreakdownSection(
-                    summaries: summaries,
-                    btcPrice: btcPrice,
-                    currency: currency,
-                  ),
+                  builder:
+                      (context, btcPrice, currency) => _WalletBreakdownSection(
+                        summaries: summaries,
+                        btcPrice: btcPrice,
+                        currency: currency,
+                      ),
                 ),
                 const SizedBox(height: 20),
               ],
@@ -462,17 +490,18 @@ class _DashboardContent extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: _Live(
-                builder: (context, btcPrice, currency) => SpendingChart(
-                  spendingByCategory: data.spendingByCategory,
-                  btcPrice: btcPrice,
-                  currency: currency,
-                  // The colours the user actually chose. The chart used to
-                  // draw its own fixed palette and ignore them.
-                  categoryColorHex: {
-                    for (final e in categoriesByName.entries)
-                      e.key: e.value.color,
-                  },
-                ),
+                builder:
+                    (context, btcPrice, currency) => SpendingChart(
+                      spendingByCategory: data.spendingByCategory,
+                      btcPrice: btcPrice,
+                      currency: currency,
+                      // The colours the user actually chose. The chart used to
+                      // draw its own fixed palette and ignore them.
+                      categoryColorHex: {
+                        for (final e in categoriesByName.entries)
+                          e.key: e.value.color,
+                      },
+                    ),
               ),
             ),
           ),
@@ -525,13 +554,14 @@ class _DashboardContent extends StatelessWidget {
         // until the Dashboard was rebuilt from scratch.
         ValueListenableBuilder<bool>(
           valueListenable: app.aiEnabledNotifier,
-          builder: (_, aiEnabled, __) => AiInsightCard(
-            aiEnabled: aiEnabled,
-            cachedInsight: cachedInsight,
-            isGenerating: isGeneratingInsight,
-            onRefresh: onRefreshInsight,
-            offDeviceRecipient: insightRecipient,
-          ),
+          builder:
+              (_, aiEnabled, __) => AiInsightCard(
+                aiEnabled: aiEnabled,
+                cachedInsight: cachedInsight,
+                isGenerating: isGeneratingInsight,
+                onRefresh: onRefreshInsight,
+                offDeviceRecipient: insightRecipient,
+              ),
         ),
         const SizedBox(height: 8),
       ],
@@ -546,11 +576,12 @@ class _DashboardContent extends StatelessWidget {
       return TransactionListItem(transaction: tx, category: category);
     }
     return _Live(
-      builder: (context, btcPrice, _) => TransactionListItem(
-        transaction: tx,
-        category: category,
-        btcPrice: btcPrice,
-      ),
+      builder:
+          (context, btcPrice, _) => TransactionListItem(
+            transaction: tx,
+            category: category,
+            btcPrice: btcPrice,
+          ),
     );
   }
 
@@ -675,14 +706,17 @@ class _WalletRow extends StatelessWidget {
               children: [
                 Text(
                   wallet.label,
-                  style: theme.textTheme.bodyMedium
-                      ?.copyWith(fontWeight: FontWeight.w500),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w500,
+                  ),
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 2),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 5,
+                    vertical: 1,
+                  ),
                   decoration: BoxDecoration(
                     color: _walletColor.withAlpha(30),
                     borderRadius: BorderRadius.circular(4),
@@ -703,35 +737,35 @@ class _WalletRow extends StatelessWidget {
           // Values (right-aligned)
           ShrinkToFit(
             child: Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                summary.hasBitcoin ? '$primaryValue sats' : primaryValue,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  fontFamily: 'RobotoMono',
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              if (secondaryValue != null)
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
                 Text(
-                  secondaryValue,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: changeColor ?? context.textSecondary,
-                    fontSize: 11,
+                  summary.hasBitcoin ? '$primaryValue sats' : primaryValue,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontFamily: 'RobotoMono',
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
-              if (summary.hasBitcoin &&
-                  btcPrice != null &&
-                  btcPrice! > 0 &&
-                  summary.totalSats != 0)
-                Text(
-                  '≈ ${CurrencyUtils.formatCompact(summary.totalSats / 1e8 * btcPrice!, currency)}',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: context.textSecondary,
-                    fontSize: 11,
+                if (secondaryValue != null)
+                  Text(
+                    secondaryValue,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: changeColor ?? context.textSecondary,
+                      fontSize: 11,
+                    ),
                   ),
-                ),
-            ],
+                if (summary.hasBitcoin &&
+                    btcPrice != null &&
+                    btcPrice! > 0 &&
+                    summary.totalSats != 0)
+                  Text(
+                    '≈ ${CurrencyUtils.formatCompact(summary.totalSats / 1e8 * btcPrice!, currency)}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: context.textSecondary,
+                      fontSize: 11,
+                    ),
+                  ),
+              ],
             ),
           ),
         ],
@@ -745,11 +779,7 @@ class _WalletRow extends StatelessWidget {
 // ── Section header ────────────────────────────────────────────────────────────
 
 class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({
-    required this.title,
-    this.action,
-    this.onAction,
-  });
+  const _SectionHeader({required this.title, this.action, this.onAction});
 
   final String title;
   final String? action;

@@ -35,16 +35,18 @@ class BitcoinNodeService {
   // ── Settings ──────────────────────────────────────────────────────────────
 
   Future<void> loadSettings() async {
-    final urlRows = await (_db.select(_db.appSettings)
-          ..where((t) => t.key.equals(AppConstants.settingBitcoinRpcUrl)))
-        .get();
+    final urlRows =
+        await (_db.select(
+          _db.appSettings,
+        )..where((t) => t.key.equals(AppConstants.settingBitcoinRpcUrl))).get();
     if (urlRows.isNotEmpty && urlRows.first.value.isNotEmpty) {
       _rpcUrl = urlRows.first.value;
     }
 
-    final userRows = await (_db.select(_db.appSettings)
-          ..where((t) => t.key.equals(AppConstants.settingBitcoinRpcUser)))
-        .get();
+    final userRows =
+        await (_db.select(_db.appSettings)..where(
+          (t) => t.key.equals(AppConstants.settingBitcoinRpcUser),
+        )).get();
     if (userRows.isNotEmpty) _rpcUser = userRows.first.value;
   }
 
@@ -56,16 +58,20 @@ class BitcoinNodeService {
     required String user,
     required String password,
   }) async {
-    _rpcUrl = url.trim().isNotEmpty ? url.trim() : AppConstants.defaultBitcoinRpcUrl;
+    _rpcUrl =
+        url.trim().isNotEmpty ? url.trim() : AppConstants.defaultBitcoinRpcUrl;
     _rpcUser = user.trim();
 
-    for (final e in {
-      AppConstants.settingBitcoinRpcUrl: _rpcUrl,
-      AppConstants.settingBitcoinRpcUser: _rpcUser,
-    }.entries) {
-      await _db.into(_db.appSettings).insertOnConflictUpdate(
-        AppSettingsCompanion.insert(key: e.key, value: e.value),
-      );
+    for (final e
+        in {
+          AppConstants.settingBitcoinRpcUrl: _rpcUrl,
+          AppConstants.settingBitcoinRpcUser: _rpcUser,
+        }.entries) {
+      await _db
+          .into(_db.appSettings)
+          .insertOnConflictUpdate(
+            AppSettingsCompanion.insert(key: e.key, value: e.value),
+          );
     }
 
     await _keys.writeEntry(
@@ -127,7 +133,8 @@ class BitcoinNodeService {
     final error = body['error'];
     if (error != null) {
       throw Exception(
-          error is Map<String, dynamic> ? error['message'] ?? error : error);
+        error is Map<String, dynamic> ? error['message'] ?? error : error,
+      );
     }
     return body['result'];
   }

@@ -127,21 +127,26 @@ class _StackScreenState extends State<StackScreen> {
   }
 
   Future<void> _loadGoal() async {
-    final entry = await (app.db.select(app.db.appSettings)
-          ..where((s) => s.key.equals(AppConstants.settingStackGoalSats)))
-        .getSingleOrNull();
+    final entry =
+        await (app.db.select(app.db.appSettings)..where(
+          (s) => s.key.equals(AppConstants.settingStackGoalSats),
+        )).getSingleOrNull();
     if (mounted) {
-      setState(() => _stackGoalSats = entry != null ? int.tryParse(entry.value) : null);
+      setState(
+        () => _stackGoalSats = entry != null ? int.tryParse(entry.value) : null,
+      );
     }
   }
 
   Future<void> _saveGoal(int sats) async {
-    await app.db.into(app.db.appSettings).insertOnConflictUpdate(
-      AppSettingsCompanion.insert(
-        key: AppConstants.settingStackGoalSats,
-        value: sats.toString(),
-      ),
-    );
+    await app.db
+        .into(app.db.appSettings)
+        .insertOnConflictUpdate(
+          AppSettingsCompanion.insert(
+            key: AppConstants.settingStackGoalSats,
+            value: sats.toString(),
+          ),
+        );
     if (mounted) setState(() => _stackGoalSats = sats);
   }
 
@@ -150,10 +155,7 @@ class _StackScreenState extends State<StackScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => SetGoalSheet(
-        current: _stackGoalSats,
-        onSave: _saveGoal,
-      ),
+      builder: (_) => SetGoalSheet(current: _stackGoalSats, onSave: _saveGoal),
     );
   }
 
@@ -174,15 +176,16 @@ class _StackScreenState extends State<StackScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.error_outline,
-                      size: 48,
-                      color: Theme.of(context)
-                          .colorScheme
-                          .error
-                          .withAlpha(160)),
+                  Icon(
+                    Icons.error_outline,
+                    size: 48,
+                    color: Theme.of(context).colorScheme.error.withAlpha(160),
+                  ),
                   const SizedBox(height: 12),
-                  Text('Failed to load stack data',
-                      style: Theme.of(context).textTheme.titleMedium),
+                  Text(
+                    'Failed to load stack data',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                 ],
               ),
             );
@@ -338,9 +341,10 @@ class _SectionHeader extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 0, 16, 10),
       child: Text(
         title,
-        style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+        style: Theme.of(
+          context,
+        ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
       ),
     );
   }
 }
-

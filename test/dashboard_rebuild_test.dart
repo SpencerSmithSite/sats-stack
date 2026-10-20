@@ -28,20 +28,25 @@ void main() {
 
   Future<void> addRow(int sats, double fiat, String description) async {
     final wallet = (await app.db.select(app.db.wallets).get()).first.id;
-    await app.db.into(app.db.transactions).insert(TransactionsCompanion.insert(
-          walletId: wallet,
-          date: DateTime.now(),
-          description: description,
-          amountSats: sats,
-          amountFiat: fiat,
-          fiatCurrency: 'USD',
-          source: 'manual',
-          dedupHash: description,
-        ));
+    await app.db
+        .into(app.db.transactions)
+        .insert(
+          TransactionsCompanion.insert(
+            walletId: wallet,
+            date: DateTime.now(),
+            description: description,
+            amountSats: sats,
+            amountFiat: fiat,
+            fiatCurrency: 'USD',
+            source: 'manual',
+            dedupHash: description,
+          ),
+        );
   }
 
-  testWidgets('a price tick rebuilds what shows the price, not every row',
-      (tester) async {
+  testWidgets('a price tick rebuilds what shows the price, not every row', (
+    tester,
+  ) async {
     await tester.runAsync(() async {
       app.db = AppDatabase.forTesting(NativeDatabase.memory());
       app.categoryService = CategoryService(app.db);
@@ -50,8 +55,10 @@ void main() {
       app.inflationRateNotifier = ValueNotifier(3.5);
       app.aiEnabledNotifier = ValueNotifier(false);
       app.showBtcPriceNotifier = ValueNotifier(false);
-      app.dashboardService = DashboardService(app.db,
-          rates: () => const FxRates(display: 'USD', btcPrices: {}));
+      app.dashboardService = DashboardService(
+        app.db,
+        rates: () => const FxRates(display: 'USD', btcPrices: {}),
+      );
       await addRow(-25000, -20, 'Has stored sats');
       await addRow(0, -10, 'No stored sats');
     });
@@ -61,18 +68,23 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(MaterialApp(
-      theme: AppTheme.dark(),
-      home: const DashboardScreen(),
-    ));
+    await tester.pumpWidget(
+      MaterialApp(theme: AppTheme.dark(), home: const DashboardScreen()),
+    );
     // Let the drift queries land, then build with their results.
-    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 100)),
+    );
     await tester.pump(const Duration(milliseconds: 300));
 
     TransactionListItem row(String description) =>
-        tester.widget<TransactionListItem>(find.byWidgetPredicate((w) =>
-            w is TransactionListItem &&
-            w.transaction.description == description));
+        tester.widget<TransactionListItem>(
+          find.byWidgetPredicate(
+            (w) =>
+                w is TransactionListItem &&
+                w.transaction.description == description,
+          ),
+        );
 
     final storedBefore = row('Has stored sats');
     final derivedBefore = row('No stored sats');
@@ -88,8 +100,10 @@ void main() {
     expect(row('No stored sats').btcPrice, 80000);
     // And the hero shows the new price.
     expect(tester.widget<HeroCard>(find.byType(HeroCard)).btcPrice, 80000);
-    expect(identical(tester.widget<HeroCard>(find.byType(HeroCard)), heroBefore),
-        isFalse);
+    expect(
+      identical(tester.widget<HeroCard>(find.byType(HeroCard)), heroBefore),
+      isFalse,
+    );
 
     // Unmount first, and let drift's stream teardown run on the test clock;
     // closing with a stream query still scheduled there never completes.

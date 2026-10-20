@@ -30,10 +30,13 @@ class StackHero extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final fiatFmt = NumberFormat.currency(
-        symbol: CurrencyUtils.symbolFor(currency), decimalDigits: 0);
-    final fiatValue = btcPrice != null && btcPrice! > 0
-        ? fiatFmt.format(totalSats / 1e8 * btcPrice!)
-        : '--';
+      symbol: CurrencyUtils.symbolFor(currency),
+      decimalDigits: 0,
+    );
+    final fiatValue =
+        btcPrice != null && btcPrice! > 0
+            ? fiatFmt.format(totalSats / 1e8 * btcPrice!)
+            : '--';
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -44,10 +47,14 @@ class StackHero extends StatelessWidget {
         // light-mode pass: in light mode it stayed a dark brown slab.
         gradient: LinearGradient(
           colors: [
-            Color.alphaBlend(AppColors.bitcoinOrange.withAlpha(20),
-                theme.colorScheme.surfaceContainerHighest),
-            Color.alphaBlend(AppColors.bitcoinOrange.withAlpha(48),
-                theme.colorScheme.surfaceContainerHighest),
+            Color.alphaBlend(
+              AppColors.bitcoinOrange.withAlpha(20),
+              theme.colorScheme.surfaceContainerHighest,
+            ),
+            Color.alphaBlend(
+              AppColors.bitcoinOrange.withAlpha(48),
+              theme.colorScheme.surfaceContainerHighest,
+            ),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -63,7 +70,11 @@ class StackHero extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(Icons.currency_bitcoin, size: 14, color: AppColors.bitcoinOrange),
+              Icon(
+                Icons.currency_bitcoin,
+                size: 14,
+                color: AppColors.bitcoinOrange,
+              ),
               const SizedBox(width: 4),
               Text(
                 'Total Stack',
@@ -78,12 +89,15 @@ class StackHero extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             _formatSats(totalSats),
-            style: AppTextStyles.heroSats
-                .copyWith(color: theme.colorScheme.onSurface),
+            style: AppTextStyles.heroSats.copyWith(
+              color: theme.colorScheme.onSurface,
+            ),
           ),
           Text(
             'sats',
-            style: theme.textTheme.bodySmall?.copyWith(color: context.textSecondary),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: context.textSecondary,
+            ),
           ),
           const SizedBox(height: 12),
           Row(
@@ -95,8 +109,7 @@ class StackHero extends StatelessWidget {
                 ),
               ),
               const Spacer(),
-              if (monthSats != 0)
-                MonthChange(sats: monthSats),
+              if (monthSats != 0) MonthChange(sats: monthSats),
             ],
           ),
         ],
@@ -108,10 +121,7 @@ class StackHero extends StatelessWidget {
 }
 
 class MonthChange extends StatelessWidget {
-  const MonthChange({
-    super.key,
-    required this.sats,
-  });
+  const MonthChange({super.key, required this.sats});
   final int sats;
 
   @override
@@ -122,7 +132,11 @@ class MonthChange extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(positive ? Icons.arrow_upward : Icons.arrow_downward, size: 12, color: color),
+        Icon(
+          positive ? Icons.arrow_upward : Icons.arrow_downward,
+          size: 12,
+          color: color,
+        ),
         const SizedBox(width: 2),
         Text(
           '$formatted sats this month',

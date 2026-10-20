@@ -60,7 +60,9 @@ class PlatformModelStatus extends StatelessWidget {
                     // Legible accent: the raw one over a tint of itself was
                     // ~2:1 in light mode.
                     style: theme.textTheme.bodySmall?.copyWith(
-                        color: context.legibleAccent(color), height: 1.45),
+                      color: context.legibleAccent(color),
+                      height: 1.45,
+                    ),
                   ),
                 ),
               ],
@@ -150,8 +152,9 @@ class _GeminiNanoDownloadSectionState extends State<GeminiNanoDownloadSection> {
             const SizedBox(height: 8),
             Text(
               _error!,
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.error),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.error,
+              ),
             ),
           ],
         ],
@@ -183,10 +186,13 @@ class _LocalModelSectionState extends State<LocalModelSection> {
     if (!await model.fitsOnDisk()) {
       final free = await DeviceStorage.freeMb();
       if (mounted) {
-        setState(() => _error =
-            '${model.name} needs ${model.downloadMb} MB and there '
-            '${free == null ? "may not be room" : "is only $free MB free"}. '
-            'Free some space and try again.');
+        setState(
+          () =>
+              _error =
+                  '${model.name} needs ${model.downloadMb} MB and there '
+                  '${free == null ? "may not be room" : "is only $free MB free"}. '
+                  'Free some space and try again.',
+        );
       }
       return;
     }
@@ -245,8 +251,9 @@ class _LocalModelSectionState extends State<LocalModelSection> {
               Text(
                 'Sized to this device — models that would not fit in memory are '
                 'not listed.',
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
               ),
               const SizedBox(height: 12),
               for (final entry in tiers)
@@ -268,8 +275,9 @@ class _LocalModelSectionState extends State<LocalModelSection> {
                 const SizedBox(height: 8),
                 Text(
                   _error!,
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: theme.colorScheme.error),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.error,
+                  ),
                 ),
               ],
             ],
@@ -314,14 +322,16 @@ class _ModelCard extends StatelessWidget {
           margin: const EdgeInsets.only(bottom: 10),
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: isSelected
-                ? accent.withValues(alpha: 0.07)
-                : theme.colorScheme.surfaceContainerHighest,
+            color:
+                isSelected
+                    ? accent.withValues(alpha: 0.07)
+                    : theme.colorScheme.surfaceContainerHighest,
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-              color: isSelected
-                  ? accent.withValues(alpha: 0.45)
-                  : theme.colorScheme.outlineVariant,
+              color:
+                  isSelected
+                      ? accent.withValues(alpha: 0.45)
+                      : theme.colorScheme.outlineVariant,
             ),
           ),
           child: Column(
@@ -358,8 +368,11 @@ class _ModelCard extends StatelessWidget {
                     ),
                   ),
                   if (installed && !isInstalling)
-                    Icon(Icons.check_circle,
-                        size: 18, color: const Color(0xFF1D9E75)),
+                    Icon(
+                      Icons.check_circle,
+                      size: 18,
+                      color: const Color(0xFF1D9E75),
+                    ),
                 ],
               ),
               const SizedBox(height: 8),
@@ -458,9 +471,9 @@ class _Pill extends StatelessWidget {
       child: Text(
         text,
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: color,
-              fontWeight: FontWeight.w600,
-            ),
+          color: color,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }

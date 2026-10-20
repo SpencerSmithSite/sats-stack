@@ -5,6 +5,5 @@ class AiConversations extends Table {
   TextColumn get prompt => text()();
   TextColumn get response => text()();
   TextColumn get model => text().withLength(min: 1, max: 100)();
-  DateTimeColumn get createdAt =>
-      dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 }

@@ -20,6 +20,7 @@ class SetBudgetSheet extends StatefulWidget {
 
   final BudgetService budgetService;
   final CategoryService categoryService;
+
   /// Pre-populate for editing an existing budget.
   final BudgetProgress? existing;
 
@@ -41,8 +42,8 @@ class _SetBudgetSheetState extends State<SetBudgetSheet> {
     super.initState();
     if (widget.existing != null) {
       _selectedCategory = widget.existing!.category;
-      _amountController.text =
-          widget.existing!.budget.amountFiat.toStringAsFixed(2);
+      _amountController.text = widget.existing!.budget.amountFiat
+          .toStringAsFixed(2);
     }
     _load();
   }
@@ -54,7 +55,8 @@ class _SetBudgetSheetState extends State<SetBudgetSheet> {
     setState(() {
       _categories = cats.where((c) => c.name != 'Income').toList();
       _existingBudgets = budgets;
-      _selectedCategory ??= _unbudgetedCategories.firstOrNull ?? _categories.firstOrNull;
+      _selectedCategory ??=
+          _unbudgetedCategories.firstOrNull ?? _categories.firstOrNull;
     });
   }
 
@@ -71,15 +73,20 @@ class _SetBudgetSheetState extends State<SetBudgetSheet> {
       setState(() => _error = 'Enter a valid amount');
       return;
     }
-    setState(() { _saving = true; _error = null; });
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
     try {
-      await widget.budgetService.upsert(
-        categoryId: cat.id,
-        amountFiat: amount,
-      );
+      await widget.budgetService.upsert(categoryId: cat.id, amountFiat: amount);
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
-      if (mounted) setState(() { _saving = false; _error = 'Error: $e'; });
+      if (mounted) {
+        setState(() {
+          _saving = false;
+          _error = 'Error: $e';
+        });
+      }
     }
   }
 
@@ -113,7 +120,8 @@ class _SetBudgetSheetState extends State<SetBudgetSheet> {
                 // Handle
                 Center(
                   child: Container(
-                    width: 36, height: 4,
+                    width: 36,
+                    height: 4,
                     margin: const EdgeInsets.only(bottom: 16),
                     decoration: BoxDecoration(
                       color: theme.colorScheme.outline,
@@ -123,7 +131,9 @@ class _SetBudgetSheetState extends State<SetBudgetSheet> {
                 ),
                 Text(
                   isEditing ? 'Edit Budget' : 'Set Monthly Budget',
-                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 const SizedBox(height: 20),
 
@@ -131,7 +141,9 @@ class _SetBudgetSheetState extends State<SetBudgetSheet> {
                 if (!isEditing) ...[
                   Text(
                     'Category',
-                    style: theme.textTheme.bodySmall?.copyWith(color: context.textSecondary),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: context.textSecondary,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   _CategoryGrid(
@@ -148,32 +160,47 @@ class _SetBudgetSheetState extends State<SetBudgetSheet> {
                 // Amount field
                 TextFormField(
                   controller: _amountController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   inputFormatters: [
                     FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
                   ],
-                  style: AppTextStyles.monoLarge.copyWith(color: theme.colorScheme.onSurface),
+                  style: AppTextStyles.monoLarge.copyWith(
+                    color: theme.colorScheme.onSurface,
+                  ),
                   decoration: InputDecoration(
                     labelText: 'Monthly budget',
-                    prefixText: '${CurrencyUtils.symbolFor(app.currencyNotifier.value)} ',
+                    prefixText:
+                        '${CurrencyUtils.symbolFor(app.currencyNotifier.value)} ',
                     hintText: '500.00',
                   ),
                 ),
                 if (_error != null) ...[
                   const SizedBox(height: 8),
-                  Text(_error!, style: TextStyle(color: AppColors.danger, fontSize: 13)),
+                  Text(
+                    _error!,
+                    style: TextStyle(color: AppColors.danger, fontSize: 13),
+                  ),
                 ],
                 const SizedBox(height: 24),
 
                 FilledButton(
                   onPressed: _saving ? null : _save,
-                  style: FilledButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
-                  child: _saving
-                      ? const SizedBox(
-                          height: 18, width: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                        )
-                      : const Text('Save Budget'),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 48),
+                  ),
+                  child:
+                      _saving
+                          ? const SizedBox(
+                            height: 18,
+                            width: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                          : const Text('Save Budget'),
                 ),
               ],
             ),
@@ -194,13 +221,16 @@ class _SelectedCategoryRow extends StatelessWidget {
     return Row(
       children: [
         Container(
-          width: 12, height: 12,
+          width: 12,
+          height: 12,
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 8),
         Text(
           category.name,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
         ),
       ],
     );
@@ -215,7 +245,11 @@ class _SelectedCategoryRow extends StatelessWidget {
 }
 
 class _CategoryGrid extends StatelessWidget {
-  const _CategoryGrid({required this.categories, required this.selected, required this.onSelect});
+  const _CategoryGrid({
+    required this.categories,
+    required this.selected,
+    required this.onSelect,
+  });
 
   final List<Category> categories;
   final Category? selected;
@@ -239,7 +273,11 @@ class _CategoryGrid extends StatelessWidget {
 }
 
 class _CategoryChip extends StatelessWidget {
-  const _CategoryChip({required this.category, required this.isSelected, required this.onTap});
+  const _CategoryChip({
+    required this.category,
+    required this.isSelected,
+    required this.onTap,
+  });
 
   final Category category;
   final bool isSelected;
@@ -266,7 +304,8 @@ class _CategoryChip extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 8, height: 8,
+              width: 8,
+              height: 8,
               decoration: BoxDecoration(color: color, shape: BoxShape.circle),
             ),
             const SizedBox(width: 6),

@@ -27,7 +27,11 @@ void main() {
         AiProvider.grok,
         AiProvider.maple,
       ]) {
-        expect(p.isPrivate, isFalse, reason: '${p.label} must not claim privacy');
+        expect(
+          p.isPrivate,
+          isFalse,
+          reason: '${p.label} must not claim privacy',
+        );
       }
     });
 
@@ -50,8 +54,7 @@ void main() {
       for (final p in AiProvider.values) {
         final cloud = p.cloudProvider;
         if (cloud == null) continue;
-        final backend =
-            CloudBackend(provider: cloud, model: null, apiKey: 'k');
+        final backend = CloudBackend(provider: cloud, model: null, apiKey: 'k');
         expect(backend.isPrivate, p.isPrivate);
       }
     });
@@ -83,8 +86,10 @@ void main() {
     });
 
     test('an unknown key falls back to Ollama rather than throwing', () {
-      expect(AiProvider.fromKey('backend-from-a-later-build'),
-          AiProvider.ollama);
+      expect(
+        AiProvider.fromKey('backend-from-a-later-build'),
+        AiProvider.ollama,
+      );
       expect(AiProvider.fromKey(null), AiProvider.ollama);
     });
 
@@ -96,20 +101,26 @@ void main() {
     });
 
     test('cloud providers map to distinct AiProvider values', () {
-      final mapped = AiProvider.values
-          .map((p) => p.cloudProvider)
-          .whereType<CloudProvider>()
-          .toSet();
+      final mapped =
+          AiProvider.values
+              .map((p) => p.cloudProvider)
+              .whereType<CloudProvider>()
+              .toSet();
       expect(mapped.length, CloudProvider.values.length);
     });
   });
 
   group('chat body — Anthropic', () {
     test('system is a top-level field, not a message', () {
-      final body = jsonDecode(
-        CloudBackend.buildChatBody(
-            CloudProvider.anthropic, 'claude-sonnet-5', messages),
-      ) as Map<String, dynamic>;
+      final body =
+          jsonDecode(
+                CloudBackend.buildChatBody(
+                  CloudProvider.anthropic,
+                  'claude-sonnet-5',
+                  messages,
+                ),
+              )
+              as Map<String, dynamic>;
 
       expect(body['system'], 'You are an analyst.');
       expect(body['messages'], hasLength(1));
@@ -120,19 +131,26 @@ void main() {
     test('max_tokens is always present', () {
       // The Messages API rejects a request without it, unlike the
       // OpenAI-shaped providers where it is optional.
-      final body = jsonDecode(
-        CloudBackend.buildChatBody(
-            CloudProvider.anthropic, 'claude-sonnet-5', messages),
-      ) as Map<String, dynamic>;
+      final body =
+          jsonDecode(
+                CloudBackend.buildChatBody(
+                  CloudProvider.anthropic,
+                  'claude-sonnet-5',
+                  messages,
+                ),
+              )
+              as Map<String, dynamic>;
       expect(body['max_tokens'], isA<int>());
     });
 
     test('no system key when there is no system message', () {
-      final body = jsonDecode(
-        CloudBackend.buildChatBody(CloudProvider.anthropic, 'm', const [
-          {'role': 'user', 'content': 'hi'},
-        ]),
-      ) as Map<String, dynamic>;
+      final body =
+          jsonDecode(
+                CloudBackend.buildChatBody(CloudProvider.anthropic, 'm', const [
+                  {'role': 'user', 'content': 'hi'},
+                ]),
+              )
+              as Map<String, dynamic>;
       expect(body.containsKey('system'), isFalse);
     });
   });
@@ -140,9 +158,9 @@ void main() {
   group('chat body — OpenAI and Grok', () {
     test('system stays inline as the first message', () {
       for (final p in [CloudProvider.openai, CloudProvider.xai]) {
-        final body = jsonDecode(
-          CloudBackend.buildChatBody(p, 'model-x', messages),
-        ) as Map<String, dynamic>;
+        final body =
+            jsonDecode(CloudBackend.buildChatBody(p, 'model-x', messages))
+                as Map<String, dynamic>;
 
         expect(body['messages'], hasLength(2), reason: p.id);
         expect(body['messages'][0]['role'], 'system', reason: p.id);
@@ -162,30 +180,40 @@ void main() {
 
   group('chat body — Gemini', () {
     test('system becomes systemInstruction', () {
-      final body = jsonDecode(
-        CloudBackend.buildChatBody(
-            CloudProvider.gemini, 'gemini-3.6-flash', messages),
-      ) as Map<String, dynamic>;
+      final body =
+          jsonDecode(
+                CloudBackend.buildChatBody(
+                  CloudProvider.gemini,
+                  'gemini-3.6-flash',
+                  messages,
+                ),
+              )
+              as Map<String, dynamic>;
 
-      expect(body['systemInstruction']['parts'][0]['text'],
-          'You are an analyst.');
+      expect(
+        body['systemInstruction']['parts'][0]['text'],
+        'You are an analyst.',
+      );
       expect(body['contents'], hasLength(1));
       expect(body['contents'][0]['parts'][0]['text'], 'How much on dining?');
     });
 
     test('assistant turns are relabelled "model"', () {
-      final body = jsonDecode(
-        CloudBackend.buildChatBody(CloudProvider.gemini, 'm', const [
-          {'role': 'user', 'content': 'a'},
-          {'role': 'assistant', 'content': 'b'},
-          {'role': 'user', 'content': 'c'},
-        ]),
-      ) as Map<String, dynamic>;
+      final body =
+          jsonDecode(
+                CloudBackend.buildChatBody(CloudProvider.gemini, 'm', const [
+                  {'role': 'user', 'content': 'a'},
+                  {'role': 'assistant', 'content': 'b'},
+                  {'role': 'user', 'content': 'c'},
+                ]),
+              )
+              as Map<String, dynamic>;
 
-      expect(
-        (body['contents'] as List).map((c) => c['role']),
-        ['user', 'model', 'user'],
-      );
+      expect((body['contents'] as List).map((c) => c['role']), [
+        'user',
+        'model',
+        'user',
+      ]);
     });
   });
 
@@ -194,27 +222,32 @@ void main() {
       // Anthropic and Google both reject two user turns in a row, which the
       // app produces when a question is retried after a failed answer.
       for (final p in CloudProvider.values) {
-        final body = jsonDecode(
-          CloudBackend.buildChatBody(p, 'm', const [
-            {'role': 'user', 'content': 'first'},
-            {'role': 'user', 'content': 'second'},
-          ]),
-        ) as Map<String, dynamic>;
+        final body =
+            jsonDecode(
+                  CloudBackend.buildChatBody(p, 'm', const [
+                    {'role': 'user', 'content': 'first'},
+                    {'role': 'user', 'content': 'second'},
+                  ]),
+                )
+                as Map<String, dynamic>;
 
-        final turns = p == CloudProvider.gemini
-            ? body['contents'] as List
-            : body['messages'] as List;
+        final turns =
+            p == CloudProvider.gemini
+                ? body['contents'] as List
+                : body['messages'] as List;
         expect(turns, hasLength(1), reason: p.id);
       }
     });
 
     test('merging keeps both turns\' text', () {
-      final body = jsonDecode(
-        CloudBackend.buildChatBody(CloudProvider.anthropic, 'm', const [
-          {'role': 'user', 'content': 'first'},
-          {'role': 'user', 'content': 'second'},
-        ]),
-      ) as Map<String, dynamic>;
+      final body =
+          jsonDecode(
+                CloudBackend.buildChatBody(CloudProvider.anthropic, 'm', const [
+                  {'role': 'user', 'content': 'first'},
+                  {'role': 'user', 'content': 'second'},
+                ]),
+              )
+              as Map<String, dynamic>;
 
       final content = body['messages'][0]['content'] as String;
       expect(content, contains('first'));
@@ -222,13 +255,15 @@ void main() {
     });
 
     test('alternating turns are left alone', () {
-      final body = jsonDecode(
-        CloudBackend.buildChatBody(CloudProvider.anthropic, 'm', const [
-          {'role': 'user', 'content': 'a'},
-          {'role': 'assistant', 'content': 'b'},
-          {'role': 'user', 'content': 'c'},
-        ]),
-      ) as Map<String, dynamic>;
+      final body =
+          jsonDecode(
+                CloudBackend.buildChatBody(CloudProvider.anthropic, 'm', const [
+                  {'role': 'user', 'content': 'a'},
+                  {'role': 'assistant', 'content': 'b'},
+                  {'role': 'user', 'content': 'c'},
+                ]),
+              )
+              as Map<String, dynamic>;
       expect(body['messages'], hasLength(3));
     });
   });
@@ -237,10 +272,17 @@ void main() {
     const b64 = 'aGVsbG8=';
 
     test('Anthropic uses a base64 source block', () {
-      final body = jsonDecode(
-        CloudBackend.buildVisionBody(
-            CloudProvider.anthropic, 'm', 'read this', b64, 'image/png'),
-      ) as Map<String, dynamic>;
+      final body =
+          jsonDecode(
+                CloudBackend.buildVisionBody(
+                  CloudProvider.anthropic,
+                  'm',
+                  'read this',
+                  b64,
+                  'image/png',
+                ),
+              )
+              as Map<String, dynamic>;
 
       final parts = body['messages'][0]['content'] as List;
       expect(parts[0]['type'], 'image');
@@ -249,20 +291,34 @@ void main() {
     });
 
     test('OpenAI uses a data: URI', () {
-      final body = jsonDecode(
-        CloudBackend.buildVisionBody(
-            CloudProvider.openai, 'm', 'read this', b64, 'image/jpeg'),
-      ) as Map<String, dynamic>;
+      final body =
+          jsonDecode(
+                CloudBackend.buildVisionBody(
+                  CloudProvider.openai,
+                  'm',
+                  'read this',
+                  b64,
+                  'image/jpeg',
+                ),
+              )
+              as Map<String, dynamic>;
 
       final parts = body['messages'][0]['content'] as List;
       expect(parts[0]['image_url']['url'], 'data:image/jpeg;base64,$b64');
     });
 
     test('Gemini uses inline_data', () {
-      final body = jsonDecode(
-        CloudBackend.buildVisionBody(
-            CloudProvider.gemini, 'm', 'read this', b64, 'image/jpeg'),
-      ) as Map<String, dynamic>;
+      final body =
+          jsonDecode(
+                CloudBackend.buildVisionBody(
+                  CloudProvider.gemini,
+                  'm',
+                  'read this',
+                  b64,
+                  'image/jpeg',
+                ),
+              )
+              as Map<String, dynamic>;
 
       final parts = body['contents'][0]['parts'] as List;
       expect(parts[0]['inline_data']['mime_type'], 'image/jpeg');
@@ -285,8 +341,9 @@ void main() {
       // message_start, ping, content_block_stop and thinking deltas all arrive
       // on the same stream; treating any of them as text corrupts the answer.
       expect(
-        CloudBackend.extractDelta(
-            CloudProvider.anthropic, {'type': 'message_start'}),
+        CloudBackend.extractDelta(CloudProvider.anthropic, {
+          'type': 'message_start',
+        }),
         isNull,
       );
       expect(
@@ -391,8 +448,9 @@ void main() {
 
     test("Anthropic's type: error frame is recognised without a message", () {
       expect(
-        CloudBackend.extractStreamError(
-            CloudProvider.anthropic, const {'type': 'error'}),
+        CloudBackend.extractStreamError(CloudProvider.anthropic, const {
+          'type': 'error',
+        }),
         isNotNull,
       );
     });
@@ -415,8 +473,11 @@ void main() {
         isNull,
       );
       for (final p in CloudProvider.values) {
-        expect(CloudBackend.extractStreamError(p, const {}), isNull,
-            reason: p.id);
+        expect(
+          CloudBackend.extractStreamError(p, const {}),
+          isNull,
+          reason: p.id,
+        );
       }
     });
   });
@@ -483,11 +544,16 @@ void main() {
 
     test('an empty or malformed frame never throws', () {
       for (final p in CloudProvider.values) {
-        expect(CloudBackend.indicatesTruncation(p, const {}), isFalse,
-            reason: p.id);
         expect(
-          CloudBackend.indicatesTruncation(
-              p, const {'choices': [], 'candidates': []}),
+          CloudBackend.indicatesTruncation(p, const {}),
+          isFalse,
+          reason: p.id,
+        );
+        expect(
+          CloudBackend.indicatesTruncation(p, const {
+            'choices': [],
+            'candidates': [],
+          }),
           isFalse,
           reason: p.id,
         );
@@ -495,13 +561,17 @@ void main() {
     });
 
     test('the cap the notice quotes is the cap that is sent', () {
-      final body = jsonDecode(CloudBackend.buildChatBody(
-        CloudProvider.anthropic,
-        'claude-x',
-        const [
-          {'role': 'user', 'content': 'hi'},
-        ],
-      )) as Map<String, dynamic>;
+      final body =
+          jsonDecode(
+                CloudBackend.buildChatBody(
+                  CloudProvider.anthropic,
+                  'claude-x',
+                  const [
+                    {'role': 'user', 'content': 'hi'},
+                  ],
+                ),
+              )
+              as Map<String, dynamic>;
       expect(body['max_tokens'], CloudBackend.maxOutputTokens);
     });
   });
@@ -509,10 +579,10 @@ void main() {
   group('model list parsing', () {
     test('Anthropic and OpenAI shape: data[].id', () {
       const body = '{"data":[{"id":"claude-opus-5"},{"id":"claude-sonnet-5"}]}';
-      expect(
-        CloudBackend.parseModelList(CloudProvider.anthropic, body),
-        ['claude-opus-5', 'claude-sonnet-5'],
-      );
+      expect(CloudBackend.parseModelList(CloudProvider.anthropic, body), [
+        'claude-opus-5',
+        'claude-sonnet-5',
+      ]);
       expect(
         CloudBackend.parseModelList(CloudProvider.openai, body),
         hasLength(2),
@@ -524,16 +594,19 @@ void main() {
       // the bare id — sending the prefixed form is a 404.
       const body =
           '{"models":[{"name":"models/gemini-3.6-flash"},{"name":"models/gemini-2.5-flash"}]}';
-      expect(
-        CloudBackend.parseModelList(CloudProvider.gemini, body),
-        ['gemini-3.6-flash', 'gemini-2.5-flash'],
-      );
+      expect(CloudBackend.parseModelList(CloudProvider.gemini, body), [
+        'gemini-3.6-flash',
+        'gemini-2.5-flash',
+      ]);
     });
 
     test('malformed JSON yields an empty list rather than throwing', () {
       for (final p in CloudProvider.values) {
-        expect(CloudBackend.parseModelList(p, 'not json'), isEmpty,
-            reason: p.id);
+        expect(
+          CloudBackend.parseModelList(p, 'not json'),
+          isEmpty,
+          reason: p.id,
+        );
         expect(CloudBackend.parseModelList(p, '[]'), isEmpty, reason: p.id);
       }
     });
@@ -551,15 +624,23 @@ void main() {
   group('error messages', () {
     test('the provider\'s own message wins when there is one', () {
       expect(
-        CloudBackend.describeError(CloudProvider.anthropic, 'm', 400,
-            '{"error":{"message":"max_tokens is required"}}'),
+        CloudBackend.describeError(
+          CloudProvider.anthropic,
+          'm',
+          400,
+          '{"error":{"message":"max_tokens is required"}}',
+        ),
         contains('max_tokens is required'),
       );
     });
 
     test('401 says the key was rejected and where to fix it', () {
-      final message =
-          CloudBackend.describeError(CloudProvider.openai, 'm', 401, '');
+      final message = CloudBackend.describeError(
+        CloudProvider.openai,
+        'm',
+        401,
+        '',
+      );
       expect(message, contains('key'));
       expect(message, contains('Settings'));
     });
@@ -567,43 +648,65 @@ void main() {
     test('404 names the model that was not recognised', () {
       expect(
         CloudBackend.describeError(
-            CloudProvider.gemini, 'gemini-9', 404, 'nope'),
+          CloudProvider.gemini,
+          'gemini-9',
+          404,
+          'nope',
+        ),
         contains('gemini-9'),
       );
     });
 
     test('429 and 5xx suggest retrying', () {
-      expect(CloudBackend.describeError(CloudProvider.xai, 'm', 429, ''),
-          contains('again'));
-      expect(CloudBackend.describeError(CloudProvider.xai, 'm', 503, ''),
-          contains('again'));
+      expect(
+        CloudBackend.describeError(CloudProvider.xai, 'm', 429, ''),
+        contains('again'),
+      );
+      expect(
+        CloudBackend.describeError(CloudProvider.xai, 'm', 503, ''),
+        contains('again'),
+      );
     });
 
     test('a non-JSON body falls through to the status mapping', () {
       expect(
         CloudBackend.describeError(
-            CloudProvider.openai, 'm', 418, '<html>teapot</html>'),
+          CloudProvider.openai,
+          'm',
+          418,
+          '<html>teapot</html>',
+        ),
         contains('418'),
       );
     });
   });
 
   group('status', () {
-    test('no key is reported as unavailable with an actionable reason',
-        () async {
-      const backend =
-          CloudBackend(provider: CloudProvider.anthropic, model: null, apiKey: '');
-      final status = await backend.checkStatus();
-      expect(status.available, isFalse);
-      expect(status.detail, contains('Settings'));
-    });
+    test(
+      'no key is reported as unavailable with an actionable reason',
+      () async {
+        const backend = CloudBackend(
+          provider: CloudProvider.anthropic,
+          model: null,
+          apiKey: '',
+        );
+        final status = await backend.checkStatus();
+        expect(status.available, isFalse);
+        expect(status.detail, contains('Settings'));
+      },
+    );
 
     test('models fall back to the static list with no key', () async {
       // No network call is made without a key, so this is safe offline.
-      const backend =
-          CloudBackend(provider: CloudProvider.gemini, model: null, apiKey: '');
-      expect(await backend.availableModels(),
-          CloudProvider.gemini.fallbackModels);
+      const backend = CloudBackend(
+        provider: CloudProvider.gemini,
+        model: null,
+        apiKey: '',
+      );
+      expect(
+        await backend.availableModels(),
+        CloudProvider.gemini.fallbackModels,
+      );
     });
 
     test('a null model resolves to the provider default', () {
@@ -620,14 +723,19 @@ void main() {
   });
 
   group('context budget', () {
-    test('a hosted backend gets a much larger budget than an on-device one',
-        () {
-      const backend = CloudBackend(
-          provider: CloudProvider.anthropic, model: null, apiKey: 'k');
-      // 4000 is what the Apple and Nano backends report.
-      expect(backend.contextBudgetChars, greaterThanOrEqualTo(24000));
-      expect(backend.contextBudgetChars, greaterThan(4000 * 4));
-    });
+    test(
+      'a hosted backend gets a much larger budget than an on-device one',
+      () {
+        const backend = CloudBackend(
+          provider: CloudProvider.anthropic,
+          model: null,
+          apiKey: 'k',
+        );
+        // 4000 is what the Apple and Nano backends report.
+        expect(backend.contextBudgetChars, greaterThanOrEqualTo(24000));
+        expect(backend.contextBudgetChars, greaterThan(4000 * 4));
+      },
+    );
 
     test('the extra budget reaches the prompt as more categories', () {
       final categories = {
@@ -635,23 +743,28 @@ void main() {
       };
 
       String prompt(int budget) => OllamaService.composeSystemPrompt(
-            totalStackSats: 5000000,
-            btcPrice: 100000,
-            monthlyIncome: 6000,
-            monthlySpending: 4000,
-            monthlySurplus: 2000,
-            spendingByCategory: categories,
-            budgetChars: budget,
-          );
+        totalStackSats: 5000000,
+        btcPrice: 100000,
+        monthlyIncome: 6000,
+        monthlySpending: 4000,
+        monthlySurplus: 2000,
+        spendingByCategory: categories,
+        budgetChars: budget,
+      );
 
       const backend = CloudBackend(
-          provider: CloudProvider.anthropic, model: null, apiKey: 'k');
+        provider: CloudProvider.anthropic,
+        model: null,
+        apiKey: 'k',
+      );
       final small = prompt(4000);
       final large = prompt(backend.contextBudgetChars);
 
       expect(large.length, greaterThan(small.length));
-      expect('\n'.allMatches(large).length,
-          greaterThan('\n'.allMatches(small).length));
+      expect(
+        '\n'.allMatches(large).length,
+        greaterThan('\n'.allMatches(small).length),
+      );
     });
   });
 
@@ -663,8 +776,10 @@ void main() {
     );
 
     test('hosted and self-hosted backends are always offered', () {
-      expect(bare.providersIn(AiBackendGroup.ownServer),
-          containsAll([AiProvider.ollama, AiProvider.lmStudio]));
+      expect(
+        bare.providersIn(AiBackendGroup.ownServer),
+        containsAll([AiProvider.ollama, AiProvider.lmStudio]),
+      );
       expect(
         bare.providersIn(AiBackendGroup.hosted),
         containsAll([
@@ -687,8 +802,9 @@ void main() {
         geminiNanoOffered: false,
         downloadableOffered: false,
       );
-      expect(withApple.providersIn(AiBackendGroup.onDevice),
-          [AiProvider.appleIntelligence]);
+      expect(withApple.providersIn(AiBackendGroup.onDevice), [
+        AiProvider.appleIntelligence,
+      ]);
     });
 
     test('the selected backend stays listed even when unsupported', () {
@@ -700,8 +816,10 @@ void main() {
         downloadableOffered: false,
         keepSelected: AiProvider.appleIntelligence,
       );
-      expect(stale.providersIn(AiBackendGroup.onDevice),
-          contains(AiProvider.appleIntelligence));
+      expect(
+        stale.providersIn(AiBackendGroup.onDevice),
+        contains(AiProvider.appleIntelligence),
+      );
     });
 
     test('on-device is offered first', () {
@@ -771,8 +889,7 @@ void main() {
 
   group('hosted backends need a key', () {
     test('needsApiKey is true for exactly the four major providers', () {
-      final needing =
-          AiProvider.values.where((p) => p.needsApiKey).toSet();
+      final needing = AiProvider.values.where((p) => p.needsApiKey).toSet();
       expect(needing, {
         AiProvider.claude,
         AiProvider.chatGpt,

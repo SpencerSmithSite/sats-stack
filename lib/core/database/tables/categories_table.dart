@@ -15,6 +15,5 @@ class Categories extends Table {
   TextColumn get color => text().withLength(min: 7, max: 7)();
   // Material icon name e.g. 'restaurant'
   TextColumn get icon => text().withLength(min: 1, max: 50)();
-  BoolColumn get isSystem =>
-      boolean().withDefault(const Constant(false))();
+  BoolColumn get isSystem => boolean().withDefault(const Constant(false))();
 }

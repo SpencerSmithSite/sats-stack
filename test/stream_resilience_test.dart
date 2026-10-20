@@ -55,51 +55,58 @@ void main() {
   });
 
   group('serialisedOnChannel', () {
-    test('a second generation waits rather than clobbering the first', () async {
-      // EventChannel.receiveBroadcastStream installs one handler per channel
-      // name, so a concurrent listen replaces the first — which then receives
-      // nothing and never completes. Reachable by generating the dashboard
-      // insight on Apple Intelligence while asking a chat question.
-      final order = <String>[];
-      final first = StreamController<String>();
+    test(
+      'a second generation waits rather than clobbering the first',
+      () async {
+        // EventChannel.receiveBroadcastStream installs one handler per channel
+        // name, so a concurrent listen replaces the first — which then receives
+        // nothing and never completes. Reachable by generating the dashboard
+        // insight on Apple Intelligence while asking a chat question.
+        final order = <String>[];
+        final first = StreamController<String>();
 
-      final a = serialisedOnChannel('test/chan', () {
-        order.add('first opened');
-        return first.stream;
-      }).toList();
+        final a =
+            serialisedOnChannel('test/chan', () {
+              order.add('first opened');
+              return first.stream;
+            }).toList();
 
-      // Let the first subscription establish itself.
-      await Future<void>.delayed(Duration.zero);
+        // Let the first subscription establish itself.
+        await Future<void>.delayed(Duration.zero);
 
-      final b = serialisedOnChannel('test/chan', () {
-        order.add('second opened');
-        return Stream.fromIterable(['b1']);
-      }).toList();
+        final b =
+            serialisedOnChannel('test/chan', () {
+              order.add('second opened');
+              return Stream.fromIterable(['b1']);
+            }).toList();
 
-      await Future<void>.delayed(const Duration(milliseconds: 20));
-      // The second has not touched the channel yet.
-      expect(order, ['first opened']);
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        // The second has not touched the channel yet.
+        expect(order, ['first opened']);
 
-      first.add('a1');
-      await first.close();
+        first.add('a1');
+        await first.close();
 
-      expect(await a, ['a1']);
-      expect(await b, ['b1']);
-      expect(order, ['first opened', 'second opened']);
-    });
+        expect(await a, ['a1']);
+        expect(await b, ['b1']);
+        expect(order, ['first opened', 'second opened']);
+      },
+    );
 
     test('a failed generation does not block the next one', () async {
-      final failing = serialisedOnChannel<String>(
-        'test/chan2',
-        () => Stream.error(StateError('native side died')),
-      ).toList();
+      final failing =
+          serialisedOnChannel<String>(
+            'test/chan2',
+            () => Stream.error(StateError('native side died')),
+          ).toList();
 
       await expectLater(failing, throwsStateError);
 
-      final after = await serialisedOnChannel<String>(
-        'test/chan2',
-        () => Stream.fromIterable(['recovered']),
-      ).toList();
+      final after =
+          await serialisedOnChannel<String>(
+            'test/chan2',
+            () => Stream.fromIterable(['recovered']),
+          ).toList();
       expect(after, ['recovered']);
     });
 
@@ -113,8 +120,10 @@ void main() {
       // A different channel name has its own queue, so this finishes while the
       // first is still open.
       expect(
-        await serialisedOnChannel('test/b',
-            () => Stream.fromIterable(['independent'])).toList(),
+        await serialisedOnChannel(
+          'test/b',
+          () => Stream.fromIterable(['independent']),
+        ).toList(),
         ['independent'],
       );
 

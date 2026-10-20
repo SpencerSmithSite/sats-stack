@@ -16,7 +16,7 @@ class DashboardService {
   /// without the service having to be rebuilt. Without it every amount passes
   /// through unconverted — what tests constructing the service directly get.
   DashboardService(this._db, {FxRates Function()? rates})
-      : _rates = rates ?? _noConversion;
+    : _rates = rates ?? _noConversion;
 
   final AppDatabase _db;
   final FxRates Function() _rates;
@@ -41,9 +41,9 @@ class DashboardService {
       for (final t in txns)
         switch (fx.convert(t.amountFiat, t.fiatCurrency)) {
           null => () {
-              unconverted++;
-              return t.copyWith(amountFiat: 0);
-            }(),
+            unconverted++;
+            return t.copyWith(amountFiat: 0);
+          }(),
           final v when v == t.amountFiat => t,
           final v => t.copyWith(amountFiat: v),
         },
@@ -55,8 +55,9 @@ class DashboardService {
   ///
   /// `select(...).watch()` only tracks the table it selects from, which is not
   /// the same set a computed aggregate reads.
-  Stream<void> _changesTo(Set<ResultSetImplementation<dynamic, dynamic>> tables) =>
-      _db.customSelect('SELECT 1', readsFrom: tables).watch();
+  Stream<void> _changesTo(
+    Set<ResultSetImplementation<dynamic, dynamic>> tables,
+  ) => _db.customSelect('SELECT 1', readsFrom: tables).watch();
 
   /// Emits a fresh [DashboardData] whenever anything it reads changes.
   /// The [month] parameter controls which month's aggregates are returned.
@@ -65,8 +66,10 @@ class DashboardService {
   /// it. Watching only `transactions` was masked for as long as the widget
   /// tree rebuilt this stream on every frame; with the stream built once, a
   /// change to the goal would otherwise never reach the card.
-  Stream<DashboardData> watchDashboard(DateTime month,
-      {double inflationRate = 3.5}) {
+  Stream<DashboardData> watchDashboard(
+    DateTime month, {
+    double inflationRate = 3.5,
+  }) {
     return _changesTo({_db.transactions, _db.appSettings}).asyncMap((_) async {
       final txns = await _db.select(_db.transactions).get();
       return _compute(txns, month, inflationRate: inflationRate);
@@ -121,23 +124,26 @@ class DashboardService {
         }
       }
 
-      result.add(WalletSummary(
-        wallet: wallet,
-        totalSats: totalSats,
-        monthChangeSats: monthChangeSats,
-        monthIncomeFiat: monthIncome,
-        monthSpendFiat: monthSpend,
-        transactionCount: walletTxns.length,
-      ));
+      result.add(
+        WalletSummary(
+          wallet: wallet,
+          totalSats: totalSats,
+          monthChangeSats: monthChangeSats,
+          monthIncomeFiat: monthIncome,
+          monthSpendFiat: monthSpend,
+          transactionCount: walletTxns.length,
+        ),
+      );
     }
 
     return result;
   }
 
   Stream<AnalyticsData> watchAnalytics(DateTime selectedMonth) {
-    return _db.select(_db.transactions).watch().asyncMap(
-          (txns) => _computeAnalytics(txns, selectedMonth),
-        );
+    return _db
+        .select(_db.transactions)
+        .watch()
+        .asyncMap((txns) => _computeAnalytics(txns, selectedMonth));
   }
 
   Future<AnalyticsData> _computeAnalytics(
@@ -147,8 +153,7 @@ class DashboardService {
     final allTxns = _restate(originalTxns).rows;
     // ── Selected month breakdown ─────────────────────────────────────────────
     final range = DateRange.month(selectedMonth);
-    final monthTxns =
-        allTxns.where((t) => range.contains(t.date)).toList();
+    final monthTxns = allTxns.where((t) => range.contains(t.date)).toList();
 
     final byCategory = <String, double>{};
     for (final t in monthTxns.where((t) => t.amountFiat < 0)) {
@@ -174,18 +179,19 @@ class DashboardService {
           mByCategory[cat] = (mByCategory[cat] ?? 0) + t.amountFiat.abs();
         }
       }
-      monthlyTotals.add(MonthlyTotal(
-        month: m,
-        income: inc,
-        spending: spend,
-        byCategory: mByCategory,
-      ));
+      monthlyTotals.add(
+        MonthlyTotal(
+          month: m,
+          income: inc,
+          spending: spend,
+          byCategory: mByCategory,
+        ),
+      );
     }
 
     // ── YTD ──────────────────────────────────────────────────────────────────
     final ytdRange = DateRange.year(selectedMonth);
-    final ytdTxns =
-        allTxns.where((t) => ytdRange.contains(t.date)).toList();
+    final ytdTxns = allTxns.where((t) => ytdRange.contains(t.date)).toList();
 
     double ytdInc = 0, ytdSpend = 0;
     for (final t in ytdTxns) {
@@ -212,8 +218,7 @@ class DashboardService {
     required String currency,
     double? btcPrice,
   }) async {
-    final txns =
-        _restate(await _db.select(_db.transactions).get()).rows;
+    final txns = _restate(await _db.select(_db.transactions).get()).rows;
     final budgets = await _db.select(_db.budgets).get();
     final categories = await _db.select(_db.categories).get();
 
@@ -229,8 +234,9 @@ class DashboardService {
     // Spending per category for the selected month
     final range = DateRange.month(month);
     final spentByCat = <String, double>{};
-    for (final t
-        in txns.where((t) => range.contains(t.date) && t.amountFiat < 0)) {
+    for (final t in txns.where(
+      (t) => range.contains(t.date) && t.amountFiat < 0,
+    )) {
       final cat = t.category ?? 'Other';
       spentByCat[cat] = (spentByCat[cat] ?? 0) + t.amountFiat.abs();
     }
@@ -255,9 +261,10 @@ class DashboardService {
       final budgeted = budgetByCat[cat] ?? 0;
       final spent = spentByCat[cat] ?? 0;
       final pct = budgeted > 0 ? spent / budgeted * 100 : 0.0;
-      final sats = btcPrice != null && btcPrice > 0
-          ? (spent / btcPrice * 100000000).round()
-          : 0;
+      final sats =
+          btcPrice != null && btcPrice > 0
+              ? (spent / btcPrice * 100000000).round()
+              : 0;
       rows.add(
         '$cat,'
         '${budgeted.toStringAsFixed(2)},'
@@ -270,8 +277,7 @@ class DashboardService {
       totalSats += sats;
     }
 
-    final totalPct =
-        totalBudgeted > 0 ? totalSpent / totalBudgeted * 100 : 0.0;
+    final totalPct = totalBudgeted > 0 ? totalSpent / totalBudgeted * 100 : 0.0;
     rows
       ..add('')
       ..add(
@@ -315,7 +321,8 @@ class DashboardService {
     }
 
     final surplus = income - spending;
-    final leakRate = income > 0 ? (spending / income * 100).clamp(0.0, 100.0) : 0.0;
+    final leakRate =
+        income > 0 ? (spending / income * 100).clamp(0.0, 100.0) : 0.0;
     final annualInflationRate = inflationRate / 100;
     final inflationCost = income * annualInflationRate / 12;
 
@@ -330,10 +337,11 @@ class DashboardService {
     final btcTxns = allTxns.where((t) => t.isBitcoin);
     final totalStackSats = btcTxns.fold<int>(0, (s, t) => s + t.amountSats);
 
-    final monthBtcTxns =
-        monthTxns.where((t) => t.isBitcoin);
-    final monthStackChange =
-        monthBtcTxns.fold<int>(0, (s, t) => s + t.amountSats);
+    final monthBtcTxns = monthTxns.where((t) => t.isBitcoin);
+    final monthStackChange = monthBtcTxns.fold<int>(
+      0,
+      (s, t) => s + t.amountSats,
+    );
 
     // ── Recent transactions ──────────────────────────────────────────────────
     // From the originals, not the restated rows: these are rendered with each
@@ -345,11 +353,11 @@ class DashboardService {
     final recent = sorted.take(5).toList();
 
     // ── Stack goal from settings ─────────────────────────────────────────────
-    final goalEntry = await (_db.select(_db.appSettings)
-          ..where((s) => s.key.equals(AppConstants.settingStackGoalSats)))
-        .getSingleOrNull();
-    final goalSats =
-        goalEntry != null ? int.tryParse(goalEntry.value) : null;
+    final goalEntry =
+        await (_db.select(_db.appSettings)..where(
+          (s) => s.key.equals(AppConstants.settingStackGoalSats),
+        )).getSingleOrNull();
+    final goalSats = goalEntry != null ? int.tryParse(goalEntry.value) : null;
 
     return DashboardData(
       totalStackSats: totalStackSats,

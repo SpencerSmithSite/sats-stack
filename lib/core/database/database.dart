@@ -22,19 +22,21 @@ import 'tables/description_category_mappings_table.dart';
 
 part 'database.g.dart';
 
-@DriftDatabase(tables: [
-  Wallets,
-  Transactions,
-  Categories,
-  Budgets,
-  AppSettings,
-  BtcPriceCache,
-  BtcPriceHistory,
-  AiConversations,
-  ImportSources,
-  ImportedTransactions,
-  DescriptionCategoryMappings,
-])
+@DriftDatabase(
+  tables: [
+    Wallets,
+    Transactions,
+    Categories,
+    Budgets,
+    AppSettings,
+    BtcPriceCache,
+    BtcPriceHistory,
+    AiConversations,
+    ImportSources,
+    ImportedTransactions,
+    DescriptionCategoryMappings,
+  ],
+)
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
@@ -47,47 +49,47 @@ class AppDatabase extends _$AppDatabase {
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
-        onCreate: (m) async {
-          await m.createAll();
-          await _seedSystemCategories();
-          await _seedDefaultWallet();
-        },
-        onUpgrade: (m, from, to) async {
-          if (from < 2) {
-            await m.addColumn(transactions, transactions.recurringPeriod);
-            await m.addColumn(transactions, transactions.recurringAnchorDate);
-          }
-          if (from < 3) {
-            await m.createTable(btcPriceHistory);
-          }
-          if (from < 4) {
-            await m.createTable(importSources);
-            await m.createTable(importedTransactions);
-          }
-          if (from < 5) {
-            await m.createTable(descriptionCategoryMappings);
-          }
-          if (from < 6) {
-            await migrateToV6(m);
-          }
-          if (from < 7) {
-            await migrateToV7(m);
-          }
-          if (from < 8) {
-            await migrateToV8(m);
-          }
-        },
-        beforeOpen: (details) async {
-          // sqlite ignores foreign keys unless asked, per connection, so every
-          // `.references(...)` in the table definitions was decorative: a row
-          // could point at a wallet or category that no longer existed and
-          // nothing would complain until something read it back.
-          //
-          // After the migrator, not before: a migration that rebuilds a table
-          // legitimately breaks references while it runs.
-          await customStatement('PRAGMA foreign_keys = ON');
-        },
-      );
+    onCreate: (m) async {
+      await m.createAll();
+      await _seedSystemCategories();
+      await _seedDefaultWallet();
+    },
+    onUpgrade: (m, from, to) async {
+      if (from < 2) {
+        await m.addColumn(transactions, transactions.recurringPeriod);
+        await m.addColumn(transactions, transactions.recurringAnchorDate);
+      }
+      if (from < 3) {
+        await m.createTable(btcPriceHistory);
+      }
+      if (from < 4) {
+        await m.createTable(importSources);
+        await m.createTable(importedTransactions);
+      }
+      if (from < 5) {
+        await m.createTable(descriptionCategoryMappings);
+      }
+      if (from < 6) {
+        await migrateToV6(m);
+      }
+      if (from < 7) {
+        await migrateToV7(m);
+      }
+      if (from < 8) {
+        await migrateToV8(m);
+      }
+    },
+    beforeOpen: (details) async {
+      // sqlite ignores foreign keys unless asked, per connection, so every
+      // `.references(...)` in the table definitions was decorative: a row
+      // could point at a wallet or category that no longer existed and
+      // nothing would complain until something read it back.
+      //
+      // After the migrator, not before: a migration that rebuilds a table
+      // legitimately breaks references while it runs.
+      await customStatement('PRAGMA foreign_keys = ON');
+    },
+  );
 
   /// v5 → v6: one budget per category, enforced.
   ///
@@ -145,9 +147,9 @@ class AppDatabase extends _$AppDatabase {
   /// next sync recognises them rather than deleting and re-adding them — which
   /// would have dropped every category and note the user had set.
   Future<void> migrateToV8(Migrator m) async {
-    final all = await (select(categories)
-          ..orderBy([(c) => OrderingTerm.asc(c.id)]))
-        .get();
+    final all =
+        await (select(categories)
+          ..orderBy([(c) => OrderingTerm.asc(c.id)])).get();
     final taken = {for (final c in all) c.name};
     final seen = <String>{};
     for (final c in all) {
@@ -158,18 +160,21 @@ class AppDatabase extends _$AppDatabase {
         candidate = _withSuffix(c.name, n++);
       } while (taken.contains(candidate));
       taken.add(candidate);
-      await (update(categories)..where((t) => t.id.equals(c.id)))
-          .write(CategoriesCompanion(name: Value(candidate)));
+      await (update(categories)..where(
+        (t) => t.id.equals(c.id),
+      )).write(CategoriesCompanion(name: Value(candidate)));
     }
     await m.createIndex(idxCategoriesName);
 
-    final xpubRows = await (select(transactions)
-          ..where((t) => t.source.equals('xpub')))
-        .get();
+    final xpubRows =
+        await (select(transactions)
+          ..where((t) => t.source.equals('xpub'))).get();
     for (final row in xpubRows) {
       await (update(transactions)..where((t) => t.id.equals(row.id))).write(
         TransactionsCompanion(
-          dedupHash: Value(HashUtils.scopedToWallet(row.dedupHash, row.walletId)),
+          dedupHash: Value(
+            HashUtils.scopedToWallet(row.dedupHash, row.walletId),
+          ),
         ),
       );
     }

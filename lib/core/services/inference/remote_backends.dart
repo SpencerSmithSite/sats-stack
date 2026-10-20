@@ -44,11 +44,12 @@ class OllamaBackend implements InferenceBackend {
   String get displayName => 'Ollama';
 
   @override
-  String get description => isPrivate
-      ? 'A model running on your own machine or one on your network. Nothing '
-          'leaves hardware you control.'
-      : 'A model running on the server you configured. Your financial figures '
-          'are sent there to answer each question.';
+  String get description =>
+      isPrivate
+          ? 'A model running on your own machine or one on your network. Nothing '
+              'leaves hardware you control.'
+          : 'A model running on the server you configured. Your financial figures '
+              'are sent there to answer each question.';
 
   /// Generous: Ollama hosts are usually desktops running 7B+ models with a
   /// context window far larger than anything on-device.
@@ -68,7 +69,9 @@ class OllamaBackend implements InferenceBackend {
           .timeout(const Duration(seconds: 5));
       return response.statusCode == 200
           ? BackendStatus.available('$model on $baseUrl')
-          : BackendStatus.unavailable('Ollama returned ${response.statusCode}.');
+          : BackendStatus.unavailable(
+            'Ollama returned ${response.statusCode}.',
+          );
     } catch (_) {
       return BackendStatus.unavailable('Could not reach Ollama at $baseUrl.');
     }
@@ -117,8 +120,9 @@ class OllamaBackend implements InferenceBackend {
         'stream': true,
       });
 
-      final streamedResponse =
-          await c.send(request).timeout(const Duration(seconds: 30));
+      final streamedResponse = await c
+          .send(request)
+          .timeout(const Duration(seconds: 30));
 
       if (streamedResponse.statusCode != 200) {
         throw InferenceException(
@@ -134,7 +138,8 @@ class OllamaBackend implements InferenceBackend {
         try {
           final data = jsonDecode(line) as Map<String, dynamic>;
           if (data['done'] == true) return;
-          final token = (data['message'] as Map<String, dynamic>?)?['content']
+          final token =
+              (data['message'] as Map<String, dynamic>?)?['content']
                   as String? ??
               '';
           if (token.isNotEmpty) yield token;
@@ -188,9 +193,9 @@ class OpenAiCompatBackend implements InferenceBackend {
   final String apiKey;
 
   Map<String, String> get _headers => {
-        'Content-Type': 'application/json',
-        if (apiKey.isNotEmpty) 'Authorization': 'Bearer $apiKey',
-      };
+    'Content-Type': 'application/json',
+    if (apiKey.isNotEmpty) 'Authorization': 'Bearer $apiKey',
+  };
 
   @override
   Future<BackendStatus> checkStatus() async {
@@ -210,7 +215,9 @@ class OpenAiCompatBackend implements InferenceBackend {
       }
       return response.statusCode == 200
           ? BackendStatus.available('$model on $baseUrl')
-          : BackendStatus.unavailable('Server returned ${response.statusCode}.');
+          : BackendStatus.unavailable(
+            'Server returned ${response.statusCode}.',
+          );
     } catch (_) {
       return BackendStatus.unavailable('Could not reach $baseUrl.');
     }
@@ -248,8 +255,10 @@ class OpenAiCompatBackend implements InferenceBackend {
     final ownedClient = client == null;
     final c = client ?? http.Client();
     try {
-      final request =
-          http.Request('POST', Uri.parse('$baseUrl/chat/completions'));
+      final request = http.Request(
+        'POST',
+        Uri.parse('$baseUrl/chat/completions'),
+      );
       request.headers.addAll(_headers);
       request.body = jsonEncode({
         'model': m,
@@ -257,8 +266,9 @@ class OpenAiCompatBackend implements InferenceBackend {
         'stream': true,
       });
 
-      final streamedResponse =
-          await c.send(request).timeout(const Duration(seconds: 30));
+      final streamedResponse = await c
+          .send(request)
+          .timeout(const Duration(seconds: 30));
 
       if (streamedResponse.statusCode != 200) {
         throw InferenceException(

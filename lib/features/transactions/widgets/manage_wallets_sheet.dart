@@ -60,9 +60,9 @@ class _ManageWalletsSheetState extends State<ManageWalletsSheet> {
         setState(() {
           _step = _Step.list;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Rescan failed: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Rescan failed: $e')));
       }
     }
   }
@@ -73,11 +73,12 @@ class _ManageWalletsSheetState extends State<ManageWalletsSheet> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => AddWalletSheet(
-        xpubService: widget.xpubService,
-        walletService: widget.walletService,
-        btcPriceService: widget.btcPriceService,
-      ),
+      builder:
+          (_) => AddWalletSheet(
+            xpubService: widget.xpubService,
+            walletService: widget.walletService,
+            btcPriceService: widget.btcPriceService,
+          ),
     );
   }
 
@@ -118,8 +119,9 @@ class _ManageWalletsSheetState extends State<ManageWalletsSheet> {
                     const SizedBox(width: 8),
                     Text(
                       'Wallets',
-                      style: theme.textTheme.titleMedium
-                          ?.copyWith(fontWeight: FontWeight.w600),
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ],
                 ),
@@ -127,23 +129,24 @@ class _ManageWalletsSheetState extends State<ManageWalletsSheet> {
               const Divider(height: 1),
               switch (_step) {
                 _Step.list => _ListBody(
-                    walletService: widget.walletService,
-                    onRescan: _rescan,
-                    onAdd: _openAddWallet,
-                  ),
+                  walletService: widget.walletService,
+                  onRescan: _rescan,
+                  onAdd: _openAddWallet,
+                ),
                 _Step.syncing => _SyncingBody(
-                    walletLabel: _syncingWalletLabel ?? 'Wallet',
-                    status: _syncStatus,
-                  ),
+                  walletLabel: _syncingWalletLabel ?? 'Wallet',
+                  status: _syncStatus,
+                ),
                 _Step.done => _DoneBody(
-                    result: _syncResult!,
-                    walletLabel: _syncingWalletLabel ?? 'Wallet',
-                    onClose: () => Navigator.of(context).pop(),
-                    onBack: () => setState(() {
-                      _step = _Step.list;
-                      _syncResult = null;
-                    }),
-                  ),
+                  result: _syncResult!,
+                  walletLabel: _syncingWalletLabel ?? 'Wallet',
+                  onClose: () => Navigator.of(context).pop(),
+                  onBack:
+                      () => setState(() {
+                        _step = _Step.list;
+                        _syncResult = null;
+                      }),
+                ),
               },
             ],
           ),
@@ -186,25 +189,33 @@ class _ListBody extends StatelessWidget {
             children: [
               if (wallets.isEmpty)
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 16,
+                  ),
                   child: Text(
                     'No xpub wallets yet. Add one below.',
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: context.textSecondary),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: context.textSecondary,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                 )
               else ...[
                 for (final wallet in wallets)
                   ListTile(
-                    contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 2,
+                    ),
                     leading: CircleAvatar(
                       radius: 16,
                       backgroundColor: _parseColor(wallet.color),
                     ),
-                    title: Text(wallet.label,
-                        style: const TextStyle(fontWeight: FontWeight.w500)),
+                    title: Text(
+                      wallet.label,
+                      style: const TextStyle(fontWeight: FontWeight.w500),
+                    ),
                     subtitle: Text(
                       wallet.xpub != null
                           ? '${wallet.xpub!.substring(0, 12)}…'
@@ -221,7 +232,9 @@ class _ListBody extends StatelessWidget {
                       label: const Text('Rescan'),
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
                         visualDensity: VisualDensity.compact,
                       ),
                     ),
@@ -236,7 +249,8 @@ class _ListBody extends StatelessWidget {
                   icon: const Icon(Icons.add, size: 18),
                   label: const Text('Add xpub / zpub wallet'),
                   style: FilledButton.styleFrom(
-                      minimumSize: const Size(double.infinity, 48)),
+                    minimumSize: const Size(double.infinity, 48),
+                  ),
                 ),
               ),
             ],
@@ -270,14 +284,16 @@ class _SyncingBody extends StatelessWidget {
           const SizedBox(height: 24),
           Text(
             'Rescanning $walletLabel…',
-            style:
-                theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
           ),
           const SizedBox(height: 8),
           Text(
             status,
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: context.textSecondary),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: context.textSecondary,
+            ),
             textAlign: TextAlign.center,
           ),
         ],
@@ -308,28 +324,34 @@ class _DoneBody extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(24, 32, 24, 40),
       child: Column(
         children: [
-          Icon(Icons.check_circle_outline_rounded,
-              size: 56, color: AppColors.success),
+          Icon(
+            Icons.check_circle_outline_rounded,
+            size: 56,
+            color: AppColors.success,
+          ),
           const SizedBox(height: 16),
           Text(
             walletLabel,
-            style:
-                theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
           ),
           const SizedBox(height: 4),
           Text(
             result.imported > 0
                 ? '${result.imported} new transaction${result.imported == 1 ? '' : 's'} imported'
                 : 'No new transactions found',
-            style:
-                theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
           ),
           const SizedBox(height: 8),
           Text(
             'Scanned ${result.addressesScanned} addresses'
             '${result.skipped > 0 ? ' · ${result.skipped} already imported' : ''}.',
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: context.textSecondary),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: context.textSecondary,
+            ),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 32),
@@ -339,7 +361,8 @@ class _DoneBody extends StatelessWidget {
                 child: OutlinedButton(
                   onPressed: onBack,
                   style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(double.infinity, 48)),
+                    minimumSize: const Size(double.infinity, 48),
+                  ),
                   child: const Text('Back'),
                 ),
               ),
@@ -348,7 +371,8 @@ class _DoneBody extends StatelessWidget {
                 child: FilledButton(
                   onPressed: onClose,
                   style: FilledButton.styleFrom(
-                      minimumSize: const Size(double.infinity, 48)),
+                    minimumSize: const Size(double.infinity, 48),
+                  ),
                   child: const Text('Done'),
                 ),
               ),

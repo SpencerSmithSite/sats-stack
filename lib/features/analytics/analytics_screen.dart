@@ -57,18 +57,18 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   /// The figures are converted into the display currency inside the
   /// aggregate, so a currency switch needs a recompute.
   void _onCurrencyChange() => setState(() {
-        _analytics = app.dashboardService.watchAnalytics(_selectedMonth);
-      });
+    _analytics = app.dashboardService.watchAnalytics(_selectedMonth);
+  });
 
   void _previousMonth() => setState(() {
-        _selectedMonth = MonthCursor(_selectedMonth).previous.month;
-        _analytics = app.dashboardService.watchAnalytics(_selectedMonth);
-      });
+    _selectedMonth = MonthCursor(_selectedMonth).previous.month;
+    _analytics = app.dashboardService.watchAnalytics(_selectedMonth);
+  });
 
   void _nextMonth() => setState(() {
-        _selectedMonth = MonthCursor(_selectedMonth).next.month;
-        _analytics = app.dashboardService.watchAnalytics(_selectedMonth);
-      });
+    _selectedMonth = MonthCursor(_selectedMonth).next.month;
+    _analytics = app.dashboardService.watchAnalytics(_selectedMonth);
+  });
 
   bool get _isCurrentMonth => MonthCursor(_selectedMonth).isCurrent();
 
@@ -99,9 +99,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Export failed: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Export failed: $e')));
       }
     }
   }
@@ -129,7 +129,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 );
               }
               final data = snapshot.data ?? AnalyticsData.empty;
-              final hasData = data.spendingByCategory.isNotEmpty ||
+              final hasData =
+                  data.spendingByCategory.isNotEmpty ||
                   data.monthlyTotals.any((m) => m.spending > 0);
 
               if (!hasData) {
@@ -163,12 +164,15 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   // ── 6-month trend ──────────────────────────────────────
                   _SectionHeader(title: '6-Month Spending Trend'),
                   _TrendChart(
-                      monthlyTotals: data.monthlyTotals, currency: currency),
+                    monthlyTotals: data.monthlyTotals,
+                    currency: currency,
+                  ),
                   const SizedBox(height: 24),
 
                   // ── YTD summary ────────────────────────────────────────
                   _SectionHeader(
-                      title: 'Year to Date (${_selectedMonth.year})'),
+                    title: 'Year to Date (${_selectedMonth.year})',
+                  ),
                   _YtdCard(data: data, currency: currency),
                 ],
               );
@@ -196,26 +200,31 @@ class _PieSectionState extends State<_PieSection> {
 
   @override
   Widget build(BuildContext context) {
-    final sorted = widget.data.spendingByCategory.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
+    final sorted =
+        widget.data.spendingByCategory.entries.toList()
+          ..sort((a, b) => b.value.compareTo(a.value));
     final total = sorted.fold(0.0, (s, e) => s + e.value);
 
-    final sections = sorted.asMap().entries.map((entry) {
-      final i = entry.key;
-      final e = entry.value;
-      final isTouched = i == _touched;
-      return PieChartSectionData(
-        value: e.value,
-        color: _colorFor(e.key),
-        radius: isTouched ? 72 : 60,
-        title: isTouched ? '${(e.value / total * 100).toStringAsFixed(0)}%' : '',
-        titleStyle: const TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w700,
-          color: Colors.white,
-        ),
-      );
-    }).toList();
+    final sections =
+        sorted.asMap().entries.map((entry) {
+          final i = entry.key;
+          final e = entry.value;
+          final isTouched = i == _touched;
+          return PieChartSectionData(
+            value: e.value,
+            color: _colorFor(e.key),
+            radius: isTouched ? 72 : 60,
+            title:
+                isTouched
+                    ? '${(e.value / total * 100).toStringAsFixed(0)}%'
+                    : '',
+            titleStyle: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+            ),
+          );
+        }).toList();
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -225,29 +234,30 @@ class _PieSectionState extends State<_PieSection> {
             height: 200,
             child: Semantics(
               // The chart itself says nothing to a screen reader.
-              label: 'Spending by category: '
+              label:
+                  'Spending by category: '
                   '${sorted.take(6).map((e) => '${e.key} ${(e.value / total * 100).round()} percent').join(', ')}',
               excludeSemantics: true,
               child: PieChart(
-              PieChartData(
-                sections: sections,
-                centerSpaceRadius: 44,
-                sectionsSpace: 2,
-                pieTouchData: PieTouchData(
-                  touchCallback: (event, response) {
-                    setState(() {
-                      if (!event.isInterestedForInteractions ||
-                          response?.touchedSection == null) {
-                        _touched = -1;
-                      } else {
-                        _touched = response!
-                            .touchedSection!.touchedSectionIndex;
-                      }
-                    });
-                  },
+                PieChartData(
+                  sections: sections,
+                  centerSpaceRadius: 44,
+                  sectionsSpace: 2,
+                  pieTouchData: PieTouchData(
+                    touchCallback: (event, response) {
+                      setState(() {
+                        if (!event.isInterestedForInteractions ||
+                            response?.touchedSection == null) {
+                          _touched = -1;
+                        } else {
+                          _touched =
+                              response!.touchedSection!.touchedSectionIndex;
+                        }
+                      });
+                    },
+                  ),
                 ),
               ),
-            ),
             ),
           ),
           const SizedBox(height: 16),
@@ -278,16 +288,19 @@ class _PieSectionState extends State<_PieSection> {
                   Text(
                     '${pct.toStringAsFixed(1)}%',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: context.textSecondary,
-                        ),
+                      color: context.textSecondary,
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Text(
-                    CurrencyUtils.format(e.value, widget.currency, decimalDigits: 0),
+                    CurrencyUtils.format(
+                      e.value,
+                      widget.currency,
+                      decimalDigits: 0,
+                    ),
                     style: AppTextStyles.monoSmall.copyWith(
-                      fontWeight: i == _touched
-                          ? FontWeight.w700
-                          : FontWeight.w400,
+                      fontWeight:
+                          i == _touched ? FontWeight.w700 : FontWeight.w400,
                     ),
                   ),
                 ],
@@ -336,9 +349,10 @@ class _TrendChartState extends State<_TrendChart> {
     final values = widget.monthlyTotals.map(_valueFor).toList();
     final maxY = values.fold(0.0, (a, b) => a > b ? a : b);
     final chartMax = maxY > 0 ? (maxY * 1.2).ceilToDouble() : 100.0;
-    final barColor = _selectedCategory != null
-        ? _colorFor(_selectedCategory!).withAlpha(200)
-        : AppColors.danger.withAlpha(200);
+    final barColor =
+        _selectedCategory != null
+            ? _colorFor(_selectedCategory!).withAlpha(200)
+            : AppColors.danger.withAlpha(200);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -375,96 +389,111 @@ class _TrendChartState extends State<_TrendChart> {
           child: SizedBox(
             height: 180,
             child: Semantics(
-              label: '${_selectedCategory ?? 'Spending'} by month: '
+              label:
+                  '${_selectedCategory ?? 'Spending'} by month: '
                   '${[for (var i = 0; i < values.length; i++) '${DateFormat('MMMM').format(widget.monthlyTotals[i].month)} ${CurrencyUtils.format(values[i], widget.currency, decimalDigits: 0)}'].join(', ')}',
               excludeSemantics: true,
               child: BarChart(
-              BarChartData(
-                maxY: chartMax,
-                barGroups: widget.monthlyTotals.asMap().entries.map((entry) {
-                  final i = entry.key;
-                  final m = entry.value;
-                  return BarChartGroupData(
-                    x: i,
-                    barRods: [
-                      BarChartRodData(
-                        toY: _valueFor(m),
-                        color: barColor,
-                        width: 18,
-                        borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(4)),
+                BarChartData(
+                  maxY: chartMax,
+                  barGroups:
+                      widget.monthlyTotals.asMap().entries.map((entry) {
+                        final i = entry.key;
+                        final m = entry.value;
+                        return BarChartGroupData(
+                          x: i,
+                          barRods: [
+                            BarChartRodData(
+                              toY: _valueFor(m),
+                              color: barColor,
+                              width: 18,
+                              borderRadius: const BorderRadius.vertical(
+                                top: Radius.circular(4),
+                              ),
+                            ),
+                          ],
+                        );
+                      }).toList(),
+                  titlesData: FlTitlesData(
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        getTitlesWidget: (value, meta) {
+                          final i = value.toInt();
+                          if (i < 0 || i >= widget.monthlyTotals.length) {
+                            return const SizedBox.shrink();
+                          }
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              DateFormat(
+                                'MMM',
+                              ).format(widget.monthlyTotals[i].month),
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: context.textSecondary,
+                              ),
+                            ),
+                          );
+                        },
                       ),
-                    ],
-                  );
-                }).toList(),
-                titlesData: FlTitlesData(
-                  bottomTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      getTitlesWidget: (value, meta) {
-                        final i = value.toInt();
-                        if (i < 0 || i >= widget.monthlyTotals.length) {
+                    ),
+                    leftTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 48,
+                        getTitlesWidget: (value, meta) {
+                          if (value == 0 || value == chartMax) {
+                            return Text(
+                              CurrencyUtils.formatCompact(
+                                value,
+                                widget.currency,
+                              ),
+                              style: TextStyle(
+                                fontSize: 9,
+                                color: context.textSecondary,
+                              ),
+                            );
+                          }
                           return const SizedBox.shrink();
-                        }
-                        return Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Text(
-                            DateFormat('MMM')
-                                .format(widget.monthlyTotals[i].month),
-                            style: TextStyle(
-                                fontSize: 10, color: context.textSecondary),
+                        },
+                      ),
+                    ),
+                    topTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
+                    rightTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
+                  ),
+                  gridData: FlGridData(
+                    drawVerticalLine: false,
+                    horizontalInterval: chartMax / 4,
+                    getDrawingHorizontalLine:
+                        (value) => FlLine(
+                          color: context.textSecondary.withAlpha(30),
+                          strokeWidth: 0.5,
+                        ),
+                  ),
+                  borderData: FlBorderData(show: false),
+                  barTouchData: BarTouchData(
+                    touchTooltipData: BarTouchTooltipData(
+                      getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                        final m = widget.monthlyTotals[group.x];
+                        return BarTooltipItem(
+                          '${DateFormat('MMM yyyy').format(m.month)}\n'
+                          '${CurrencyUtils.format(rod.toY, widget.currency, decimalDigits: 0)}',
+                          const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
                           ),
                         );
                       },
                     ),
                   ),
-                  leftTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      reservedSize: 48,
-                      getTitlesWidget: (value, meta) {
-                        if (value == 0 || value == chartMax) {
-                          return Text(
-                            CurrencyUtils.formatCompact(value, widget.currency),
-                            style: TextStyle(
-                                fontSize: 9, color: context.textSecondary),
-                          );
-                        }
-                        return const SizedBox.shrink();
-                      },
-                    ),
-                  ),
-                  topTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false)),
-                  rightTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false)),
-                ),
-                gridData: FlGridData(
-                  drawVerticalLine: false,
-                  horizontalInterval: chartMax / 4,
-                  getDrawingHorizontalLine: (value) => FlLine(
-                    color: context.textSecondary.withAlpha(30),
-                    strokeWidth: 0.5,
-                  ),
-                ),
-                borderData: FlBorderData(show: false),
-                barTouchData: BarTouchData(
-                  touchTooltipData: BarTouchTooltipData(
-                    getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                      final m = widget.monthlyTotals[group.x];
-                      return BarTooltipItem(
-                        '${DateFormat('MMM yyyy').format(m.month)}\n'
-                        '${CurrencyUtils.format(rod.toY, widget.currency, decimalDigits: 0)}',
-                        const TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600),
-                      );
-                    },
-                  ),
                 ),
               ),
-            ),
             ),
           ),
         ),
@@ -545,19 +574,28 @@ class _YtdCard extends StatelessWidget {
           children: [
             _YtdStat(
               label: 'Income',
-              value: CurrencyUtils.format(data.ytdIncome, currency, decimalDigits: 0),
+              value: CurrencyUtils.format(
+                data.ytdIncome,
+                currency,
+                decimalDigits: 0,
+              ),
               color: AppColors.success,
             ),
             const _Divider(),
             _YtdStat(
               label: 'Spending',
-              value: CurrencyUtils.format(data.ytdSpending, currency, decimalDigits: 0),
+              value: CurrencyUtils.format(
+                data.ytdSpending,
+                currency,
+                decimalDigits: 0,
+              ),
               color: AppColors.danger,
             ),
             const _Divider(),
             _YtdStat(
               label: 'Surplus',
-              value: '${surplusPositive ? '+' : ''}${CurrencyUtils.format(data.ytdSurplus, currency, decimalDigits: 0)}',
+              value:
+                  '${surplusPositive ? '+' : ''}${CurrencyUtils.format(data.ytdSurplus, currency, decimalDigits: 0)}',
               color: surplusPositive ? AppColors.success : AppColors.danger,
             ),
           ],
@@ -568,7 +606,11 @@ class _YtdCard extends StatelessWidget {
 }
 
 class _YtdStat extends StatelessWidget {
-  const _YtdStat({required this.label, required this.value, required this.color});
+  const _YtdStat({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
   final String label;
   final String value;
   final Color color;
@@ -580,9 +622,9 @@ class _YtdStat extends StatelessWidget {
         children: [
           Text(
             label,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: context.textSecondary,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: context.textSecondary),
           ),
           const SizedBox(height: 4),
           Text(
@@ -629,9 +671,9 @@ class _SectionHeader extends StatelessWidget {
           Text(
             title.toUpperCase(),
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: context.textSecondary,
-                  letterSpacing: 1.2,
-                ),
+              color: context.textSecondary,
+              letterSpacing: 1.2,
+            ),
           ),
           const Spacer(),
           if (trailing != null) trailing!,

@@ -12,16 +12,14 @@ abstract final class AppTheme {
       brightness: brightness,
       primary: AppColors.bitcoinOrange,
       onPrimary: Colors.white,
-      primaryContainer: isDark
-          ? const Color(0xFF3D2600)
-          : const Color(0xFFFFE0B2),
+      primaryContainer:
+          isDark ? const Color(0xFF3D2600) : const Color(0xFFFFE0B2),
       onPrimaryContainer:
           isDark ? AppColors.bitcoinOrange : const Color(0xFF3D2600),
       secondary: AppColors.success,
       onSecondary: Colors.white,
-      secondaryContainer: isDark
-          ? const Color(0xFF003D2E)
-          : const Color(0xFFB2F0DC),
+      secondaryContainer:
+          isDark ? const Color(0xFF003D2E) : const Color(0xFFB2F0DC),
       onSecondaryContainer: AppColors.success,
       error: AppColors.danger,
       onError: Colors.white,
@@ -48,10 +46,7 @@ abstract final class AppTheme {
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          side: BorderSide(
-            color: colorScheme.outline,
-            width: 0.5,
-          ),
+          side: BorderSide(color: colorScheme.outline, width: 0.5),
         ),
         margin: EdgeInsets.zero,
       ),
@@ -71,17 +66,15 @@ abstract final class AppTheme {
           if (states.contains(WidgetState.selected)) {
             // Text, so the legible orange on light — see bitcoinOrangeOnLight.
             return TextStyle(
-              color: isDark
-                  ? AppColors.bitcoinOrange
-                  : AppColors.bitcoinOrangeOnLight,
+              color:
+                  isDark
+                      ? AppColors.bitcoinOrange
+                      : AppColors.bitcoinOrangeOnLight,
               fontSize: 11,
               fontWeight: FontWeight.w600,
             );
           }
-          return TextStyle(
-            color: colorScheme.onSurfaceVariant,
-            fontSize: 11,
-          );
+          return TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 11);
         }),
       ),
 
@@ -100,8 +93,7 @@ abstract final class AppTheme {
 
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor:
-            isDark ? AppColors.darkSurface2 : const Color(0xFFF5F3F0),
+        fillColor: isDark ? AppColors.darkSurface2 : const Color(0xFFF5F3F0),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
           borderSide: BorderSide(color: colorScheme.outline, width: 0.5),
@@ -112,8 +104,10 @@ abstract final class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide:
-              const BorderSide(color: AppColors.bitcoinOrange, width: 1.5),
+          borderSide: const BorderSide(
+            color: AppColors.bitcoinOrange,
+            width: 1.5,
+          ),
         ),
       ),
 

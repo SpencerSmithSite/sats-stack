@@ -74,7 +74,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Future<void> _finish() async {
     // Save currency
     app.currencyNotifier.value = _currency;
-    await app.db.into(app.db.appSettings).insertOnConflictUpdate(
+    await app.db
+        .into(app.db.appSettings)
+        .insertOnConflictUpdate(
           AppSettingsCompanion.insert(
             key: AppConstants.settingCurrency,
             value: _currency,
@@ -89,7 +91,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       ThemeMode.dark => 'dark',
       ThemeMode.system => 'system',
     };
-    await app.db.into(app.db.appSettings).insertOnConflictUpdate(
+    await app.db
+        .into(app.db.appSettings)
+        .insertOnConflictUpdate(
           AppSettingsCompanion.insert(
             key: AppConstants.settingThemeMode,
             value: themeValue,
@@ -107,15 +111,22 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     switch (_aiProvider) {
       case AiProvider.ollama:
         await app.ollamaService.saveSettings(
-          url: trimmedUrl.isNotEmpty ? trimmedUrl : AppConstants.defaultOllamaUrl,
+          url:
+              trimmedUrl.isNotEmpty
+                  ? trimmedUrl
+                  : AppConstants.defaultOllamaUrl,
         );
       case AiProvider.lmStudio:
         await app.ollamaService.saveLmStudioSettings(
-          url: trimmedUrl.isNotEmpty ? trimmedUrl : AppConstants.defaultLmStudioUrl,
+          url:
+              trimmedUrl.isNotEmpty
+                  ? trimmedUrl
+                  : AppConstants.defaultLmStudioUrl,
         );
       case AiProvider.maple:
         await app.ollamaService.saveMapleSettings(
-          url: trimmedUrl.isNotEmpty ? trimmedUrl : AppConstants.defaultMapleUrl,
+          url:
+              trimmedUrl.isNotEmpty ? trimmedUrl : AppConstants.defaultMapleUrl,
           apiKey: trimmedKey.isNotEmpty ? trimmedKey : null,
         );
       case AiProvider.claude:
@@ -148,7 +159,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     // Mark onboarding complete, in the database and in the notifier the
     // router's redirect reads. Both, or the redirect sends the user straight
     // back here.
-    await app.db.into(app.db.appSettings).insertOnConflictUpdate(
+    await app.db
+        .into(app.db.appSettings)
+        .insertOnConflictUpdate(
           AppSettingsCompanion.insert(
             key: AppConstants.settingOnboardingComplete,
             value: 'true',
@@ -175,12 +188,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   /// needs, so by the time the user arrives the right option is already
   /// selected instead of appearing a beat later.
   Future<void> _loadPlatformAvailability() async {
-    final apple = PlatformLlmBackend.bridgedHere
-        ? await PlatformLlmBackend.availability()
-        : null;
-    final nano = GeminiNanoBackend.bridgedHere
-        ? await GeminiNanoBackend.availability()
-        : null;
+    final apple =
+        PlatformLlmBackend.bridgedHere
+            ? await PlatformLlmBackend.availability()
+            : null;
+    final nano =
+        GeminiNanoBackend.bridgedHere
+            ? await GeminiNanoBackend.availability()
+            : null;
     if (!mounted) return;
     setState(() {
       _catalogue = AiBackendCatalogue(
@@ -290,4 +305,3 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 // ── Reusable sub-widgets ──────────────────────────────────────────────────────
 
 // ── Bottom bar ────────────────────────────────────────────────────────────────
-

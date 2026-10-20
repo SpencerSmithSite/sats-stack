@@ -107,7 +107,10 @@ class _AiChatScreenState extends State<AiChatScreen> {
     if (!mounted) return;
 
     if (!available) {
-      setState(() { _ollamaAvailable = false; _checking = false; });
+      setState(() {
+        _ollamaAvailable = false;
+        _checking = false;
+      });
       return;
     }
 
@@ -212,45 +215,47 @@ class _AiChatScreenState extends State<AiChatScreen> {
     final completion = Completer<void>();
     _streamDone = completion;
 
-    _streamSub = app.ollamaService.chat(apiMessages, client: client).listen(
-      (token) {
-        buffer.write(token);
-        if (!mounted) return;
-        setState(() => _streamingContent = buffer.toString());
-        _scrollToBottom();
-      },
-      onError: (Object e) {
-        if (mounted) {
-          setState(() {
-            _isStreaming = false;
-            _streamingContent = '';
-            _error = 'Error: $e';
-          });
-        }
-        if (!completion.isCompleted) completion.complete();
-      },
-      onDone: () async {
-        final response = buffer.toString();
-        if (response.isNotEmpty) {
-          await app.ollamaService.saveConversation(
-            prompt: text,
-            response: response,
-          );
-        }
-        if (mounted) {
-          setState(() {
-            _messages = [
-              ..._messages,
-              _Msg(role: _Role.assistant, content: response),
-            ];
-            _isStreaming = false;
-            _streamingContent = '';
-          });
-        }
-        if (!completion.isCompleted) completion.complete();
-      },
-      cancelOnError: true,
-    );
+    _streamSub = app.ollamaService
+        .chat(apiMessages, client: client)
+        .listen(
+          (token) {
+            buffer.write(token);
+            if (!mounted) return;
+            setState(() => _streamingContent = buffer.toString());
+            _scrollToBottom();
+          },
+          onError: (Object e) {
+            if (mounted) {
+              setState(() {
+                _isStreaming = false;
+                _streamingContent = '';
+                _error = 'Error: $e';
+              });
+            }
+            if (!completion.isCompleted) completion.complete();
+          },
+          onDone: () async {
+            final response = buffer.toString();
+            if (response.isNotEmpty) {
+              await app.ollamaService.saveConversation(
+                prompt: text,
+                response: response,
+              );
+            }
+            if (mounted) {
+              setState(() {
+                _messages = [
+                  ..._messages,
+                  _Msg(role: _Role.assistant, content: response),
+                ];
+                _isStreaming = false;
+                _streamingContent = '';
+              });
+            }
+            if (!completion.isCompleted) completion.complete();
+          },
+          cancelOnError: true,
+        );
 
     await completion.future;
     client.close();
@@ -287,50 +292,63 @@ class _AiChatScreenState extends State<AiChatScreen> {
       AiProvider.claude ||
       AiProvider.chatGpt ||
       AiProvider.gemini ||
-      AiProvider.grok =>
-        '',
+      AiProvider.grok => '',
     };
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _AiSettingsSheet(
-        provider: provider,
-        currentUrl: currentUrl,
-        currentModel: app.ollamaService.selectedModel,
-        models: _models,
-        onSave: (url, model) async {
-          switch (provider) {
-            case AiProvider.ollama:
-              await app.ollamaService.saveSettings(url: url, model: model);
-            case AiProvider.lmStudio:
-              await app.ollamaService.saveLmStudioSettings(url: url, model: model);
-            case AiProvider.maple:
-              await app.ollamaService.saveMapleSettings(url: url, model: model);
-            case AiProvider.claude:
-            case AiProvider.chatGpt:
-            case AiProvider.gemini:
-            case AiProvider.grok:
-              // The model is the only editable part; the endpoint is fixed and
-              // the API key is entered in Settings, never here.
-              await app.ollamaService
-                  .saveCloudSettings(provider.cloudProvider!, model: model);
-            case AiProvider.appleIntelligence:
-            case AiProvider.geminiNano:
-            case AiProvider.localModel:
-              // Nothing to save: no URL, and the model is either fixed by the
-              // OS or chosen in Settings, not here.
-              break;
-          }
-          if (mounted) setState(() {});
-        },
-        onRefresh: () async {
-          final available = await app.ollamaService.isAvailable();
-          if (!available) return;
-          final models = await app.ollamaService.listModels();
-          if (mounted) setState(() { _models = models; _ollamaAvailable = true; });
-        },
-      ),
+      builder:
+          (_) => _AiSettingsSheet(
+            provider: provider,
+            currentUrl: currentUrl,
+            currentModel: app.ollamaService.selectedModel,
+            models: _models,
+            onSave: (url, model) async {
+              switch (provider) {
+                case AiProvider.ollama:
+                  await app.ollamaService.saveSettings(url: url, model: model);
+                case AiProvider.lmStudio:
+                  await app.ollamaService.saveLmStudioSettings(
+                    url: url,
+                    model: model,
+                  );
+                case AiProvider.maple:
+                  await app.ollamaService.saveMapleSettings(
+                    url: url,
+                    model: model,
+                  );
+                case AiProvider.claude:
+                case AiProvider.chatGpt:
+                case AiProvider.gemini:
+                case AiProvider.grok:
+                  // The model is the only editable part; the endpoint is fixed and
+                  // the API key is entered in Settings, never here.
+                  await app.ollamaService.saveCloudSettings(
+                    provider.cloudProvider!,
+                    model: model,
+                  );
+                case AiProvider.appleIntelligence:
+                case AiProvider.geminiNano:
+                case AiProvider.localModel:
+                  // Nothing to save: no URL, and the model is either fixed by the
+                  // OS or chosen in Settings, not here.
+                  break;
+              }
+              if (mounted) setState(() {});
+            },
+            onRefresh: () async {
+              final available = await app.ollamaService.isAvailable();
+              if (!available) return;
+              final models = await app.ollamaService.listModels();
+              if (mounted) {
+                setState(() {
+                  _models = models;
+                  _ollamaAvailable = true;
+                });
+              }
+            },
+          ),
     );
   }
 
@@ -338,18 +356,19 @@ class _AiChatScreenState extends State<AiChatScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: _checking
-            ? const Text('AI Analyst')
-            : _ollamaAvailable
+        title:
+            _checking
+                ? const Text('AI Analyst')
+                : _ollamaAvailable
                 ? _ModelSelector(
-                    models: _models,
-                    selected: app.ollamaService.selectedModel,
-                    onChanged: (m) async {
-                      await app.ollamaService.saveModelForActiveProvider(m);
-                      // Guarded, like the two sibling callbacks above it.
-                      if (mounted) setState(() {});
-                    },
-                  )
+                  models: _models,
+                  selected: app.ollamaService.selectedModel,
+                  onChanged: (m) async {
+                    await app.ollamaService.saveModelForActiveProvider(m);
+                    // Guarded, like the two sibling callbacks above it.
+                    if (mounted) setState(() {});
+                  },
+                )
                 : const Text('AI Analyst'),
         actions: [
           IconButton(
@@ -359,29 +378,35 @@ class _AiChatScreenState extends State<AiChatScreen> {
           ),
         ],
       ),
-      body: _checking
-          ? const Center(child: CircularProgressIndicator())
-          : !_ollamaAvailable
+      body:
+          _checking
+              ? const Center(child: CircularProgressIndicator())
+              : !_ollamaAvailable
               ? _OfflineState(onRetry: _init, onOpenSettings: _openSettings)
               : Column(
-                  children: [
-                    Expanded(child: _ChatList(
+                children: [
+                  Expanded(
+                    child: _ChatList(
                       messages: _messages,
                       isStreaming: _isStreaming,
                       streamingContent: _streamingContent,
                       scrollCtrl: _scrollCtrl,
                       starters: _starters,
                       onStarterTap: _send,
-                    )),
-                    if (_error != null)
-                      _ErrorBanner(message: _error!, onDismiss: () => setState(() => _error = null)),
-                    _InputBar(
-                      controller: _inputCtrl,
-                      isStreaming: _isStreaming,
-                      onSend: _send,
                     ),
-                  ],
-                ),
+                  ),
+                  if (_error != null)
+                    _ErrorBanner(
+                      message: _error!,
+                      onDismiss: () => setState(() => _error = null),
+                    ),
+                  _InputBar(
+                    controller: _inputCtrl,
+                    isStreaming: _isStreaming,
+                    onSend: _send,
+                  ),
+                ],
+              ),
     );
   }
 }
@@ -418,21 +443,28 @@ class _ChatList extends StatelessWidget {
         if (empty) ...[
           const SizedBox(height: 32),
           Center(
-            child: Icon(Icons.auto_awesome_outlined,
-                size: 40, color: const Color(0xFF6AB0E8)),
+            child: Icon(
+              Icons.auto_awesome_outlined,
+              size: 40,
+              color: const Color(0xFF6AB0E8),
+            ),
           ),
           const SizedBox(height: 12),
           Center(
             child: Text(
               'Bitcoin-native AI analyst',
-              style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
           const SizedBox(height: 4),
           Center(
             child: Text(
               'Your financial data is injected as context.',
-              style: theme.textTheme.bodySmall?.copyWith(color: context.textSecondary),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: context.textSecondary,
+              ),
             ),
           ),
           const SizedBox(height: 24),
@@ -445,7 +477,8 @@ class _ChatList extends StatelessWidget {
                 ActionChip(
                   label: Text(s, style: const TextStyle(fontSize: 12)),
                   onPressed: () => onStarterTap(s),
-                  backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  backgroundColor:
+                      Theme.of(context).colorScheme.surfaceContainerHighest,
                   side: BorderSide(
                     color: Theme.of(context).colorScheme.outlineVariant,
                     width: 0.5,
@@ -489,17 +522,26 @@ class _Bubble extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment:
+            isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
         children: [
           if (!isUser) ...[
             Container(
-              width: 28, height: 28,
+              width: 28,
+              height: 28,
               decoration: BoxDecoration(
                 color: theme.colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: theme.colorScheme.outlineVariant, width: 0.5),
+                border: Border.all(
+                  color: theme.colorScheme.outlineVariant,
+                  width: 0.5,
+                ),
               ),
-              child: const Icon(Icons.auto_awesome, size: 14, color: Color(0xFF6AB0E8)),
+              child: const Icon(
+                Icons.auto_awesome,
+                size: 14,
+                color: Color(0xFF6AB0E8),
+              ),
             ),
             const SizedBox(width: 8),
           ],
@@ -507,54 +549,62 @@ class _Bubble extends StatelessWidget {
             child: Semantics(
               onLongPressHint: 'Copy message',
               child: GestureDetector(
-              onLongPress: () {
-                Clipboard.setData(ClipboardData(text: msg.content));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Copied to clipboard'),
-                    duration: Duration(seconds: 1),
+                onLongPress: () {
+                  Clipboard.setData(ClipboardData(text: msg.content));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Copied to clipboard'),
+                      duration: Duration(seconds: 1),
+                    ),
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
                   ),
-                );
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: isUser
-                      ? AppColors.bitcoinOrange.withAlpha(25)
-                      : theme.colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.only(
-                    topLeft: const Radius.circular(16),
-                    topRight: const Radius.circular(16),
-                    bottomLeft: Radius.circular(isUser ? 16 : 4),
-                    bottomRight: Radius.circular(isUser ? 4 : 16),
+                  decoration: BoxDecoration(
+                    color:
+                        isUser
+                            ? AppColors.bitcoinOrange.withAlpha(25)
+                            : theme.colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.only(
+                      topLeft: const Radius.circular(16),
+                      topRight: const Radius.circular(16),
+                      bottomLeft: Radius.circular(isUser ? 16 : 4),
+                      bottomRight: Radius.circular(isUser ? 4 : 16),
+                    ),
+                    border: Border.all(
+                      color:
+                          isUser
+                              ? AppColors.bitcoinOrange.withAlpha(60)
+                              : theme.colorScheme.outlineVariant,
+                      width: 0.5,
+                    ),
                   ),
-                  border: Border.all(
-                    color: isUser
-                        ? AppColors.bitcoinOrange.withAlpha(60)
-                        : theme.colorScheme.outlineVariant,
-                    width: 0.5,
-                  ),
-                ),
-                child: streaming && msg.content.isEmpty
-                    ? const _TypingIndicator()
-                    : Row(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Flexible(
-                            child: Text(
-                              msg.content,
-                              style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
-                            ),
+                  child:
+                      streaming && msg.content.isEmpty
+                          ? const _TypingIndicator()
+                          : Row(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  msg.content,
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    height: 1.5,
+                                  ),
+                                ),
+                              ),
+                              if (streaming) ...[
+                                const SizedBox(width: 2),
+                                const _Cursor(),
+                              ],
+                            ],
                           ),
-                          if (streaming) ...[
-                            const SizedBox(width: 2),
-                            const _Cursor(),
-                          ],
-                        ],
-                      ),
+                ),
               ),
-            ),
             ),
           ),
           if (isUser) const SizedBox(width: 36),
@@ -578,8 +628,10 @@ class _TypingIndicatorState extends State<_TypingIndicator>
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))
-      ..repeat(reverse: true);
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
     _anim = Tween<double>(begin: 0.3, end: 1.0).animate(_ctrl);
   }
 
@@ -598,7 +650,8 @@ class _TypingIndicatorState extends State<_TypingIndicator>
         children: [
           for (int i = 0; i < 3; i++) ...[
             Container(
-              width: 6, height: 6,
+              width: 6,
+              height: 6,
               decoration: const BoxDecoration(
                 color: Color(0xFF6AB0E8),
                 shape: BoxShape.circle,
@@ -624,21 +677,31 @@ class _CursorState extends State<_Cursor> with SingleTickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 530))
-      ..repeat(reverse: true);
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 530),
+    )..repeat(reverse: true);
   }
 
   @override
-  void dispose() { _ctrl.dispose(); super.dispose(); }
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: _ctrl,
-      builder: (_, __) => Container(
-        width: 2, height: 14,
-        color: _ctrl.value > 0.5 ? AppColors.bitcoinOrange : Colors.transparent,
-      ),
+      builder:
+          (_, __) => Container(
+            width: 2,
+            height: 14,
+            color:
+                _ctrl.value > 0.5
+                    ? AppColors.bitcoinOrange
+                    : Colors.transparent,
+          ),
     );
   }
 }
@@ -646,7 +709,11 @@ class _CursorState extends State<_Cursor> with SingleTickerProviderStateMixin {
 // ── Input bar ─────────────────────────────────────────────────────────────────
 
 class _InputBar extends StatelessWidget {
-  const _InputBar({required this.controller, required this.isStreaming, required this.onSend});
+  const _InputBar({
+    required this.controller,
+    required this.isStreaming,
+    required this.onSend,
+  });
 
   final TextEditingController controller;
   final bool isStreaming;
@@ -657,10 +724,16 @@ class _InputBar extends StatelessWidget {
     final theme = Theme.of(context);
     return Container(
       padding: EdgeInsets.fromLTRB(
-          12, 8, 12, MediaQuery.of(context).padding.bottom + 8),
+        12,
+        8,
+        12,
+        MediaQuery.of(context).padding.bottom + 8,
+      ),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
-        border: Border(top: BorderSide(color: theme.colorScheme.outline.withAlpha(40))),
+        border: Border(
+          top: BorderSide(color: theme.colorScheme.outline.withAlpha(40)),
+        ),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
@@ -675,9 +748,14 @@ class _InputBar extends StatelessWidget {
                 hintText: isStreaming ? 'Thinking…' : 'Ask anything…',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(20),
-                  borderSide: BorderSide(color: theme.colorScheme.outline.withAlpha(60)),
+                  borderSide: BorderSide(
+                    color: theme.colorScheme.outline.withAlpha(60),
+                  ),
                 ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
                 isDense: true,
               ),
               onSubmitted: isStreaming ? null : (_) => onSend(),
@@ -703,20 +781,33 @@ class _SendButton extends StatelessWidget {
       onTap: enabled ? onTap : null,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
-        width: 40, height: 40,
+        width: 40,
+        height: 40,
         decoration: BoxDecoration(
-          color: enabled ? AppColors.bitcoinOrange : context.textSecondary.withAlpha(60),
+          color:
+              enabled
+                  ? AppColors.bitcoinOrange
+                  : context.textSecondary.withAlpha(60),
           shape: BoxShape.circle,
         ),
-        child: enabled
-            ? const Icon(Icons.arrow_upward_rounded, color: Colors.white, size: 20)
-            : const SizedBox(
-                width: 20, height: 20,
-                child: Padding(
-                  padding: EdgeInsets.all(10),
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+        child:
+            enabled
+                ? const Icon(
+                  Icons.arrow_upward_rounded,
+                  color: Colors.white,
+                  size: 20,
+                )
+                : const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: Padding(
+                    padding: EdgeInsets.all(10),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  ),
                 ),
-              ),
       ),
     );
   }
@@ -753,17 +844,19 @@ class _OfflineState extends StatelessWidget {
             const SizedBox(height: 16),
             Text(
               'Cannot reach $providerName',
-              style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
             ),
             const SizedBox(height: 8),
             Text(
               provider == AiProvider.ollama && isDesktop
                   ? 'Install Ollama and pull a model, then tap Retry.\n\nollama pull llama3.2'
                   : provider == AiProvider.lmStudio
-                      ? 'Make sure LM Studio is running with server mode enabled, then tap Retry.'
-                      : provider == AiProvider.maple
-                          ? 'Check that your Maple proxy URL and API key are correct in Settings.'
-                          : 'Check that your server URL is correct and reachable, then tap Retry.',
+                  ? 'Make sure LM Studio is running with server mode enabled, then tap Retry.'
+                  : provider == AiProvider.maple
+                  ? 'Check that your Maple proxy URL and API key are correct in Settings.'
+                  : 'Check that your server URL is correct and reachable, then tap Retry.',
               textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: context.textSecondary,
@@ -774,7 +867,9 @@ class _OfflineState extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 AppConstants.defaultOllamaUrl,
-                style: AppTextStyles.monoSmall.copyWith(color: context.textSecondary),
+                style: AppTextStyles.monoSmall.copyWith(
+                  color: context.textSecondary,
+                ),
               ),
             ],
             const SizedBox(height: 24),
@@ -834,7 +929,11 @@ class _ErrorBanner extends StatelessWidget {
 // ── Model selector (in app bar) ───────────────────────────────────────────────
 
 class _ModelSelector extends StatelessWidget {
-  const _ModelSelector({required this.models, required this.selected, required this.onChanged});
+  const _ModelSelector({
+    required this.models,
+    required this.selected,
+    required this.onChanged,
+  });
   final List<String> models;
   final String? selected;
   final ValueChanged<String> onChanged;
@@ -847,13 +946,20 @@ class _ModelSelector extends StatelessWidget {
         value: models.contains(selected) ? selected : models.firstOrNull,
         isDense: true,
         icon: const Icon(Icons.expand_more, size: 18),
-        style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+        style: Theme.of(
+          context,
+        ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
         dropdownColor: Theme.of(context).colorScheme.surface,
         items: [
           for (final m in models)
-            DropdownMenuItem(value: m, child: Text(m, style: const TextStyle(fontSize: 14))),
+            DropdownMenuItem(
+              value: m,
+              child: Text(m, style: const TextStyle(fontSize: 14)),
+            ),
         ],
-        onChanged: (v) { if (v != null) onChanged(v); },
+        onChanged: (v) {
+          if (v != null) onChanged(v);
+        },
       ),
     );
   }
@@ -906,16 +1012,20 @@ class _AiSettingsSheetState extends State<_AiSettingsSheet> {
   String _providerUrlHint(AiProvider p) => p.defaultUrl ?? '';
 
   Future<void> _testAndSave() async {
-    setState(() { _testing = true; _testResult = null; });
+    setState(() {
+      _testing = true;
+      _testResult = null;
+    });
     await widget.onSave(_urlCtrl.text.trim(), _selectedModel);
     await widget.onRefresh();
     final ok = await app.ollamaService.isAvailable();
     if (mounted) {
       setState(() {
         _testing = false;
-        _testResult = ok
-            ? 'Connected ✓'
-            : 'Cannot reach ${_providerLabel(widget.provider)} at that URL';
+        _testResult =
+            ok
+                ? 'Connected ✓'
+                : 'Cannot reach ${_providerLabel(widget.provider)} at that URL';
       });
     }
   }
@@ -941,7 +1051,8 @@ class _AiSettingsSheetState extends State<_AiSettingsSheet> {
               children: [
                 Center(
                   child: Container(
-                    width: 36, height: 4,
+                    width: 36,
+                    height: 4,
                     margin: const EdgeInsets.only(bottom: 16),
                     decoration: BoxDecoration(
                       color: theme.colorScheme.outline,
@@ -951,7 +1062,9 @@ class _AiSettingsSheetState extends State<_AiSettingsSheet> {
                 ),
                 Text(
                   '${_providerLabel(widget.provider)} Settings',
-                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 const SizedBox(height: 20),
                 TextField(
@@ -961,12 +1074,17 @@ class _AiSettingsSheetState extends State<_AiSettingsSheet> {
                     labelText: '${_providerLabel(widget.provider)} URL',
                     hintText: _providerUrlHint(widget.provider),
                   ),
-                  style: AppTextStyles.monoSmall.copyWith(color: theme.colorScheme.onSurface),
+                  style: AppTextStyles.monoSmall.copyWith(
+                    color: theme.colorScheme.onSurface,
+                  ),
                 ),
                 const SizedBox(height: 16),
                 if (widget.models.isNotEmpty) ...[
                   DropdownButtonFormField<String>(
-                    initialValue: widget.models.contains(_selectedModel) ? _selectedModel : widget.models.firstOrNull,
+                    initialValue:
+                        widget.models.contains(_selectedModel)
+                            ? _selectedModel
+                            : widget.models.firstOrNull,
                     decoration: const InputDecoration(labelText: 'Model'),
                     items: [
                       for (final m in widget.models)
@@ -981,20 +1099,30 @@ class _AiSettingsSheetState extends State<_AiSettingsSheet> {
                     _testResult!,
                     style: TextStyle(
                       fontSize: 13,
-                      color: _testResult!.contains('✓')
-                          ? AppColors.success
-                          : AppColors.danger,
+                      color:
+                          _testResult!.contains('✓')
+                              ? AppColors.success
+                              : AppColors.danger,
                     ),
                   ),
                   const SizedBox(height: 12),
                 ],
                 FilledButton(
                   onPressed: _testing ? null : _testAndSave,
-                  style: FilledButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
-                  child: _testing
-                      ? const SizedBox(height: 18, width: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                      : const Text('Save & Test Connection'),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 48),
+                  ),
+                  child:
+                      _testing
+                          ? const SizedBox(
+                            height: 18,
+                            width: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                          : const Text('Save & Test Connection'),
                 ),
               ],
             ),

@@ -11,14 +11,20 @@ void main() {
   group('AiProvider persistence', () {
     test('every provider round-trips through its key', () {
       for (final p in AiProvider.values) {
-        expect(AiProvider.fromKey(p.key), p, reason: 'round-trip for ${p.name}');
+        expect(
+          AiProvider.fromKey(p.key),
+          p,
+          reason: 'round-trip for ${p.name}',
+        );
       }
     });
 
     test('an unknown key falls back to Ollama rather than throwing', () {
       // A backend removed in a later build must not break a settings read.
-      expect(AiProvider.fromKey('a-backend-that-no-longer-exists'),
-          AiProvider.ollama);
+      expect(
+        AiProvider.fromKey('a-backend-that-no-longer-exists'),
+        AiProvider.ollama,
+      );
       expect(AiProvider.fromKey(null), AiProvider.ollama);
     });
 
@@ -34,19 +40,19 @@ void main() {
       // forgotten — a new value with no `dataRecipient` that claims privacy it
       // does not have will fail here.
       for (final p in AiProvider.values) {
-        expect(p.isPrivate, p.dataRecipient == null,
-            reason: '${p.name}: isPrivate must match having a data recipient');
+        expect(
+          p.isPrivate,
+          p.dataRecipient == null,
+          reason: '${p.name}: isPrivate must match having a data recipient',
+        );
       }
-      expect(
-        AiProvider.values.where((p) => !p.isPrivate).toSet(),
-        {
-          AiProvider.maple,
-          AiProvider.claude,
-          AiProvider.chatGpt,
-          AiProvider.gemini,
-          AiProvider.grok,
-        },
-      );
+      expect(AiProvider.values.where((p) => !p.isPrivate).toSet(), {
+        AiProvider.maple,
+        AiProvider.claude,
+        AiProvider.chatGpt,
+        AiProvider.gemini,
+        AiProvider.grok,
+      });
     });
 
     test('only a backend with a server the user runs offers a URL field', () {
@@ -54,8 +60,11 @@ void main() {
       // and a hosted service has one fixed endpoint the user must not be able
       // to mistype their finances into.
       for (final p in AiProvider.values) {
-        expect(p.defaultUrl == null, p.isOnDevice || p.needsApiKey,
-            reason: '${p.name}: defaultUrl disagrees with how it is configured');
+        expect(
+          p.defaultUrl == null,
+          p.isOnDevice || p.needsApiKey,
+          reason: '${p.name}: defaultUrl disagrees with how it is configured',
+        );
       }
     });
   });
@@ -67,12 +76,18 @@ void main() {
     // download can be started from.
     test('Apple: only fixable or ready states are offered', () {
       expect(PlatformLlmState.available.worthOffering, isTrue);
-      expect(PlatformLlmState.notEnabled.worthOffering, isTrue,
-          reason: 'the row is how the user learns where the switch is');
+      expect(
+        PlatformLlmState.notEnabled.worthOffering,
+        isTrue,
+        reason: 'the row is how the user learns where the switch is',
+      );
       expect(PlatformLlmState.modelNotReady.worthOffering, isTrue);
 
-      expect(PlatformLlmState.notEligible.worthOffering, isFalse,
-          reason: 'this hardware can never run it — a dead row helps nobody');
+      expect(
+        PlatformLlmState.notEligible.worthOffering,
+        isFalse,
+        reason: 'this hardware can never run it — a dead row helps nobody',
+      );
       expect(PlatformLlmState.osTooOld.worthOffering, isFalse);
       expect(PlatformLlmState.unsupportedPlatform.worthOffering, isFalse);
       expect(PlatformLlmState.unknown.worthOffering, isFalse);
@@ -95,35 +110,43 @@ void main() {
     test('Nano: every reason string the Kotlin bridge emits is mapped', () {
       // These five are the exact strings GeminiNanoBridge.availability returns.
       // An unmapped one lands on `unknown`, which hides the backend.
-      for (final entry in {
-        'available': GeminiNanoState.available,
-        'downloadable': GeminiNanoState.downloadable,
-        'downloading': GeminiNanoState.downloading,
-        'unavailable': GeminiNanoState.unavailable,
-        'unsupported_platform': GeminiNanoState.unsupportedPlatform,
-      }.entries) {
+      for (final entry
+          in {
+            'available': GeminiNanoState.available,
+            'downloadable': GeminiNanoState.downloadable,
+            'downloading': GeminiNanoState.downloading,
+            'unavailable': GeminiNanoState.unavailable,
+            'unsupported_platform': GeminiNanoState.unsupportedPlatform,
+          }.entries) {
         expect(GeminiNanoState.fromReason(entry.key), entry.value);
       }
-      expect(GeminiNanoState.fromReason('something-new'),
-          GeminiNanoState.unknown);
+      expect(
+        GeminiNanoState.fromReason('something-new'),
+        GeminiNanoState.unknown,
+      );
     });
 
     test('Apple: every reason string the Swift bridge emits is mapped', () {
-      for (final entry in {
-        'available': PlatformLlmState.available,
-        'device_not_eligible': PlatformLlmState.notEligible,
-        'not_enabled': PlatformLlmState.notEnabled,
-        'model_not_ready': PlatformLlmState.modelNotReady,
-        'os_too_old': PlatformLlmState.osTooOld,
-      }.entries) {
+      for (final entry
+          in {
+            'available': PlatformLlmState.available,
+            'device_not_eligible': PlatformLlmState.notEligible,
+            'not_enabled': PlatformLlmState.notEnabled,
+            'model_not_ready': PlatformLlmState.modelNotReady,
+            'os_too_old': PlatformLlmState.osTooOld,
+          }.entries) {
         expect(PlatformLlmState.fromReason(entry.key, true), entry.value);
       }
       // Unrecognised + supported is a genuinely unknown state; unrecognised +
       // unsupported means there is no bridge here at all.
-      expect(PlatformLlmState.fromReason('brand-new', true),
-          PlatformLlmState.unknown);
-      expect(PlatformLlmState.fromReason(null, false),
-          PlatformLlmState.unsupportedPlatform);
+      expect(
+        PlatformLlmState.fromReason('brand-new', true),
+        PlatformLlmState.unknown,
+      );
+      expect(
+        PlatformLlmState.fromReason(null, false),
+        PlatformLlmState.unsupportedPlatform,
+      );
     });
   });
 
@@ -185,15 +208,15 @@ void main() {
     };
 
     String build(int budget) => OllamaService.composeSystemPrompt(
-          totalStackSats: 5000000,
-          btcPrice: 65000,
-          monthlyIncome: 6000,
-          monthlySpending: 4000,
-          monthlySurplus: 2000,
-          spendingByCategory: spending,
-          stackGoalSats: 21000000,
-          budgetChars: budget,
-        );
+      totalStackSats: 5000000,
+      btcPrice: 65000,
+      monthlyIncome: 6000,
+      monthlySpending: 4000,
+      monthlySurplus: 2000,
+      spendingByCategory: spending,
+      stackGoalSats: 21000000,
+      budgetChars: budget,
+    );
 
     int categoryCount(String prompt) =>
         RegExp(r'^  - ', multiLine: true).allMatches(prompt).length;
@@ -202,8 +225,11 @@ void main() {
       // The whole point: Apple Intelligence and Gemini Nano get ~4000, and
       // overfilling a small window degrades the answer rather than erroring.
       for (final budget in [3000, 4000, 6000, 8000, 12000, 24000]) {
-        expect(build(budget).length, lessThanOrEqualTo(budget),
-            reason: 'overflowed a $budget-char budget');
+        expect(
+          build(budget).length,
+          lessThanOrEqualTo(budget),
+          reason: 'overflowed a $budget-char budget',
+        );
       }
     });
 
@@ -221,10 +247,16 @@ void main() {
     test('categories are dropped largest-value-last', () {
       // An over-tight budget must still carry the spending that matters most.
       final small = build(3000);
-      expect(small, contains('Category number 0:'),
-          reason: 'the largest category must survive any budget');
-      expect(small, isNot(contains('Category number 99:')),
-          reason: 'the smallest is the first to go');
+      expect(
+        small,
+        contains('Category number 0:'),
+        reason: 'the largest category must survive any budget',
+      );
+      expect(
+        small,
+        isNot(contains('Category number 99:')),
+        reason: 'the smallest is the first to go',
+      );
       // And the boundary is a real cut, not everything squeaking in.
       expect(categoryCount(small), lessThan(spending.length));
     });
@@ -235,8 +267,11 @@ void main() {
       final tiny = build(200);
       expect(tiny, contains('5000000 sats'));
       expect(tiny, contains('Monthly surplus'));
-      expect(categoryCount(tiny), 1,
-          reason: 'one category is kept rather than an empty heading');
+      expect(
+        categoryCount(tiny),
+        1,
+        reason: 'one category is kept rather than an empty heading',
+      );
     });
 
     test('no categories means no orphaned bullet', () {
@@ -254,8 +289,11 @@ void main() {
     });
 
     test('a large budget includes everything available', () {
-      expect(categoryCount(build(24000)), spending.length,
-          reason: 'a hosted model should get the full picture');
+      expect(
+        categoryCount(build(24000)),
+        spending.length,
+        reason: 'a hosted model should get the full picture',
+      );
     });
   });
 
@@ -273,15 +311,21 @@ void main() {
     test('an id from another device resolves instead of throwing', () {
       // Someone picks the 8B on a desktop, then opens Settings on a phone.
       expect(() => LocalModelChoice.byId('qwen3-8b'), returnsNormally);
-      expect(() => LocalModelChoice.byId('some-removed-model'), returnsNormally);
+      expect(
+        () => LocalModelChoice.byId('some-removed-model'),
+        returnsNormally,
+      );
     });
 
     test('every model asks for more RAM than its weights occupy', () {
       // A model sized exactly to its own weights leaves nothing for the OS,
       // Flutter and the database, and gets the app killed under pressure.
       for (final m in LocalModelChoice.catalogue) {
-        expect(m.minDeviceRamMb, greaterThan(m.ramMb),
-            reason: '${m.name} must leave headroom beside its weights');
+        expect(
+          m.minDeviceRamMb,
+          greaterThan(m.ramMb),
+          reason: '${m.name} must leave headroom beside its weights',
+        );
       }
     });
 
@@ -290,14 +334,18 @@ void main() {
       // model allowed on a 6 GB desktop may need a nominal 12 GB phone.
       for (final m in LocalModelChoice.catalogue) {
         if (m.minPhoneRamMb != null) {
-          expect(m.minPhoneRamMb, greaterThanOrEqualTo(m.minDeviceRamMb),
-              reason: '${m.name} phone floor must not undercut desktop');
+          expect(
+            m.minPhoneRamMb,
+            greaterThanOrEqualTo(m.minDeviceRamMb),
+            reason: '${m.name} phone floor must not undercut desktop',
+          );
         }
       }
     });
 
     test('catalogue is ordered smallest first', () {
-      final sizes = LocalModelChoice.catalogue.map((m) => m.downloadMb).toList();
+      final sizes =
+          LocalModelChoice.catalogue.map((m) => m.downloadMb).toList();
       final sorted = [...sizes]..sort();
       expect(sizes, sorted);
     });
@@ -311,35 +359,45 @@ void main() {
 
     test('unknown memory is permissive rather than restrictive', () {
       DeviceMemory.debugSetTotalMb(null, unknown: true);
-      expect(LocalModelChoice.availableHere(),
-          completion(hasLength(LocalModelChoice.all.length)));
+      expect(
+        LocalModelChoice.availableHere(),
+        completion(hasLength(LocalModelChoice.all.length)),
+      );
     });
 
-    test('the recommendation is never the largest once three or more fit',
-        () async {
-      // The largest is the slowest; defaulting to it makes the feature feel
-      // broken on exactly the machines that can run the most.
-      DeviceMemory.debugSetTotalMb(64000);
-      final tiers = await LocalModelChoice.tiersHere();
-      if (tiers.length >= 3) {
-        final recommended = await LocalModelChoice.recommendedHere();
-        expect(recommended.id, isNot(tiers.last.model.id));
-      }
-    });
-
-    test('the recommendation always matches the row labelled Recommended',
-        () async {
-      // These disagreed once; the default and the label must be one thing.
-      for (final mb in [2600, 5000, 7000, 14000, 64000]) {
-        DeviceMemory.debugSetTotalMb(mb);
+    test(
+      'the recommendation is never the largest once three or more fit',
+      () async {
+        // The largest is the slowest; defaulting to it makes the feature feel
+        // broken on exactly the machines that can run the most.
+        DeviceMemory.debugSetTotalMb(64000);
         final tiers = await LocalModelChoice.tiersHere();
-        final labelled = tiers
-            .firstWhere((t) => t.tier == LocalModelTier.recommended)
-            .model;
-        expect((await LocalModelChoice.recommendedHere()).id, labelled.id,
-            reason: 'disagreement at ${mb}MB');
-      }
-    });
+        if (tiers.length >= 3) {
+          final recommended = await LocalModelChoice.recommendedHere();
+          expect(recommended.id, isNot(tiers.last.model.id));
+        }
+      },
+    );
+
+    test(
+      'the recommendation always matches the row labelled Recommended',
+      () async {
+        // These disagreed once; the default and the label must be one thing.
+        for (final mb in [2600, 5000, 7000, 14000, 64000]) {
+          DeviceMemory.debugSetTotalMb(mb);
+          final tiers = await LocalModelChoice.tiersHere();
+          final labelled =
+              tiers
+                  .firstWhere((t) => t.tier == LocalModelTier.recommended)
+                  .model;
+          expect(
+            (await LocalModelChoice.recommendedHere()).id,
+            labelled.id,
+            reason: 'disagreement at ${mb}MB',
+          );
+        }
+      },
+    );
 
     test('tiers never exceed three and are ordered smallest first', () async {
       for (final mb in [2600, 5000, 7000, 14000, 64000]) {
@@ -356,10 +414,16 @@ void main() {
       // and return HTTP 401 — fatal for a backend whose whole promise is "no
       // account, no key".
       for (final m in LocalModelChoice.catalogue) {
-        expect(m.url, contains('litert-community/Qwen3'),
-            reason: '${m.name} must come from an ungated repository');
-        expect(m.url, endsWith('.litertlm'),
-            reason: '${m.name} must be the format LiteRT-LM reads');
+        expect(
+          m.url,
+          contains('litert-community/Qwen3'),
+          reason: '${m.name} must come from an ungated repository',
+        );
+        expect(
+          m.url,
+          endsWith('.litertlm'),
+          reason: '${m.name} must be the format LiteRT-LM reads',
+        );
       }
     });
   });

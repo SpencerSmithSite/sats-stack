@@ -60,13 +60,14 @@ class _ImportSourceSetupScreenState extends State<ImportSourceSetupScreen> {
         actions: [
           TextButton(
             onPressed: _saving ? null : _save,
-            child: _saving
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('Save'),
+            child:
+                _saving
+                    ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                    : const Text('Save'),
           ),
         ],
       ),
@@ -83,8 +84,8 @@ class _ImportSourceSetupScreenState extends State<ImportSourceSetupScreen> {
                 labelText: 'Source Name',
                 hintText: 'e.g. Chase Checking, Coinbase',
               ),
-              validator: (v) =>
-                  (v == null || v.trim().isEmpty) ? 'Required' : null,
+              validator:
+                  (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
             ),
             const SizedBox(height: 20),
 
@@ -92,29 +93,38 @@ class _ImportSourceSetupScreenState extends State<ImportSourceSetupScreen> {
             DropdownButtonFormField<String>(
               initialValue: _type,
               decoration: const InputDecoration(labelText: 'Account Type'),
-              items: _types.entries
-                  .map((e) => DropdownMenuItem(
-                        value: e.key,
-                        child: Row(
-                          children: [
-                            Icon(_typeIcon(e.key),
-                                size: 18, color: cs.onSurfaceVariant),
-                            const SizedBox(width: 8),
-                            Text(e.value),
-                          ],
+              items:
+                  _types.entries
+                      .map(
+                        (e) => DropdownMenuItem(
+                          value: e.key,
+                          child: Row(
+                            children: [
+                              Icon(
+                                _typeIcon(e.key),
+                                size: 18,
+                                color: cs.onSurfaceVariant,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(e.value),
+                            ],
+                          ),
                         ),
-                      ))
-                  .toList(),
+                      )
+                      .toList(),
               onChanged: (v) => setState(() => _type = v!),
             ),
             const SizedBox(height: 20),
 
             // Currency — dropdown + manual entry
             DropdownButtonFormField<String>(
-              initialValue: _currencies.contains(_currency) ? _currency : 'other',
+              initialValue:
+                  _currencies.contains(_currency) ? _currency : 'other',
               decoration: const InputDecoration(labelText: 'Currency'),
               items: [
-                ..._currencies.map((c) => DropdownMenuItem(value: c, child: Text(c))),
+                ..._currencies.map(
+                  (c) => DropdownMenuItem(value: c, child: Text(c)),
+                ),
                 const DropdownMenuItem(value: 'other', child: Text('Other…')),
               ],
               onChanged: (v) {
@@ -138,8 +148,8 @@ class _ImportSourceSetupScreenState extends State<ImportSourceSetupScreen> {
                 ),
                 textCapitalization: TextCapitalization.characters,
                 onChanged: (v) => setState(() => _currency = v.toUpperCase()),
-                validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? 'Required' : null,
+                validator:
+                    (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
               ),
             ],
 

@@ -53,8 +53,10 @@ void main() {
 
   group('CategoryPalette', () {
     test("the user's own colour wins", () {
-      expect(CategoryPalette.of('Food & Dining', userHex: '#123456'),
-          const Color(0xFF123456));
+      expect(
+        CategoryPalette.of('Food & Dining', userHex: '#123456'),
+        const Color(0xFF123456),
+      );
     });
 
     test('a seeded category keeps its shipped colour', () {
@@ -66,8 +68,10 @@ void main() {
       // The whole point: Shopping was purple, blue-grey or plain grey
       // depending on which file you were looking at.
       expect(CategoryPalette.of('Shopping'), CategoryPalette.of('Shopping'));
-      expect(CategoryPalette.of('Subscriptions'),
-          CategoryPalette.of('Subscriptions'));
+      expect(
+        CategoryPalette.of('Subscriptions'),
+        CategoryPalette.of('Subscriptions'),
+      );
     });
 
     test('a custom category gets a stable, distinct colour', () {
@@ -80,8 +84,10 @@ void main() {
     test('a bad stored colour does not take a chart down', () {
       expect(CategoryPalette.parseHex('not a colour'), isNull);
       expect(CategoryPalette.parseHex(''), isNull);
-      expect(CategoryPalette.of('Housing', userHex: 'garbage'),
-          CategoryPalette.of('Housing'));
+      expect(
+        CategoryPalette.of('Housing', userHex: 'garbage'),
+        CategoryPalette.of('Housing'),
+      );
     });
 
     test('hex is accepted with or without a hash, and with alpha', () {
@@ -93,8 +99,10 @@ void main() {
 
   group('MonthCursor', () {
     test('normalises to the first of the month', () {
-      expect(MonthCursor(DateTime(2026, 3, 17, 23, 59)).month,
-          DateTime(2026, 3, 1));
+      expect(
+        MonthCursor(DateTime(2026, 3, 17, 23, 59)).month,
+        DateTime(2026, 3, 1),
+      );
     });
 
     test('steps backwards and forwards across a year boundary', () {

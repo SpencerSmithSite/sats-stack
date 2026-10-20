@@ -58,12 +58,11 @@ enum PlatformLlmState {
   /// permanently greyed-out row; someone who has merely left it switched off
   /// is, because the row tells them where the switch is.
   bool get worthOffering => switch (this) {
-        PlatformLlmState.available ||
-        PlatformLlmState.notEnabled ||
-        PlatformLlmState.modelNotReady =>
-          true,
-        _ => false,
-      };
+    PlatformLlmState.available ||
+    PlatformLlmState.notEnabled ||
+    PlatformLlmState.modelNotReady => true,
+    _ => false,
+  };
 }
 
 /// A snapshot of what the platform reported.
@@ -90,8 +89,9 @@ class PlatformLlmAvailability {
 /// distinguish hardware that will never support it from a switch the user has
 /// not turned on.
 class PlatformLlmBackend implements InferenceBackend {
-  static const MethodChannel _methods =
-      MethodChannel('app.satsstack/platform_llm');
+  static const MethodChannel _methods = MethodChannel(
+    'app.satsstack/platform_llm',
+  );
   static const _streamChannel = 'app.satsstack/platform_llm_stream';
   static const EventChannel _events = EventChannel(_streamChannel);
 
@@ -146,11 +146,14 @@ class PlatformLlmBackend implements InferenceBackend {
     }
 
     try {
-      final raw =
-          await _methods.invokeMapMethod<String, dynamic>('availability');
+      final raw = await _methods.invokeMapMethod<String, dynamic>(
+        'availability',
+      );
       final supported = raw?['supported'] as bool? ?? false;
-      final state =
-          PlatformLlmState.fromReason(raw?['reason'] as String?, supported);
+      final state = PlatformLlmState.fromReason(
+        raw?['reason'] as String?,
+        supported,
+      );
       return _cached = PlatformLlmAvailability(
         state,
         raw?['detail'] as String? ?? 'Unavailable.',

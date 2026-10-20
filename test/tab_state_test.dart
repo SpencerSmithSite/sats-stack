@@ -30,36 +30,38 @@ class _CounterTabState extends State<_CounterTab> {
 
   @override
   Widget build(BuildContext context) => Center(
-        child: TextButton(
-          onPressed: () => setState(() => count++),
-          child: Text('${widget.name} $count'),
-        ),
-      );
+    child: TextButton(
+      onPressed: () => setState(() => count++),
+      child: Text('${widget.name} $count'),
+    ),
+  );
 }
 
 GoRouter _router() => GoRouter(
-      initialLocation: '/dashboard',
-      routes: [
-        StatefulShellRoute.indexedStack(
-          builder: (ctx, state, shell) => AppShell(navigationShell: shell),
-          branches: [
-            for (final name in const [
-              'dashboard',
-              'transactions',
-              'budgets',
-              'stack',
-              'ai',
-            ])
-              StatefulShellBranch(routes: [
-                GoRoute(
-                  path: '/$name',
-                  builder: (ctx, state) => _CounterTab(name),
-                ),
-              ]),
-          ],
-        ),
+  initialLocation: '/dashboard',
+  routes: [
+    StatefulShellRoute.indexedStack(
+      builder: (ctx, state, shell) => AppShell(navigationShell: shell),
+      branches: [
+        for (final name in const [
+          'dashboard',
+          'transactions',
+          'budgets',
+          'stack',
+          'ai',
+        ])
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/$name',
+                builder: (ctx, state) => _CounterTab(name),
+              ),
+            ],
+          ),
       ],
-    );
+    ),
+  ],
+);
 
 Future<void> _pump(WidgetTester tester, {required bool aiEnabled}) async {
   app.aiEnabledNotifier = ValueNotifier(aiEnabled);
@@ -68,16 +70,16 @@ Future<void> _pump(WidgetTester tester, {required bool aiEnabled}) async {
 }
 
 Future<void> _tapTab(WidgetTester tester, String label) async {
-  await tester.tap(find.descendant(
-    of: find.byType(NavigationBar),
-    matching: find.text(label),
-  ));
+  await tester.tap(
+    find.descendant(of: find.byType(NavigationBar), matching: find.text(label)),
+  );
   await tester.pumpAndSettle();
 }
 
 void main() {
-  testWidgets('a tab keeps its state across a switch away and back',
-      (tester) async {
+  testWidgets('a tab keeps its state across a switch away and back', (
+    tester,
+  ) async {
     await _pump(tester, aiEnabled: true);
 
     await _tapTab(tester, 'Transactions');
@@ -111,16 +113,18 @@ void main() {
     expect(find.text('stack 2'), findsOneWidget);
   });
 
-  testWidgets('the AI tab is hidden when no provider can answer',
-      (tester) async {
+  testWidgets('the AI tab is hidden when no provider can answer', (
+    tester,
+  ) async {
     await _pump(tester, aiEnabled: false);
     final bar = tester.widget<NavigationBar>(find.byType(NavigationBar));
     expect(bar.destinations, hasLength(4));
     expect(find.text('AI'), findsNothing);
   });
 
-  testWidgets('the AI tab appears when a provider becomes available',
-      (tester) async {
+  testWidgets('the AI tab appears when a provider becomes available', (
+    tester,
+  ) async {
     await _pump(tester, aiEnabled: false);
     app.aiEnabledNotifier.value = true;
     await tester.pumpAndSettle();

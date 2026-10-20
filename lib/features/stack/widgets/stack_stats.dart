@@ -36,9 +36,10 @@ class StackStats {
       for (final e in byMonth.entries)
         if (e.key.isBefore(currentMonth)) e.value,
     ];
-    final avg = complete.isEmpty
-        ? 0
-        : (complete.fold(0, (s, v) => s + v) / complete.length).round();
+    final avg =
+        complete.isEmpty
+            ? 0
+            : (complete.fold(0, (s, v) => s + v) / complete.length).round();
 
     // Cumulative balance at the end of each month with activity.
     final sorted = byMonth.keys.toList()..sort();

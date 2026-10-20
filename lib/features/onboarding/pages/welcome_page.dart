@@ -195,8 +195,11 @@ class TourPage extends StatelessWidget {
                           color: AppColors.bitcoinOrange.withAlpha(26),
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: Icon(tab.icon,
-                            color: AppColors.bitcoinOrange, size: 20),
+                        child: Icon(
+                          tab.icon,
+                          color: AppColors.bitcoinOrange,
+                          size: 20,
+                        ),
                       ),
                       const SizedBox(width: 14),
                       Expanded(

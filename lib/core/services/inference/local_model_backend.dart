@@ -77,9 +77,10 @@ class LocalModelBackend implements InferenceBackend {
       // models are small and inconsistent about honouring a separate system
       // role, and the system prompt is what carries the user's actual figures.
       final flat = InferenceBackend.flattenMessages(messages);
-      final text = flat.system == null
-          ? flat.prompt
-          : '${flat.system}\n\n${flat.prompt}';
+      final text =
+          flat.system == null
+              ? flat.prompt
+              : '${flat.system}\n\n${flat.prompt}';
       await session.addQueryChunk(Message.text(text: text, isUser: true));
       yield* session.getResponseAsync();
     } catch (e) {
@@ -146,24 +147,24 @@ enum LocalModelTier {
   large;
 
   String get label => switch (this) {
-        LocalModelTier.small => 'Smaller and faster',
-        LocalModelTier.recommended => 'Recommended',
-        LocalModelTier.large => 'Best answers',
-      };
+    LocalModelTier.small => 'Smaller and faster',
+    LocalModelTier.recommended => 'Recommended',
+    LocalModelTier.large => 'Best answers',
+  };
 
   /// Why someone might pick this one. Phrased as the trade being made, since
   /// every one of these is a trade rather than a ranking.
   String get rationale => switch (this) {
-        LocalModelTier.small =>
-          'Quickest to download and to answer. Best for straightforward '
-              'questions about your spending.',
-        LocalModelTier.recommended =>
-          'The best balance for this device — capable enough to reason about '
-              'your figures, quick enough to stay usable.',
-        LocalModelTier.large =>
-          'The most capable model this device can hold. Noticeably slower to '
-              'answer, and a much larger download.',
-      };
+    LocalModelTier.small =>
+      'Quickest to download and to answer. Best for straightforward '
+          'questions about your spending.',
+    LocalModelTier.recommended =>
+      'The best balance for this device — capable enough to reason about '
+          'your figures, quick enough to stay usable.',
+    LocalModelTier.large =>
+      'The most capable model this device can hold. Noticeably slower to '
+          'answer, and a much larger download.',
+  };
 }
 
 /// One downloadable model, with the numbers needed to decide whether to offer
@@ -309,7 +310,8 @@ class LocalModelChoice {
     id: 'qwen3-0.6b',
     name: 'Qwen 3 0.6B',
     fileName: 'qwen3_0_6b_mixed_int4.litertlm',
-    url: 'https://huggingface.co/litert-community/Qwen3-0.6B/resolve/main/'
+    url:
+        'https://huggingface.co/litert-community/Qwen3-0.6B/resolve/main/'
         'qwen3_0_6b_mixed_int4.litertlm',
     approximateSize: '500 MB',
     downloadMb: 497,
@@ -321,7 +323,8 @@ class LocalModelChoice {
     contextBudgetChars: 3000,
     modelType: ModelType.qwen3,
     fileType: ModelFileType.litertlm,
-    note: 'Small enough for any recent phone. Good at summarising and '
+    note:
+        'Small enough for any recent phone. Good at summarising and '
         'comparing your spending; a hosted model is still better for '
         'open-ended questions.',
   );
@@ -330,7 +333,8 @@ class LocalModelChoice {
     id: 'qwen3-1.7b',
     name: 'Qwen 3 1.7B',
     fileName: 'Qwen3_1.7B.litertlm',
-    url: 'https://huggingface.co/litert-community/Qwen3-1.7B/resolve/main/'
+    url:
+        'https://huggingface.co/litert-community/Qwen3-1.7B/resolve/main/'
         'Qwen3_1.7B.litertlm',
     approximateSize: '2.1 GB',
     downloadMb: 2056,
@@ -344,7 +348,8 @@ class LocalModelChoice {
     contextBudgetChars: 4000,
     modelType: ModelType.qwen3,
     fileType: ModelFileType.litertlm,
-    note: 'Noticeably better reasoning than the 0.6B. Only worth it on a phone '
+    note:
+        'Noticeably better reasoning than the 0.6B. Only worth it on a phone '
         'with plenty of memory to spare.',
   );
 
@@ -352,7 +357,8 @@ class LocalModelChoice {
     id: 'qwen3-4b-2507',
     name: 'Qwen 3 4B Instruct',
     fileName: 'qwen3_4b_instruct_2507_mixed_int4.litertlm',
-    url: 'https://huggingface.co/litert-community/Qwen3-4B-Instruct-2507/'
+    url:
+        'https://huggingface.co/litert-community/Qwen3-4B-Instruct-2507/'
         'resolve/main/qwen3_4b_instruct_2507_mixed_int4.litertlm',
     approximateSize: '2.7 GB',
     downloadMb: 2659,
@@ -364,7 +370,8 @@ class LocalModelChoice {
     contextBudgetChars: 6000,
     modelType: ModelType.qwen3,
     fileType: ModelFileType.litertlm,
-    note: 'The best balance on a desktop. Handles a longer question and more '
+    note:
+        'The best balance on a desktop. Handles a longer question and more '
         'of your history than the smaller two.',
   );
 
@@ -372,7 +379,8 @@ class LocalModelChoice {
     id: 'qwen3-8b',
     name: 'Qwen 3 8B',
     fileName: 'qwen3_8b_mixed_int4.litertlm',
-    url: 'https://huggingface.co/litert-community/Qwen3-8B/resolve/main/'
+    url:
+        'https://huggingface.co/litert-community/Qwen3-8B/resolve/main/'
         'qwen3_8b_mixed_int4.litertlm',
     approximateSize: '4.9 GB',
     downloadMb: 4887,
@@ -383,7 +391,8 @@ class LocalModelChoice {
     contextBudgetChars: 8000,
     modelType: ModelType.qwen3,
     fileType: ModelFileType.litertlm,
-    note: 'The most capable option, and the heaviest. For a machine with '
+    note:
+        'The most capable option, and the heaviest. For a machine with '
         'memory to spare, where it approaches what a hosted model gives you.',
   );
 
@@ -440,10 +449,8 @@ class LocalModelChoice {
 
   /// Resolved against the whole catalogue, not the platform's shortlist, so a
   /// choice made on another device is recognised rather than silently reset.
-  static LocalModelChoice byId(String id) => catalogue.firstWhere(
-        (m) => m.id == id,
-        orElse: fallback,
-      );
+  static LocalModelChoice byId(String id) =>
+      catalogue.firstWhere((m) => m.id == id, orElse: fallback);
 
   /// Whether a downloaded model can run on this platform at all.
   ///
@@ -472,7 +479,7 @@ class LocalModelChoice {
   /// can run the most; it is offered as [LocalModelTier.large] instead, plainly
   /// described as slower.
   static Future<List<({LocalModelTier tier, LocalModelChoice model})>>
-      tiersHere() async {
+  tiersHere() async {
     final fits = await availableHere();
     if (fits.length == 1) {
       return [(tier: LocalModelTier.recommended, model: fits.first)];

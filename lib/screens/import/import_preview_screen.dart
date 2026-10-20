@@ -64,10 +64,11 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => TransactionEditSheet.forParsed(
-        tx,
-        onSaved: () => setState(() => _editedTxns.add(tx)),
-      ),
+      builder:
+          (_) => TransactionEditSheet.forParsed(
+            tx,
+            onSaved: () => setState(() => _editedTxns.add(tx)),
+          ),
     );
   }
 
@@ -103,230 +104,246 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen> {
             ),
         ],
       ),
-      body: hasTransactions
-          ? Column(
-              children: [
-                // Header card
-                Container(
-                  width: double.infinity,
-                  margin:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: cs.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(widget.sourceName,
-                          style: Theme.of(context).textTheme.titleSmall),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${_txns.length} transaction${_txns.length != 1 ? 's' : ''} found'
-                        '${start != null ? '  ·  ${DateFormat('MMM d, yyyy').format(start)} – ${DateFormat('MMM d, yyyy').format(end!)}' : ''}',
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodySmall
-                            ?.copyWith(color: cs.onSurfaceVariant),
-                      ),
-                      if (widget.result.tierUsed != null) ...[
+      body:
+          hasTransactions
+              ? Column(
+                children: [
+                  // Header card
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: cs.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.sourceName,
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
                         const SizedBox(height: 4),
                         Text(
-                          'Parsed via ${_tierLabel(widget.result.tierUsed!)}',
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodySmall
-                              ?.copyWith(color: cs.primary),
+                          '${_txns.length} transaction${_txns.length != 1 ? 's' : ''} found'
+                          '${start != null ? '  ·  ${DateFormat('MMM d, yyyy').format(start)} – ${DateFormat('MMM d, yyyy').format(end!)}' : ''}',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: cs.onSurfaceVariant),
                         ),
-                      ],
-                      if (widget.result.sentTo != null) ...[
-                        const SizedBox(height: 4),
-                        _SentToNote(recipient: widget.result.sentTo!),
-                      ],
-                      if (widget.result.tierUsed ==
-                          ImportTier.pdfHeuristic) ...[
-                        const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: Colors.orange.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(8),
+                        if (widget.result.tierUsed != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            'Parsed via ${_tierLabel(widget.result.tierUsed!)}',
+                            style: Theme.of(
+                              context,
+                            ).textTheme.bodySmall?.copyWith(color: cs.primary),
                           ),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.warning_amber_rounded,
-                                  size: 16, color: Colors.orange),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  'Transactions extracted without AI — please review carefully before importing.',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodySmall
-                                      ?.copyWith(color: Colors.orange),
+                        ],
+                        if (widget.result.sentTo != null) ...[
+                          const SizedBox(height: 4),
+                          _SentToNote(recipient: widget.result.sentTo!),
+                        ],
+                        if (widget.result.tierUsed ==
+                            ImportTier.pdfHeuristic) ...[
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.warning_amber_rounded,
+                                  size: 16,
+                                  color: Colors.orange,
                                 ),
-                              ),
-                            ],
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    'Transactions extracted without AI — please review carefully before importing.',
+                                    style: Theme.of(context).textTheme.bodySmall
+                                        ?.copyWith(color: Colors.orange),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
-                ),
 
-                // Transaction list
-                Expanded(
-                  child: ListView.builder(
-                    itemCount: _txns.length,
-                    itemBuilder: (context, i) {
-                      final tx = _txns[i];
-                      final isCredit = tx.direction == 'credit';
-                      return Opacity(
-                        opacity: tx.include ? 1.0 : 0.4,
-                        child: ListTile(
-                          leading: Checkbox(
-                            value: tx.include,
-                            onChanged: (v) =>
-                                setState(() => tx.include = v ?? true),
-                          ),
-                          title: Text(
-                            tx.description,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          subtitle: Text(
-                            '${DateFormat('MMM d, yyyy').format(tx.date)}'
-                            '${tx.category != null ? '  ·  ${tx.category}' : ''}',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodySmall
-                                ?.copyWith(color: cs.onSurfaceVariant),
-                          ),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (_editedTxns.contains(tx))
-                                Padding(
-                                  padding: const EdgeInsets.only(right: 4),
-                                  child: Icon(Icons.edit_outlined,
-                                      size: 14, color: cs.primary),
-                                ),
-                              Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text(
-                                    '${isCredit ? '+' : '-'}${_formatAmount(tx.amount, tx.currency)}',
-                                    style: TextStyle(
-                                      color: isCredit
-                                          ? const Color(0xFF1D9E75)
-                                          : cs.error,
-                                      fontWeight: FontWeight.w600,
+                  // Transaction list
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: _txns.length,
+                      itemBuilder: (context, i) {
+                        final tx = _txns[i];
+                        final isCredit = tx.direction == 'credit';
+                        return Opacity(
+                          opacity: tx.include ? 1.0 : 0.4,
+                          child: ListTile(
+                            leading: Checkbox(
+                              value: tx.include,
+                              onChanged:
+                                  (v) => setState(() => tx.include = v ?? true),
+                            ),
+                            title: Text(
+                              tx.description,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            subtitle: Text(
+                              '${DateFormat('MMM d, yyyy').format(tx.date)}'
+                              '${tx.category != null ? '  ·  ${tx.category}' : ''}',
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(color: cs.onSurfaceVariant),
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (_editedTxns.contains(tx))
+                                  Padding(
+                                    padding: const EdgeInsets.only(right: 4),
+                                    child: Icon(
+                                      Icons.edit_outlined,
+                                      size: 14,
+                                      color: cs.primary,
                                     ),
                                   ),
-                                  Text(
-                                    tx.currency,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .labelSmall
-                                        ?.copyWith(color: cs.onSurfaceVariant),
-                                  ),
-                                ],
-                              ),
-                            ],
+                                Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(
+                                      '${isCredit ? '+' : '-'}${_formatAmount(tx.amount, tx.currency)}',
+                                      style: TextStyle(
+                                        color:
+                                            isCredit
+                                                ? const Color(0xFF1D9E75)
+                                                : cs.error,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    Text(
+                                      tx.currency,
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.labelSmall?.copyWith(
+                                        color: cs.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            onTap: () => _editTransaction(i),
                           ),
-                          onTap: () => _editTransaction(i),
-                        ),
-                      );
-                    },
+                        );
+                      },
+                    ),
                   ),
-                ),
-              ],
-            )
-          : Center(
-              child: Padding(
-                padding: const EdgeInsets.all(32),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.search_off_rounded,
-                        size: 56, color: cs.onSurfaceVariant),
-                    const SizedBox(height: 16),
-                    Text(
+                ],
+              )
+              : Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.search_off_rounded,
+                        size: 56,
+                        color: cs.onSurfaceVariant,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
                         widget.result.aiConsentDeclined
                             ? 'Nothing was sent'
                             : 'No transactions found',
-                        style: Theme.of(context).textTheme.titleMedium),
-                    const SizedBox(height: 8),
-                    Text(
-                      _emptyMessage(),
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodyMedium
-                          ?.copyWith(color: cs.onSurfaceVariant),
-                    ),
-                    if (widget.result.sentTo != null) ...[
-                      const SizedBox(height: 12),
-                      _SentToNote(recipient: widget.result.sentTo!),
-                    ],
-                    if (widget.result.pdfScanned ||
-                        widget.result.pdfAiNotReady ||
-                        widget.result.aiConsentDeclined) ...[
-                      const SizedBox(height: 16),
-                      OutlinedButton.icon(
-                        onPressed: () => Navigator.of(context).pop(),
-                        icon: const Icon(Icons.settings_outlined),
-                        label: const Text('Connect AI Provider'),
+                        style: Theme.of(context).textTheme.titleMedium,
                       ),
-                    ],
-                    if (widget.result.tierUsed == ImportTier.manual) ...[
-                      const SizedBox(height: 16),
-                      OutlinedButton.icon(
-                        onPressed: () => Navigator.of(context).pop(),
-                        icon: const Icon(Icons.arrow_back),
-                        label: const Text('Back to Column Mapper'),
+                      const SizedBox(height: 8),
+                      Text(
+                        _emptyMessage(),
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: cs.onSurfaceVariant,
+                        ),
                       ),
+                      if (widget.result.sentTo != null) ...[
+                        const SizedBox(height: 12),
+                        _SentToNote(recipient: widget.result.sentTo!),
+                      ],
+                      if (widget.result.pdfScanned ||
+                          widget.result.pdfAiNotReady ||
+                          widget.result.aiConsentDeclined) ...[
+                        const SizedBox(height: 16),
+                        OutlinedButton.icon(
+                          onPressed: () => Navigator.of(context).pop(),
+                          icon: const Icon(Icons.settings_outlined),
+                          label: const Text('Connect AI Provider'),
+                        ),
+                      ],
+                      if (widget.result.tierUsed == ImportTier.manual) ...[
+                        const SizedBox(height: 16),
+                        OutlinedButton.icon(
+                          onPressed: () => Navigator.of(context).pop(),
+                          icon: const Icon(Icons.arrow_back),
+                          label: const Text('Back to Column Mapper'),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
-            ),
-      bottomNavigationBar: hasTransactions
-          ? SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    OutlinedButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('Cancel'),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: FilledButton.icon(
-                        onPressed:
-                            _importing || _includeCount == 0 ? null : _import,
-                        icon: _importing
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white),
-                              )
-                            : const Icon(Icons.download_done),
-                        label: Text('Import $_includeCount transaction'
-                            '${_includeCount != 1 ? 's' : ''}'),
+      bottomNavigationBar:
+          hasTransactions
+              ? SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      OutlinedButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: const Text('Cancel'),
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed:
+                              _importing || _includeCount == 0 ? null : _import,
+                          icon:
+                              _importing
+                                  ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                  : const Icon(Icons.download_done),
+                          label: Text(
+                            'Import $_includeCount transaction'
+                            '${_includeCount != 1 ? 's' : ''}',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            )
-          : null,
+              )
+              : null,
     );
   }
 
@@ -373,19 +390,18 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen> {
 
   /// The AI tiers are named after the provider that actually read the file.
   String _tierLabel(ImportTier tier) => switch (tier) {
-        ImportTier.ollama => widget.result.aiLabel ?? 'AI',
-        ImportTier.rules => 'Smart Rules',
-        ImportTier.manual => 'Saved Mapping',
-        ImportTier.pdfExtracted => 'PDF + AI',
-        ImportTier.pdfHeuristic => 'PDF Heuristics',
-        ImportTier.image => '${widget.result.aiLabel ?? 'AI'} (image)',
-      };
+    ImportTier.ollama => widget.result.aiLabel ?? 'AI',
+    ImportTier.rules => 'Smart Rules',
+    ImportTier.manual => 'Saved Mapping',
+    ImportTier.pdfExtracted => 'PDF + AI',
+    ImportTier.pdfHeuristic => 'PDF Heuristics',
+    ImportTier.image => '${widget.result.aiLabel ?? 'AI'} (image)',
+  };
 
   String _formatAmount(double amount, String currency) {
     if (currency == 'BTC') return '${amount.toStringAsFixed(8)} BTC';
     if (currency == 'SATS') return '${amount.round()} sats';
-    return NumberFormat.currency(symbol: '', decimalDigits: 2)
-        .format(amount);
+    return NumberFormat.currency(symbol: '', decimalDigits: 2).format(amount);
   }
 }
 
@@ -396,18 +412,23 @@ class _SentToNote extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final style = Theme.of(context)
-        .textTheme
-        .bodySmall
-        ?.copyWith(color: context.textSecondary);
+    final style = Theme.of(
+      context,
+    ).textTheme.bodySmall?.copyWith(color: context.textSecondary);
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(Icons.cloud_upload_outlined, size: 14, color: context.textSecondary),
+        Icon(
+          Icons.cloud_upload_outlined,
+          size: 14,
+          color: context.textSecondary,
+        ),
         const SizedBox(width: 6),
         Flexible(
-          child: Text('This file was sent to $recipient to be read.',
-              style: style),
+          child: Text(
+            'This file was sent to $recipient to be read.',
+            style: style,
+          ),
         ),
       ],
     );

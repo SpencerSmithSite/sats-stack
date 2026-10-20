@@ -63,86 +63,89 @@ class _BtcPriceChipState extends State<BtcPriceChip> {
   Widget _chip() {
     return ValueListenableBuilder<String>(
       valueListenable: app.currencyNotifier,
-      builder: (context, currency, _) =>
-          ValueListenableBuilder<double?>(
-        valueListenable: widget.service.priceNotifier,
-        builder: (context, price, _) {
-          final lastUpdated = widget.service.lastFetchedAt;
-          final symbol = CurrencyUtils.symbolFor(currency);
+      builder:
+          (context, currency, _) => ValueListenableBuilder<double?>(
+            valueListenable: widget.service.priceNotifier,
+            builder: (context, price, _) {
+              final lastUpdated = widget.service.lastFetchedAt;
+              final symbol = CurrencyUtils.symbolFor(currency);
 
-          return Tappable(
-          label: price == null
-              ? 'Bitcoin price not loaded'
-              : 'Bitcoin price ${CurrencyUtils.format(price, currency, decimalDigits: 0)}'
-                  '${lastUpdated == null ? '' : ', updated ${_spokenAge(lastUpdated)}'}',
-          hint: 'Refreshes the price',
-          onTap: _refreshing ? null : _refresh,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: AppColors.bitcoinOrange.withAlpha(25),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: AppColors.bitcoinOrange.withAlpha(70),
-                width: 0.5,
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (_refreshing)
-                  const SizedBox(
-                    width: 10,
-                    height: 10,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 1.5,
-                      color: AppColors.bitcoinOrange,
-                    ),
-                  )
-                else
-                  Text(
-                    '₿',
-                    style: AppTextStyles.monoSmall.copyWith(
-                      color: context.bitcoinOrangeText,
-                      fontSize: 11,
+              return Tappable(
+                label:
+                    price == null
+                        ? 'Bitcoin price not loaded'
+                        : 'Bitcoin price ${CurrencyUtils.format(price, currency, decimalDigits: 0)}'
+                            '${lastUpdated == null ? '' : ', updated ${_spokenAge(lastUpdated)}'}',
+                hint: 'Refreshes the price',
+                onTap: _refreshing ? null : _refresh,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.bitcoinOrange.withAlpha(25),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: AppColors.bitcoinOrange.withAlpha(70),
+                      width: 0.5,
                     ),
                   ),
-                const SizedBox(width: 5),
-                if (price != null) ...[
-                  Text(
-                    NumberFormat.currency(
-                      symbol: symbol,
-                      decimalDigits: 0,
-                    ).format(price),
-                    style: AppTextStyles.monoSmall.copyWith(
-                      color: context.bitcoinOrangeText,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_refreshing)
+                        const SizedBox(
+                          width: 10,
+                          height: 10,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 1.5,
+                            color: AppColors.bitcoinOrange,
+                          ),
+                        )
+                      else
+                        Text(
+                          '₿',
+                          style: AppTextStyles.monoSmall.copyWith(
+                            color: context.bitcoinOrangeText,
+                            fontSize: 11,
+                          ),
+                        ),
+                      const SizedBox(width: 5),
+                      if (price != null) ...[
+                        Text(
+                          NumberFormat.currency(
+                            symbol: symbol,
+                            decimalDigits: 0,
+                          ).format(price),
+                          style: AppTextStyles.monoSmall.copyWith(
+                            color: context.bitcoinOrangeText,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        if (lastUpdated != null) ...[
+                          const SizedBox(width: 4),
+                          Text(
+                            '· ${_ageLabel(lastUpdated)}',
+                            style: AppTextStyles.monoSmall.copyWith(
+                              color: context.textSecondary,
+                              fontSize: 10,
+                            ),
+                          ),
+                        ],
+                      ] else
+                        Text(
+                          'no price',
+                          style: AppTextStyles.monoSmall.copyWith(
+                            color: context.textSecondary,
+                          ),
+                        ),
+                    ],
                   ),
-                  if (lastUpdated != null) ...[
-                    const SizedBox(width: 4),
-                    Text(
-                      '· ${_ageLabel(lastUpdated)}',
-                      style: AppTextStyles.monoSmall.copyWith(
-                        color: context.textSecondary,
-                        fontSize: 10,
-                      ),
-                    ),
-                  ],
-                ] else
-                  Text(
-                    'no price',
-                    style: AppTextStyles.monoSmall.copyWith(
-                      color: context.textSecondary,
-                    ),
-                  ),
-              ],
-            ),
+                ),
+              );
+            },
           ),
-        );
-      },
-    ),
     );
   }
 }
-

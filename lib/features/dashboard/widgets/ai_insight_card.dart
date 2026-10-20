@@ -39,8 +39,11 @@ class AiInsightCard extends StatelessWidget {
   ];
 
   String get _tip {
-    if (cachedInsight != null && cachedInsight!.isNotEmpty) return cachedInsight!;
-    final dayOfYear = DateTime.now().difference(DateTime(DateTime.now().year)).inDays;
+    if (cachedInsight != null && cachedInsight!.isNotEmpty) {
+      return cachedInsight!;
+    }
+    final dayOfYear =
+        DateTime.now().difference(DateTime(DateTime.now().year)).inDays;
     return _tips[dayOfYear % _tips.length];
   }
 
@@ -91,38 +94,40 @@ class AiInsightCard extends StatelessWidget {
               const Spacer(),
               if (aiEnabled && onRefresh != null && !_needsConsentToGenerate)
                 Tappable(
-                  label: isGenerating ? 'Generating insight' : 'Refresh insight',
+                  label:
+                      isGenerating ? 'Generating insight' : 'Refresh insight',
                   onTap: isGenerating ? null : onRefresh,
-                  child: isGenerating
-                      ? SizedBox(
-                          width: 12,
-                          height: 12,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 1.5,
-                            color: accent,
-                          ),
-                        )
-                      : Icon(Icons.refresh, size: 14, color: accent),
+                  child:
+                      isGenerating
+                          ? SizedBox(
+                            width: 12,
+                            height: 12,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 1.5,
+                              color: accent,
+                            ),
+                          )
+                          : Icon(Icons.refresh, size: 14, color: accent),
                 ),
             ],
           ),
           const SizedBox(height: 10),
           isGenerating && !_hasInsight
               ? Text(
-                  'Generating insight…',
-                  style: TextStyle(
-                    color: accent.withValues(alpha: 0.6),
-                    fontSize: 14,
-                    fontStyle: FontStyle.italic,
-                  ),
-                )
-              : Text(
-                  _tip,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurface,
-                    height: 1.5,
-                  ),
+                'Generating insight…',
+                style: TextStyle(
+                  color: accent.withValues(alpha: 0.6),
+                  fontSize: 14,
+                  fontStyle: FontStyle.italic,
                 ),
+              )
+              : Text(
+                _tip,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurface,
+                  height: 1.5,
+                ),
+              ),
           if (_needsConsentToGenerate) ...[
             const SizedBox(height: 12),
             Align(

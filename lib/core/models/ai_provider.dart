@@ -32,42 +32,41 @@ enum AiProvider {
   /// The string persisted in `AppSettings`. Stable — changing one of these
   /// silently resets that user's choice back to Ollama.
   String get key => switch (this) {
-        AiProvider.ollama => 'ollama',
-        AiProvider.lmStudio => 'lmStudio',
-        AiProvider.maple => 'maple',
-        AiProvider.appleIntelligence => 'appleIntelligence',
-        AiProvider.geminiNano => 'geminiNano',
-        AiProvider.localModel => 'localModel',
-        AiProvider.claude => 'claude',
-        AiProvider.chatGpt => 'chatGpt',
-        AiProvider.gemini => 'gemini',
-        AiProvider.grok => 'grok',
-      };
+    AiProvider.ollama => 'ollama',
+    AiProvider.lmStudio => 'lmStudio',
+    AiProvider.maple => 'maple',
+    AiProvider.appleIntelligence => 'appleIntelligence',
+    AiProvider.geminiNano => 'geminiNano',
+    AiProvider.localModel => 'localModel',
+    AiProvider.claude => 'claude',
+    AiProvider.chatGpt => 'chatGpt',
+    AiProvider.gemini => 'gemini',
+    AiProvider.grok => 'grok',
+  };
 
   /// Falls back to Ollama for an unknown value — a backend removed in a later
   /// build, most likely — rather than throwing on a settings read.
   static AiProvider fromKey(String? key) => switch (key) {
-        'lmStudio' => AiProvider.lmStudio,
-        'maple' => AiProvider.maple,
-        'appleIntelligence' => AiProvider.appleIntelligence,
-        'geminiNano' => AiProvider.geminiNano,
-        'localModel' => AiProvider.localModel,
-        'claude' => AiProvider.claude,
-        'chatGpt' => AiProvider.chatGpt,
-        'gemini' => AiProvider.gemini,
-        'grok' => AiProvider.grok,
-        _ => AiProvider.ollama,
-      };
+    'lmStudio' => AiProvider.lmStudio,
+    'maple' => AiProvider.maple,
+    'appleIntelligence' => AiProvider.appleIntelligence,
+    'geminiNano' => AiProvider.geminiNano,
+    'localModel' => AiProvider.localModel,
+    'claude' => AiProvider.claude,
+    'chatGpt' => AiProvider.chatGpt,
+    'gemini' => AiProvider.gemini,
+    'grok' => AiProvider.grok,
+    _ => AiProvider.ollama,
+  };
 
   /// Whether this backend runs entirely on the device, with no server to
   /// configure and no host to reach.
   bool get isOnDevice => switch (this) {
-        AiProvider.appleIntelligence ||
-        AiProvider.geminiNano ||
-        AiProvider.localModel =>
-          true,
-        _ => false,
-      };
+    AiProvider.appleIntelligence ||
+    AiProvider.geminiNano ||
+    AiProvider.localModel => true,
+    _ => false,
+  };
 
   /// The hosted provider behind this choice, or null if there is none.
   ///
@@ -75,12 +74,12 @@ enum AiProvider {
   /// an OpenAI-compatible endpoint the user points at themselves, so it keeps
   /// its URL field and is configured like a server rather than like a service.
   CloudProvider? get cloudProvider => switch (this) {
-        AiProvider.claude => CloudProvider.anthropic,
-        AiProvider.chatGpt => CloudProvider.openai,
-        AiProvider.gemini => CloudProvider.gemini,
-        AiProvider.grok => CloudProvider.xai,
-        _ => null,
-      };
+    AiProvider.claude => CloudProvider.anthropic,
+    AiProvider.chatGpt => CloudProvider.openai,
+    AiProvider.gemini => CloudProvider.gemini,
+    AiProvider.grok => CloudProvider.xai,
+    _ => null,
+  };
 
   /// Whether this backend needs an API key before it can answer anything.
   bool get needsApiKey => cloudProvider != null;
@@ -92,18 +91,17 @@ enum AiProvider {
   /// compile error the moment a backend was added. Adding one here is now the
   /// whole change.
   String get label => switch (this) {
-        AiProvider.ollama => 'Ollama',
-        AiProvider.lmStudio => 'LM Studio',
-        AiProvider.maple => 'Maple',
-        AiProvider.appleIntelligence => 'Apple Intelligence',
-        AiProvider.geminiNano => 'Gemini Nano',
-        AiProvider.localModel => 'Downloaded model',
-        AiProvider.claude ||
-        AiProvider.chatGpt ||
-        AiProvider.gemini ||
-        AiProvider.grok =>
-          cloudProvider!.label,
-      };
+    AiProvider.ollama => 'Ollama',
+    AiProvider.lmStudio => 'LM Studio',
+    AiProvider.maple => 'Maple',
+    AiProvider.appleIntelligence => 'Apple Intelligence',
+    AiProvider.geminiNano => 'Gemini Nano',
+    AiProvider.localModel => 'Downloaded model',
+    AiProvider.claude ||
+    AiProvider.chatGpt ||
+    AiProvider.gemini ||
+    AiProvider.grok => cloudProvider!.label,
+  };
 
   /// The URL field's placeholder, or null when this backend has no server to
   /// point at.
@@ -115,18 +113,17 @@ enum AiProvider {
   /// that will be ignored, or worse, to send their financial data somewhere
   /// they mistyped.
   String? get defaultUrl => switch (this) {
-        AiProvider.ollama => 'http://localhost:11434',
-        AiProvider.lmStudio => 'http://localhost:1234/v1',
-        AiProvider.maple => 'http://localhost:8080/v1',
-        AiProvider.appleIntelligence ||
-        AiProvider.geminiNano ||
-        AiProvider.localModel ||
-        AiProvider.claude ||
-        AiProvider.chatGpt ||
-        AiProvider.gemini ||
-        AiProvider.grok =>
-          null,
-      };
+    AiProvider.ollama => 'http://localhost:11434',
+    AiProvider.lmStudio => 'http://localhost:1234/v1',
+    AiProvider.maple => 'http://localhost:8080/v1',
+    AiProvider.appleIntelligence ||
+    AiProvider.geminiNano ||
+    AiProvider.localModel ||
+    AiProvider.claude ||
+    AiProvider.chatGpt ||
+    AiProvider.gemini ||
+    AiProvider.grok => null,
+  };
 
   /// Whether answers are generated without anything leaving the device.
   ///
@@ -144,9 +141,10 @@ enum AiProvider {
   /// Null when nothing leaves the device. Named rather than left vague because
   /// "sent to a server" is not a disclosure — the user needs to know *whose*.
   String? get dataRecipient => switch (this) {
-        AiProvider.maple => 'the Maple server you configured',
-        _ => cloudProvider == null
-            ? null
-            : '${cloudProvider!.company} (${cloudProvider!.host})',
-      };
+    AiProvider.maple => 'the Maple server you configured',
+    _ =>
+      cloudProvider == null
+          ? null
+          : '${cloudProvider!.company} (${cloudProvider!.host})',
+  };
 }

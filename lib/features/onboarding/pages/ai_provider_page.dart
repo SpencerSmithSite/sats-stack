@@ -36,67 +36,65 @@ class AiProviderPage extends StatelessWidget {
   /// compile.
   static ({String subtitle, String description, IconData icon}) _card(
     AiProvider provider,
-  ) =>
-      switch (provider) {
-        AiProvider.appleIntelligence => (
-            subtitle: 'Built in',
-            description:
-                'The model already on this Mac or iPhone. No key, no download, '
-                    'no network — and your figures never leave the device.',
-            icon: Icons.auto_awesome_outlined,
-          ),
-        AiProvider.geminiNano => (
-            subtitle: 'Built in',
-            description:
-                'The model built into this phone, run by Android. No key and '
-                    'no account — your figures never leave the device.',
-            icon: Icons.auto_awesome_outlined,
-          ),
-        AiProvider.localModel => (
-            subtitle: 'Download once',
-            description:
-                'A small open model you download once, then run offline '
-                    'anywhere. Sats Stack picks a size that fits this device.',
-            icon: Icons.download_outlined,
-          ),
-        AiProvider.ollama => (
-            subtitle: 'Self-hosted',
-            description:
-                'Runs on your own machine or home server. Install Ollama and '
-                    'pull any model — nothing leaves your network.',
-            icon: Icons.computer_outlined,
-          ),
-        AiProvider.lmStudio => (
-            subtitle: 'Self-hosted',
-            description:
-                'Runs models on this machine through LM Studio\'s local '
-                    'server. Nothing leaves your network.',
-            icon: Icons.storage_outlined,
-          ),
-        AiProvider.maple => (
-            subtitle: 'Bring your own',
-            description:
-                'A hosted OpenAI-compatible endpoint you point at yourself.',
-            icon: Icons.shield_outlined,
-          ),
-        // Named by company and default model rather than by how good they are.
-        // All four are strong, so a superlative repeated on four adjacent cards
-        // reads as filler and helps nobody choose; what actually decides it is
-        // which account the user already has. The group heading above already
-        // carries both the "powerful" and the "your data goes there" halves.
-        AiProvider.claude ||
-        AiProvider.chatGpt ||
-        AiProvider.gemini ||
-        AiProvider.grok =>
-          (
-            subtitle: 'Your API key',
-            description: '${provider.cloudProvider!.company}\'s models, using '
-                'a key you provide. Defaults to '
-                '${provider.cloudProvider!.defaultModel} — you pay '
-                '${provider.cloudProvider!.company} directly for what you use.',
-            icon: Icons.cloud_outlined,
-          ),
-      };
+  ) => switch (provider) {
+    AiProvider.appleIntelligence => (
+      subtitle: 'Built in',
+      description:
+          'The model already on this Mac or iPhone. No key, no download, '
+          'no network — and your figures never leave the device.',
+      icon: Icons.auto_awesome_outlined,
+    ),
+    AiProvider.geminiNano => (
+      subtitle: 'Built in',
+      description:
+          'The model built into this phone, run by Android. No key and '
+          'no account — your figures never leave the device.',
+      icon: Icons.auto_awesome_outlined,
+    ),
+    AiProvider.localModel => (
+      subtitle: 'Download once',
+      description:
+          'A small open model you download once, then run offline '
+          'anywhere. Sats Stack picks a size that fits this device.',
+      icon: Icons.download_outlined,
+    ),
+    AiProvider.ollama => (
+      subtitle: 'Self-hosted',
+      description:
+          'Runs on your own machine or home server. Install Ollama and '
+          'pull any model — nothing leaves your network.',
+      icon: Icons.computer_outlined,
+    ),
+    AiProvider.lmStudio => (
+      subtitle: 'Self-hosted',
+      description:
+          'Runs models on this machine through LM Studio\'s local '
+          'server. Nothing leaves your network.',
+      icon: Icons.storage_outlined,
+    ),
+    AiProvider.maple => (
+      subtitle: 'Bring your own',
+      description: 'A hosted OpenAI-compatible endpoint you point at yourself.',
+      icon: Icons.shield_outlined,
+    ),
+    // Named by company and default model rather than by how good they are.
+    // All four are strong, so a superlative repeated on four adjacent cards
+    // reads as filler and helps nobody choose; what actually decides it is
+    // which account the user already has. The group heading above already
+    // carries both the "powerful" and the "your data goes there" halves.
+    AiProvider.claude ||
+    AiProvider.chatGpt ||
+    AiProvider.gemini ||
+    AiProvider.grok => (
+      subtitle: 'Your API key',
+      description:
+          '${provider.cloudProvider!.company}\'s models, using '
+          'a key you provide. Defaults to '
+          '${provider.cloudProvider!.defaultModel} — you pay '
+          '${provider.cloudProvider!.company} directly for what you use.',
+      icon: Icons.cloud_outlined,
+    ),
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -162,16 +160,17 @@ class AiProviderPage extends StatelessWidget {
             // Per-provider config section
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 250),
-              transitionBuilder: (child, animation) => FadeTransition(
-                opacity: animation,
-                child: SizeTransition(
-                  sizeFactor: animation,
-                  // The migration Flutter's own deprecation notice prescribes
-                  // for a vertical axis: Alignment(-1.0, axisAlignment).
-                  alignment: const Alignment(-1.0, -1.0),
-                  child: child,
-                ),
-              ),
+              transitionBuilder:
+                  (child, animation) => FadeTransition(
+                    opacity: animation,
+                    child: SizeTransition(
+                      sizeFactor: animation,
+                      // The migration Flutter's own deprecation notice prescribes
+                      // for a vertical axis: Alignment(-1.0, axisAlignment).
+                      alignment: const Alignment(-1.0, -1.0),
+                      child: child,
+                    ),
+                  ),
               child: ProviderConfigSection(
                 key: ValueKey(selected),
                 provider: selected,
@@ -213,14 +212,16 @@ class ProviderCard extends StatelessWidget {
           duration: const Duration(milliseconds: 180),
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: isSelected
-                ? AppColors.bitcoinOrange.withAlpha(26)
-                : theme.colorScheme.surface,
+            color:
+                isSelected
+                    ? AppColors.bitcoinOrange.withAlpha(26)
+                    : theme.colorScheme.surface,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: isSelected
-                  ? AppColors.bitcoinOrange
-                  : theme.colorScheme.outlineVariant.withAlpha(80),
+              color:
+                  isSelected
+                      ? AppColors.bitcoinOrange
+                      : theme.colorScheme.outlineVariant.withAlpha(80),
               width: isSelected ? 1.5 : 1,
             ),
           ),
@@ -230,9 +231,10 @@ class ProviderCard extends StatelessWidget {
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: isSelected
-                      ? AppColors.bitcoinOrange.withAlpha(40)
-                      : AppColors.bitcoinOrange.withAlpha(20),
+                  color:
+                      isSelected
+                          ? AppColors.bitcoinOrange.withAlpha(40)
+                          : AppColors.bitcoinOrange.withAlpha(20),
                   borderRadius: BorderRadius.circular(9),
                 ),
                 child: Icon(
@@ -251,14 +253,17 @@ class ProviderCard extends StatelessWidget {
                         Flexible(
                           child: Text(
                             provider.label,
-                            style: theme.textTheme.titleSmall
-                                ?.copyWith(fontWeight: FontWeight.w700),
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
                         const SizedBox(width: 7),
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 5, vertical: 2),
+                            horizontal: 5,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
                             color: theme.colorScheme.surfaceContainerHighest,
                             borderRadius: BorderRadius.circular(4),
@@ -321,7 +326,9 @@ class NoteBanner extends StatelessWidget {
       decoration: BoxDecoration(
         color: color.withValues(alpha: isDark ? 0.10 : 0.07),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withValues(alpha: isDark ? 0.32 : 0.20)),
+        border: Border.all(
+          color: color.withValues(alpha: isDark ? 0.32 : 0.20),
+        ),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -338,7 +345,9 @@ class NoteBanner extends StatelessWidget {
               // Legible accent — this is also the warning state, which is the
               // one the user most needs to be able to read.
               style: theme.textTheme.bodySmall?.copyWith(
-                  color: context.legibleAccent(color), height: 1.5),
+                color: context.legibleAccent(color),
+                height: 1.5,
+              ),
             ),
           ),
         ],
@@ -386,7 +395,8 @@ class ProviderConfigSection extends StatelessWidget {
               decoration: InputDecoration(
                 labelText: '${cloud.label} API key',
                 hintText: '${cloud.keyPrefix}…',
-                helperText: 'Stored in this device\'s keychain. You can also '
+                helperText:
+                    'Stored in this device\'s keychain. You can also '
                     'add it later in Settings → Servers.',
                 helperMaxLines: 2,
               ),
@@ -396,7 +406,8 @@ class ProviderConfigSection extends StatelessWidget {
             NoteBanner(
               isDark: isDark,
               isWarning: false,
-              text: 'Defaults to ${cloud.defaultModel}. You can pick a '
+              text:
+                  'Defaults to ${cloud.defaultModel}. You can pick a '
                   'different model in Settings → Servers.',
             ),
           ],
@@ -421,41 +432,48 @@ class ProviderConfigSection extends StatelessWidget {
             AiProvider.geminiNano =>
               'Nothing to configure. Sats Stack will use the model built into '
                   'this phone, and your figures never leave it.',
-            _ => 'You will need to download a model before this works. Sats '
-                'Stack will offer one sized to this device in Settings → '
-                'Servers.',
+            _ =>
+              'You will need to download a model before this works. Sats '
+                  'Stack will offer one sized to this device in Settings → '
+                  'Servers.',
           },
         ),
       );
     }
 
     // Per-provider hint config
-    final (urlHint, urlHelper, urlLabel, note, noteIsWarning) = switch (provider) {
+    final (
+      urlHint,
+      urlHelper,
+      urlLabel,
+      note,
+      noteIsWarning,
+    ) = switch (provider) {
       AiProvider.ollama => (
-          AppConstants.defaultOllamaUrl,
-          'Default port — change only if you customised Ollama\'s port',
-          'Ollama server URL',
-          PlatformUtils.isDesktop
-              ? 'Make sure Ollama is running: ollama serve'
-              : 'On iPhone/iPad, localhost won\'t reach a Mac. Use your Mac\'s local network IP — e.g. http://192.168.1.x:11434',
-          !PlatformUtils.isDesktop,
-        ),
+        AppConstants.defaultOllamaUrl,
+        'Default port — change only if you customised Ollama\'s port',
+        'Ollama server URL',
+        PlatformUtils.isDesktop
+            ? 'Make sure Ollama is running: ollama serve'
+            : 'On iPhone/iPad, localhost won\'t reach a Mac. Use your Mac\'s local network IP — e.g. http://192.168.1.x:11434',
+        !PlatformUtils.isDesktop,
+      ),
       AiProvider.lmStudio => (
-          AppConstants.defaultLmStudioUrl,
-          'Default port — requires LM Studio\'s Local Server to be running',
-          'LM Studio server URL',
-          PlatformUtils.isDesktop
-              ? 'In LM Studio, open the Local Server tab and click Start Server before connecting.'
-              : 'On iPhone/iPad, localhost won\'t reach a Mac. Use your Mac\'s local network IP — e.g. http://192.168.1.x:1234/v1',
-          !PlatformUtils.isDesktop,
-        ),
+        AppConstants.defaultLmStudioUrl,
+        'Default port — requires LM Studio\'s Local Server to be running',
+        'LM Studio server URL',
+        PlatformUtils.isDesktop
+            ? 'In LM Studio, open the Local Server tab and click Start Server before connecting.'
+            : 'On iPhone/iPad, localhost won\'t reach a Mac. Use your Mac\'s local network IP — e.g. http://192.168.1.x:1234/v1',
+        !PlatformUtils.isDesktop,
+      ),
       AiProvider.maple => (
-          AppConstants.defaultMapleUrl,
-          'Your Maple server URL (cloud or self-hosted)',
-          'Maple server URL',
-          'Your API key is required to authenticate with the Maple server.',
-          false,
-        ),
+        AppConstants.defaultMapleUrl,
+        'Your Maple server URL (cloud or self-hosted)',
+        'Maple server URL',
+        'Your API key is required to authenticate with the Maple server.',
+        false,
+      ),
       // Unreachable: the on-device backends return above, before this switch.
       _ => ('', '', '', '', false),
     };
@@ -468,96 +486,104 @@ class ProviderConfigSection extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(top: 12),
       child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        TextField(
-          controller: urlController,
-          autocorrect: false,
-          keyboardType: TextInputType.url,
-          decoration: InputDecoration(
-            labelText: urlLabel,
-            hintText: urlHint,
-            helperText: urlHelper,
-            helperMaxLines: 2,
-          ),
-        ),
-        if (provider == AiProvider.maple) ...[
-          const SizedBox(height: 16),
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           TextField(
-            controller: apiKeyController,
+            controller: urlController,
             autocorrect: false,
-            obscureText: true,
-            decoration: const InputDecoration(
-              labelText: 'API key',
-              hintText: 'sk-…',
-              helperText: 'Required — get your key from your Maple dashboard',
+            keyboardType: TextInputType.url,
+            decoration: InputDecoration(
+              labelText: urlLabel,
+              hintText: urlHint,
+              helperText: urlHelper,
+              helperMaxLines: 2,
+            ),
+          ),
+          if (provider == AiProvider.maple) ...[
+            const SizedBox(height: 16),
+            TextField(
+              controller: apiKeyController,
+              autocorrect: false,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'API key',
+                hintText: 'sk-…',
+                helperText: 'Required — get your key from your Maple dashboard',
+              ),
+            ),
+          ],
+          // Maple is hosted like the four major providers, so the same disclosure
+          // applies. Driven off `isPrivate` rather than named explicitly, so a
+          // backend added to this branch later cannot quietly skip it.
+          if (!provider.isPrivate) ...[
+            const SizedBox(height: 14),
+            AiPrivacyDisclosure(provider: provider, compact: true),
+          ],
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: noteColor.withValues(alpha: isDark ? 0.10 : 0.07),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: noteColor.withValues(alpha: isDark ? 0.32 : 0.20),
+              ),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  noteIsWarning
+                      ? Icons.warning_amber_rounded
+                      : Icons.info_outline,
+                  size: 15,
+                  color: noteColor,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    note,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: context.legibleAccent(noteColor),
+                      height: 1.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: accentInfo.withValues(alpha: isDark ? 0.10 : 0.07),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: accentInfo.withValues(alpha: isDark ? 0.32 : 0.20),
+              ),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(
+                  Icons.check_circle_outline,
+                  size: 15,
+                  color: accentInfo,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'You can test the connection and change these settings later in Settings → Servers.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: context.legibleAccent(accentInfo),
+                      height: 1.5,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
-        // Maple is hosted like the four major providers, so the same disclosure
-        // applies. Driven off `isPrivate` rather than named explicitly, so a
-        // backend added to this branch later cannot quietly skip it.
-        if (!provider.isPrivate) ...[
-          const SizedBox(height: 14),
-          AiPrivacyDisclosure(provider: provider, compact: true),
-        ],
-        const SizedBox(height: 14),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: noteColor.withValues(alpha: isDark ? 0.10 : 0.07),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-                color: noteColor.withValues(alpha: isDark ? 0.32 : 0.20)),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(
-                noteIsWarning ? Icons.warning_amber_rounded : Icons.info_outline,
-                size: 15,
-                color: noteColor,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  note,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: context.legibleAccent(noteColor),
-                    height: 1.5,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 10),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: accentInfo.withValues(alpha: isDark ? 0.10 : 0.07),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-                color: accentInfo.withValues(alpha: isDark ? 0.32 : 0.20)),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Icon(Icons.check_circle_outline, size: 15, color: accentInfo),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'You can test the connection and change these settings later in Settings → Servers.',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: context.legibleAccent(accentInfo),
-                    height: 1.5,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
       ),
     );
   }

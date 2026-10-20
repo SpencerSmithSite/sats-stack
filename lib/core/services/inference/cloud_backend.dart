@@ -124,9 +124,9 @@ enum CloudProvider {
   String get host => Uri.parse(chatEndpoint).host;
 
   static CloudProvider fromId(String? id) => CloudProvider.values.firstWhere(
-        (p) => p.id == id,
-        orElse: () => CloudProvider.anthropic,
-      );
+    (p) => p.id == id,
+    orElse: () => CloudProvider.anthropic,
+  );
 }
 
 /// Streams answers from a hosted model using the user's own API key.
@@ -192,12 +192,15 @@ class CloudBackend implements InferenceBackend {
     return headers;
   }
 
-  Uri get _chatUri => provider == CloudProvider.gemini
-      // Gemini puts the model in the path and needs `alt=sse` to stream rather
-      // than return one enormous JSON array at the end.
-      ? Uri.parse('${provider.chatEndpoint}/$_model:streamGenerateContent'
-          '?alt=sse')
-      : Uri.parse(provider.chatEndpoint);
+  Uri get _chatUri =>
+      provider == CloudProvider.gemini
+          // Gemini puts the model in the path and needs `alt=sse` to stream rather
+          // than return one enormous JSON array at the end.
+          ? Uri.parse(
+            '${provider.chatEndpoint}/$_model:streamGenerateContent'
+            '?alt=sse',
+          )
+          : Uri.parse(provider.chatEndpoint);
 
   @override
   Future<BackendStatus> checkStatus() async {
@@ -213,14 +216,14 @@ class CloudBackend implements InferenceBackend {
       return switch (response.statusCode) {
         200 => BackendStatus.available('$_model via ${provider.host}'),
         401 || 403 => BackendStatus.unavailable(
-            '${provider.label} rejected the API key.',
-          ),
+          '${provider.label} rejected the API key.',
+        ),
         429 => BackendStatus.unavailable(
-            '${provider.label} rate limit reached. Try again shortly.',
-          ),
+          '${provider.label} rate limit reached. Try again shortly.',
+        ),
         final s => BackendStatus.unavailable(
-            '${provider.label} returned HTTP $s.',
-          ),
+          '${provider.label} returned HTTP $s.',
+        ),
       };
     } catch (_) {
       return BackendStatus.unavailable('Could not reach ${provider.host}.');
@@ -315,7 +318,10 @@ class CloudBackend implements InferenceBackend {
           if (system.isNotEmpty) 'system': system,
           'messages': [
             for (final m in turns)
-              {'role': _anthropicRole(m['role']), 'content': m['content'] ?? ''},
+              {
+                'role': _anthropicRole(m['role']),
+                'content': m['content'] ?? '',
+              },
           ],
           'stream': true,
         });
@@ -460,7 +466,10 @@ class CloudBackend implements InferenceBackend {
   /// Pull the incremental text out of one decoded SSE payload.
   ///
   /// Static and public so each provider's frame shape can be tested directly.
-  static String? extractDelta(CloudProvider provider, Map<String, dynamic> data) {
+  static String? extractDelta(
+    CloudProvider provider,
+    Map<String, dynamic> data,
+  ) {
     switch (provider) {
       case CloudProvider.anthropic:
         if (data['type'] != 'content_block_delta') return null;
@@ -496,7 +505,9 @@ class CloudBackend implements InferenceBackend {
   ///
   /// Static and public so each provider's frame shape can be tested directly.
   static String? extractStreamError(
-      CloudProvider provider, Map<String, dynamic> data) {
+    CloudProvider provider,
+    Map<String, dynamic> data,
+  ) {
     // All four put the detail in an `error` object; Anthropic additionally
     // tags the frame `type: error`.
     final error = data['error'];
@@ -517,7 +528,9 @@ class CloudBackend implements InferenceBackend {
   ///
   /// Static and public so each provider's frame shape can be tested directly.
   static bool indicatesTruncation(
-      CloudProvider provider, Map<String, dynamic> data) {
+    CloudProvider provider,
+    Map<String, dynamic> data,
+  ) {
     switch (provider) {
       case CloudProvider.anthropic:
         if (data['type'] != 'message_delta') return false;
@@ -543,8 +556,7 @@ class CloudBackend implements InferenceBackend {
   Stream<String> chat(
     List<Map<String, String>> messages, {
     http.Client? client,
-  }) =>
-      _stream(buildChatBody(provider, _model, messages), client: client);
+  }) => _stream(buildChatBody(provider, _model, messages), client: client);
 
   /// Stream an answer about an image. Every provider here reads images, which
   /// is the main reason the receipt import is worth pointing at one.
@@ -553,12 +565,11 @@ class CloudBackend implements InferenceBackend {
     String base64Image, {
     String mimeType = 'image/jpeg',
     http.Client? client,
-  }) =>
-      _stream(
-        buildVisionBody(provider, _model, prompt, base64Image, mimeType),
-        client: client,
-        timeout: const Duration(seconds: 60),
-      );
+  }) => _stream(
+    buildVisionBody(provider, _model, prompt, base64Image, mimeType),
+    client: client,
+    timeout: const Duration(seconds: 60),
+  );
 
   /// How long the body may go silent before the request is abandoned. Long
   /// enough for a slow first token, short enough that a dead connection does
@@ -579,9 +590,10 @@ class CloudBackend implements InferenceBackend {
     final ownedClient = client == null;
     final c = client ?? http.Client();
     try {
-      final request = http.Request('POST', _chatUri)
-        ..headers.addAll(_headers)
-        ..body = body;
+      final request =
+          http.Request('POST', _chatUri)
+            ..headers.addAll(_headers)
+            ..body = body;
 
       final response = await c.send(request).timeout(timeout);
 
@@ -658,11 +670,12 @@ class CloudBackend implements InferenceBackend {
     if (status != 401 && status != 403) {
       try {
         final decoded = jsonDecode(body);
-        final message = decoded is Map
-            ? (decoded['error'] is Map
-                ? decoded['error']['message']
-                : decoded['message'])
-            : null;
+        final message =
+            decoded is Map
+                ? (decoded['error'] is Map
+                    ? decoded['error']['message']
+                    : decoded['message'])
+                : null;
         if (message is String && message.isNotEmpty) {
           return '${provider.label}: $message';
         }
@@ -672,8 +685,8 @@ class CloudBackend implements InferenceBackend {
     }
 
     return switch (status) {
-      401 || 403 =>
-        '${provider.label} rejected the API key. Check it in Settings.',
+      401 ||
+      403 => '${provider.label} rejected the API key. Check it in Settings.',
       404 => '${provider.label} does not recognise the model "$model".',
       429 => '${provider.label} rate limit reached. Try again shortly.',
       final s when s >= 500 =>

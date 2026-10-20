@@ -28,19 +28,21 @@ class TransactionListItem extends StatelessWidget {
     final isExpense = transaction.amountFiat < 0;
     final isBtc = transaction.isBitcoin;
 
-    final catColor = _parseColor(category?.color) ??
+    final catColor =
+        _parseColor(category?.color) ??
         (isBtc ? AppColors.bitcoinOrange : context.textSecondary);
 
-    final satsDisplay = transaction.amountSats != 0
-        ? SatConverter.formatSats(transaction.amountSats.abs())
-        : (btcPrice != null && btcPrice! > 0
-            ? SatConverter.formatSats(
-                SatConverter.fiatToSats(
-                  transaction.amountFiat.abs(),
-                  btcPrice!,
-                ),
-              )
-            : null);
+    final satsDisplay =
+        transaction.amountSats != 0
+            ? SatConverter.formatSats(transaction.amountSats.abs())
+            : (btcPrice != null && btcPrice! > 0
+                ? SatConverter.formatSats(
+                  SatConverter.fiatToSats(
+                    transaction.amountFiat.abs(),
+                    btcPrice!,
+                  ),
+                )
+                : null);
 
     return InkWell(
       onTap: onTap,
@@ -57,11 +59,7 @@ class TransactionListItem extends StatelessWidget {
                 color: catColor.withAlpha(30),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Icon(
-                _iconData(category?.icon),
-                size: 18,
-                color: catColor,
-              ),
+              child: Icon(_iconData(category?.icon), size: 18, color: catColor),
             ),
             const SizedBox(width: 12),
 
@@ -81,7 +79,8 @@ class TransactionListItem extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  if (category != null || transaction.recurringPeriod != null) ...[
+                  if (category != null ||
+                      transaction.recurringPeriod != null) ...[
                     const SizedBox(height: 2),
                     Row(
                       children: [
@@ -110,25 +109,26 @@ class TransactionListItem extends StatelessWidget {
             // Amounts
             ShrinkToFit(
               child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  '${isExpense ? '-' : '+'}${CurrencyUtils.format(transaction.amountFiat.abs(), transaction.fiatCurrency)}',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: isExpense
-                        ? theme.colorScheme.onSurface
-                        : AppColors.success,
-                  ),
-                ),
-                if (satsDisplay != null)
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
                   Text(
-                    '${isExpense ? '-' : '+'}$satsDisplay sats',
-                    style: AppTextStyles.monoSmall.copyWith(
-                      color: context.bitcoinOrangeText,
+                    '${isExpense ? '-' : '+'}${CurrencyUtils.format(transaction.amountFiat.abs(), transaction.fiatCurrency)}',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color:
+                          isExpense
+                              ? theme.colorScheme.onSurface
+                              : AppColors.success,
                     ),
                   ),
-              ],
+                  if (satsDisplay != null)
+                    Text(
+                      '${isExpense ? '-' : '+'}$satsDisplay sats',
+                      style: AppTextStyles.monoSmall.copyWith(
+                        color: context.bitcoinOrangeText,
+                      ),
+                    ),
+                ],
               ),
             ),
           ],
@@ -136,7 +136,6 @@ class TransactionListItem extends StatelessWidget {
       ),
     );
   }
-
 
   Color? _parseColor(String? hex) {
     if (hex == null) return null;

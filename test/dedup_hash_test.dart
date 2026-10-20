@@ -29,13 +29,12 @@ void main() {
     String description = 'AMAZON MKTPLACE',
     int walletId = 1,
     DateTime? on,
-  }) =>
-      HashUtils.transactionDedupHash(
-        date: on ?? date,
-        amount: amount,
-        description: description,
-        salt: 'wallet_$walletId',
-      );
+  }) => HashUtils.transactionDedupHash(
+    date: on ?? date,
+    amount: amount,
+    description: description,
+    salt: 'wallet_$walletId',
+  );
 
   group('statement import: the same row dedupes, different rows do not', () {
     test('re-importing an identical row produces an identical hash', () {
@@ -72,11 +71,11 @@ void main() {
       // Buying the same coffee twice in one day is two transactions, so the
       // salt is a timestamp rather than something derived from the content.
       String manual(int micros) => HashUtils.transactionDedupHash(
-            date: date,
-            amount: -4.5,
-            description: 'Coffee',
-            salt: micros.toString(),
-          );
+        date: date,
+        amount: -4.5,
+        description: 'Coffee',
+        salt: micros.toString(),
+      );
 
       expect(manual(1760000000000001), isNot(manual(1760000000000002)));
     });
@@ -88,7 +87,8 @@ void main() {
           date: due,
           amount: -1200,
           description: 'Rent',
-          salt: 'recurring_${anchor.millisecondsSinceEpoch}'
+          salt:
+              'recurring_${anchor.millisecondsSinceEpoch}'
               '_${due.millisecondsSinceEpoch}',
         );
 
@@ -121,11 +121,11 @@ void main() {
 
   group('xpub: one row per on-chain transaction', () {
     String chain(String txid, int netSats) => HashUtils.transactionDedupHash(
-          date: date,
-          amount: netSats.toDouble(),
-          description: 'BTC ${txid.substring(0, 8)}',
-          salt: 'xpub_$txid',
-        );
+      date: date,
+      amount: netSats.toDouble(),
+      description: 'BTC ${txid.substring(0, 8)}',
+      salt: 'xpub_$txid',
+    );
 
     const txid = 'a1b2c3d4e5f60718293a4b5c6d7e8f90';
 
@@ -149,25 +149,29 @@ void main() {
       const description = 'Rent';
       final hashes = {
         'import': HashUtils.transactionDedupHash(
-            date: date,
-            amount: amount,
-            description: description,
-            salt: 'wallet_1'),
+          date: date,
+          amount: amount,
+          description: description,
+          salt: 'wallet_1',
+        ),
         'manual': HashUtils.transactionDedupHash(
-            date: date,
-            amount: amount,
-            description: description,
-            salt: '1760000000000001'),
+          date: date,
+          amount: amount,
+          description: description,
+          salt: '1760000000000001',
+        ),
         'recurring': HashUtils.transactionDedupHash(
-            date: date,
-            amount: amount,
-            description: description,
-            salt: 'recurring_1_2'),
+          date: date,
+          amount: amount,
+          description: description,
+          salt: 'recurring_1_2',
+        ),
         'xpub': HashUtils.transactionDedupHash(
-            date: date,
-            amount: amount,
-            description: description,
-            salt: 'xpub_abc'),
+          date: date,
+          amount: amount,
+          description: description,
+          salt: 'xpub_abc',
+        ),
       };
 
       expect(hashes.values.toSet(), hasLength(4));
@@ -175,11 +179,20 @@ void main() {
 
     test('an unsalted hash is not equal to any salted one', () {
       final unsalted = HashUtils.transactionDedupHash(
-          date: date, amount: -1200, description: 'Rent');
+        date: date,
+        amount: -1200,
+        description: 'Rent',
+      );
       expect(
         unsalted,
-        isNot(HashUtils.transactionDedupHash(
-            date: date, amount: -1200, description: 'Rent', salt: 'wallet_1')),
+        isNot(
+          HashUtils.transactionDedupHash(
+            date: date,
+            amount: -1200,
+            description: 'Rent',
+            salt: 'wallet_1',
+          ),
+        ),
       );
     });
   });
@@ -189,9 +202,17 @@ void main() {
       // It is persisted, so it has to survive a relaunch — nothing in the
       // input may vary per process.
       final a = HashUtils.transactionDedupHash(
-          date: date, amount: -10, description: 'X', salt: 's');
+        date: date,
+        amount: -10,
+        description: 'X',
+        salt: 's',
+      );
       final b = HashUtils.transactionDedupHash(
-          date: date, amount: -10, description: 'X', salt: 's');
+        date: date,
+        amount: -10,
+        description: 'X',
+        salt: 's',
+      );
       expect(a, b);
       expect(a, hasLength(64)); // SHA-256 hex
     });
@@ -201,9 +222,17 @@ void main() {
       // statement date would never dedupe on re-import.
       expect(
         HashUtils.transactionDedupHash(
-            date: DateTime(2026, 3, 15), amount: -10, description: 'X'),
-        isNot(HashUtils.transactionDedupHash(
-            date: DateTime(2026, 3, 15, 12), amount: -10, description: 'X')),
+          date: DateTime(2026, 3, 15),
+          amount: -10,
+          description: 'X',
+        ),
+        isNot(
+          HashUtils.transactionDedupHash(
+            date: DateTime(2026, 3, 15, 12),
+            amount: -10,
+            description: 'X',
+          ),
+        ),
       );
     });
   });

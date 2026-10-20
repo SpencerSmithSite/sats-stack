@@ -65,19 +65,22 @@ class _ImportColumnMapperScreenState extends State<ImportColumnMapperScreen> {
   // Inspects preview rows for the given column and auto-selects the date format.
   // Must be called inside setState (mutates _mapping.dateFormat directly).
   void _detectDateFormat(int colIndex) {
-    final values = _previewRows
-        .map((r) => colIndex < r.length ? r[colIndex].trim() : '')
-        .where((v) => v.isNotEmpty)
-        .take(3)
-        .toList();
+    final values =
+        _previewRows
+            .map((r) => colIndex < r.length ? r[colIndex].trim() : '')
+            .where((v) => v.isNotEmpty)
+            .take(3)
+            .toList();
     if (values.isEmpty) return;
     if (values.every((v) => RegExp(r'^\d{4}-\d{2}-\d{2}').hasMatch(v))) {
       _mapping.dateFormat = 'YYYY-MM-DD';
-    } else if (values
-        .every((v) => RegExp(r'^\d{1,2}/\d{1,2}/\d{2}(?!\d)').hasMatch(v))) {
+    } else if (values.every(
+      (v) => RegExp(r'^\d{1,2}/\d{1,2}/\d{2}(?!\d)').hasMatch(v),
+    )) {
       _mapping.dateFormat = 'MM/DD/YY';
-    } else if (values
-        .every((v) => RegExp(r'^\d{1,2}/\d{1,2}/\d{4}').hasMatch(v))) {
+    } else if (values.every(
+      (v) => RegExp(r'^\d{1,2}/\d{1,2}/\d{4}').hasMatch(v),
+    )) {
       _mapping.dateFormat = 'MM/DD/YYYY';
     }
   }
@@ -142,11 +145,12 @@ class _ImportColumnMapperScreenState extends State<ImportColumnMapperScreen> {
       );
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder: (_) => ImportPreviewScreen(
-            result: newResult,
-            sourceId: widget.sourceId,
-            sourceName: widget.sourceName,
-          ),
+          builder:
+              (_) => ImportPreviewScreen(
+                result: newResult,
+                sourceId: widget.sourceId,
+                sourceName: widget.sourceName,
+              ),
         ),
       );
     } finally {
@@ -169,10 +173,9 @@ class _ImportColumnMapperScreenState extends State<ImportColumnMapperScreen> {
             child: Text(
               'Assign each column from your CSV to a field below. '
               'At minimum you need: Date, Description, and Amount (or Debit + Credit).',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: cs.onSurface),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: cs.onSurface),
             ),
           ),
 
@@ -182,8 +185,10 @@ class _ImportColumnMapperScreenState extends State<ImportColumnMapperScreen> {
               children: [
                 // CSV preview table
                 if (_headers.isNotEmpty) ...[
-                  Text('File Preview',
-                      style: Theme.of(context).textTheme.labelLarge),
+                  Text(
+                    'File Preview',
+                    style: Theme.of(context).textTheme.labelLarge,
+                  ),
                   const SizedBox(height: 8),
                   SizedBox(
                     height: 160,
@@ -195,25 +200,38 @@ class _ImportColumnMapperScreenState extends State<ImportColumnMapperScreen> {
                           dataRowMinHeight: 28,
                           dataRowMaxHeight: 28,
                           columnSpacing: 16,
-                          columns: _headers
-                              .map((h) => DataColumn(
-                                    label: Text(h,
+                          columns:
+                              _headers
+                                  .map(
+                                    (h) => DataColumn(
+                                      label: Text(
+                                        h,
                                         style: const TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 12)),
-                                  ))
-                              .toList(),
-                          rows: _previewRows
-                              .map((row) => DataRow(
-                                    cells: List.generate(
-                                      _headers.length,
-                                      (i) => DataCell(Text(
-                                        i < row.length ? row[i] : '',
-                                        style: const TextStyle(fontSize: 11),
-                                      )),
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 12,
+                                        ),
+                                      ),
                                     ),
-                                  ))
-                              .toList(),
+                                  )
+                                  .toList(),
+                          rows:
+                              _previewRows
+                                  .map(
+                                    (row) => DataRow(
+                                      cells: List.generate(
+                                        _headers.length,
+                                        (i) => DataCell(
+                                          Text(
+                                            i < row.length ? row[i] : '',
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
                         ),
                       ),
                     ),
@@ -222,8 +240,10 @@ class _ImportColumnMapperScreenState extends State<ImportColumnMapperScreen> {
                 ],
 
                 // Column assignment
-                Text('Column Assignments',
-                    style: Theme.of(context).textTheme.labelLarge),
+                Text(
+                  'Column Assignments',
+                  style: Theme.of(context).textTheme.labelLarge,
+                ),
                 const SizedBox(height: 8),
                 ..._headers.asMap().entries.map((entry) {
                   final i = entry.key;
@@ -234,9 +254,11 @@ class _ImportColumnMapperScreenState extends State<ImportColumnMapperScreen> {
                       children: [
                         Expanded(
                           flex: 2,
-                          child: Text(h,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.bodyMedium),
+                          child: Text(
+                            h,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -246,16 +268,22 @@ class _ImportColumnMapperScreenState extends State<ImportColumnMapperScreen> {
                             isDense: true,
                             decoration: const InputDecoration(
                               contentPadding: EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 8),
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
                             ),
-                            items: _assignOptions
-                                .map((o) => DropdownMenuItem(
-                                      value: o.$1,
-                                      child: Text(o.$2,
-                                          style:
-                                              const TextStyle(fontSize: 13)),
-                                    ))
-                                .toList(),
+                            items:
+                                _assignOptions
+                                    .map(
+                                      (o) => DropdownMenuItem(
+                                        value: o.$1,
+                                        child: Text(
+                                          o.$2,
+                                          style: const TextStyle(fontSize: 13),
+                                        ),
+                                      ),
+                                    )
+                                    .toList(),
                             onChanged: (v) => _onAssign(i, v!),
                           ),
                         ),
@@ -267,53 +295,68 @@ class _ImportColumnMapperScreenState extends State<ImportColumnMapperScreen> {
                 // Date format picker (shown when date column is assigned)
                 if (_mapping.dateColumn != null) ...[
                   const SizedBox(height: 16),
-                  Text('Date Format',
-                      style: Theme.of(context).textTheme.labelLarge),
+                  Text(
+                    'Date Format',
+                    style: Theme.of(context).textTheme.labelLarge,
+                  ),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
                     initialValue: _mapping.dateFormat,
                     decoration: const InputDecoration(
-                      contentPadding:
-                          EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                     ),
-                    items: _dateFormats
-                        .map((f) =>
-                            DropdownMenuItem(value: f, child: Text(f)))
-                        .toList(),
-                    onChanged: (v) =>
-                        setState(() => _mapping.dateFormat = v!),
+                    items:
+                        _dateFormats
+                            .map(
+                              (f) => DropdownMenuItem(value: f, child: Text(f)),
+                            )
+                            .toList(),
+                    onChanged: (v) => setState(() => _mapping.dateFormat = v!),
                   ),
                 ],
 
                 // Live preview
                 if (_canParse && _previewRows.isNotEmpty) ...[
                   const SizedBox(height: 24),
-                  Text('Preview (first ${_previewRows.length} rows)',
-                      style: Theme.of(context).textTheme.labelLarge),
+                  Text(
+                    'Preview (first ${_previewRows.length} rows)',
+                    style: Theme.of(context).textTheme.labelLarge,
+                  ),
                   const SizedBox(height: 8),
                   ..._previewRows.map((row) {
-                    final dateStr = _mapping.dateColumn != null &&
-                            _mapping.dateColumn! < row.length
-                        ? row[_mapping.dateColumn!]
-                        : '?';
-                    final descStr = _mapping.descriptionColumn != null &&
-                            _mapping.descriptionColumn! < row.length
-                        ? row[_mapping.descriptionColumn!]
-                        : '?';
-                    final amtStr = _mapping.amountColumn != null &&
-                            _mapping.amountColumn! < row.length
-                        ? row[_mapping.amountColumn!]
-                        : '${_mapping.debitColumn != null && _mapping.debitColumn! < row.length ? row[_mapping.debitColumn!] : ''}'
-                            '/'
-                            '${_mapping.creditColumn != null && _mapping.creditColumn! < row.length ? row[_mapping.creditColumn!] : ''}';
+                    final dateStr =
+                        _mapping.dateColumn != null &&
+                                _mapping.dateColumn! < row.length
+                            ? row[_mapping.dateColumn!]
+                            : '?';
+                    final descStr =
+                        _mapping.descriptionColumn != null &&
+                                _mapping.descriptionColumn! < row.length
+                            ? row[_mapping.descriptionColumn!]
+                            : '?';
+                    final amtStr =
+                        _mapping.amountColumn != null &&
+                                _mapping.amountColumn! < row.length
+                            ? row[_mapping.amountColumn!]
+                            : '${_mapping.debitColumn != null && _mapping.debitColumn! < row.length ? row[_mapping.debitColumn!] : ''}'
+                                '/'
+                                '${_mapping.creditColumn != null && _mapping.creditColumn! < row.length ? row[_mapping.creditColumn!] : ''}';
                     return ListTile(
                       dense: true,
                       contentPadding: EdgeInsets.zero,
-                      title: Text(descStr,
-                          maxLines: 1, overflow: TextOverflow.ellipsis),
+                      title: Text(
+                        descStr,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                       subtitle: Text(dateStr),
-                      trailing: Text(amtStr,
-                          style: const TextStyle(fontSize: 13)),
+                      trailing: Text(
+                        amtStr,
+                        style: const TextStyle(fontSize: 13),
+                      ),
                     );
                   }),
                 ],
@@ -326,7 +369,8 @@ class _ImportColumnMapperScreenState extends State<ImportColumnMapperScreen> {
                   onChanged: (v) => setState(() => _saveMapping = v ?? true),
                   title: Text('Save mapping for "${widget.sourceName}"'),
                   subtitle: const Text(
-                      'Reuse this column layout on future imports from this source.'),
+                    'Reuse this column layout on future imports from this source.',
+                  ),
                   contentPadding: EdgeInsets.zero,
                 ),
 
@@ -334,14 +378,17 @@ class _ImportColumnMapperScreenState extends State<ImportColumnMapperScreen> {
 
                 FilledButton.icon(
                   onPressed: _canParse && !_parsing ? _parse : null,
-                  icon: _parsing
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.white),
-                        )
-                      : const Icon(Icons.play_arrow),
+                  icon:
+                      _parsing
+                          ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                          : const Icon(Icons.play_arrow),
                   label: const Text('Parse Transactions'),
                 ),
               ],

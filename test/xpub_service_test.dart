@@ -34,18 +34,16 @@ void main() {
 
   group('address derivation', () {
     test('receive chain matches the BIP84 vector', () {
-      expect(
-        service.deriveAddresses(bip84Zpub, 0, 2),
-        ['bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu',
-         'bc1qnjg0jd8228aq7egyzacy8cys3knf9xvrerkf9g'],
-      );
+      expect(service.deriveAddresses(bip84Zpub, 0, 2), [
+        'bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu',
+        'bc1qnjg0jd8228aq7egyzacy8cys3knf9xvrerkf9g',
+      ]);
     });
 
     test('change chain matches the BIP84 vector', () {
-      expect(
-        service.deriveAddresses(bip84Zpub, 0, 1, chain: 1),
-        ['bc1q8c6fshw2dlwun7ekn9qwf37cu2rn755upcp6el'],
-      );
+      expect(service.deriveAddresses(bip84Zpub, 0, 1, chain: 1), [
+        'bc1q8c6fshw2dlwun7ekn9qwf37cu2rn755upcp6el',
+      ]);
     });
 
     test('change chain is not the receive chain', () {
@@ -79,8 +77,10 @@ void main() {
     });
 
     test('garbage is rejected', () {
-      expect(() => service.deriveAddresses('not a key', 0, 1),
-          throwsA(anything));
+      expect(
+        () => service.deriveAddresses('not a key', 0, 1),
+        throwsA(anything),
+      );
     });
   });
 
@@ -183,10 +183,13 @@ void main() {
     final blockTime =
         DateTime.utc(2025, 3, 4, 12).millisecondsSinceEpoch ~/ 1000;
 
-    XpubService withChain() => XpubService(db, client: MockClient((req) async {
-          final txs = req.url.path.contains('/address/$funded/txs') &&
-                  !req.url.path.contains('/chain/')
-              ? [
+    XpubService withChain() => XpubService(
+      db,
+      client: MockClient((req) async {
+        final txs =
+            req.url.path.contains('/address/$funded/txs') &&
+                    !req.url.path.contains('/chain/')
+                ? [
                   {
                     'txid': 'f00d' * 16,
                     'status': {'confirmed': true, 'block_time': blockTime},
@@ -196,49 +199,80 @@ void main() {
                     ],
                   },
                 ]
-              : const [];
-          return http.Response(jsonEncode(txs), 200);
-        }));
+                : const [];
+        return http.Response(jsonEncode(txs), 200);
+      }),
+    );
 
     Future<Wallet> xpubWallet(String label) async {
-      final id = await db.into(db.wallets).insert(WalletsCompanion.insert(
-            label: label,
-            type: 'xpub',
-            xpub: const Value(bip84Zpub),
-            color: '#F7931A',
-          ));
+      final id = await db
+          .into(db.wallets)
+          .insert(
+            WalletsCompanion.insert(
+              label: label,
+              type: 'xpub',
+              xpub: const Value(bip84Zpub),
+              color: '#F7931A',
+            ),
+          );
       return (db.select(db.wallets)..where((w) => w.id.equals(id))).getSingle();
     }
 
     test('the same xpub in two wallets syncs into both', () async {
       final prices = BtcPriceService(db);
       // A cache hit, so the price lookup never reaches the network.
-      await db.into(db.btcPriceHistory).insert(BtcPriceHistoryCompanion.insert(
-          date: '2025-03-04', currency: prices.currency, price: 80000));
+      await db
+          .into(db.btcPriceHistory)
+          .insert(
+            BtcPriceHistoryCompanion.insert(
+              date: '2025-03-04',
+              currency: prices.currency,
+              price: 80000,
+            ),
+          );
       final sync = withChain();
 
       final first = await sync.syncWallet(
-          wallet: await xpubWallet('Cold'), btcPriceService: prices);
+        wallet: await xpubWallet('Cold'),
+        btcPriceService: prices,
+      );
       final second = await sync.syncWallet(
-          wallet: await xpubWallet('Cold, again'), btcPriceService: prices);
+        wallet: await xpubWallet('Cold, again'),
+        btcPriceService: prices,
+      );
 
       expect(first.imported, 1);
       // Was 0 imported and 1 skipped: the dedupe looked at every wallet.
       expect(second.imported, 1);
       expect(second.skipped, 0);
-      expect(await db.select(db.transactions).get()
-          .then((r) => r.where((t) => t.source == 'xpub')), hasLength(2));
+      expect(
+        await db
+            .select(db.transactions)
+            .get()
+            .then((r) => r.where((t) => t.source == 'xpub')),
+        hasLength(2),
+      );
     }, timeout: const Timeout(Duration(minutes: 1)));
 
     test('a resync of one wallet still skips its own rows', () async {
       final prices = BtcPriceService(db);
-      await db.into(db.btcPriceHistory).insert(BtcPriceHistoryCompanion.insert(
-          date: '2025-03-04', currency: prices.currency, price: 80000));
+      await db
+          .into(db.btcPriceHistory)
+          .insert(
+            BtcPriceHistoryCompanion.insert(
+              date: '2025-03-04',
+              currency: prices.currency,
+              price: 80000,
+            ),
+          );
       final sync = withChain();
       final wallet = await xpubWallet('Cold');
 
       await sync.syncWallet(wallet: wallet, btcPriceService: prices);
-      final again = await sync.syncWallet(wallet: wallet, btcPriceService: prices);
+      final again = await sync.syncWallet(
+        wallet: wallet,
+        btcPriceService: prices,
+      );
 
       expect(again.imported, 0);
       expect(again.skipped, 1);

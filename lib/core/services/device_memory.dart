@@ -58,9 +58,9 @@ class DeviceMemory {
         return bytes == null ? null : bytes ~/ (1024 * 1024);
       }
       // /proc/meminfo reports MemTotal in kB.
-      final line = await File('/proc/meminfo')
-          .readAsLines()
-          .then((l) => l.firstWhere((s) => s.startsWith('MemTotal:')));
+      final line = await File('/proc/meminfo').readAsLines().then(
+        (l) => l.firstWhere((s) => s.startsWith('MemTotal:')),
+      );
       final kb = int.tryParse(line.split(RegExp(r'\s+'))[1]);
       return kb == null ? null : kb ~/ 1024;
     } catch (_) {

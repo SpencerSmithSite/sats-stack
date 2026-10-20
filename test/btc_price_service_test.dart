@@ -76,8 +76,11 @@ void main() {
       service.switchCurrency('EUR');
 
       expect(service.currency, 'EUR');
-      expect(service.priceNotifier.value, isNull,
-          reason: 'a USD figure must not be shown as euros');
+      expect(
+        service.priceNotifier.value,
+        isNull,
+        reason: 'a USD figure must not be shown as euros',
+      );
     });
   });
 
@@ -100,18 +103,19 @@ void main() {
 
     /// Runs [body] with every `http.get` answered by a fake mempool.
     Future<T> offline<T>(Future<T> Function() body) => http.runWithClient(
-          body,
-          () => MockClient((_) async {
-            requests++;
-            return http.Response(
-                jsonEncode({
-                  'prices': [
-                    {'time': 0, 'USD': quote},
-                  ],
-                }),
-                200);
+      body,
+      () => MockClient((_) async {
+        requests++;
+        return http.Response(
+          jsonEncode({
+            'prices': [
+              {'time': 0, 'USD': quote},
+            ],
           }),
+          200,
         );
+      }),
+    );
 
     Future<List<BtcPriceHistoryData>> stored() =>
         db.select(db.btcPriceHistory).get();
@@ -136,22 +140,35 @@ void main() {
       final march = DateTime(2026, 3, 4);
       await offline(() => service.getHistoricalPrice(march, 'USD'));
       quote = 1; // a later answer must not be asked for
-      final again = await offline(() => service.getHistoricalPrice(march, 'USD'));
+      final again = await offline(
+        () => service.getHistoricalPrice(march, 'USD'),
+      );
 
       expect(again, 60000);
       expect(requests, 1);
       expect((await stored()).single.date, '2026-03-04');
     });
 
-    test('a mid-day row from an earlier build is not served as final',
-        () async {
-      await db.into(db.btcPriceHistory).insert(BtcPriceHistoryCompanion.insert(
-          date: '2026-10-20', currency: 'USD', price: 1));
+    test(
+      'a mid-day row from an earlier build is not served as final',
+      () async {
+        await db
+            .into(db.btcPriceHistory)
+            .insert(
+              BtcPriceHistoryCompanion.insert(
+                date: '2026-10-20',
+                currency: 'USD',
+                price: 1,
+              ),
+            );
 
-      final price = await offline(() => service.getHistoricalPrice(now, 'USD'));
+        final price = await offline(
+          () => service.getHistoricalPrice(now, 'USD'),
+        );
 
-      expect(price, 60000);
-      expect(await stored(), isEmpty);
-    });
+        expect(price, 60000);
+        expect(await stored(), isEmpty);
+      },
+    );
   });
 }

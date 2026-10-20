@@ -9,18 +9,18 @@ import 'package:sats_stack/features/stack/widgets/stack_stats.dart';
 void main() {
   var id = 0;
   Transaction tx(DateTime date, int sats, {bool btc = true}) => Transaction(
-        id: id++,
-        walletId: 1,
-        date: date,
-        description: 'row',
-        amountSats: sats,
-        amountFiat: 0,
-        fiatCurrency: 'USD',
-        source: 'manual',
-        isBitcoin: btc,
-        dedupHash: 'h$id',
-        createdAt: date,
-      );
+    id: id++,
+    walletId: 1,
+    date: date,
+    description: 'row',
+    amountSats: sats,
+    amountFiat: 0,
+    fiatCurrency: 'USD',
+    source: 'manual',
+    isBitcoin: btc,
+    dedupHash: 'h$id',
+    createdAt: date,
+  );
 
   final now = DateTime(2026, 10, 20);
   final txns = [

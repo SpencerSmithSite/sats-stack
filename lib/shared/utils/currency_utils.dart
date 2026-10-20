@@ -14,11 +14,14 @@ abstract final class CurrencyUtils {
     return map[currency.toUpperCase()] ?? '$currency ';
   }
 
-  static String format(double amount, String currency, {int decimalDigits = 2}) =>
-      NumberFormat.currency(
-        symbol: symbolFor(currency),
-        decimalDigits: decimalDigits,
-      ).format(amount);
+  static String format(
+    double amount,
+    String currency, {
+    int decimalDigits = 2,
+  }) => NumberFormat.currency(
+    symbol: symbolFor(currency),
+    decimalDigits: decimalDigits,
+  ).format(amount);
 
   static String formatCompact(double amount, String currency) =>
       NumberFormat.compactCurrency(

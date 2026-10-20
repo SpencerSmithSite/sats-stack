@@ -29,7 +29,8 @@ void main() {
       expect(
         report.state,
         isNot(PlatformLlmState.unsupportedPlatform),
-        reason: 'The bridge is not registered. Check that '
+        reason:
+            'The bridge is not registered. Check that '
             'FoundationModelsBridge.register runs in MainFlutterWindow '
             '(macOS) or AppDelegate (iOS), and that the channel names match '
             'the Dart side.',
@@ -49,7 +50,8 @@ void main() {
       await for (final token in backend.chat([
         {
           'role': 'system',
-          'content': 'You are a personal finance analyst. Answer in one short '
+          'content':
+              'You are a personal finance analyst. Answer in one short '
               'sentence.',
         },
         {'role': 'user', 'content': 'Is spending \$412 on dining a lot?'},
@@ -71,8 +73,11 @@ void main() {
       // A cumulative-forwarding bug shows up as the first chunk appearing again
       // inside the second.
       if (chunks.length > 1 && chunks.first.length > 3) {
-        expect(chunks[1].contains(chunks.first), isFalse,
-            reason: 'chunks look cumulative, not deltas');
+        expect(
+          chunks[1].contains(chunks.first),
+          isFalse,
+          reason: 'chunks look cumulative, not deltas',
+        );
       }
     }, timeout: const Timeout(Duration(minutes: 2)));
 
@@ -86,9 +91,14 @@ void main() {
       const backend = PlatformLlmBackend();
       // Leaving the chat screen mid-answer must cancel the Swift Task rather
       // than leaving it running.
-      final sub = backend.chat([
-        {'role': 'user', 'content': 'Write a long paragraph about budgeting.'},
-      ]).listen(null);
+      final sub = backend
+          .chat([
+            {
+              'role': 'user',
+              'content': 'Write a long paragraph about budgeting.',
+            },
+          ])
+          .listen(null);
       await Future<void>.delayed(const Duration(milliseconds: 300));
       await sub.cancel();
     }, timeout: const Timeout(Duration(minutes: 1)));

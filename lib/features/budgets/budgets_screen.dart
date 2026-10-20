@@ -54,30 +54,32 @@ class _BudgetsScreenState extends State<BudgetsScreen> {
     _progressSub?.cancel();
     _items = null;
     _error = null;
-    _progressSub = app.budgetService.watchProgress(_selectedMonth).listen(
-      (items) {
-        if (!mounted) return;
-        setState(() {
-          _items = items;
-          _error = null;
-        });
-        if (_isCurrentMonth) _notifyOverspend();
-      },
-      onError: (Object e) {
-        if (mounted) setState(() => _error = e);
-      },
-    );
+    _progressSub = app.budgetService
+        .watchProgress(_selectedMonth)
+        .listen(
+          (items) {
+            if (!mounted) return;
+            setState(() {
+              _items = items;
+              _error = null;
+            });
+            if (_isCurrentMonth) _notifyOverspend();
+          },
+          onError: (Object e) {
+            if (mounted) setState(() => _error = e);
+          },
+        );
   }
 
   void _previousMonth() => setState(() {
-        _selectedMonth = MonthCursor(_selectedMonth).previous.month;
-        _subscribe();
-      });
+    _selectedMonth = MonthCursor(_selectedMonth).previous.month;
+    _subscribe();
+  });
 
   void _nextMonth() => setState(() {
-        _selectedMonth = MonthCursor(_selectedMonth).next.month;
-        _subscribe();
-      });
+    _selectedMonth = MonthCursor(_selectedMonth).next.month;
+    _subscribe();
+  });
 
   bool get _isCurrentMonth => MonthCursor(_selectedMonth).isCurrent();
 
@@ -86,11 +88,12 @@ class _BudgetsScreenState extends State<BudgetsScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => SetBudgetSheet(
-        budgetService: app.budgetService,
-        categoryService: app.categoryService,
-        existing: existing,
-      ),
+      builder:
+          (_) => SetBudgetSheet(
+            budgetService: app.budgetService,
+            categoryService: app.categoryService,
+            existing: existing,
+          ),
     );
   }
 
@@ -150,12 +153,16 @@ class _BudgetsScreenState extends State<BudgetsScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.error_outline,
-                size: 48,
-                color: Theme.of(context).colorScheme.error.withAlpha(160)),
+            Icon(
+              Icons.error_outline,
+              size: 48,
+              color: Theme.of(context).colorScheme.error.withAlpha(160),
+            ),
             const SizedBox(height: 12),
-            Text('Failed to load budgets',
-                style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'Failed to load budgets',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
           ],
         ),
       );
@@ -216,7 +223,10 @@ class _BudgetList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final totalBudgeted = items.fold<double>(0, (s, p) => s + p.budget.amountFiat);
+    final totalBudgeted = items.fold<double>(
+      0,
+      (s, p) => s + p.budget.amountFiat,
+    );
     final totalSpent = items.fold<double>(0, (s, p) => s + p.spentFiat);
     final overCount = items.where((p) => p.isOverBudget).length;
 
@@ -268,7 +278,8 @@ class _SummaryBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final remaining = totalBudgeted - totalSpent;
-    final remainingColor = remaining >= 0 ? AppColors.success : AppColors.danger;
+    final remainingColor =
+        remaining >= 0 ? AppColors.success : AppColors.danger;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -277,30 +288,53 @@ class _SummaryBar extends StatelessWidget {
         decoration: BoxDecoration(
           color: theme.colorScheme.surface,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: theme.colorScheme.outline.withAlpha(60), width: 0.5),
+          border: Border.all(
+            color: theme.colorScheme.outline.withAlpha(60),
+            width: 0.5,
+          ),
         ),
         child: Row(
           children: [
             Expanded(
               child: _SummaryItem(
                 label: 'Budgeted',
-                value: CurrencyUtils.format(totalBudgeted, currency, decimalDigits: 0),
+                value: CurrencyUtils.format(
+                  totalBudgeted,
+                  currency,
+                  decimalDigits: 0,
+                ),
                 color: context.textSecondary,
               ),
             ),
-            Container(width: 0.5, height: 32, color: theme.colorScheme.outline.withAlpha(80)),
+            Container(
+              width: 0.5,
+              height: 32,
+              color: theme.colorScheme.outline.withAlpha(80),
+            ),
             Expanded(
               child: _SummaryItem(
                 label: 'Spent',
-                value: CurrencyUtils.format(totalSpent, currency, decimalDigits: 0),
+                value: CurrencyUtils.format(
+                  totalSpent,
+                  currency,
+                  decimalDigits: 0,
+                ),
                 color: theme.colorScheme.onSurface,
               ),
             ),
-            Container(width: 0.5, height: 32, color: theme.colorScheme.outline.withAlpha(80)),
+            Container(
+              width: 0.5,
+              height: 32,
+              color: theme.colorScheme.outline.withAlpha(80),
+            ),
             Expanded(
               child: _SummaryItem(
                 label: remaining >= 0 ? 'Remaining' : 'Over',
-                value: CurrencyUtils.format(remaining.abs(), currency, decimalDigits: 0),
+                value: CurrencyUtils.format(
+                  remaining.abs(),
+                  currency,
+                  decimalDigits: 0,
+                ),
                 color: remainingColor,
               ),
             ),
@@ -312,7 +346,11 @@ class _SummaryBar extends StatelessWidget {
 }
 
 class _SummaryItem extends StatelessWidget {
-  const _SummaryItem({required this.label, required this.value, required this.color});
+  const _SummaryItem({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
 
   final String label;
   final String value;
@@ -324,7 +362,10 @@ class _SummaryItem extends StatelessWidget {
       children: [
         Text(
           value,
-          style: AppTextStyles.monoMedium.copyWith(color: color, fontWeight: FontWeight.w600),
+          style: AppTextStyles.monoMedium.copyWith(
+            color: color,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         const SizedBox(height: 2),
         Text(

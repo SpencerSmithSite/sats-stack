@@ -45,11 +45,15 @@ void main() {
     expect(target.readAsStringSync(), 'the user own data');
   });
 
-  test('with no database to keep, a failure says the original is lost',
-      () async {
-    target.deleteSync();
-    final r = await replaceDatabaseFile(
-        source: File('${dir.path}/gone.sqlite'), target: target);
-    expect(r.outcome, RestoreOutcome.failedOriginalLost);
-  });
+  test(
+    'with no database to keep, a failure says the original is lost',
+    () async {
+      target.deleteSync();
+      final r = await replaceDatabaseFile(
+        source: File('${dir.path}/gone.sqlite'),
+        target: target,
+      );
+      expect(r.outcome, RestoreOutcome.failedOriginalLost);
+    },
+  );
 }

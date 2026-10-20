@@ -12,10 +12,11 @@ class ImportSummaryScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final dateRange = summary.startDate != null
-        ? '${DateFormat('MMM d, yyyy').format(summary.startDate!)} – '
-            '${DateFormat('MMM d, yyyy').format(summary.endDate!)}'
-        : null;
+    final dateRange =
+        summary.startDate != null
+            ? '${DateFormat('MMM d, yyyy').format(summary.startDate!)} – '
+                '${DateFormat('MMM d, yyyy').format(summary.endDate!)}'
+            : null;
 
     return Scaffold(
       appBar: AppBar(
@@ -57,10 +58,9 @@ class ImportSummaryScreen extends StatelessWidget {
               Center(
                 child: Text(
                   dateRange,
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodyMedium
-                      ?.copyWith(color: cs.onSurfaceVariant),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
                 ),
               ),
             ],
@@ -82,8 +82,9 @@ class ImportSummaryScreen extends StatelessWidget {
                 Expanded(
                   child: _StatCard(
                     label: 'Skipped',
-                    value: (summary.duplicatesSkipped + summary.alreadyInLedger)
-                        .toString(),
+                    value:
+                        (summary.duplicatesSkipped + summary.alreadyInLedger)
+                            .toString(),
                     color: cs.onSurfaceVariant,
                     icon: Icons.content_copy_outlined,
                     subtitle: 'already there',
@@ -99,10 +100,9 @@ class ImportSummaryScreen extends StatelessWidget {
                 'your transactions from another import, so '
                 '${summary.alreadyInLedger == 1 ? 'it was' : 'they were'} '
                 'not added twice.',
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: cs.onSurfaceVariant),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
               ),
             ],
 
@@ -169,52 +169,61 @@ class _StatCard extends StatelessWidget {
         color: cs.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(12),
       ),
-      child: wide
-          ? Row(
-              children: [
-                Icon(icon, color: color, size: 24),
-                const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(value,
-                        style: Theme.of(context)
-                            .textTheme
-                            .headlineSmall
-                            ?.copyWith(color: color, fontWeight: FontWeight.bold)),
-                    Text(label,
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodySmall
-                            ?.copyWith(color: cs.onSurfaceVariant)),
-                  ],
-                ),
-              ],
-            )
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(icon, color: color, size: 24),
-                const SizedBox(height: 8),
-                Text(value,
-                    style: Theme.of(context)
-                        .textTheme
-                        .headlineSmall
-                        ?.copyWith(
-                            color: color, fontWeight: FontWeight.bold)),
-                Text(label,
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: cs.onSurfaceVariant)),
-                if (subtitle != null)
-                  Text(subtitle!,
-                      style: Theme.of(context)
-                          .textTheme
-                          .labelSmall
-                          ?.copyWith(color: cs.onSurfaceVariant)),
-              ],
-            ),
+      child:
+          wide
+              ? Row(
+                children: [
+                  Icon(icon, color: color, size: 24),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        value,
+                        style: Theme.of(
+                          context,
+                        ).textTheme.headlineSmall?.copyWith(
+                          color: color,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        label,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              )
+              : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(icon, color: color, size: 24),
+                  const SizedBox(height: 8),
+                  Text(
+                    value,
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      color: color,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    label,
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                  ),
+                  if (subtitle != null)
+                    Text(
+                      subtitle!,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
+                ],
+              ),
     );
   }
 }

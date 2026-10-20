@@ -31,26 +31,29 @@ class ElectrumService {
   // ── Settings ──────────────────────────────────────────────────────────────
 
   Future<void> loadSettings() async {
-    final hostRows = await (_db.select(_db.appSettings)
-          ..where((t) => t.key.equals(AppConstants.settingElectrumHost)))
-        .get();
+    final hostRows =
+        await (_db.select(_db.appSettings)
+          ..where((t) => t.key.equals(AppConstants.settingElectrumHost))).get();
     if (hostRows.isNotEmpty) _host = hostRows.first.value;
 
-    final portRows = await (_db.select(_db.appSettings)
-          ..where((t) => t.key.equals(AppConstants.settingElectrumPort)))
-        .get();
+    final portRows =
+        await (_db.select(_db.appSettings)
+          ..where((t) => t.key.equals(AppConstants.settingElectrumPort))).get();
     if (portRows.isNotEmpty) {
-      _port = int.tryParse(portRows.first.value) ?? AppConstants.defaultElectrumPort;
+      _port =
+          int.tryParse(portRows.first.value) ??
+          AppConstants.defaultElectrumPort;
     }
 
-    final sslRows = await (_db.select(_db.appSettings)
-          ..where((t) => t.key.equals(AppConstants.settingElectrumSsl)))
-        .get();
+    final sslRows =
+        await (_db.select(_db.appSettings)
+          ..where((t) => t.key.equals(AppConstants.settingElectrumSsl))).get();
     if (sslRows.isNotEmpty) _ssl = sslRows.first.value == 'true';
 
-    final pinRows = await (_db.select(_db.appSettings)
-          ..where((t) => t.key.equals(AppConstants.settingElectrumCertPin)))
-        .get();
+    final pinRows =
+        await (_db.select(_db.appSettings)..where(
+          (t) => t.key.equals(AppConstants.settingElectrumCertPin),
+        )).get();
     if (pinRows.isNotEmpty) _pinnedFingerprint = pinRows.first.value;
   }
 
@@ -75,9 +78,11 @@ class ElectrumService {
       AppConstants.settingElectrumCertPin: _pinnedFingerprint,
     };
     for (final e in entries.entries) {
-      await _db.into(_db.appSettings).insertOnConflictUpdate(
-        AppSettingsCompanion.insert(key: e.key, value: e.value),
-      );
+      await _db
+          .into(_db.appSettings)
+          .insertOnConflictUpdate(
+            AppSettingsCompanion.insert(key: e.key, value: e.value),
+          );
     }
   }
 
@@ -175,18 +180,21 @@ class ElectrumService {
     ElectrumSession session,
     String scripthash,
   ) async {
-    final result =
-        await session.call('blockchain.scripthash.get_history', [scripthash]);
+    final result = await session.call('blockchain.scripthash.get_history', [
+      scripthash,
+    ]);
     if (result == null) return [];
     return (result as List<dynamic>)
         .where((item) {
           final h = item['height'];
           return h is int && h > 0;
         })
-        .map((item) => (
-              txid: item['tx_hash'] as String,
-              height: item['height'] as int,
-            ))
+        .map(
+          (item) => (
+            txid: item['tx_hash'] as String,
+            height: item['height'] as int,
+          ),
+        )
         .toList();
   }
 
@@ -199,8 +207,10 @@ class ElectrumService {
     String txid,
   ) async {
     try {
-      final result =
-          await session.call('blockchain.transaction.get', [txid, true]);
+      final result = await session.call('blockchain.transaction.get', [
+        txid,
+        true,
+      ]);
       return result as Map<String, dynamic>?;
     } catch (_) {
       return null;
@@ -213,8 +223,7 @@ class ElectrumService {
   /// Returns null on any failure. Never throws.
   Future<int?> getBlockTimestamp(ElectrumSession session, int height) async {
     try {
-      final result =
-          await session.call('blockchain.block.header', [height]);
+      final result = await session.call('blockchain.block.header', [height]);
       if (result is! String || result.length < 160) return null;
       final bytes = _hexDecode(result);
       if (bytes.length < 72) return null;
@@ -245,11 +254,7 @@ class ElectrumSession {
         .cast<List<int>>()
         .transform(utf8.decoder)
         .transform(const LineSplitter())
-        .listen(
-          _handleLine,
-          onError: _handleError,
-          onDone: _handleDone,
-        );
+        .listen(_handleLine, onError: _handleError, onDone: _handleDone);
   }
 
   final Socket _socket;
@@ -307,7 +312,10 @@ class ElectrumSession {
       const Duration(seconds: 30),
       onTimeout: () {
         _pending.remove(id);
-        throw TimeoutException('$method timed out', const Duration(seconds: 30));
+        throw TimeoutException(
+          '$method timed out',
+          const Duration(seconds: 30),
+        );
       },
     );
   }

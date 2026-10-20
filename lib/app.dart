@@ -62,9 +62,10 @@ String? _appRedirect(BuildContext context, GoRouterState state) {
 final _router = GoRouter(
   initialLocation: '/dashboard',
   redirect: _appRedirect,
-  refreshListenable: Listenable.merge(
-    [app.aiEnabledNotifier, app.onboardingCompleteNotifier],
-  ),
+  refreshListenable: Listenable.merge([
+    app.aiEnabledNotifier,
+    app.onboardingCompleteNotifier,
+  ]),
   routes: [
     GoRoute(
       path: '/onboarding',
@@ -85,41 +86,49 @@ final _router = GoRouter(
     // front. The AI branch is always present; the nav bar hides it when no
     // provider can answer, and the redirect above moves off `/ai`.
     StatefulShellRoute.indexedStack(
-      builder: (ctx, state, navigationShell) =>
-          AppShell(navigationShell: navigationShell),
+      builder:
+          (ctx, state, navigationShell) =>
+              AppShell(navigationShell: navigationShell),
       branches: [
-        StatefulShellBranch(routes: [
-          GoRoute(
-            path: '/dashboard',
-            builder: (ctx, state) => const DashboardScreen(),
-          ),
-        ]),
-        StatefulShellBranch(routes: [
-          GoRoute(
-            path: '/transactions',
-            builder: (ctx, state) => const TransactionsScreen(),
-          ),
-        ]),
-        StatefulShellBranch(routes: [
-          GoRoute(
-            path: '/budgets',
-            builder: (ctx, state) => const BudgetsScreen(),
-          ),
-        ]),
-        StatefulShellBranch(routes: [
-          GoRoute(
-            path: '/stack',
-            builder: (ctx, state) => const StackScreen(),
-          ),
-        ]),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/dashboard',
+              builder: (ctx, state) => const DashboardScreen(),
+            ),
+          ],
+        ),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/transactions',
+              builder: (ctx, state) => const TransactionsScreen(),
+            ),
+          ],
+        ),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/budgets',
+              builder: (ctx, state) => const BudgetsScreen(),
+            ),
+          ],
+        ),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/stack',
+              builder: (ctx, state) => const StackScreen(),
+            ),
+          ],
+        ),
         // Last on purpose: it is the only tab that can be hidden, so keeping
         // it at the end means a branch index always equals its nav-bar index.
-        StatefulShellBranch(routes: [
-          GoRoute(
-            path: '/ai',
-            builder: (ctx, state) => const AiChatScreen(),
-          ),
-        ]),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(path: '/ai', builder: (ctx, state) => const AiChatScreen()),
+          ],
+        ),
       ],
     ),
     GoRoute(
@@ -200,20 +209,20 @@ class _AppShellState extends State<AppShell> {
     // Branch index equals destination index because the AI branch is last.
     // While it is hidden the redirect has already moved off it, so this only
     // guards the frame in between.
-    final selected = shell.currentIndex < destinations.length
-        ? shell.currentIndex
-        : 0;
+    final selected =
+        shell.currentIndex < destinations.length ? shell.currentIndex : 0;
 
     return Scaffold(
       body: shell,
       bottomNavigationBar: NavigationBar(
         selectedIndex: selected,
         destinations: destinations,
-        onDestinationSelected: (i) => shell.goBranch(
-          i,
-          // Tapping the tab you are already on returns it to its root.
-          initialLocation: i == shell.currentIndex,
-        ),
+        onDestinationSelected:
+            (i) => shell.goBranch(
+              i,
+              // Tapping the tab you are already on returns it to its root.
+              initialLocation: i == shell.currentIndex,
+            ),
       ),
     );
   }

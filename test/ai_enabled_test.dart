@@ -84,28 +84,33 @@ void main() {
     test('every provider is covered — no silent fall-through', () async {
       final ollama = await serviceWith(key: 'sk-test-123');
       for (final p in AiProvider.values) {
-        expect(() => ollama.isUsableWithoutDesktop(p), returnsNormally,
-            reason: p.key);
+        expect(
+          () => ollama.isUsableWithoutDesktop(p),
+          returnsNormally,
+          reason: p.key,
+        );
       }
     });
   });
 
-  test('switching provider and back does not lose a saved hosted key',
-      () async {
-    // The exact reported failure: pick Claude with a key, switch away, switch
-    // back. Settings recomputed the flag without the hosted term, so the tab
-    // disappeared and did not return.
-    final ollama = await serviceWith(key: 'sk-test-123');
+  test(
+    'switching provider and back does not lose a saved hosted key',
+    () async {
+      // The exact reported failure: pick Claude with a key, switch away, switch
+      // back. Settings recomputed the flag without the hosted term, so the tab
+      // disappeared and did not return.
+      final ollama = await serviceWith(key: 'sk-test-123');
 
-    await ollama.setActiveProvider(AiProvider.claude);
-    expect(ollama.isUsableWithoutDesktop(ollama.activeProvider), isTrue);
+      await ollama.setActiveProvider(AiProvider.claude);
+      expect(ollama.isUsableWithoutDesktop(ollama.activeProvider), isTrue);
 
-    await ollama.setActiveProvider(AiProvider.ollama);
-    expect(ollama.isUsableWithoutDesktop(ollama.activeProvider), isFalse);
+      await ollama.setActiveProvider(AiProvider.ollama);
+      expect(ollama.isUsableWithoutDesktop(ollama.activeProvider), isFalse);
 
-    await ollama.setActiveProvider(AiProvider.claude);
-    expect(ollama.isUsableWithoutDesktop(ollama.activeProvider), isTrue);
-  });
+      await ollama.setActiveProvider(AiProvider.claude);
+      expect(ollama.isUsableWithoutDesktop(ollama.activeProvider), isTrue);
+    },
+  );
 
   test('the startup seed agrees with the live rule', () async {
     // main.dart used to seed from `isDesktop || isConnected`, where an

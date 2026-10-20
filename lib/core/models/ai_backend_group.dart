@@ -44,12 +44,12 @@ class AiBackendCatalogue {
   /// the initial value while that check is in flight, so the picker never
   /// flashes a row it is about to remove.
   const AiBackendCatalogue.checking({AiProvider? keepSelected})
-      : this(
-          appleIntelligenceOffered: false,
-          geminiNanoOffered: false,
-          downloadableOffered: false,
-          keepSelected: keepSelected,
-        );
+    : this(
+        appleIntelligenceOffered: false,
+        geminiNanoOffered: false,
+        downloadableOffered: false,
+        keepSelected: keepSelected,
+      );
 
   /// Whether the platform reported Apple Intelligence as worth offering. Asked
   /// of the OS rather than inferred from a version number: an iPhone 15 Pro on
@@ -69,32 +69,32 @@ class AiBackendCatalogue {
   final AiProvider? keepSelected;
 
   bool _offered(AiProvider p) => switch (p) {
-        AiProvider.appleIntelligence => appleIntelligenceOffered,
-        AiProvider.geminiNano => geminiNanoOffered,
-        AiProvider.localModel => downloadableOffered,
-        // Everything else depends on something the user sets up — a server, a
-        // key — rather than on the hardware, so it is always offered.
-        _ => true,
-      };
+    AiProvider.appleIntelligence => appleIntelligenceOffered,
+    AiProvider.geminiNano => geminiNanoOffered,
+    AiProvider.localModel => downloadableOffered,
+    // Everything else depends on something the user sets up — a server, a
+    // key — rather than on the hardware, so it is always offered.
+    _ => true,
+  };
 
   List<AiProvider> providersIn(AiBackendGroup group) {
     final all = switch (group) {
       AiBackendGroup.onDevice => const [
-          AiProvider.appleIntelligence,
-          AiProvider.geminiNano,
-          AiProvider.localModel,
-        ],
+        AiProvider.appleIntelligence,
+        AiProvider.geminiNano,
+        AiProvider.localModel,
+      ],
       AiBackendGroup.ownServer => const [
-          AiProvider.ollama,
-          AiProvider.lmStudio,
-        ],
+        AiProvider.ollama,
+        AiProvider.lmStudio,
+      ],
       AiBackendGroup.hosted => const [
-          AiProvider.claude,
-          AiProvider.chatGpt,
-          AiProvider.gemini,
-          AiProvider.grok,
-          AiProvider.maple,
-        ],
+        AiProvider.claude,
+        AiProvider.chatGpt,
+        AiProvider.gemini,
+        AiProvider.grok,
+        AiProvider.maple,
+      ],
     };
     return all.where((p) => _offered(p) || p == keepSelected).toList();
   }
@@ -104,13 +104,13 @@ class AiBackendCatalogue {
   /// On-device first: where a device has a built-in model it needs no key, no
   /// URL and no download, and that should be the obvious choice rather than
   /// something to discover after configuring something harder.
-  List<AiBackendGroup> get nonEmptyGroups => AiBackendGroup.values
-      .where((g) => providersIn(g).isNotEmpty)
-      .toList();
+  List<AiBackendGroup> get nonEmptyGroups =>
+      AiBackendGroup.values.where((g) => providersIn(g).isNotEmpty).toList();
 
   /// Every offered backend, flattened.
-  List<AiProvider> get all =>
-      [for (final g in AiBackendGroup.values) ...providersIn(g)];
+  List<AiProvider> get all => [
+    for (final g in AiBackendGroup.values) ...providersIn(g),
+  ];
 
   /// The backend to preselect for someone who has chosen nothing.
   ///
@@ -125,8 +125,7 @@ class AiBackendCatalogue {
 
   /// True when the device can answer questions with nothing installed and no
   /// key — the case onboarding leads with.
-  bool get hasZeroConfigOption =>
-      appleIntelligenceOffered || geminiNanoOffered;
+  bool get hasZeroConfigOption => appleIntelligenceOffered || geminiNanoOffered;
 
   /// Whether the downloadable engine runs on this platform.
   ///

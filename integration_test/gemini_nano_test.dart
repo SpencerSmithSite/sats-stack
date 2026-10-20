@@ -30,24 +30,30 @@ void main() {
       expect(
         report.state,
         isNot(GeminiNanoState.unsupportedPlatform),
-        reason: 'The bridge is not registered. Check that '
+        reason:
+            'The bridge is not registered. Check that '
             'GeminiNanoBridge.register runs in MainActivity and that the '
             'channel names match the Dart side.',
       );
       expect(report.detail, isNotEmpty);
     });
 
-    test('an unsupported device reports a reason rather than crashing',
-        () async {
-      final report = await GeminiNanoBackend.availability(refresh: true);
+    test(
+      'an unsupported device reports a reason rather than crashing',
+      () async {
+        final report = await GeminiNanoBackend.availability(refresh: true);
 
-      // ML Kit throws outright on a device with no AICore, or with an unlocked
-      // bootloader. The bridge catches that and turns it into a state; if the
-      // catch were missing this would surface as a PlatformException.
-      expect(GeminiNanoState.values, contains(report.state));
-      expect(report.state, isNot(GeminiNanoState.unknown),
-          reason: 'the bridge returned a reason string Dart does not map');
-    });
+        // ML Kit throws outright on a device with no AICore, or with an unlocked
+        // bootloader. The bridge catches that and turns it into a state; if the
+        // catch were missing this would surface as a PlatformException.
+        expect(GeminiNanoState.values, contains(report.state));
+        expect(
+          report.state,
+          isNot(GeminiNanoState.unknown),
+          reason: 'the bridge returned a reason string Dart does not map',
+        );
+      },
+    );
 
     test('generates a real answer when Nano is actually available', () async {
       final report = await GeminiNanoBackend.availability(refresh: true);
@@ -61,7 +67,8 @@ void main() {
       await for (final token in backend.chat([
         {
           'role': 'system',
-          'content': 'You are a personal finance analyst. Answer in one short '
+          'content':
+              'You are a personal finance analyst. Answer in one short '
               'sentence.',
         },
         {'role': 'user', 'content': 'Is spending \$412 on dining a lot?'},
@@ -74,8 +81,11 @@ void main() {
       // ML Kit emits deltas, not cumulative text — the opposite of Apple's
       // framework. If that ever changed, chunk 2 would contain chunk 1.
       if (chunks.length > 1 && chunks.first.length > 3) {
-        expect(chunks[1].contains(chunks.first), isFalse,
-            reason: 'chunks look cumulative; the bridge assumes deltas');
+        expect(
+          chunks[1].contains(chunks.first),
+          isFalse,
+          reason: 'chunks look cumulative; the bridge assumes deltas',
+        );
       }
     }, timeout: const Timeout(Duration(minutes: 3)));
   });

@@ -40,7 +40,10 @@ class StackGoalCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final fiatFmt = NumberFormat.currency(symbol: CurrencyUtils.symbolFor(currency), decimalDigits: 0);
+    final fiatFmt = NumberFormat.currency(
+      symbol: CurrencyUtils.symbolFor(currency),
+      decimalDigits: 0,
+    );
 
     if (goalSats == null || goalSats! <= 0) {
       return Padding(
@@ -59,14 +62,24 @@ class StackGoalCard extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Icon(Icons.flag_outlined, size: 18, color: context.textSecondary),
+                Icon(
+                  Icons.flag_outlined,
+                  size: 18,
+                  color: context.textSecondary,
+                ),
                 const SizedBox(width: 10),
                 Text(
                   'Set a stacking goal',
-                  style: theme.textTheme.bodyMedium?.copyWith(color: context.textSecondary),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: context.textSecondary,
+                  ),
                 ),
                 const Spacer(),
-                Icon(Icons.chevron_right, size: 18, color: context.textSecondary),
+                Icon(
+                  Icons.chevron_right,
+                  size: 18,
+                  color: context.textSecondary,
+                ),
               ],
             ),
           ),
@@ -76,14 +89,16 @@ class StackGoalCard extends StatelessWidget {
 
     final progress = (totalSats / goalSats!).clamp(0.0, 1.0);
     final remaining = goalSats! - totalSats;
-    final progressColor = progress >= 1.0
-        ? AppColors.success
-        : progress > 0.7
+    final progressColor =
+        progress >= 1.0
+            ? AppColors.success
+            : progress > 0.7
             ? AppColors.bitcoinOrange
             : AppColors.success;
-    final remainingFiat = btcPrice != null && btcPrice! > 0 && remaining > 0
-        ? fiatFmt.format(remaining / 1e8 * btcPrice!)
-        : null;
+    final remainingFiat =
+        btcPrice != null && btcPrice! > 0 && remaining > 0
+            ? fiatFmt.format(remaining / 1e8 * btcPrice!)
+            : null;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -115,10 +130,16 @@ class StackGoalCard extends StatelessWidget {
                   const Spacer(),
                   Text(
                     '${_formatSats(totalSats)} / ${_formatSats(goalSats!)} sats',
-                    style: AppTextStyles.monoSmall.copyWith(color: context.textSecondary),
+                    style: AppTextStyles.monoSmall.copyWith(
+                      color: context.textSecondary,
+                    ),
                   ),
                   const SizedBox(width: 8),
-                  Icon(Icons.edit_outlined, size: 14, color: context.textSecondary),
+                  Icon(
+                    Icons.edit_outlined,
+                    size: 14,
+                    color: context.textSecondary,
+                  ),
                 ],
               ),
               const SizedBox(height: 10),
@@ -135,14 +156,20 @@ class StackGoalCard extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text(
                   '${_formatSats(remaining)} sats to go ≈ $remainingFiat',
-                  style: theme.textTheme.bodySmall?.copyWith(color: context.textSecondary),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: context.textSecondary,
+                  ),
                 ),
                 const SizedBox(height: 6),
                 // ── Projection row ──────────────────────────────────────
                 Row(
                   children: [
                     if (avgMonthlySats > 0) ...[
-                      Icon(Icons.trending_up, size: 13, color: context.textSecondary),
+                      Icon(
+                        Icons.trending_up,
+                        size: 13,
+                        color: context.textSecondary,
+                      ),
                       const SizedBox(width: 4),
                       Text(
                         '+${_formatSats(avgMonthlySats)} sats/mo avg',
@@ -154,7 +181,11 @@ class StackGoalCard extends StatelessWidget {
                       const SizedBox(width: 12),
                     ],
                     if (_projectedDate(remaining) case final date?) ...[
-                      Icon(Icons.flag_outlined, size: 13, color: AppColors.bitcoinOrange),
+                      Icon(
+                        Icons.flag_outlined,
+                        size: 13,
+                        color: AppColors.bitcoinOrange,
+                      ),
                       const SizedBox(width: 4),
                       Text(
                         'Goal by ${DateFormat('MMM yyyy').format(date)}',
@@ -171,11 +202,17 @@ class StackGoalCard extends StatelessWidget {
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    Icon(Icons.check_circle_outline, size: 14, color: AppColors.success),
+                    Icon(
+                      Icons.check_circle_outline,
+                      size: 14,
+                      color: AppColors.success,
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       'Goal reached!',
-                      style: theme.textTheme.bodySmall?.copyWith(color: AppColors.success),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: AppColors.success,
+                      ),
                     ),
                   ],
                 ),
@@ -191,11 +228,7 @@ class StackGoalCard extends StatelessWidget {
 }
 
 class SetGoalSheet extends StatefulWidget {
-  const SetGoalSheet({
-    super.key,
-    required this.current,
-    required this.onSave,
-  });
+  const SetGoalSheet({super.key, required this.current, required this.onSave});
   final int? current;
   final ValueChanged<int> onSave;
 
@@ -241,7 +274,8 @@ class _SetGoalSheetState extends State<SetGoalSheet> {
               children: [
                 Center(
                   child: Container(
-                    width: 36, height: 4,
+                    width: 36,
+                    height: 4,
                     margin: const EdgeInsets.only(bottom: 16),
                     decoration: BoxDecoration(
                       color: theme.colorScheme.outline,
@@ -251,7 +285,9 @@ class _SetGoalSheetState extends State<SetGoalSheet> {
                 ),
                 Text(
                   'Set Stack Goal',
-                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 const SizedBox(height: 20),
                 TextField(
@@ -259,7 +295,9 @@ class _SetGoalSheetState extends State<SetGoalSheet> {
                   keyboardType: TextInputType.number,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                   autofocus: true,
-                  style: AppTextStyles.monoLarge.copyWith(color: theme.colorScheme.onSurface),
+                  style: AppTextStyles.monoLarge.copyWith(
+                    color: theme.colorScheme.onSurface,
+                  ),
                   decoration: const InputDecoration(
                     labelText: 'Goal (sats)',
                     hintText: '1,000,000',
@@ -288,7 +326,9 @@ class _SetGoalSheetState extends State<SetGoalSheet> {
                       Navigator.of(context).pop();
                     }
                   },
-                  style: FilledButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 48),
+                  ),
                   child: const Text('Save Goal'),
                 ),
               ],

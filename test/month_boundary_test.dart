@@ -17,8 +17,10 @@ void main() {
       // through the 999 ms gap between one month and the next.
       expect(march.contains(DateTime(2025, 3, 31, 23, 59, 59, 400)), isTrue);
       expect(march.contains(DateTime(2025, 3, 31, 23, 59, 59, 999)), isTrue);
-      expect(march.contains(DateTime(2025, 3, 31, 23, 59, 59, 999, 999)),
-          isTrue);
+      expect(
+        march.contains(DateTime(2025, 3, 31, 23, 59, 59, 999, 999)),
+        isTrue,
+      );
     });
 
     test('midnight on the 1st belongs to the new month, not the old', () {
@@ -41,8 +43,8 @@ void main() {
       var instant = DateTime(2024, 2, 29, 23, 59, 58);
       final stop = DateTime(2024, 3, 1, 0, 0, 2);
       while (instant.isBefore(stop)) {
-        final inOne = (feb.contains(instant) ? 1 : 0) +
-            (mar.contains(instant) ? 1 : 0);
+        final inOne =
+            (feb.contains(instant) ? 1 : 0) + (mar.contains(instant) ? 1 : 0);
         expect(inOne, 1, reason: 'no month claims $instant');
         instant = instant.add(const Duration(milliseconds: 1));
       }
@@ -79,22 +81,26 @@ void main() {
       dashboard = DashboardService(db);
       budgets = BudgetService(db);
       walletId = (await db.select(db.wallets).getSingle()).id;
-      foodId = (await (db.select(db.categories)
-                ..where((c) => c.name.equals('Food & Dining')))
-              .getSingle())
-          .id;
+      foodId =
+          (await (db.select(db.categories)
+                ..where((c) => c.name.equals('Food & Dining'))).getSingle())
+              .id;
 
-      await db.into(db.transactions).insert(TransactionsCompanion.insert(
-            walletId: walletId,
-            date: lastInstant,
-            description: 'Late dinner',
-            amountSats: -600000,
-            amountFiat: -47,
-            fiatCurrency: 'USD',
-            category: const Value('Food & Dining'),
-            source: 'manual',
-            dedupHash: 'late-dinner',
-          ));
+      await db
+          .into(db.transactions)
+          .insert(
+            TransactionsCompanion.insert(
+              walletId: walletId,
+              date: lastInstant,
+              description: 'Late dinner',
+              amountSats: -600000,
+              amountFiat: -47,
+              fiatCurrency: 'USD',
+              category: const Value('Food & Dining'),
+              source: 'manual',
+              dedupHash: 'late-dinner',
+            ),
+          );
     });
 
     tearDown(() => db.close());
@@ -132,8 +138,7 @@ void main() {
     });
 
     test('the per-wallet breakdown counts it', () async {
-      final summaries =
-          await dashboard.watchPerWallet(DateTime(2025, 3)).first;
+      final summaries = await dashboard.watchPerWallet(DateTime(2025, 3)).first;
       expect(summaries.single.monthSpendFiat, 47);
     });
   });

@@ -23,7 +23,8 @@ class BitcoinServerPage extends StatelessWidget {
         // Keeps the Spacers meaningful when there is room, so the page looks
         // the same as it always did on a normal screen.
         constraints: BoxConstraints(
-          minHeight: MediaQuery.sizeOf(context).height -
+          minHeight:
+              MediaQuery.sizeOf(context).height -
               MediaQuery.viewInsetsOf(context).bottom -
               200,
         ),
@@ -40,8 +41,11 @@ class BitcoinServerPage extends StatelessWidget {
                     color: AppColors.bitcoinOrange.withAlpha(26),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Icons.dns_outlined,
-                      color: AppColors.bitcoinOrange, size: 22),
+                  child: const Icon(
+                    Icons.dns_outlined,
+                    color: AppColors.bitcoinOrange,
+                    size: 22,
+                  ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -83,35 +87,38 @@ class BitcoinServerPage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 20),
-            Builder(builder: (context) {
-              const accent = Color(0xFF6AC86A);
-              final isDark = Theme.of(context).brightness == Brightness.dark;
-              return Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: accent.withValues(alpha: isDark ? 0.12 : 0.08),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                      color: accent.withValues(alpha: isDark ? 0.35 : 0.20)),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(Icons.info_outline, size: 16, color: accent),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'You can change this later in Settings → Servers.',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: context.legibleAccent(accent),
-                          height: 1.5,
+            Builder(
+              builder: (context) {
+                const accent = Color(0xFF6AC86A);
+                final isDark = Theme.of(context).brightness == Brightness.dark;
+                return Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: isDark ? 0.12 : 0.08),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: accent.withValues(alpha: isDark ? 0.35 : 0.20),
+                    ),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.info_outline, size: 16, color: accent),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'You can change this later in Settings → Servers.',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: context.legibleAccent(accent),
+                            height: 1.5,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              );
-            }),
+                    ],
+                  ),
+                );
+              },
+            ),
             const Spacer(flex: 2),
           ],
         ),

@@ -45,9 +45,9 @@ late ValueNotifier<double> inflationRateNotifier;
 
 /// Today's display currency and BTC prices, for converting stored amounts.
 FxRates _currentRates() => FxRates(
-      display: currencyNotifier.value,
-      btcPrices: btcPriceService.allPrices,
-    );
+  display: currencyNotifier.value,
+  btcPrices: btcPriceService.allPrices,
+);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -100,17 +100,18 @@ void main() async {
   // btcPriceService.loadSettings() is called inside initialize() below.
 
   // Onboarding state, for the router's redirect.
-  final onboardingRows = await (db.select(db.appSettings)
-        ..where((t) => t.key.equals(AppConstants.settingOnboardingComplete)))
-      .get();
+  final onboardingRows =
+      await (db.select(db.appSettings)..where(
+        (t) => t.key.equals(AppConstants.settingOnboardingComplete),
+      )).get();
   onboardingCompleteNotifier = ValueNotifier(
     onboardingRows.isNotEmpty && onboardingRows.first.value == 'true',
   );
 
   // Load persisted theme mode
-  final themeRows = await (db.select(db.appSettings)
-        ..where((t) => t.key.equals(AppConstants.settingThemeMode)))
-      .get();
+  final themeRows =
+      await (db.select(db.appSettings)
+        ..where((t) => t.key.equals(AppConstants.settingThemeMode))).get();
   final savedTheme = themeRows.isNotEmpty ? themeRows.first.value : null;
   final initialTheme = switch (savedTheme) {
     'light' => ThemeMode.light,
@@ -120,28 +121,30 @@ void main() async {
   themeModeNotifier = ValueNotifier(initialTheme);
 
   // Load persisted currency
-  final currencyRows = await (db.select(db.appSettings)
-        ..where((t) => t.key.equals(AppConstants.settingCurrency)))
-      .get();
+  final currencyRows =
+      await (db.select(db.appSettings)
+        ..where((t) => t.key.equals(AppConstants.settingCurrency))).get();
   final savedCurrency =
       currencyRows.isNotEmpty ? currencyRows.first.value : 'USD';
   currencyNotifier = ValueNotifier(savedCurrency);
 
   // Load persisted show-BTC-price toggle (default: on)
-  final showPriceRows = await (db.select(db.appSettings)
-        ..where((t) => t.key.equals(AppConstants.settingShowBtcPrice)))
-      .get();
-  final showPrice = showPriceRows.isEmpty || showPriceRows.first.value != 'false';
+  final showPriceRows =
+      await (db.select(db.appSettings)
+        ..where((t) => t.key.equals(AppConstants.settingShowBtcPrice))).get();
+  final showPrice =
+      showPriceRows.isEmpty || showPriceRows.first.value != 'false';
   showBtcPriceNotifier = ValueNotifier(showPrice);
 
   // Load persisted inflation rate (default: 3.5%)
-  final inflationRows = await (db.select(db.appSettings)
-        ..where((t) => t.key.equals(AppConstants.settingInflationRate)))
-      .get();
-  final savedInflation = inflationRows.isNotEmpty
-      ? double.tryParse(inflationRows.first.value) ??
-          AppConstants.defaultInflationRate
-      : AppConstants.defaultInflationRate;
+  final inflationRows =
+      await (db.select(db.appSettings)
+        ..where((t) => t.key.equals(AppConstants.settingInflationRate))).get();
+  final savedInflation =
+      inflationRows.isNotEmpty
+          ? double.tryParse(inflationRows.first.value) ??
+              AppConstants.defaultInflationRate
+          : AppConstants.defaultInflationRate;
   inflationRateNotifier = ValueNotifier(savedInflation);
 
   // Initialise local notifications (owned by NotificationService).
@@ -155,15 +158,19 @@ void main() async {
   await btcPriceService.initialize();
 
   // Check budgets at startup and on every subsequent transaction change.
-  budgetService.checkAndNotify(
-    notifications: notificationService,
-    currency: currencyNotifier.value,
-  ).ignore();
+  budgetService
+      .checkAndNotify(
+        notifications: notificationService,
+        currency: currencyNotifier.value,
+      )
+      .ignore();
   transactionService.watchAll().listen((_) {
-    budgetService.checkAndNotify(
-      notifications: notificationService,
-      currency: currencyNotifier.value,
-    ).ignore();
+    budgetService
+        .checkAndNotify(
+          notifications: notificationService,
+          currency: currencyNotifier.value,
+        )
+        .ignore();
   });
 
   runApp(const _AppWithSplash());
