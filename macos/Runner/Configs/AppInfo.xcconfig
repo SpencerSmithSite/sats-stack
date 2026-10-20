@@ -11,8 +11,12 @@
 // identifier below, not this.
 PRODUCT_NAME = Sats Stack
 
-// The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.satsstack.satsStack
+// The application's bundle identifier — the same as iOS's. It was the
+// template's `com.satsstack.satsStack` until 2026-10-20. Changing it moves the
+// app's sandbox container, so a build with the old id keeps its data under
+// ~/Library/Containers/com.satsstack.satsStack; see README → "Moving macOS
+// data from before the bundle id change".
+PRODUCT_BUNDLE_IDENTIFIER = app.satsstack.SatsStack
 
 // The copyright displayed in application information
 PRODUCT_COPYRIGHT = Copyright © 2026 The Sats Stack Authors. Licensed under Apache-2.0.

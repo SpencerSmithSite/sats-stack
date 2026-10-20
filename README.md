@@ -132,6 +132,30 @@ The minimum is iOS 15, set in `ios/Podfile` and the Xcode project — the
 lowest the current Xcode supports. `pod install` needs a UTF-8 locale
 (`LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8`).
 
+### Moving macOS data from before the bundle id change
+
+On 2026-10-20 the macOS bundle id changed from the template's
+`com.satsstack.satsStack` to `app.satsstack.SatsStack`, matching iOS. The app
+is sandboxed, so a build with the new id opens a new, empty container: your
+existing data is still there, under the old id, untouched. To bring it across:
+
+1. In a build from **before** the change, open Settings → Data → **Export
+   database** and save the file somewhere you can find.
+2. Open the new build. It starts at onboarding — skip through it.
+3. Settings → Data → **Import database**, choose the export, then quit and
+   reopen.
+4. Re-enter any hosted-AI API keys in Settings → Servers. They are kept in the
+   keychain against the app's identity, so they do not come across.
+
+If you no longer have an old build, quit the app and copy the file by hand:
+
+```bash
+cp ~/Library/Containers/com.satsstack.satsStack/Data/Documents/sats_stack_db.sqlite ~/Library/Containers/app.satsstack.SatsStack/Data/Documents/
+```
+
+Run the new build once first so its container exists, and quit it before
+copying.
+
 ## Project Structure
 
 ```
