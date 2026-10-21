@@ -16,6 +16,7 @@ import 'package:sats_stack/core/models/ai_provider.dart';
 import 'package:sats_stack/core/services/import_service.dart';
 import 'package:sats_stack/core/services/ollama_service.dart';
 import 'package:sats_stack/core/services/secure_key_store.dart';
+import 'package:sats_stack/shared/constants/app_constants.dart';
 
 class _NoKeyStore extends SecureKeyStore {
   const _NoKeyStore();
@@ -168,4 +169,52 @@ void main() {
       expect(result.errorMessage, contains('cannot read images'));
     },
   );
+
+  group('consent for a server the user chose is for that server', () {
+    late OllamaService real;
+    late ImportService service;
+
+    setUp(() async {
+      real = OllamaService(db, keyStore: const _NoKeyStore());
+      service = ImportService(db, real);
+      await real.setActiveProvider(AiProvider.ollama);
+    });
+
+    test('a yes for one host does not carry over to another', () async {
+      await real.saveSettings(url: 'https://ollama.example.com:11434');
+      expect(real.sendsDataOffDevice, isTrue);
+      await service.setOffDeviceImportAllowed(true);
+      expect(await service.offDeviceImportAllowed(), isTrue);
+
+      // Consent was stored per provider, so it survived this.
+      await real.saveSettings(url: 'https://someone-else.example.net');
+      expect(await service.offDeviceImportAllowed(), isFalse);
+    });
+
+    test('a consent stored before it named a server is asked again', () async {
+      await real.saveSettings(url: 'https://ollama.example.com:11434');
+      await db
+          .into(db.appSettings)
+          .insertOnConflictUpdate(
+            AppSettingsCompanion.insert(
+              key: AppConstants.aiImportConsentKey(AiProvider.ollama.key),
+              value: 'true',
+            ),
+          );
+      expect(await service.offDeviceImportAllowed(), isFalse);
+    });
+
+    test('...but still stands for a hosted provider', () async {
+      await real.setActiveProvider(AiProvider.claude);
+      await db
+          .into(db.appSettings)
+          .insertOnConflictUpdate(
+            AppSettingsCompanion.insert(
+              key: AppConstants.aiImportConsentKey(AiProvider.claude.key),
+              value: 'true',
+            ),
+          );
+      expect(await service.offDeviceImportAllowed(), isTrue);
+    });
+  });
 }

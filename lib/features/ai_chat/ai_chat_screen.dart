@@ -5,11 +5,13 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 
 import '../../core/models/ai_provider.dart';
+import '../../core/services/ollama_service.dart';
 import '../../main.dart' as app;
 import '../../shared/constants/app_constants.dart';
 import '../../shared/theme/app_colors.dart';
 import '../../shared/theme/app_text_styles.dart';
 import '../../shared/utils/platform_utils.dart';
+import '../../shared/widgets/ai_privacy_disclosure.dart';
 import '../../shared/widgets/tappable.dart';
 
 // ── Message model ─────────────────────────────────────────────────────────────
@@ -103,7 +105,11 @@ class _AiChatScreenState extends State<AiChatScreen> {
   Future<void> _init() async {
     _loadedFingerprint = app.ollamaService.configFingerprint;
     if (mounted) setState(() => _checking = true);
-    await app.ollamaService.loadSettings();
+    // No loadSettings() here. The service's in-memory state is the current
+    // configuration — every save updates it and bumps configChanges, which is
+    // what brings this screen back — and re-reading the table threw away an
+    // API key the keychain had refused, which lives only in memory for the
+    // session.
     final available = await app.ollamaService.isAvailable();
     if (!mounted) return;
 
@@ -267,9 +273,8 @@ class _AiChatScreenState extends State<AiChatScreen> {
       AiProvider.lmStudio => app.ollamaService.lmStudioBaseUrl,
       AiProvider.maple => app.ollamaService.mapleBaseUrl,
       // On-device backends have no server, and a hosted service has one fixed
-      // endpoint the user must not be invited to edit. The sheet hides its URL
-      // field when this is empty rather than showing a box that would be
-      // ignored — or, worse, one they could mistype and send their finances to.
+      // endpoint the user must not be invited to edit. The sheet shows a URL
+      // field only for a provider with a server of the user's choosing.
       AiProvider.appleIntelligence ||
       AiProvider.geminiNano ||
       AiProvider.claude ||
@@ -992,6 +997,11 @@ class _AiSettingsSheetState extends State<_AiSettingsSheet> {
 
   String _providerUrlHint(AiProvider p) => p.defaultUrl ?? '';
 
+  /// Ollama, LM Studio and Maple: the providers with a server to point at.
+  /// The sheet used to show a URL field whatever the provider, so Apple
+  /// Intelligence offered an "Apple Intelligence URL" that did nothing.
+  bool get _hasServer => widget.provider.defaultUrl != null;
+
   Future<void> _testAndSave() async {
     setState(() {
       _testing = true;
@@ -1000,13 +1010,19 @@ class _AiSettingsSheetState extends State<_AiSettingsSheet> {
     await widget.onSave(_urlCtrl.text.trim(), _selectedModel);
     await widget.onRefresh();
     final ok = await app.ollamaService.isAvailable();
+    // Recorded, as Settings' own test does: on a phone the AI tab is shown
+    // only for a connected server, and a test that passed here used not to
+    // count.
+    await app.ollamaService.setConnected(ok);
     if (mounted) {
       setState(() {
         _testing = false;
         _testResult =
             ok
                 ? 'Connected ✓'
-                : 'Cannot reach ${_providerLabel(widget.provider)} at that URL';
+                : _hasServer
+                ? 'Cannot reach ${_providerLabel(widget.provider)} at that URL'
+                : '${_providerLabel(widget.provider)} is not available';
       });
     }
   }
@@ -1048,18 +1064,55 @@ class _AiSettingsSheetState extends State<_AiSettingsSheet> {
                   ),
                 ),
                 const SizedBox(height: 20),
-                TextField(
-                  controller: _urlCtrl,
-                  autocorrect: false,
-                  decoration: InputDecoration(
-                    labelText: '${_providerLabel(widget.provider)} URL',
-                    hintText: _providerUrlHint(widget.provider),
+                if (_hasServer) ...[
+                  TextField(
+                    controller: _urlCtrl,
+                    autocorrect: false,
+                    keyboardType: TextInputType.url,
+                    decoration: InputDecoration(
+                      labelText: '${_providerLabel(widget.provider)} URL',
+                      hintText: _providerUrlHint(widget.provider),
+                    ),
+                    style: AppTextStyles.monoSmall.copyWith(
+                      color: theme.colorScheme.onSurface,
+                    ),
                   ),
-                  style: AppTextStyles.monoSmall.copyWith(
-                    color: theme.colorScheme.onSurface,
+                  // Where this URL would send the user's figures, as they
+                  // type it — the same rule as Settings and onboarding.
+                  ValueListenableBuilder<TextEditingValue>(
+                    valueListenable: _urlCtrl,
+                    builder: (context, value, _) {
+                      final recipient = OllamaService.recipientFor(
+                        widget.provider,
+                        value.text,
+                      );
+                      if (recipient == null) return const SizedBox.shrink();
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: AiPrivacyDisclosure(
+                          provider: widget.provider,
+                          recipient: recipient,
+                          compact: true,
+                        ),
+                      );
+                    },
                   ),
-                ),
-                const SizedBox(height: 16),
+                  const SizedBox(height: 16),
+                ] else if (widget.models.isEmpty) ...[
+                  Text(
+                    widget.provider.isOnDevice
+                        ? '${_providerLabel(widget.provider)} runs on this '
+                            'device: there is nothing to configure. Choose a '
+                            'different provider in Settings → Servers.'
+                        : 'Change the API key or provider in Settings → '
+                            'Servers.',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      height: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
                 if (widget.models.isNotEmpty) ...[
                   DropdownButtonFormField<String>(
                     initialValue:
@@ -1103,7 +1156,9 @@ class _AiSettingsSheetState extends State<_AiSettingsSheet> {
                               color: Colors.white,
                             ),
                           )
-                          : const Text('Save & Test Connection'),
+                          : Text(
+                            _hasServer ? 'Save & Test Connection' : 'Check',
+                          ),
                 ),
               ],
             ),
