@@ -13,9 +13,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 String _scriptToElectrumScripthash(List<int> script) {
   final sha = sha256.convert(script).bytes;
-  return sha.reversed
-      .map((b) => b.toRadixString(16).padLeft(2, '0'))
-      .join();
+  return sha.reversed.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
 }
 
 List<int> _hexToBytes(String hex) {
@@ -44,7 +42,9 @@ void main() {
       ];
       expect(
         _scriptToElectrumScripthash(script),
-        equals('8b01df4e368ea28f8dc0423bcf7a4923e3a12d307c875e47a0cfbf90b5c39161'),
+        equals(
+          '8b01df4e368ea28f8dc0423bcf7a4923e3a12d307c875e47a0cfbf90b5c39161',
+        ),
       );
     });
 
@@ -71,7 +71,9 @@ void main() {
   group('scriptPubKey hex parsing', () {
     test('P2PKH script recognised and hash160 extracted correctly', () {
       // 1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa — genesis coinbase output
-      final b = _hexToBytes('76a91462e907b15cbf27d5425399ebf6f0fb50ebb88f1888ac');
+      final b = _hexToBytes(
+        '76a91462e907b15cbf27d5425399ebf6f0fb50ebb88f1888ac',
+      );
       expect(b.length, equals(25));
       expect(b[0], equals(0x76)); // OP_DUP
       expect(b[1], equals(0xa9)); // OP_HASH160
@@ -79,20 +81,29 @@ void main() {
       expect(b[23], equals(0x88)); // OP_EQUALVERIFY
       expect(b[24], equals(0xac)); // OP_CHECKSIG
       // Verify the hash160 encodes to the correct address via bs58check
-      final addr = bs58check.encode(Uint8List.fromList([0x00, ...b.sublist(3, 23)]));
+      final addr = bs58check.encode(
+        Uint8List.fromList([0x00, ...b.sublist(3, 23)]),
+      );
       expect(addr, equals('1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa'));
     });
 
-    test('P2WPKH script recognised and witness program extracted correctly', () {
-      // bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4 (BIP173 test vector)
-      // witness program = 751e76e8199196f454f082d11b9cf43e1f1e4c3f
-      final b = _hexToBytes('0014751e76e8199196f454f082d11b9cf43e1f1e4c3f');
-      expect(b.length, equals(22));
-      expect(b[0], equals(0x00)); // OP_0
-      expect(b[1], equals(0x14)); // PUSH20
-      final program = b.sublist(2, 22).map((x) => x.toRadixString(16).padLeft(2, '0')).join();
-      expect(program, equals('751e76e8199196f454f082d11b9cf43e1f1e4c3f'));
-    });
+    test(
+      'P2WPKH script recognised and witness program extracted correctly',
+      () {
+        // bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4 (BIP173 test vector)
+        // witness program = 751e76e8199196f454f082d11b9cf43e1f1e4c3f
+        final b = _hexToBytes('0014751e76e8199196f454f082d11b9cf43e1f1e4c3f');
+        expect(b.length, equals(22));
+        expect(b[0], equals(0x00)); // OP_0
+        expect(b[1], equals(0x14)); // PUSH20
+        final program =
+            b
+                .sublist(2, 22)
+                .map((x) => x.toRadixString(16).padLeft(2, '0'))
+                .join();
+        expect(program, equals('751e76e8199196f454f082d11b9cf43e1f1e4c3f'));
+      },
+    );
 
     test('P2SH script recognised and hash160 extracted correctly', () {
       // 3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy
@@ -101,14 +112,17 @@ void main() {
       expect(b[0], equals(0xa9)); // OP_HASH160
       expect(b[1], equals(0x14)); // PUSH20
       expect(b[22], equals(0x87)); // OP_EQUAL
-      final addr = bs58check.encode(Uint8List.fromList([0x05, ...b.sublist(2, 22)]));
+      final addr = bs58check.encode(
+        Uint8List.fromList([0x05, ...b.sublist(2, 22)]),
+      );
       expect(addr, equals('3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy'));
     });
 
     test('_hexToBytes round-trips correctly for all byte values', () {
       // Verify every byte 0x00-0xFF decodes correctly
       final allBytes = List.generate(256, (i) => i);
-      final hex = allBytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+      final hex =
+          allBytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
       expect(_hexToBytes(hex), equals(allBytes));
     });
   });

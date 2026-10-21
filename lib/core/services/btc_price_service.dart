@@ -1,14 +1,19 @@
 import 'dart:convert';
+
 import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import '../database/database.dart';
+
 import '../../shared/constants/app_constants.dart';
+import '../database/database.dart';
 
 class BtcPriceService {
-  BtcPriceService(this._db);
+  /// [clock] is for tests that need "today" to be a known date.
+  BtcPriceService(this._db, {DateTime Function()? clock})
+    : _now = clock ?? DateTime.now;
 
   final AppDatabase _db;
+  final DateTime Function() _now;
 
   /// Reactive price notifier — always reflects the price in [_currency].
   final ValueNotifier<double?> priceNotifier = ValueNotifier(null);
@@ -33,13 +38,14 @@ class BtcPriceService {
 
   /// Loads Esplora URL, selected currency, and all persisted prices from DB.
   Future<void> loadSettings() async {
-    final rows = await (_db.select(_db.appSettings)
-          ..where((t) => t.key.isIn([
-                AppConstants.settingElectrumUrl,
-                AppConstants.settingCurrency,
-                AppConstants.settingBtcAllPrices,
-              ])))
-        .get();
+    final rows =
+        await (_db.select(_db.appSettings)..where(
+          (t) => t.key.isIn([
+            AppConstants.settingElectrumUrl,
+            AppConstants.settingCurrency,
+            AppConstants.settingBtcAllPrices,
+          ]),
+        )).get();
     for (final row in rows) {
       switch (row.key) {
         case AppConstants.settingElectrumUrl:
@@ -157,17 +163,18 @@ class BtcPriceService {
         // currency is actually in the response, since the column records no
         // currency of its own.
         if (price != null) {
-          await _db.into(_db.btcPriceCache).insert(
-                BtcPriceCacheCompanion.insert(
-                  priceUsd: price,
-                  fetchedAt: now,
-                ),
+          await _db
+              .into(_db.btcPriceCache)
+              .insert(
+                BtcPriceCacheCompanion.insert(priceUsd: price, fetchedAt: now),
               );
         }
 
         // Persist the full multi-currency map so future launches don't need
         // a network call just to display the price in a different currency.
-        await _db.into(_db.appSettings).insertOnConflictUpdate(
+        await _db
+            .into(_db.appSettings)
+            .insertOnConflictUpdate(
               AppSettingsCompanion.insert(
                 key: AppConstants.settingBtcAllPrices,
                 value: jsonEncode(_allPrices),
@@ -209,7 +216,8 @@ class BtcPriceService {
   /// success, so a failed fetch cannot destroy a good map.
   Future<Map<String, double>?> _fetchFromApi() async {
     final customBase = _esploraBaseUrl;
-    final hasCustomServer = customBase != null &&
+    final hasCustomServer =
+        customBase != null &&
         customBase.isNotEmpty &&
         !customBase.contains('mempool.space');
 
@@ -253,11 +261,11 @@ class BtcPriceService {
   Future<Map<String, double>?> _fetchMempoolPrices(String baseUrl) async {
     try {
       final uri = Uri.parse('$baseUrl/v1/prices');
-      final response =
-          await http.get(uri).timeout(const Duration(seconds: 8));
+      final response = await http.get(uri).timeout(const Duration(seconds: 8));
       if (response.statusCode == 200) {
         return currencyEntries(
-            jsonDecode(response.body) as Map<String, dynamic>);
+          jsonDecode(response.body) as Map<String, dynamic>,
+        );
       }
     } catch (_) {}
     return null;
@@ -270,8 +278,7 @@ class BtcPriceService {
       final uri = Uri.parse(
         'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=$vsParam',
       );
-      final response =
-          await http.get(uri).timeout(const Duration(seconds: 10));
+      final response = await http.get(uri).timeout(const Duration(seconds: 10));
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
         final btc = json['bitcoin'];
@@ -285,17 +292,32 @@ class BtcPriceService {
 
   /// Returns the BTC price for [date] in [currency].
   /// Serves from the local cache if available; otherwise fetches from the API
-  /// (mempool.space primary, CoinGecko fallback) and caches permanently.
+  /// (mempool.space primary, CoinGecko fallback) and caches it.
   /// Network calls are throttled to at most 1 per second.
+  ///
+  /// Only a settled day — see [_isSettled] — is cached permanently. Today's
+  /// figure is a moving intraday quote, and caching it the first time it was
+  /// asked for meant every transaction dated today kept that mid-day price
+  /// forever, including ones re-priced days later. An unsettled day is cached
+  /// in memory for [_unsettledTtl] instead, so one import still fetches it
+  /// once.
   Future<double?> getHistoricalPrice(DateTime date, String currency) async {
     final dateStr = _dateKey(date);
     final cur = currency.toUpperCase();
+    final settled = _isSettled(date);
 
-    // Cache hit
-    final cached = await (_db.select(_db.btcPriceHistory)
-          ..where((t) => t.date.equals(dateStr) & t.currency.equals(cur)))
-        .getSingleOrNull();
-    if (cached != null) return cached.price;
+    if (settled) {
+      final cached =
+          await (_db.select(_db.btcPriceHistory)..where(
+            (t) => t.date.equals(dateStr) & t.currency.equals(cur),
+          )).getSingleOrNull();
+      if (cached != null) return cached.price;
+    } else {
+      final recent = _unsettled[dateStr];
+      if (recent != null && _now().difference(recent.at) < _unsettledTtl) {
+        return recent.prices[cur];
+      }
+    }
 
     // Throttle network calls to 1 req/sec.
     final now = DateTime.now();
@@ -307,15 +329,32 @@ class BtcPriceService {
     }
     _lastHistoricalFetch = DateTime.now();
 
-    return _fetchAndCacheHistorical(date, cur);
+    return _fetchAndCacheHistorical(date, cur, settled: settled);
   }
+
+  /// Whether [date]'s price is final. A two-day margin rather than "before
+  /// today": the key is a local date while the price sources bucket by UTC,
+  /// so "yesterday" here can still be "today" there.
+  bool _isSettled(DateTime date) =>
+      _now().difference(DateTime(date.year, date.month, date.day)) >
+      const Duration(days: 2);
+
+  static const _unsettledTtl = Duration(minutes: 15);
+
+  /// Prices for days that have not settled, by date key, with when fetched.
+  final _unsettled = <String, ({Map<String, double> prices, DateTime at})>{};
 
   String _dateKey(DateTime date) =>
       '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 
-  Future<double?> _fetchAndCacheHistorical(DateTime date, String currency) async {
+  Future<double?> _fetchAndCacheHistorical(
+    DateTime date,
+    String currency, {
+    required bool settled,
+  }) async {
     final customBase = _esploraBaseUrl;
-    final hasCustomServer = customBase != null &&
+    final hasCustomServer =
+        customBase != null &&
         customBase.isNotEmpty &&
         !customBase.contains('mempool.space');
 
@@ -323,14 +362,26 @@ class BtcPriceService {
     if (hasCustomServer) {
       prices = await _fetchMempoolHistoricalPrices(customBase, date);
     } else {
-      prices = await _fetchMempoolHistoricalPrices(AppConstants.mempoolBaseUrl, date);
+      prices = await _fetchMempoolHistoricalPrices(
+        AppConstants.mempoolBaseUrl,
+        date,
+      );
       prices ??= await _fetchCoinGeckoHistoricalPrices(date);
     }
 
     if (prices == null || prices.isEmpty) return null;
 
-    // Persist all returned currencies for this date (permanent cache).
     final dateStr = _dateKey(date);
+    if (!settled) {
+      _unsettled[dateStr] = (prices: prices, at: _now());
+      // A row an earlier build wrote for this date mid-day would otherwise be
+      // served as final once the day settles.
+      await (_db.delete(_db.btcPriceHistory)
+        ..where((t) => t.date.equals(dateStr))).go();
+      return prices[currency];
+    }
+
+    // Persist all returned currencies for this date (permanent cache).
     await _db.batch((b) {
       for (final entry in prices!.entries) {
         b.insert(
@@ -352,13 +403,15 @@ class BtcPriceService {
   /// The `/v1/historical-price?timestamp=...` endpoint returns all currencies
   /// in a single request.
   Future<Map<String, double>?> _fetchMempoolHistoricalPrices(
-      String baseUrl, DateTime date) async {
+    String baseUrl,
+    DateTime date,
+  ) async {
     try {
       final timestamp = date.millisecondsSinceEpoch ~/ 1000;
-      final uri =
-          Uri.parse('$baseUrl/v1/historical-price?timestamp=$timestamp');
-      final response =
-          await http.get(uri).timeout(const Duration(seconds: 10));
+      final uri = Uri.parse(
+        '$baseUrl/v1/historical-price?timestamp=$timestamp',
+      );
+      final response = await http.get(uri).timeout(const Duration(seconds: 10));
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
         final pricesList = json['prices'] as List<dynamic>?;
@@ -367,8 +420,7 @@ class BtcPriceService {
           final result = <String, double>{};
           for (final entry in priceData.entries) {
             if (entry.key != 'time' && entry.value is num) {
-              result[entry.key.toUpperCase()] =
-                  (entry.value as num).toDouble();
+              result[entry.key.toUpperCase()] = (entry.value as num).toDouble();
             }
           }
           if (result.isNotEmpty) return result;
@@ -380,7 +432,8 @@ class BtcPriceService {
 
   /// CoinGecko fallback for historical prices.
   Future<Map<String, double>?> _fetchCoinGeckoHistoricalPrices(
-      DateTime date) async {
+    DateTime date,
+  ) async {
     try {
       final day = date.day.toString().padLeft(2, '0');
       final month = date.month.toString().padLeft(2, '0');
@@ -389,8 +442,7 @@ class BtcPriceService {
         'https://api.coingecko.com/api/v3/coins/bitcoin/history'
         '?date=$dateStr&localization=false',
       );
-      final response =
-          await http.get(uri).timeout(const Duration(seconds: 10));
+      final response = await http.get(uri).timeout(const Duration(seconds: 10));
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
         final marketData = json['market_data'] as Map<String, dynamic>?;
@@ -400,8 +452,7 @@ class BtcPriceService {
           final result = <String, double>{};
           for (final entry in currentPrice.entries) {
             if (entry.value is num) {
-              result[entry.key.toUpperCase()] =
-                  (entry.value as num).toDouble();
+              result[entry.key.toUpperCase()] = (entry.value as num).toDouble();
             }
           }
           if (result.isNotEmpty) return result;
@@ -412,14 +463,13 @@ class BtcPriceService {
   }
 
   Future<void> _pruneOldEntries() async {
-    final all = await (_db.select(_db.btcPriceCache)
-          ..orderBy([(t) => OrderingTerm.desc(t.fetchedAt)]))
-        .get();
+    final all =
+        await (_db.select(_db.btcPriceCache)
+          ..orderBy([(t) => OrderingTerm.desc(t.fetchedAt)])).get();
     if (all.length > 10) {
       final toDelete = all.skip(10).map((e) => e.id).toList();
       await (_db.delete(_db.btcPriceCache)
-            ..where((t) => t.id.isIn(toDelete)))
-          .go();
+        ..where((t) => t.id.isIn(toDelete))).go();
     }
   }
 }

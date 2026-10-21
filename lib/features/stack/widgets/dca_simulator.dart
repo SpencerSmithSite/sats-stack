@@ -1,16 +1,17 @@
 /// The DCA simulator: what a fixed recurring buy would have accumulated.
 library;
 
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
+
 import '../../../shared/theme/app_colors.dart';
+import '../../../shared/theme/app_text_styles.dart';
 import '../../../shared/utils/currency_utils.dart';
 import '../../../shared/utils/sat_converter.dart';
-import '../../../main.dart' as app;
 import 'period_chip.dart';
-import '../../../shared/theme/app_text_styles.dart';
-import 'package:intl/intl.dart';
-import 'dart:math';
 
 class DcaSimulator extends StatelessWidget {
   const DcaSimulator({
@@ -19,9 +20,13 @@ class DcaSimulator extends StatelessWidget {
     required this.controller,
     required this.years,
     required this.onYearsChanged,
+    required this.currency,
   });
 
   final double? btcPrice;
+
+  /// See `StackHero.currency`.
+  final String currency;
   final TextEditingController controller;
   final int years;
   final ValueChanged<int> onYearsChanged;
@@ -34,7 +39,12 @@ class DcaSimulator extends StatelessWidget {
     (label: 'Optimistic', rate: 0.40, color: Color(0xFF6AB0E8)),
   ];
 
-  int _simulate(double monthlyAmount, double startPrice, int months, double annualRate) {
+  int _simulate(
+    double monthlyAmount,
+    double startPrice,
+    int months,
+    double annualRate,
+  ) {
     if (startPrice <= 0) return 0;
     int total = 0;
     for (int n = 0; n < months; n++) {
@@ -51,7 +61,10 @@ class DcaSimulator extends StatelessWidget {
     final monthly = double.tryParse(controller.text.replaceAll(',', '')) ?? 0;
     final months = years * 12;
     final totalInvested = monthly * months;
-    final fiatFmt = NumberFormat.currency(symbol: CurrencyUtils.symbolFor(app.currencyNotifier.value), decimalDigits: 0);
+    final fiatFmt = NumberFormat.currency(
+      symbol: CurrencyUtils.symbolFor(currency),
+      decimalDigits: 0,
+    );
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -68,14 +81,20 @@ class DcaSimulator extends StatelessWidget {
                   Expanded(
                     child: TextField(
                       controller: controller,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
                       inputFormatters: [
-                        FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                        FilteringTextInputFormatter.allow(
+                          RegExp(r'^\d*\.?\d*'),
+                        ),
                       ],
-                      style: AppTextStyles.monoMedium.copyWith(color: theme.colorScheme.onSurface),
+                      style: AppTextStyles.monoMedium.copyWith(
+                        color: theme.colorScheme.onSurface,
+                      ),
                       decoration: InputDecoration(
                         labelText: 'Monthly DCA',
-                        prefixText: '${CurrencyUtils.symbolFor(app.currencyNotifier.value)} ',
+                        prefixText: '${CurrencyUtils.symbolFor(currency)} ',
                         isDense: true,
                       ),
                     ),
@@ -86,7 +105,9 @@ class DcaSimulator extends StatelessWidget {
                     children: [
                       Text(
                         'Period',
-                        style: theme.textTheme.bodySmall?.copyWith(color: context.textSecondary),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: context.textSecondary,
+                        ),
                       ),
                       const SizedBox(height: 4),
                       Row(
@@ -108,7 +129,9 @@ class DcaSimulator extends StatelessWidget {
               if (price <= 0)
                 Text(
                   'BTC price unavailable — open the app with internet to fetch price.',
-                  style: theme.textTheme.bodySmall?.copyWith(color: context.textSecondary),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: context.textSecondary,
+                  ),
                 )
               else ...[
                 // Total invested line
@@ -116,12 +139,16 @@ class DcaSimulator extends StatelessWidget {
                   children: [
                     Text(
                       'Total invested:',
-                      style: theme.textTheme.bodySmall?.copyWith(color: context.textSecondary),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: context.textSecondary,
+                      ),
                     ),
                     const SizedBox(width: 8),
                     Text(
                       fiatFmt.format(totalInvested),
-                      style: AppTextStyles.monoSmall.copyWith(fontWeight: FontWeight.w600),
+                      style: AppTextStyles.monoSmall.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ],
                 ),
@@ -137,6 +164,7 @@ class DcaSimulator extends StatelessWidget {
                     color: s.color,
                     sats: _simulate(monthly, price, months, s.rate),
                     btcPrice: price,
+                    currency: currency,
                   ),
                   const SizedBox(height: 10),
                 ],
@@ -166,9 +194,11 @@ class ScenarioRow extends StatelessWidget {
     required this.color,
     required this.sats,
     required this.btcPrice,
+    required this.currency,
   });
 
   final String label;
+  final String currency;
   final double rate;
   final Color color;
   final int sats;
@@ -176,14 +206,18 @@ class ScenarioRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fiatFmt = NumberFormat.currency(symbol: CurrencyUtils.symbolFor(app.currencyNotifier.value), decimalDigits: 0);
+    final fiatFmt = NumberFormat.currency(
+      symbol: CurrencyUtils.symbolFor(currency),
+      decimalDigits: 0,
+    );
     final fiatValue = fiatFmt.format(sats / 1e8 * btcPrice);
     final satsStr = SatConverter.formatSats(sats);
 
     return Row(
       children: [
         Container(
-          width: 8, height: 8,
+          width: 8,
+          height: 8,
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 8),
@@ -191,13 +225,18 @@ class ScenarioRow extends StatelessWidget {
           width: 92,
           child: Text(
             label,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w500),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w500),
           ),
         ),
         Expanded(
           child: Text(
             '$satsStr sats',
-            style: AppTextStyles.monoSmall.copyWith(color: color, fontWeight: FontWeight.w600),
+            style: AppTextStyles.monoSmall.copyWith(
+              color: color,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
         Text(

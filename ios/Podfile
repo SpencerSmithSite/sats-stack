@@ -1,4 +1,4 @@
-platform :ios, '16.0'
+platform :ios, '15.0'
 
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
@@ -42,14 +42,14 @@ post_install do |installer|
     #
     # `flutter_additional_ios_build_settings` resets pods to Flutter's default
     # minimum, which Xcode 27 rejects outright — the supported range starts at
-    # 15.0 — and which is below what flutter_gemma's Swift package requires
-    # (16.0). Without this the build fails inside Pods.xcodeproj even though
-    # `platform :ios` above and all three Runner configurations say 16.0.
-    # Applied after the Flutter helper runs, so it wins.
+    # 15.0. Without this the build fails inside Pods.xcodeproj even though
+    # `platform :ios` above and all three Runner configurations say 15.0.
+    # Applied after the Flutter helper runs, so it wins. (It was 16.0 while
+    # flutter_gemma's Swift package required it; that backend is gone.)
     target.build_configurations.each do |config|
       current = config.build_settings['IPHONEOS_DEPLOYMENT_TARGET']
-      if current.nil? || current.to_f < 16.0
-        config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '16.0'
+      if current.nil? || current.to_f < 15.0
+        config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
       end
     end
   end

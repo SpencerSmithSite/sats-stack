@@ -36,13 +36,13 @@ enum GeminiNanoState {
   unknown;
 
   static GeminiNanoState fromReason(String? reason) => switch (reason) {
-        'available' => GeminiNanoState.available,
-        'downloadable' => GeminiNanoState.downloadable,
-        'downloading' => GeminiNanoState.downloading,
-        'unavailable' => GeminiNanoState.unavailable,
-        'unsupported_platform' => GeminiNanoState.unsupportedPlatform,
-        _ => GeminiNanoState.unknown,
-      };
+    'available' => GeminiNanoState.available,
+    'downloadable' => GeminiNanoState.downloadable,
+    'downloading' => GeminiNanoState.downloading,
+    'unavailable' => GeminiNanoState.unavailable,
+    'unsupported_platform' => GeminiNanoState.unsupportedPlatform,
+    _ => GeminiNanoState.unknown,
+  };
 
   /// Whether to show this backend in the picker at all.
   ///
@@ -50,16 +50,16 @@ enum GeminiNanoState {
   /// one that merely needs the download does — because that row is the only
   /// place the download can be started from.
   bool get worthOffering => switch (this) {
-        GeminiNanoState.available ||
-        GeminiNanoState.downloadable ||
-        GeminiNanoState.downloading =>
-          true,
-        _ => false,
-      };
+    GeminiNanoState.available ||
+    GeminiNanoState.downloadable ||
+    GeminiNanoState.downloading => true,
+    _ => false,
+  };
 
   /// Whether the user has something to do here.
   bool get needsDownload =>
-      this == GeminiNanoState.downloadable || this == GeminiNanoState.downloading;
+      this == GeminiNanoState.downloadable ||
+      this == GeminiNanoState.downloading;
 }
 
 class GeminiNanoAvailability {
@@ -90,13 +90,14 @@ class GeminiNanoAvailability {
 ///    neither this nor a large downloaded model, which is why the downloadable
 ///    Qwen catalogue remains the floor on Android rather than a fallback.
 class GeminiNanoBackend implements InferenceBackend {
-  static const MethodChannel _methods =
-      MethodChannel('app.satsstack/gemini_nano');
-  static const EventChannel _events =
-      EventChannel(_streamChannel);
+  static const MethodChannel _methods = MethodChannel(
+    'app.satsstack/gemini_nano',
+  );
+  static const EventChannel _events = EventChannel(_streamChannel);
   static const _streamChannel = 'app.satsstack/gemini_nano_stream';
-  static const EventChannel _downloadEvents =
-      EventChannel('app.satsstack/gemini_nano_download');
+  static const EventChannel _downloadEvents = EventChannel(
+    'app.satsstack/gemini_nano_download',
+  );
 
   static GeminiNanoAvailability? _cached;
 
@@ -139,8 +140,9 @@ class GeminiNanoBackend implements InferenceBackend {
     }
 
     try {
-      final raw =
-          await _methods.invokeMapMethod<String, dynamic>('availability');
+      final raw = await _methods.invokeMapMethod<String, dynamic>(
+        'availability',
+      );
       return _cached = GeminiNanoAvailability(
         GeminiNanoState.fromReason(raw?['reason'] as String?),
         raw?['detail'] as String? ?? 'Unavailable.',
@@ -170,15 +172,16 @@ class GeminiNanoBackend implements InferenceBackend {
         InferenceException('Gemini Nano is only available on Android.'),
       );
     }
-    return _downloadEvents.receiveBroadcastStream().map((e) => e as int).handleError(
-      (Object error) {
-        throw InferenceException(
-          error is PlatformException
-              ? error.message ?? 'The Gemini Nano download failed.'
-              : error.toString(),
-        );
-      },
-    );
+    return _downloadEvents
+        .receiveBroadcastStream()
+        .map((e) => e as int)
+        .handleError((Object error) {
+          throw InferenceException(
+            error is PlatformException
+                ? error.message ?? 'The Gemini Nano download failed.'
+                : error.toString(),
+          );
+        });
   }
 
   @override
@@ -200,9 +203,8 @@ class GeminiNanoBackend implements InferenceBackend {
     // the instructions are prepended. Small models are inconsistent about
     // honouring a system turn even where one exists, and the system prompt here
     // carries the financial figures the answer has to be grounded in.
-    final prompt = flat.system == null
-        ? flat.prompt
-        : '${flat.system}\n\n${flat.prompt}';
+    final prompt =
+        flat.system == null ? flat.prompt : '${flat.system}\n\n${flat.prompt}';
 
     // Queued, and with a gap timeout — see the note on serialisedOnChannel.
     return serialisedOnChannel(

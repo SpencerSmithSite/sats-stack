@@ -71,8 +71,11 @@ class NotificationService {
     if (_shown.contains(id)) return;
     _shown.add(id);
 
-    final budgetStr =
-        CurrencyUtils.format(budgetAmount, currency, decimalDigits: 0);
+    final budgetStr = CurrencyUtils.format(
+      budgetAmount,
+      currency,
+      decimalDigits: 0,
+    );
     await _show(
       id: id,
       title: 'Budget warning: $categoryName',
@@ -95,8 +98,11 @@ class NotificationService {
     _shown.add(id);
 
     final overStr = CurrencyUtils.format(overBy, currency, decimalDigits: 0);
-    final budgetStr =
-        CurrencyUtils.format(budgetAmount, currency, decimalDigits: 0);
+    final budgetStr = CurrencyUtils.format(
+      budgetAmount,
+      currency,
+      decimalDigits: 0,
+    );
     await _show(
       id: id,
       title: 'Over budget: $categoryName',
@@ -117,9 +123,10 @@ class NotificationService {
     _shown.add(id);
 
     final satsStr = _formatSats(goalSats);
-    final fiatPart = btcPrice != null && btcPrice > 0
-        ? ' ≈ ${CurrencyUtils.format(goalSats / 1e8 * btcPrice, currency, decimalDigits: 0)}'
-        : '';
+    final fiatPart =
+        btcPrice != null && btcPrice > 0
+            ? ' ≈ ${CurrencyUtils.format(goalSats / 1e8 * btcPrice, currency, decimalDigits: 0)}'
+            : '';
     await _show(
       id: id,
       title: 'Stack goal reached!',
@@ -143,10 +150,14 @@ class NotificationService {
     final cached = _permissionGranted;
     if (cached != null) return cached;
 
-    final ios = _plugin.resolvePlatformSpecificImplementation<
-        IOSFlutterLocalNotificationsPlugin>();
+    final ios =
+        _plugin
+            .resolvePlatformSpecificImplementation<
+              IOSFlutterLocalNotificationsPlugin
+            >();
     if (ios != null) {
-      return _permissionGranted = await ios.requestPermissions(
+      return _permissionGranted =
+          await ios.requestPermissions(
             alert: true,
             badge: false,
             sound: true,
@@ -154,10 +165,14 @@ class NotificationService {
           false;
     }
 
-    final macOS = _plugin.resolvePlatformSpecificImplementation<
-        MacOSFlutterLocalNotificationsPlugin>();
+    final macOS =
+        _plugin
+            .resolvePlatformSpecificImplementation<
+              MacOSFlutterLocalNotificationsPlugin
+            >();
     if (macOS != null) {
-      return _permissionGranted = await macOS.requestPermissions(
+      return _permissionGranted =
+          await macOS.requestPermissions(
             alert: true,
             badge: false,
             sound: true,
@@ -165,8 +180,11 @@ class NotificationService {
           false;
     }
 
-    final android = _plugin.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
+    final android =
+        _plugin
+            .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin
+            >();
     if (android != null) {
       return _permissionGranted =
           await android.requestNotificationsPermission() ?? false;
@@ -203,7 +221,8 @@ class NotificationService {
           android: AndroidNotificationDetails(
             'budget_alerts',
             'Budget Alerts',
-            channelDescription: 'Notifies when spending approaches or exceeds budget limits',
+            channelDescription:
+                'Notifies when spending approaches or exceeds budget limits',
             importance: Importance.high,
             priority: Priority.high,
           ),

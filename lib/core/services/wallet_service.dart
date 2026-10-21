@@ -18,10 +18,11 @@ class WalletService {
 
   /// Returns the first manual wallet, or null if none exists.
   Future<Wallet?> getDefaultManual() async {
-    final result = await (_db.select(_db.wallets)
-          ..where((w) => w.type.equals('manual'))
-          ..limit(1))
-        .getSingleOrNull();
+    final result =
+        await (_db.select(_db.wallets)
+              ..where((w) => w.type.equals('manual'))
+              ..limit(1))
+            .getSingleOrNull();
     return result;
   }
 
@@ -31,14 +32,16 @@ class WalletService {
     required String xpub,
     required String color,
   }) async {
-    final id = await _db.into(_db.wallets).insert(
-      WalletsCompanion.insert(
-        label: label,
-        type: 'xpub',
-        xpub: Value(xpub),
-        color: color,
-      ),
-    );
+    final id = await _db
+        .into(_db.wallets)
+        .insert(
+          WalletsCompanion.insert(
+            label: label,
+            type: 'xpub',
+            xpub: Value(xpub),
+            color: color,
+          ),
+        );
     return (_db.select(_db.wallets)..where((w) => w.id.equals(id))).getSingle();
   }
 }

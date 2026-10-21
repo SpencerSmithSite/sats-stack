@@ -10,7 +10,7 @@ import '../services/inference/cloud_backend.dart';
 /// The values fall into three groups, which is how both Settings and onboarding
 /// present them:
 ///
-/// * **On device** — [appleIntelligence], [geminiNano], [localModel]. No URL and
+/// * **On device** — [appleIntelligence], [geminiNano]. No URL and
 ///   no user-supplied model name; availability is owned by the OS rather than by
 ///   whether a server is reachable, which is why the picker asks each backend
 ///   for its own status instead of pinging a host.
@@ -23,7 +23,6 @@ enum AiProvider {
   maple,
   appleIntelligence,
   geminiNano,
-  localModel,
   claude,
   chatGpt,
   gemini,
@@ -32,42 +31,47 @@ enum AiProvider {
   /// The string persisted in `AppSettings`. Stable — changing one of these
   /// silently resets that user's choice back to Ollama.
   String get key => switch (this) {
-        AiProvider.ollama => 'ollama',
-        AiProvider.lmStudio => 'lmStudio',
-        AiProvider.maple => 'maple',
-        AiProvider.appleIntelligence => 'appleIntelligence',
-        AiProvider.geminiNano => 'geminiNano',
-        AiProvider.localModel => 'localModel',
-        AiProvider.claude => 'claude',
-        AiProvider.chatGpt => 'chatGpt',
-        AiProvider.gemini => 'gemini',
-        AiProvider.grok => 'grok',
-      };
+    AiProvider.ollama => 'ollama',
+    AiProvider.lmStudio => 'lmStudio',
+    AiProvider.maple => 'maple',
+    AiProvider.appleIntelligence => 'appleIntelligence',
+    AiProvider.geminiNano => 'geminiNano',
+    AiProvider.claude => 'claude',
+    AiProvider.chatGpt => 'chatGpt',
+    AiProvider.gemini => 'gemini',
+    AiProvider.grok => 'grok',
+  };
 
   /// Falls back to Ollama for an unknown value — a backend removed in a later
   /// build, most likely — rather than throwing on a settings read.
+  ///
+  /// `'localModel'`, the downloadable-model backend removed on 2026-10-20, is
+  /// one such value; `OllamaService.loadSettings` moves it to the platform's
+  /// built-in on-device model before it gets here — see [removedLocalModelKey].
   static AiProvider fromKey(String? key) => switch (key) {
-        'lmStudio' => AiProvider.lmStudio,
-        'maple' => AiProvider.maple,
-        'appleIntelligence' => AiProvider.appleIntelligence,
-        'geminiNano' => AiProvider.geminiNano,
-        'localModel' => AiProvider.localModel,
-        'claude' => AiProvider.claude,
-        'chatGpt' => AiProvider.chatGpt,
-        'gemini' => AiProvider.gemini,
-        'grok' => AiProvider.grok,
-        _ => AiProvider.ollama,
-      };
+    'lmStudio' => AiProvider.lmStudio,
+    'maple' => AiProvider.maple,
+    'appleIntelligence' => AiProvider.appleIntelligence,
+    'geminiNano' => AiProvider.geminiNano,
+    'claude' => AiProvider.claude,
+    'chatGpt' => AiProvider.chatGpt,
+    'gemini' => AiProvider.gemini,
+    'grok' => AiProvider.grok,
+    _ => AiProvider.ollama,
+  };
 
   /// Whether this backend runs entirely on the device, with no server to
   /// configure and no host to reach.
   bool get isOnDevice => switch (this) {
-        AiProvider.appleIntelligence ||
-        AiProvider.geminiNano ||
-        AiProvider.localModel =>
-          true,
-        _ => false,
-      };
+    AiProvider.appleIntelligence || AiProvider.geminiNano => true,
+    _ => false,
+  };
+
+  /// The persisted key of the downloadable-model backend, removed on
+  /// 2026-10-20 with the discontinued `flutter_gemma` package. Kept only so a
+  /// stored choice of it can be recognised and moved — see
+  /// `OllamaService.loadSettings`.
+  static const removedLocalModelKey = 'localModel';
 
   /// The hosted provider behind this choice, or null if there is none.
   ///
@@ -75,12 +79,12 @@ enum AiProvider {
   /// an OpenAI-compatible endpoint the user points at themselves, so it keeps
   /// its URL field and is configured like a server rather than like a service.
   CloudProvider? get cloudProvider => switch (this) {
-        AiProvider.claude => CloudProvider.anthropic,
-        AiProvider.chatGpt => CloudProvider.openai,
-        AiProvider.gemini => CloudProvider.gemini,
-        AiProvider.grok => CloudProvider.xai,
-        _ => null,
-      };
+    AiProvider.claude => CloudProvider.anthropic,
+    AiProvider.chatGpt => CloudProvider.openai,
+    AiProvider.gemini => CloudProvider.gemini,
+    AiProvider.grok => CloudProvider.xai,
+    _ => null,
+  };
 
   /// Whether this backend needs an API key before it can answer anything.
   bool get needsApiKey => cloudProvider != null;
@@ -92,18 +96,16 @@ enum AiProvider {
   /// compile error the moment a backend was added. Adding one here is now the
   /// whole change.
   String get label => switch (this) {
-        AiProvider.ollama => 'Ollama',
-        AiProvider.lmStudio => 'LM Studio',
-        AiProvider.maple => 'Maple',
-        AiProvider.appleIntelligence => 'Apple Intelligence',
-        AiProvider.geminiNano => 'Gemini Nano',
-        AiProvider.localModel => 'Downloaded model',
-        AiProvider.claude ||
-        AiProvider.chatGpt ||
-        AiProvider.gemini ||
-        AiProvider.grok =>
-          cloudProvider!.label,
-      };
+    AiProvider.ollama => 'Ollama',
+    AiProvider.lmStudio => 'LM Studio',
+    AiProvider.maple => 'Maple',
+    AiProvider.appleIntelligence => 'Apple Intelligence',
+    AiProvider.geminiNano => 'Gemini Nano',
+    AiProvider.claude ||
+    AiProvider.chatGpt ||
+    AiProvider.gemini ||
+    AiProvider.grok => cloudProvider!.label,
+  };
 
   /// The URL field's placeholder, or null when this backend has no server to
   /// point at.
@@ -115,18 +117,16 @@ enum AiProvider {
   /// that will be ignored, or worse, to send their financial data somewhere
   /// they mistyped.
   String? get defaultUrl => switch (this) {
-        AiProvider.ollama => 'http://localhost:11434',
-        AiProvider.lmStudio => 'http://localhost:1234/v1',
-        AiProvider.maple => 'http://localhost:8080/v1',
-        AiProvider.appleIntelligence ||
-        AiProvider.geminiNano ||
-        AiProvider.localModel ||
-        AiProvider.claude ||
-        AiProvider.chatGpt ||
-        AiProvider.gemini ||
-        AiProvider.grok =>
-          null,
-      };
+    AiProvider.ollama => 'http://localhost:11434',
+    AiProvider.lmStudio => 'http://localhost:1234/v1',
+    AiProvider.maple => 'http://localhost:8080/v1',
+    AiProvider.appleIntelligence ||
+    AiProvider.geminiNano ||
+    AiProvider.claude ||
+    AiProvider.chatGpt ||
+    AiProvider.gemini ||
+    AiProvider.grok => null,
+  };
 
   /// Whether answers are generated without anything leaving the device.
   ///
@@ -144,9 +144,10 @@ enum AiProvider {
   /// Null when nothing leaves the device. Named rather than left vague because
   /// "sent to a server" is not a disclosure — the user needs to know *whose*.
   String? get dataRecipient => switch (this) {
-        AiProvider.maple => 'the Maple server you configured',
-        _ => cloudProvider == null
-            ? null
-            : '${cloudProvider!.company} (${cloudProvider!.host})',
-      };
+    AiProvider.maple => 'the Maple server you configured',
+    _ =>
+      cloudProvider == null
+          ? null
+          : '${cloudProvider!.company} (${cloudProvider!.host})',
+  };
 }

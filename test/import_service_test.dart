@@ -21,7 +21,9 @@ void main() {
     service = ImportService(db, OllamaService(db));
     prices = BtcPriceService(db);
     // Seeded so getHistoricalPrice is a cache hit and never reaches the network.
-    await db.into(db.btcPriceHistory).insert(
+    await db
+        .into(db.btcPriceHistory)
+        .insert(
           BtcPriceHistoryCompanion.insert(
             date: '2025-03-04',
             currency: 'USD',
@@ -33,25 +35,24 @@ void main() {
   tearDown(() => db.close());
 
   Future<int> newSource(String currency) => service.createSource(
-        name: 'Test $currency',
-        type: 'bank',
-        currency: currency,
-      );
+    name: 'Test $currency',
+    type: 'bank',
+    currency: currency,
+  );
 
   ParsedTransaction row({
     required double amount,
     required String currency,
     String direction = 'credit',
     String description = 'Deposit',
-  }) =>
-      ParsedTransaction(
-        date: txDate,
-        amount: amount,
-        direction: direction,
-        description: description,
-        rawDescription: description,
-        currency: currency,
-      );
+  }) => ParsedTransaction(
+    date: txDate,
+    amount: amount,
+    direction: direction,
+    description: description,
+    rawDescription: description,
+    currency: currency,
+  );
 
   Future<Transaction> saveOne(ParsedTransaction tx, int sourceId) async {
     await service.saveTransactions(
@@ -64,22 +65,29 @@ void main() {
   }
 
   group('a Bitcoin-denominated account', () {
-    test('converts BTC to fiat rather than writing BTC into amountFiat',
-        () async {
-      final sourceId = await newSource('BTC');
-      final saved = await saveOne(row(amount: 0.05, currency: 'BTC'), sourceId);
+    test(
+      'converts BTC to fiat rather than writing BTC into amountFiat',
+      () async {
+        final sourceId = await newSource('BTC');
+        final saved = await saveOne(
+          row(amount: 0.05, currency: 'BTC'),
+          sourceId,
+        );
 
-      // The bug: amountFiat held 0.05, which the dashboard summed as money.
-      expect(saved.amountSats, 5000000);
-      expect(saved.amountFiat, closeTo(4000, 0.01)); // 0.05 BTC @ 80,000
-      expect(saved.fiatCurrency, 'USD');
-      expect(saved.isBitcoin, isTrue);
-    });
+        // The bug: amountFiat held 0.05, which the dashboard summed as money.
+        expect(saved.amountSats, 5000000);
+        expect(saved.amountFiat, closeTo(4000, 0.01)); // 0.05 BTC @ 80,000
+        expect(saved.fiatCurrency, 'USD');
+        expect(saved.isBitcoin, isTrue);
+      },
+    );
 
     test('converts a SATS account the same way', () async {
       final sourceId = await newSource('SATS');
-      final saved =
-          await saveOne(row(amount: 5000000, currency: 'SATS'), sourceId);
+      final saved = await saveOne(
+        row(amount: 5000000, currency: 'SATS'),
+        sourceId,
+      );
 
       expect(saved.amountSats, 5000000);
       expect(saved.amountFiat, closeTo(4000, 0.01));
@@ -97,33 +105,37 @@ void main() {
       expect(saved.amountFiat, closeTo(-4000, 0.01));
     });
 
-    test('an unresolvable price leaves fiat at zero, not the BTC figure',
-        () async {
-      final sourceId = await newSource('BTC');
-      // Cached as 0 — the shape a failed lookup leaves behind — so the test
-      // exercises the fallback without reaching the network.
-      await db.into(db.btcPriceHistory).insert(
-            BtcPriceHistoryCompanion.insert(
-              date: '2011-07-01',
-              currency: 'USD',
-              price: 0,
-            ),
-          );
-      final saved = await saveOne(
-        ParsedTransaction(
-          date: DateTime(2011, 7, 1),
-          amount: 0.05,
-          direction: 'credit',
-          description: 'Deposit',
-          rawDescription: 'Deposit',
-          currency: 'BTC',
-        ),
-        sourceId,
-      );
+    test(
+      'an unresolvable price leaves fiat at zero, not the BTC figure',
+      () async {
+        final sourceId = await newSource('BTC');
+        // Cached as 0 — the shape a failed lookup leaves behind — so the test
+        // exercises the fallback without reaching the network.
+        await db
+            .into(db.btcPriceHistory)
+            .insert(
+              BtcPriceHistoryCompanion.insert(
+                date: '2011-07-01',
+                currency: 'USD',
+                price: 0,
+              ),
+            );
+        final saved = await saveOne(
+          ParsedTransaction(
+            date: DateTime(2011, 7, 1),
+            amount: 0.05,
+            direction: 'credit',
+            description: 'Deposit',
+            rawDescription: 'Deposit',
+            currency: 'BTC',
+          ),
+          sourceId,
+        );
 
-      expect(saved.amountSats, 5000000);
-      expect(saved.amountFiat, 0.0);
-    });
+        expect(saved.amountSats, 5000000);
+        expect(saved.amountFiat, 0.0);
+      },
+    );
   });
 
   group("the source's currency", () {
@@ -136,7 +148,8 @@ void main() {
     });
 
     test('reaches every row the rule-based tier parses', () async {
-      const csv = 'Date,Description,Amount\n'
+      const csv =
+          'Date,Description,Amount\n'
           '2025-03-04,Tesco,-40.00\n'
           '2025-03-05,Salary,1200.00\n';
 
@@ -197,7 +210,10 @@ void main() {
     ];
 
     var notifications = 0;
-    final sub = db.select(db.transactions).watch().listen((_) => notifications++);
+    final sub = db
+        .select(db.transactions)
+        .watch()
+        .listen((_) => notifications++);
     await pumpEventQueue();
     notifications = 0;
 
@@ -215,5 +231,53 @@ void main() {
     // One commit, so listeners (main.dart's budget re-check among them) wake
     // once rather than 25 times.
     expect(notifications, 1);
+  });
+
+  group('the import summary', () {
+    Future<ImportSummary> save(int sourceId) => service.saveTransactions(
+      transactions: [
+        row(
+          amount: 12.5,
+          currency: 'USD',
+          direction: 'debit',
+          description: 'Coffee',
+        ),
+        row(
+          amount: 40,
+          currency: 'USD',
+          direction: 'debit',
+          description: 'Groceries',
+        ),
+      ],
+      sourceId: sourceId,
+      sourceName: 'Test',
+      btcPriceService: prices,
+    );
+
+    test(
+      'counts what reached the ledger, not what reached the source',
+      () async {
+        final first = await save(await newSource('USD'));
+        // The same statement, imported again under a second source.
+        final second = await save(await newSource('USD'));
+
+        expect(first.imported, 2);
+        // Was 2: the rows were new to the second source, but the ledger —
+        // deduplicated per wallet — gained nothing.
+        expect(second.imported, 0);
+        expect(second.alreadyInLedger, 2);
+        expect(await db.select(db.transactions).get(), hasLength(2));
+      },
+    );
+
+    test('a re-import into the same source is a plain duplicate', () async {
+      final source = await newSource('USD');
+      await save(source);
+      final again = await save(source);
+
+      expect(again.imported, 0);
+      expect(again.duplicatesSkipped, 2);
+      expect(again.alreadyInLedger, 0);
+    });
   });
 }

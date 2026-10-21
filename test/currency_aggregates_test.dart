@@ -29,10 +29,10 @@ void main() {
   setUp(() async {
     db = AppDatabase.forTesting(NativeDatabase.memory());
     walletId = (await db.select(db.wallets).getSingle()).id;
-    foodId = (await (db.select(db.categories)
-              ..where((c) => c.name.equals('Food & Dining')))
-            .getSingle())
-        .id;
+    foodId =
+        (await (db.select(db.categories)
+              ..where((c) => c.name.equals('Food & Dining'))).getSingle())
+            .id;
   });
 
   tearDown(() => db.close());
@@ -43,42 +43,52 @@ void main() {
     String category = 'Food & Dining',
     int sats = 0,
     bool isBitcoin = false,
-  }) =>
-      db.into(db.transactions).insert(TransactionsCompanion.insert(
-            walletId: walletId,
-            date: DateTime(2026, 3, 10),
-            description: 'row ${hashSeq++}',
-            amountSats: sats,
-            amountFiat: fiat,
-            fiatCurrency: currency,
-            category: Value(category),
-            source: 'manual',
-            isBitcoin: Value(isBitcoin),
-            dedupHash: 'h$hashSeq',
-          ));
+  }) => db
+      .into(db.transactions)
+      .insert(
+        TransactionsCompanion.insert(
+          walletId: walletId,
+          date: DateTime(2026, 3, 10),
+          description: 'row ${hashSeq++}',
+          amountSats: sats,
+          amountFiat: fiat,
+          fiatCurrency: currency,
+          category: Value(category),
+          source: 'manual',
+          isBitcoin: Value(isBitcoin),
+          dedupHash: 'h$hashSeq',
+        ),
+      );
 
-  test('the dashboard converts foreign rows instead of adding them raw', () async {
-    await add(fiat: -100, currency: 'GBP'); // £100 groceries
-    await add(fiat: -50, currency: 'USD'); //  $50 on a US card
-    await add(fiat: 2000, currency: 'GBP', category: 'Income');
+  test(
+    'the dashboard converts foreign rows instead of adding them raw',
+    () async {
+      await add(fiat: -100, currency: 'GBP'); // £100 groceries
+      await add(fiat: -50, currency: 'USD'); //  $50 on a US card
+      await add(fiat: 2000, currency: 'GBP', category: 'Income');
 
-    final data = await DashboardService(db, rates: gbp)
-        .getDashboard(DateTime(2026, 3));
+      final data = await DashboardService(
+        db,
+        rates: gbp,
+      ).getDashboard(DateTime(2026, 3));
 
-    // Was £150. $50 is £40 at 1 USD = 0.8 GBP.
-    expect(data.monthlySpendingFiat, closeTo(140, 1e-9));
-    expect(data.monthlyIncomeFiat, closeTo(2000, 1e-9));
-    expect(data.spendingByCategory['Food & Dining'], closeTo(140, 1e-9));
-    expect(data.unconvertedCount, 0);
-  });
+      // Was £150. $50 is £40 at 1 USD = 0.8 GBP.
+      expect(data.monthlySpendingFiat, closeTo(140, 1e-9));
+      expect(data.monthlyIncomeFiat, closeTo(2000, 1e-9));
+      expect(data.spendingByCategory['Food & Dining'], closeTo(140, 1e-9));
+      expect(data.unconvertedCount, 0);
+    },
+  );
 
   test('recent rows keep their own currency for display', () async {
     // The list renders each row with its own currency label, so restating
     // the amount would print "$40.00" for a $50 charge.
     await add(fiat: -50, currency: 'USD');
 
-    final data = await DashboardService(db, rates: gbp)
-        .getDashboard(DateTime(2026, 3));
+    final data = await DashboardService(
+      db,
+      rates: gbp,
+    ).getDashboard(DateTime(2026, 3));
 
     final row = data.recentTransactions.single;
     expect(row.amountFiat, -50);
@@ -89,8 +99,10 @@ void main() {
     await add(fiat: -100, currency: 'GBP');
     await add(fiat: -5000, currency: 'JPY'); // no JPY price available
 
-    final data = await DashboardService(db, rates: gbp)
-        .getDashboard(DateTime(2026, 3));
+    final data = await DashboardService(
+      db,
+      rates: gbp,
+    ).getDashboard(DateTime(2026, 3));
 
     // Not ¥5000 added to pounds, and not silently missing either.
     expect(data.monthlySpendingFiat, closeTo(100, 1e-9));
@@ -107,24 +119,32 @@ void main() {
       category: 'Bitcoin',
     );
 
-    final data = await DashboardService(db, rates: gbp)
-        .getDashboard(DateTime(2026, 3));
+    final data = await DashboardService(
+      db,
+      rates: gbp,
+    ).getDashboard(DateTime(2026, 3));
 
     expect(data.totalStackSats, 250000);
     expect(data.unconvertedCount, 1);
   });
 
   test('budget progress is measured in the display currency', () async {
-    await db.into(db.budgets).insert(BudgetsCompanion.insert(
-          categoryId: foodId,
-          amountFiat: 500,
-          period: 'monthly',
-        ));
+    await db
+        .into(db.budgets)
+        .insert(
+          BudgetsCompanion.insert(
+            categoryId: foodId,
+            amountFiat: 500,
+            period: 'monthly',
+          ),
+        );
     await add(fiat: -100, currency: 'GBP');
     await add(fiat: -50, currency: 'USD');
 
-    final progress = await BudgetService(db, rates: gbp)
-        .getProgress(DateTime(2026, 3));
+    final progress = await BudgetService(
+      db,
+      rates: gbp,
+    ).getProgress(DateTime(2026, 3));
 
     // A £500 budget against £140 of spending — was measured against "£150".
     expect(progress.single.spentFiat, closeTo(140, 1e-9));

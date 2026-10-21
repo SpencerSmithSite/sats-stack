@@ -21,7 +21,7 @@
 /// them for nearly every user, are returned untouched and exact.
 class FxRates {
   const FxRates({required this.display, required this.btcPrices})
-      : _passthrough = false;
+    : _passthrough = false;
 
   /// Returns every amount unchanged.
   ///
@@ -29,9 +29,9 @@ class FxRates {
   /// that construct a service directly and by nothing in production, where
   /// `main.dart` supplies real rates.
   const FxRates.passthrough()
-      : display = '',
-        btcPrices = const {},
-        _passthrough = true;
+    : display = '',
+      btcPrices = const {},
+      _passthrough = true;
 
   /// The currency amounts are converted into.
   final String display;

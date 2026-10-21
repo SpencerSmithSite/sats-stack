@@ -1,18 +1,19 @@
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
-import 'package:drift/drift.dart' show Value;
+
 import '../../../core/database/database.dart';
-import '../../../core/services/transaction_service.dart';
-import '../../../core/services/category_service.dart';
-import '../../../core/services/wallet_service.dart';
 import '../../../core/services/btc_price_service.dart';
+import '../../../core/services/category_service.dart';
+import '../../../core/services/transaction_service.dart';
+import '../../../core/services/wallet_service.dart';
+import '../../../main.dart' as app;
 import '../../../shared/theme/app_colors.dart';
 import '../../../shared/theme/app_text_styles.dart';
-import '../../../shared/utils/sat_converter.dart';
-import '../../../shared/utils/hash_utils.dart';
 import '../../../shared/utils/currency_utils.dart';
-import '../../../main.dart' as app;
+import '../../../shared/utils/hash_utils.dart';
+import '../../../shared/utils/sat_converter.dart';
 import '../../../shared/widgets/tappable.dart';
 
 class AddTransactionSheet extends StatefulWidget {
@@ -103,7 +104,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       firstDate: DateTime(2009, 1, 3), // Bitcoin genesis block
       lastDate: DateTime.now(),
     );
-    if (picked != null) setState(() => _selectedDate = picked);
+    if (picked != null && mounted) setState(() => _selectedDate = picked);
   }
 
   Future<void> _save() async {
@@ -111,11 +112,14 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     setState(() => _saving = true);
 
     try {
-      final rawAmount =
-          double.parse(_amountController.text.replaceAll(',', ''));
+      final rawAmount = double.parse(
+        _amountController.text.replaceAll(',', ''),
+      );
       final wallet = await widget.walletService.getDefaultManual();
       if (wallet == null) {
-        if (mounted) _showError('No manual account found. Please restart the app.');
+        if (mounted) {
+          _showError('No manual account found. Please restart the app.');
+        }
         return;
       }
 
@@ -130,14 +134,16 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
 
       if (_isFiatMode) {
         amountFiat = rawAmount;
-        amountSats = price != null && price > 0
-            ? SatConverter.fiatToSats(rawAmount, price)
-            : 0;
+        amountSats =
+            price != null && price > 0
+                ? SatConverter.fiatToSats(rawAmount, price)
+                : 0;
       } else {
         amountSats = rawAmount.round();
-        amountFiat = price != null && price > 0
-            ? SatConverter.satsToFiat(amountSats, price)
-            : 0;
+        amountFiat =
+            price != null && price > 0
+                ? SatConverter.satsToFiat(amountSats, price)
+                : 0;
       }
 
       // Apply sign: expenses are negative
@@ -149,10 +155,14 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
         amountSats = amountSats.abs();
       }
 
-      final period = _isRecurring ? Value<String?>(_recurringPeriod) : const Value<String?>(null);
-      final anchor = _isRecurring
-          ? Value<DateTime?>(_selectedDate)
-          : const Value<DateTime?>(null);
+      final period =
+          _isRecurring
+              ? Value<String?>(_recurringPeriod)
+              : const Value<String?>(null);
+      final anchor =
+          _isRecurring
+              ? Value<DateTime?>(_selectedDate)
+              : const Value<DateTime?>(null);
 
       final dedupHash = HashUtils.transactionDedupHash(
         date: _selectedDate,
@@ -171,9 +181,11 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
           fiatCurrency: currency,
           category: Value(_selectedCategory?.name),
           source: 'manual',
-          notes: Value(_notesController.text.trim().isEmpty
-              ? null
-              : _notesController.text.trim()),
+          notes: Value(
+            _notesController.text.trim().isEmpty
+                ? null
+                : _notesController.text.trim(),
+          ),
           dedupHash: dedupHash,
           recurringPeriod: period,
           recurringAnchorDate: anchor,
@@ -231,18 +243,21 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                   // Expense / Income toggle
                   _TypeToggle(
                     isExpense: _isExpense,
-                    onChanged: (v) => setState(() {
-                      _isExpense = v;
-                      if (!_isExpense) {
-                        _selectedCategory = _categories
-                            .where((c) => c.name == 'Income')
-                            .firstOrNull;
-                      } else {
-                        _selectedCategory = _categories
-                            .where((c) => c.name != 'Income')
-                            .firstOrNull;
-                      }
-                    }),
+                    onChanged:
+                        (v) => setState(() {
+                          _isExpense = v;
+                          if (!_isExpense) {
+                            _selectedCategory =
+                                _categories
+                                    .where((c) => c.name == 'Income')
+                                    .firstOrNull;
+                          } else {
+                            _selectedCategory =
+                                _categories
+                                    .where((c) => c.name != 'Income')
+                                    .firstOrNull;
+                          }
+                        }),
                   ),
                   const SizedBox(height: 20),
 
@@ -269,14 +284,19 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                             hintStyle: AppTextStyles.monoLarge.copyWith(
                               color: context.textSecondary,
                             ),
-                            prefixText: _isFiatMode ? '${CurrencyUtils.symbolFor(app.currencyNotifier.value)} ' : '',
+                            prefixText:
+                                _isFiatMode
+                                    ? '${CurrencyUtils.symbolFor(app.currencyNotifier.value)} '
+                                    : '',
                             suffixText: !_isFiatMode ? ' sats' : '',
                           ),
                           onChanged: (_) => setState(() {}),
                           validator: (v) {
                             if (v == null || v.isEmpty) return 'Enter amount';
                             final n = double.tryParse(v.replaceAll(',', ''));
-                            if (n == null || n <= 0) return 'Enter a valid amount';
+                            if (n == null || n <= 0) {
+                              return 'Enter a valid amount';
+                            }
                             return null;
                           },
                         ),
@@ -286,14 +306,17 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                       Padding(
                         padding: const EdgeInsets.only(top: 14),
                         child: Tappable(
-                          label: _isFiatMode
-                              ? 'Amount in ${app.currencyNotifier.value}'
-                              : 'Amount in sats',
-                          hint: _isFiatMode
-                              ? 'Switches to entering sats'
-                              : 'Switches to entering '
-                                  '${app.currencyNotifier.value}',
-                          onTap: () => setState(() => _isFiatMode = !_isFiatMode),
+                          label:
+                              _isFiatMode
+                                  ? 'Amount in ${app.currencyNotifier.value}'
+                                  : 'Amount in sats',
+                          hint:
+                              _isFiatMode
+                                  ? 'Switches to entering sats'
+                                  : 'Switches to entering '
+                                      '${app.currencyNotifier.value}',
+                          onTap:
+                              () => setState(() => _isFiatMode = !_isFiatMode),
                           child: Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 10,
@@ -308,8 +331,8 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                             ),
                             child: Text(
                               // The active currency, not a hardcoded 'USD' — a GBP user was being
-                        // told they were typing dollars.
-                        _isFiatMode ? app.currencyNotifier.value : 'SATS',
+                              // told they were typing dollars.
+                              _isFiatMode ? app.currencyNotifier.value : 'SATS',
                               style: AppTextStyles.monoSmall.copyWith(
                                 color: context.bitcoinOrangeText,
                                 fontWeight: FontWeight.w600,
@@ -341,8 +364,11 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                       hintText: 'e.g. Coffee, Rent, Salary…',
                     ),
                     textCapitalization: TextCapitalization.sentences,
-                    validator: (v) =>
-                        (v == null || v.trim().isEmpty) ? 'Enter a description' : null,
+                    validator:
+                        (v) =>
+                            (v == null || v.trim().isEmpty)
+                                ? 'Enter a description'
+                                : null,
                   ),
                   const SizedBox(height: 16),
 
@@ -389,8 +415,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                           ),
                           const SizedBox(width: 10),
                           Text(
-                            DateFormat('EEEE, MMMM d, yyyy')
-                                .format(_selectedDate),
+                            DateFormat(
+                              'EEEE, MMMM d, yyyy',
+                            ).format(_selectedDate),
                             style: theme.textTheme.bodyMedium,
                           ),
                         ],
@@ -406,9 +433,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                     child: Row(
                       children: [
                         Icon(
-                          _showNotes
-                              ? Icons.expand_less
-                              : Icons.expand_more,
+                          _showNotes ? Icons.expand_less : Icons.expand_more,
                           size: 16,
                           color: context.textSecondary,
                         ),
@@ -447,17 +472,19 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                               ? Icons.repeat_on_outlined
                               : Icons.repeat,
                           size: 16,
-                          color: _isRecurring
-                              ? AppColors.bitcoinOrange
-                              : context.textSecondary,
+                          color:
+                              _isRecurring
+                                  ? AppColors.bitcoinOrange
+                                  : context.textSecondary,
                         ),
                         const SizedBox(width: 4),
                         Text(
                           'Repeat',
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: _isRecurring
-                                ? context.bitcoinOrangeText
-                                : context.textSecondary,
+                            color:
+                                _isRecurring
+                                    ? context.bitcoinOrangeText
+                                    : context.textSecondary,
                           ),
                         ),
                       ],
@@ -475,16 +502,17 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                   // Save button
                   FilledButton(
                     onPressed: _saving ? null : _save,
-                    child: _saving
-                        ? const SizedBox(
-                            height: 18,
-                            width: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Text('Save Transaction'),
+                    child:
+                        _saving
+                            ? const SizedBox(
+                              height: 18,
+                              width: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                            : const Text('Save Transaction'),
                   ),
                 ],
               ),
@@ -508,21 +536,25 @@ class _TypeToggle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Expanded(child: _Chip(
-          label: 'Expense',
-          selected: isExpense,
-          selectedColor: AppColors.danger,
-          icon: Icons.arrow_downward,
-          onTap: () => onChanged(true),
-        )),
+        Expanded(
+          child: _Chip(
+            label: 'Expense',
+            selected: isExpense,
+            selectedColor: AppColors.danger,
+            icon: Icons.arrow_downward,
+            onTap: () => onChanged(true),
+          ),
+        ),
         const SizedBox(width: 8),
-        Expanded(child: _Chip(
-          label: 'Income',
-          selected: !isExpense,
-          selectedColor: AppColors.success,
-          icon: Icons.arrow_upward,
-          onTap: () => onChanged(false),
-        )),
+        Expanded(
+          child: _Chip(
+            label: 'Income',
+            selected: !isExpense,
+            selectedColor: AppColors.success,
+            icon: Icons.arrow_upward,
+            onTap: () => onChanged(false),
+          ),
+        ),
       ],
     );
   }
@@ -555,14 +587,21 @@ class _Chip extends StatelessWidget {
           color: selected ? selectedColor.withAlpha(30) : Colors.transparent,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: selected ? selectedColor : Theme.of(context).colorScheme.outline,
+            color:
+                selected
+                    ? selectedColor
+                    : Theme.of(context).colorScheme.outline,
             width: selected ? 1.5 : 0.5,
           ),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 14, color: selected ? selectedColor : context.textSecondary),
+            Icon(
+              icon,
+              size: 14,
+              color: selected ? selectedColor : context.textSecondary,
+            ),
             const SizedBox(width: 6),
             Text(
               label,
@@ -597,7 +636,7 @@ class _CategoryChips extends StatelessWidget {
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: categories.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 6),
+        separatorBuilder: (_, _) => const SizedBox(width: 6),
         itemBuilder: (_, i) {
           final cat = categories[i];
           final isSelected = selected?.id == cat.id;
@@ -613,7 +652,8 @@ class _CategoryChips extends StatelessWidget {
                 color: isSelected ? color.withAlpha(30) : Colors.transparent,
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: isSelected ? color : context.textSecondary.withAlpha(80),
+                  color:
+                      isSelected ? color : context.textSecondary.withAlpha(80),
                   width: isSelected ? 1.5 : 0.5,
                 ),
               ),

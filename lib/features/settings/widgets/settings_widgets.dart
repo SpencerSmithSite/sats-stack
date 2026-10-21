@@ -36,10 +36,7 @@ class DataRoutingBanner extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 4),
-            RouteRow(
-              label: 'Wallet sync',
-              value: 'mempool.space',
-            ),
+            RouteRow(label: 'Wallet sync', value: 'mempool.space'),
             RouteRow(
               label: 'BTC price',
               value: 'mempool.space · CoinGecko (fallback)',
@@ -78,14 +75,8 @@ class DataRoutingBanner extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 4),
-          RouteRow(
-            label: 'Wallet sync',
-            value: 'Your server only',
-          ),
-          RouteRow(
-            label: 'BTC price',
-            value: 'Your server only',
-          ),
+          RouteRow(label: 'Wallet sync', value: 'Your server only'),
+          RouteRow(label: 'BTC price', value: 'Your server only'),
           RouteRow(
             label: 'Historical prices',
             value: 'Your server only (mempool with price data required)',
@@ -145,11 +136,7 @@ class SettingsBanner extends StatelessWidget {
 }
 
 class RouteRow extends StatelessWidget {
-  const RouteRow({
-    super.key,
-    required this.label,
-    required this.value,
-  });
+  const RouteRow({super.key, required this.label, required this.value});
 
   final String label;
   final String value;
@@ -166,10 +153,7 @@ class RouteRow extends StatelessWidget {
             child: Text(
               label,
               // Was the accent at 70% alpha — the worst ratio on the screen.
-              style: TextStyle(
-                fontSize: 11,
-                color: context.textSecondary,
-              ),
+              style: TextStyle(fontSize: 11, color: context.textSecondary),
             ),
           ),
           Flexible(
@@ -199,9 +183,9 @@ class SettingsSectionHeader extends StatelessWidget {
       child: Text(
         title.toUpperCase(),
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: context.textSecondary,
-              letterSpacing: 1.2,
-            ),
+          color: context.textSecondary,
+          letterSpacing: 1.2,
+        ),
       ),
     );
   }
@@ -230,14 +214,11 @@ class SettingsTile extends StatelessWidget {
           if (subtitle != null)
             Text(
               subtitle!,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: context.textSecondary,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: context.textSecondary),
             ),
-          if (trailing != null) ...[
-            const SizedBox(height: 10),
-            trailing!,
-          ],
+          if (trailing != null) ...[const SizedBox(height: 10), trailing!],
         ],
       ),
     );

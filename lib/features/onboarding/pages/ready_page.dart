@@ -60,8 +60,7 @@ class ReadyPage extends StatelessWidget {
 }
 
 class TipRow extends StatelessWidget {
-  const TipRow({
-    super.key,required this.icon, required this.text});
+  const TipRow({super.key, required this.icon, required this.text});
 
   final IconData icon;
   final String text;
@@ -77,9 +76,9 @@ class TipRow extends StatelessWidget {
           child: Text(
             text,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: context.textSecondary,
-                  height: 1.5,
-                ),
+              color: context.textSecondary,
+              height: 1.5,
+            ),
           ),
         ),
       ],
@@ -118,9 +117,10 @@ class BottomBar extends StatelessWidget {
                 width: i == page ? 20 : 6,
                 height: 6,
                 decoration: BoxDecoration(
-                  color: i == page
-                      ? AppColors.bitcoinOrange
-                      : AppColors.bitcoinOrange.withAlpha(64),
+                  color:
+                      i == page
+                          ? AppColors.bitcoinOrange
+                          : AppColors.bitcoinOrange.withAlpha(64),
                   borderRadius: BorderRadius.circular(3),
                 ),
               );

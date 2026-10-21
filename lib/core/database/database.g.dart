@@ -4566,6 +4566,10 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     'idx_transactions_recurring_period',
     'CREATE INDEX idx_transactions_recurring_period ON transactions (recurring_period)',
   );
+  late final Index idxCategoriesName = Index(
+    'idx_categories_name',
+    'CREATE UNIQUE INDEX idx_categories_name ON categories (name)',
+  );
   late final Index idxBudgetsCategoryId = Index(
     'idx_budgets_category_id',
     'CREATE UNIQUE INDEX idx_budgets_category_id ON budgets (category_id)',
@@ -4598,6 +4602,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     idxTransactionsWalletId,
     idxTransactionsCategory,
     idxTransactionsRecurringPeriod,
+    idxCategoriesName,
     idxBudgetsCategoryId,
     idxImportedTransactionsSourceId,
     idxDescriptionMappingsSourceDescription,

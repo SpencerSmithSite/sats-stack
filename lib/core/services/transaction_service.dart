@@ -3,9 +3,10 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
-import '../database/database.dart';
+
 import '../../shared/constants/app_constants.dart';
 import '../../shared/utils/hash_utils.dart';
+import '../database/database.dart';
 
 class TransactionService {
   TransactionService(this._db);
@@ -14,14 +15,12 @@ class TransactionService {
 
   Stream<List<Transaction>> watchAll() {
     return (_db.select(_db.transactions)
-          ..orderBy([(t) => OrderingTerm.desc(t.date)]))
-        .watch();
+      ..orderBy([(t) => OrderingTerm.desc(t.date)])).watch();
   }
 
   Future<List<Transaction>> getAll() {
     return (_db.select(_db.transactions)
-          ..orderBy([(t) => OrderingTerm.desc(t.date)]))
-        .get();
+      ..orderBy([(t) => OrderingTerm.desc(t.date)])).get();
   }
 
   Future<void> add(TransactionsCompanion companion) {
@@ -29,9 +28,7 @@ class TransactionService {
   }
 
   Future<void> deleteById(int id) {
-    return (_db.delete(_db.transactions)
-          ..where((t) => t.id.equals(id)))
-        .go();
+    return (_db.delete(_db.transactions)..where((t) => t.id.equals(id))).go();
   }
 
   /// Writes the fields present in [companion] to the row with its `id`.
@@ -44,8 +41,7 @@ class TransactionService {
       throw ArgumentError.value(companion, 'companion', 'id is required');
     }
     return (_db.update(_db.transactions)
-          ..where((t) => t.id.equals(companion.id.value)))
-        .write(companion);
+      ..where((t) => t.id.equals(companion.id.value))).write(companion);
   }
 
   /// Finds all recurring transaction templates and inserts any instances that
@@ -54,9 +50,9 @@ class TransactionService {
   ///
   /// [now] exists for tests; production callers omit it.
   Future<void> generateDueRecurring({DateTime? now}) async {
-    final recurring = await (_db.select(_db.transactions)
-          ..where((t) => t.recurringPeriod.isNotNull()))
-        .get();
+    final recurring =
+        await (_db.select(_db.transactions)
+          ..where((t) => t.recurringPeriod.isNotNull())).get();
 
     if (recurring.isEmpty) return;
 
@@ -93,9 +89,9 @@ class TransactionService {
         // surviving row: deleting the most recent instance used to lower it
         // and the next launch brought that row straight back.
         final cursorKey = AppConstants.recurringCursorKey(entry.key);
-        final cursorRow = await (_db.select(_db.appSettings)
-              ..where((t) => t.key.equals(cursorKey)))
-            .getSingleOrNull();
+        final cursorRow =
+            await (_db.select(_db.appSettings)
+              ..where((t) => t.key.equals(cursorKey))).getSingleOrNull();
         final cursor = int.tryParse(cursorRow?.value ?? '');
 
         // The highest occurrence the series still has a row for.
@@ -117,9 +113,10 @@ class TransactionService {
         // generated again. A series where the newest instance alone was
         // deleted still has its middle instances, so it keeps the cursor and
         // the deleted row stays deleted.
-        final resumeFrom = (cursor != null && highestSurviving > 0)
-            ? cursor
-            : highestSurviving;
+        final resumeFrom =
+            (cursor != null && highestSurviving > 0)
+                ? cursor
+                : highestSurviving;
 
         var n = resumeFrom + 1;
         if (n < 1) n = 1;
@@ -139,7 +136,9 @@ class TransactionService {
           );
 
           // insertOrIgnore: the unique dedupHash means "already inserted".
-          await _db.into(_db.transactions).insert(
+          await _db
+              .into(_db.transactions)
+              .insert(
                 TransactionsCompanion.insert(
                   walletId: template.walletId,
                   date: nextDue,
@@ -166,7 +165,9 @@ class TransactionService {
         // its anchor and a deletion cannot rewind past it.
         final mark = n - 1;
         if (cursor == null || mark > cursor || startedAt == n) {
-          await _db.into(_db.appSettings).insertOnConflictUpdate(
+          await _db
+              .into(_db.appSettings)
+              .insertOnConflictUpdate(
                 AppSettingsCompanion.insert(
                   key: cursorKey,
                   value: mark.toString(),
@@ -185,13 +186,11 @@ class TransactionService {
   /// `AppSettings` key.
   @visibleForTesting
   static String seriesKey(Transaction tx) {
-    final raw = '${tx.recurringPeriod}|'
+    final raw =
+        '${tx.recurringPeriod}|'
         '${tx.recurringAnchorDate!.millisecondsSinceEpoch}|'
         '${tx.description}|${tx.amountFiat}';
-    return sha256
-        .convert(utf8.encode(raw))
-        .toString()
-        .substring(0, 16);
+    return sha256.convert(utf8.encode(raw)).toString().substring(0, 16);
   }
 
   static DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
@@ -235,20 +234,29 @@ class TransactionService {
   }
 
   static int _dayDiff(DateTime from, DateTime to) =>
-      DateTime.utc(to.year, to.month, to.day)
-          .difference(DateTime.utc(from.year, from.month, from.day))
-          .inDays;
+      DateTime.utc(
+        to.year,
+        to.month,
+        to.day,
+      ).difference(DateTime.utc(from.year, from.month, from.day)).inDays;
 
   static DateTime _onDay(DateTime time, int year, int month, int day) =>
-      DateTime(year, month, day, time.hour, time.minute, time.second,
-          time.millisecond, time.microsecond);
+      DateTime(
+        year,
+        month,
+        day,
+        time.hour,
+        time.minute,
+        time.second,
+        time.millisecond,
+        time.microsecond,
+      );
 
   /// [anchor]'s day of month in [year]/[month] (month may overflow — DateTime
   /// normalises it), clamped to that month's length.
   static DateTime _clampedToMonth(DateTime anchor, int year, int month) {
     final first = DateTime(year, month);
     final maxDay = DateTime(first.year, first.month + 1, 0).day;
-    return _onDay(
-        anchor, first.year, first.month, anchor.day.clamp(1, maxDay));
+    return _onDay(anchor, first.year, first.month, anchor.day.clamp(1, maxDay));
   }
 }

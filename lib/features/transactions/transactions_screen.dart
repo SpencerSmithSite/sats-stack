@@ -3,15 +3,16 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+
 import '../../core/database/database.dart';
+import '../../main.dart' as app;
 import '../../shared/theme/app_colors.dart';
-import '../../shared/widgets/empty_state.dart';
 import '../../shared/widgets/btc_price_chip.dart';
-import 'widgets/transaction_list_item.dart';
+import '../../shared/widgets/empty_state.dart';
 import 'widgets/add_transaction_sheet.dart';
 import 'widgets/add_wallet_sheet.dart';
 import 'widgets/transaction_edit_sheet.dart';
-import '../../main.dart' as app;
+import 'widgets/transaction_list_item.dart';
 
 class TransactionsScreen extends StatefulWidget {
   const TransactionsScreen({super.key});
@@ -47,8 +48,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     _transactions = app.transactionService.watchAll();
     _categorySub = app.categoryService.watchAll().listen((cats) {
       if (!mounted) return;
-      setState(() =>
-          _categoriesByName = {for (final c in cats) c.name: c});
+      setState(() => _categoriesByName = {for (final c in cats) c.name: c});
     });
   }
 
@@ -66,17 +66,21 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     var result = all;
     if (_searchQuery.isNotEmpty) {
       final q = _searchQuery.toLowerCase();
-      result = result
-          .where((t) =>
-              t.description.toLowerCase().contains(q) ||
-              (t.category?.toLowerCase().contains(q) ?? false) ||
-              (t.notes?.toLowerCase().contains(q) ?? false))
-          .toList();
+      result =
+          result
+              .where(
+                (t) =>
+                    t.description.toLowerCase().contains(q) ||
+                    (t.category?.toLowerCase().contains(q) ?? false) ||
+                    (t.notes?.toLowerCase().contains(q) ?? false),
+              )
+              .toList();
     }
     if (_filterCategories.isNotEmpty) {
-      result = result
-          .where((t) => _filterCategories.contains(t.category ?? 'Other'))
-          .toList();
+      result =
+          result
+              .where((t) => _filterCategories.contains(t.category ?? 'Other'))
+              .toList();
     }
     if (_filterSources.isNotEmpty) {
       result = result.where((t) => _filterSources.contains(t.source)).toList();
@@ -85,21 +89,22 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   }
 
   void _clearFilters() => setState(() {
-        _filterCategories.clear();
-        _filterSources.clear();
-      });
+    _filterCategories.clear();
+    _filterSources.clear();
+  });
 
   void _openAddSheet() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => AddTransactionSheet(
-        transactionService: app.transactionService,
-        categoryService: app.categoryService,
-        walletService: app.walletService,
-        btcPriceService: app.btcPriceService,
-      ),
+      builder:
+          (_) => AddTransactionSheet(
+            transactionService: app.transactionService,
+            categoryService: app.categoryService,
+            walletService: app.walletService,
+            btcPriceService: app.btcPriceService,
+          ),
     );
   }
 
@@ -108,11 +113,12 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => AddWalletSheet(
-        xpubService: app.xpubService,
-        walletService: app.walletService,
-        btcPriceService: app.btcPriceService,
-      ),
+      builder:
+          (_) => AddWalletSheet(
+            xpubService: app.xpubService,
+            walletService: app.walletService,
+            btcPriceService: app.btcPriceService,
+          ),
     );
   }
 
@@ -121,18 +127,20 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _FilterSheet(
-        activeCategories: Set.from(_filterCategories),
-        activeSources: Set.from(_filterSources),
-        onApply: (cats, sources) => setState(() {
-          _filterCategories
-            ..clear()
-            ..addAll(cats);
-          _filterSources
-            ..clear()
-            ..addAll(sources);
-        }),
-      ),
+      builder:
+          (_) => _FilterSheet(
+            activeCategories: Set.from(_filterCategories),
+            activeSources: Set.from(_filterSources),
+            onApply:
+                (cats, sources) => setState(() {
+                  _filterCategories
+                    ..clear()
+                    ..addAll(cats);
+                  _filterSources
+                    ..clear()
+                    ..addAll(sources);
+                }),
+          ),
     );
   }
 
@@ -164,7 +172,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
           IconButton(
             icon: const Icon(Icons.account_balance_wallet_outlined),
             onPressed: _openAddWallet,
-            tooltip: 'Add xpub wallet',
+            tooltip: 'Add Bitcoin wallet (xpub, ypub or zpub)',
             padding: const EdgeInsets.all(8),
             visualDensity: VisualDensity.compact,
           ),
@@ -187,15 +195,16 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
               decoration: InputDecoration(
                 hintText: 'Search transactions…',
                 prefixIcon: const Icon(Icons.search, size: 20),
-                suffixIcon: _searchQuery.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear, size: 18),
-                        onPressed: () {
-                          _searchCtrl.clear();
-                          setState(() => _searchQuery = '');
-                        },
-                      )
-                    : null,
+                suffixIcon:
+                    _searchQuery.isNotEmpty
+                        ? IconButton(
+                          icon: const Icon(Icons.clear, size: 18),
+                          onPressed: () {
+                            _searchCtrl.clear();
+                            setState(() => _searchQuery = '');
+                          },
+                        )
+                        : null,
                 isDense: true,
                 contentPadding: const EdgeInsets.symmetric(vertical: 10),
                 border: OutlineInputBorder(
@@ -219,14 +228,17 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                         for (final cat in _filterCategories)
                           _ActiveFilterChip(
                             label: cat,
-                            onRemove: () => setState(
-                                () => _filterCategories.remove(cat)),
+                            onRemove:
+                                () => setState(
+                                  () => _filterCategories.remove(cat),
+                                ),
                           ),
                         for (final src in _filterSources)
                           _ActiveFilterChip(
                             label: _sourceLabel(src),
-                            onRemove: () =>
-                                setState(() => _filterSources.remove(src)),
+                            onRemove:
+                                () =>
+                                    setState(() => _filterSources.remove(src)),
                           ),
                       ],
                     ),
@@ -270,7 +282,8 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                   return EmptyState(
                     icon: Icons.search_off_outlined,
                     title: 'No results',
-                    subtitle: 'Try a different search term or clear the filters.',
+                    subtitle:
+                        'Try a different search term or clear the filters.',
                     actionLabel: 'Clear filters',
                     onAction: () {
                       _searchCtrl.clear();
@@ -341,9 +354,9 @@ class _FilterSheetState extends State<_FilterSheet> {
   }
 
   void _clearAll() => setState(() {
-        _categories.clear();
-        _sources.clear();
-      });
+    _categories.clear();
+    _sources.clear();
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -356,7 +369,11 @@ class _FilterSheetState extends State<_FilterSheet> {
         borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       padding: EdgeInsets.fromLTRB(
-          16, 16, 16, MediaQuery.of(context).viewInsets.bottom + 16),
+        16,
+        16,
+        16,
+        MediaQuery.of(context).viewInsets.bottom + 16,
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -381,7 +398,8 @@ class _FilterSheetState extends State<_FilterSheet> {
                 TextButton(
                   onPressed: _clearAll,
                   style: TextButton.styleFrom(
-                      foregroundColor: context.textSecondary),
+                    foregroundColor: context.textSecondary,
+                  ),
                   child: const Text('Clear all'),
                 ),
             ],
@@ -389,55 +407,69 @@ class _FilterSheetState extends State<_FilterSheet> {
           const SizedBox(height: 12),
 
           // Source section
-          Text('Source',
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: context.textSecondary,
-                letterSpacing: 1.1,
-              )),
+          Text(
+            'Source',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: context.textSecondary,
+              letterSpacing: 1.1,
+            ),
+          ),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
             runSpacing: 6,
-            children: _allSources
-                .map((src) => FilterChip(
-                      label: Text(_sourceLabel(src)),
-                      selected: _sources.contains(src),
-                      onSelected: (on) => setState(() =>
-                          on ? _sources.add(src) : _sources.remove(src)),
-                    ))
-                .toList(),
+            children:
+                _allSources
+                    .map(
+                      (src) => FilterChip(
+                        label: Text(_sourceLabel(src)),
+                        selected: _sources.contains(src),
+                        onSelected:
+                            (on) => setState(
+                              () =>
+                                  on ? _sources.add(src) : _sources.remove(src),
+                            ),
+                      ),
+                    )
+                    .toList(),
           ),
 
           const SizedBox(height: 16),
 
           // Category section
-          Text('Category',
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: context.textSecondary,
-                letterSpacing: 1.1,
-              )),
+          Text(
+            'Category',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: context.textSecondary,
+              letterSpacing: 1.1,
+            ),
+          ),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
             runSpacing: 6,
-            children: _allCategories
-                .map((cat) => FilterChip(
-                      label: Text(cat.name),
-                      selected: _categories.contains(cat.name),
-                      onSelected: (on) => setState(() => on
-                          ? _categories.add(cat.name)
-                          : _categories.remove(cat.name)),
-                    ))
-                .toList(),
+            children:
+                _allCategories
+                    .map(
+                      (cat) => FilterChip(
+                        label: Text(cat.name),
+                        selected: _categories.contains(cat.name),
+                        onSelected:
+                            (on) => setState(
+                              () =>
+                                  on
+                                      ? _categories.add(cat.name)
+                                      : _categories.remove(cat.name),
+                            ),
+                      ),
+                    )
+                    .toList(),
           ),
 
           const SizedBox(height: 20),
           SizedBox(
             width: double.infinity,
-            child: FilledButton(
-              onPressed: _apply,
-              child: const Text('Apply'),
-            ),
+            child: FilledButton(onPressed: _apply, child: const Text('Apply')),
           ),
         ],
       ),
@@ -448,11 +480,11 @@ class _FilterSheetState extends State<_FilterSheet> {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 String _sourceLabel(String source) => switch (source) {
-      'manual' => 'Manual',
-      'csv' => 'CSV import',
-      'xpub' => 'xpub wallet',
-      _ => source,
-    };
+  'manual' => 'Manual',
+  'csv' => 'CSV import',
+  'xpub' => 'xpub wallet',
+  _ => source,
+};
 
 class _ActiveFilterChip extends StatelessWidget {
   const _ActiveFilterChip({required this.label, required this.onRemove});
@@ -600,26 +632,27 @@ class _TransactionRow extends StatelessWidget {
   void _confirmDelete(BuildContext context) {
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Delete transaction?'),
-        content: Text(
-          'Remove "${transaction.description.isEmpty ? 'this transaction' : transaction.description}"?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+      builder:
+          (_) => AlertDialog(
+            title: const Text('Delete transaction?'),
+            content: Text(
+              'Remove "${transaction.description.isEmpty ? 'this transaction' : transaction.description}"?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  app.transactionService.deleteById(transaction.id);
+                },
+                style: TextButton.styleFrom(foregroundColor: AppColors.danger),
+                child: const Text('Delete'),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              app.transactionService.deleteById(transaction.id);
-            },
-            style: TextButton.styleFrom(foregroundColor: AppColors.danger),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
     );
   }
 }

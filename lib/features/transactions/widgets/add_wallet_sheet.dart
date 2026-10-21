@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
-import '../../../core/services/xpub_service.dart';
-import '../../../core/services/wallet_service.dart';
+
 import '../../../core/services/btc_price_service.dart';
+import '../../../core/services/wallet_service.dart';
+import '../../../core/services/xpub_service.dart';
 import '../../../shared/constants/app_constants.dart';
 import '../../../shared/theme/app_colors.dart';
-import '../../../shared/widgets/tappable.dart';
 import '../../../shared/utils/colour_names.dart';
+import '../../../shared/widgets/tappable.dart';
 
 class AddWalletSheet extends StatefulWidget {
   const AddWalletSheet({
@@ -114,7 +115,8 @@ class _AddWalletSheetState extends State<AddWalletSheet> {
               // Handle
               Center(
                 child: Container(
-                  width: 36, height: 4,
+                  width: 36,
+                  height: 4,
                   margin: const EdgeInsets.symmetric(vertical: 12),
                   decoration: BoxDecoration(
                     color: theme.colorScheme.outline,
@@ -129,8 +131,12 @@ class _AddWalletSheetState extends State<AddWalletSheet> {
                     const Icon(Icons.account_balance_wallet_outlined, size: 20),
                     const SizedBox(width: 8),
                     Text(
-                      _step == _SheetStep.done ? 'Wallet Added' : 'Add xpub Wallet',
-                      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                      _step == _SheetStep.done
+                          ? 'Wallet Added'
+                          : 'Add xpub Wallet',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ],
                 ),
@@ -138,21 +144,21 @@ class _AddWalletSheetState extends State<AddWalletSheet> {
               const Divider(height: 1),
               switch (_step) {
                 _SheetStep.form => _FormBody(
-                    formKey: _formKey,
-                    labelController: _labelController,
-                    xpubController: _xpubController,
-                    selectedColor: _selectedColor,
-                    colorOptions: _colorOptions,
-                    error: _error,
-                    xpubService: widget.xpubService,
-                    onColorSelect: (c) => setState(() => _selectedColor = c),
-                    onSubmit: _submit,
-                  ),
+                  formKey: _formKey,
+                  labelController: _labelController,
+                  xpubController: _xpubController,
+                  selectedColor: _selectedColor,
+                  colorOptions: _colorOptions,
+                  error: _error,
+                  xpubService: widget.xpubService,
+                  onColorSelect: (c) => setState(() => _selectedColor = c),
+                  onSubmit: _submit,
+                ),
                 _SheetStep.syncing => _SyncingBody(status: _syncStatus),
                 _SheetStep.done => _DoneBody(
-                    result: _syncResult!,
-                    onClose: () => Navigator.of(context).pop(),
-                  ),
+                  result: _syncResult!,
+                  onClose: () => Navigator.of(context).pop(),
+                ),
               },
             ],
           ),
@@ -229,7 +235,7 @@ class _FormBody extends StatelessWidget {
             // Format hint
             ListenableBuilder(
               listenable: xpubController,
-              builder: (_, __) {
+              builder: (_, _) {
                 final text = xpubController.text.trim();
                 if (text.isEmpty) return const SizedBox.shrink();
                 String hint;
@@ -271,15 +277,18 @@ class _FormBody extends StatelessWidget {
                 hintText: 'e.g. Cold Storage, Hardware Wallet…',
               ),
               textCapitalization: TextCapitalization.words,
-              validator: (v) =>
-                  (v == null || v.trim().isEmpty) ? 'Enter a label' : null,
+              validator:
+                  (v) =>
+                      (v == null || v.trim().isEmpty) ? 'Enter a label' : null,
             ),
             const SizedBox(height: 20),
 
             // Color picker
             Text(
               'Colour',
-              style: theme.textTheme.bodySmall?.copyWith(color: context.textSecondary),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: context.textSecondary,
+              ),
             ),
             const SizedBox(height: 10),
             Row(
@@ -297,32 +306,68 @@ class _FormBody extends StatelessWidget {
             const SizedBox(height: 8),
 
             // Privacy notice — content depends on whether a custom server is set
-            Builder(builder: (context) {
-              final esploraUrl = xpubService.esploraBaseUrl;
-              final usingCustom = esploraUrl != AppConstants.mempoolBaseUrl;
+            Builder(
+              builder: (context) {
+                final esploraUrl = xpubService.esploraBaseUrl;
+                final usingCustom = esploraUrl != AppConstants.mempoolBaseUrl;
 
-              final isDark = Theme.of(context).brightness == Brightness.dark;
-              if (usingCustom) {
-                const accent = Color(0xFF6AC86A);
-                // Custom server: show which server is being used, no warning
+                final isDark = Theme.of(context).brightness == Brightness.dark;
+                if (usingCustom) {
+                  const accent = Color(0xFF6AC86A);
+                  // Custom server: show which server is being used, no warning
+                  return Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: accent.withValues(alpha: isDark ? 0.12 : 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: accent.withValues(alpha: isDark ? 0.35 : 0.20),
+                        width: 0.5,
+                      ),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(
+                          Icons.check_circle_outline,
+                          size: 14,
+                          color: accent,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Transactions will be fetched exclusively from your custom server ($esploraUrl). No data is sent to public servers.',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: context.legibleAccent(accent),
+                              height: 1.5,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                // Default mempool.space: show the original privacy warning
+                const accent = Color(0xFF6AB0E8);
                 return Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: accent.withValues(alpha: isDark ? 0.12 : 0.08),
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
-                        color: accent.withValues(alpha: isDark ? 0.35 : 0.20),
-                        width: 0.5),
+                      color: accent.withValues(alpha: isDark ? 0.35 : 0.20),
+                      width: 0.5,
+                    ),
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.check_circle_outline,
-                          size: 14, color: accent),
+                      const Icon(Icons.info_outline, size: 14, color: accent),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'Transactions will be fetched exclusively from your custom server ($esploraUrl). No data is sent to public servers.',
+                          'Transactions are fetched from mempool.space. Your xpub is stored locally only — never sent to any server.',
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: context.legibleAccent(accent),
                             height: 1.5,
@@ -332,37 +377,8 @@ class _FormBody extends StatelessWidget {
                     ],
                   ),
                 );
-              }
-
-              // Default mempool.space: show the original privacy warning
-              const accent = Color(0xFF6AB0E8);
-              return Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: accent.withValues(alpha: isDark ? 0.12 : 0.08),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                      color: accent.withValues(alpha: isDark ? 0.35 : 0.20),
-                      width: 0.5),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(Icons.info_outline, size: 14, color: accent),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Transactions are fetched from mempool.space. Your xpub is stored locally only — never sent to any server.',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: context.legibleAccent(accent),
-                          height: 1.5,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }),
+              },
+            ),
 
             if (error != null) ...[
               const SizedBox(height: 12),
@@ -375,7 +391,9 @@ class _FormBody extends StatelessWidget {
 
             FilledButton(
               onPressed: onSubmit,
-              style: FilledButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(double.infinity, 48),
+              ),
               child: const Text('Add & Sync Wallet'),
             ),
           ],
@@ -400,18 +418,23 @@ class _SyncingBody extends StatelessWidget {
       child: Column(
         children: [
           const SizedBox(
-            width: 48, height: 48,
+            width: 48,
+            height: 48,
             child: CircularProgressIndicator(strokeWidth: 3),
           ),
           const SizedBox(height: 24),
           Text(
             'Syncing…',
-            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
           ),
           const SizedBox(height: 8),
           Text(
             status,
-            style: theme.textTheme.bodySmall?.copyWith(color: context.textSecondary),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: context.textSecondary,
+            ),
             textAlign: TextAlign.center,
           ),
         ],
@@ -435,23 +458,33 @@ class _DoneBody extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(24, 32, 24, 40),
       child: Column(
         children: [
-          Icon(Icons.check_circle_outline_rounded, size: 56, color: AppColors.success),
+          Icon(
+            Icons.check_circle_outline_rounded,
+            size: 56,
+            color: AppColors.success,
+          ),
           const SizedBox(height: 16),
           Text(
             '${result.imported} transaction${result.imported == 1 ? '' : 's'} imported',
-            style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
           ),
           const SizedBox(height: 8),
           Text(
             'Scanned ${result.addressesScanned} addresses'
             '${result.skipped > 0 ? ' · ${result.skipped} duplicates skipped' : ''}.',
-            style: theme.textTheme.bodySmall?.copyWith(color: context.textSecondary),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: context.textSecondary,
+            ),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 32),
           FilledButton(
             onPressed: onClose,
-            style: FilledButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
+            style: FilledButton.styleFrom(
+              minimumSize: const Size(double.infinity, 48),
+            ),
             child: const Text('Done'),
           ),
         ],
@@ -463,7 +496,11 @@ class _DoneBody extends StatelessWidget {
 // ── Color dot ─────────────────────────────────────────────────────────────────
 
 class _ColorDot extends StatelessWidget {
-  const _ColorDot({required this.hex, required this.selected, required this.onTap});
+  const _ColorDot({
+    required this.hex,
+    required this.selected,
+    required this.onTap,
+  });
 
   final String hex;
   final bool selected;
@@ -483,7 +520,8 @@ class _ColorDot extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 120),
-        width: 28, height: 28,
+        width: 28,
+        height: 28,
         decoration: BoxDecoration(
           color: color,
           shape: BoxShape.circle,
@@ -491,9 +529,10 @@ class _ColorDot extends StatelessWidget {
             color: selected ? Colors.white : Colors.transparent,
             width: 2,
           ),
-          boxShadow: selected
-              ? [BoxShadow(color: color.withAlpha(100), blurRadius: 6)]
-              : null,
+          boxShadow:
+              selected
+                  ? [BoxShadow(color: color.withAlpha(100), blurRadius: 6)]
+                  : null,
         ),
       ),
     );

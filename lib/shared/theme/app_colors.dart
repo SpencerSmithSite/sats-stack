@@ -53,9 +53,10 @@ extension AppColorsOf on BuildContext {
   Color get textSecondary => Theme.of(this).colorScheme.onSurfaceVariant;
 
   /// Bitcoin orange that is legible as text in the active theme.
-  Color get bitcoinOrangeText => Theme.of(this).brightness == Brightness.dark
-      ? AppColors.bitcoinOrange
-      : AppColors.bitcoinOrangeOnLight;
+  Color get bitcoinOrangeText =>
+      Theme.of(this).brightness == Brightness.dark
+          ? AppColors.bitcoinOrange
+          : AppColors.bitcoinOrangeOnLight;
 
   /// [accent], darkened in light mode just enough to be legible as text on a
   /// banner tinted with that same accent. Unchanged in dark mode, where every

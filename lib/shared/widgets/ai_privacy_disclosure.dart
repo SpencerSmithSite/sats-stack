@@ -132,10 +132,11 @@ class ApiKeyHelpLink extends StatelessWidget {
     return Align(
       alignment: Alignment.centerLeft,
       child: TextButton.icon(
-        onPressed: () => launchUrl(
-          Uri.parse(cloud.keyUrl),
-          mode: LaunchMode.externalApplication,
-        ),
+        onPressed:
+            () => launchUrl(
+              Uri.parse(cloud.keyUrl),
+              mode: LaunchMode.externalApplication,
+            ),
         icon: const Icon(Icons.open_in_new, size: 15),
         label: Text('Get a ${cloud.label} API key'),
         style: TextButton.styleFrom(

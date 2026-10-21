@@ -9,6 +9,5 @@ class MainActivity : FlutterActivity() {
 
         val messenger = flutterEngine.dartExecutor.binaryMessenger
         GeminiNanoBridge.register(messenger)
-        DeviceBridge.register(messenger, applicationContext)
     }
 }

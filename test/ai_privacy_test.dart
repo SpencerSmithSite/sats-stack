@@ -58,8 +58,10 @@ void main() {
     test('a URL with no readable host fails closed', () {
       // `Uri` reads `ollama.example.com` here as the *scheme*, leaving no
       // host, and the old check called a hostless URL local.
-      expect(OllamaService.isLocalEndpoint('ollama.example.com:11434'),
-          isFalse);
+      expect(
+        OllamaService.isLocalEndpoint('ollama.example.com:11434'),
+        isFalse,
+      );
       expect(OllamaService.isLocalEndpoint('not a url at all'), isFalse);
     });
   });
@@ -67,8 +69,11 @@ void main() {
   group('the enum invariant still holds', () {
     test('isPrivate matches the absence of a named recipient', () {
       for (final provider in AiProvider.values) {
-        expect(provider.isPrivate, provider.dataRecipient == null,
-            reason: provider.key);
+        expect(
+          provider.isPrivate,
+          provider.dataRecipient == null,
+          reason: provider.key,
+        );
       }
     });
   });
@@ -81,7 +86,11 @@ void main() {
           'You can find your API key at https://platform.openai.com/account/api-keys.",'
           '"type":"invalid_request_error"}}';
       final message = CloudBackend.describeError(
-          CloudProvider.openai, 'gpt-5.6-terra', 401, body);
+        CloudProvider.openai,
+        'gpt-5.6-terra',
+        401,
+        body,
+      );
 
       expect(message, isNot(contains('sk-proj')));
       expect(message, isNot(contains('****')));
@@ -91,7 +100,11 @@ void main() {
     test('other statuses still use the provider own message', () {
       const body = '{"error":{"message":"model is overloaded"}}';
       final message = CloudBackend.describeError(
-          CloudProvider.openai, 'gpt-5.6-terra', 503, body);
+        CloudProvider.openai,
+        'gpt-5.6-terra',
+        503,
+        body,
+      );
       expect(message, contains('overloaded'));
     });
   });
@@ -133,29 +146,34 @@ void main() {
       await importService.setOffDeviceImportAllowed(true);
 
       await ollama.setActiveProvider(AiProvider.chatGpt);
-      expect(await importService.offDeviceImportAllowed(), isFalse,
-          reason: 'agreeing to Anthropic is not agreeing to OpenAI');
+      expect(
+        await importService.offDeviceImportAllowed(),
+        isFalse,
+        reason: 'agreeing to Anthropic is not agreeing to OpenAI',
+      );
 
       await ollama.setActiveProvider(AiProvider.claude);
       expect(await importService.offDeviceImportAllowed(), isTrue);
     });
 
-    test('a bare host:port is normalised on save, not taken as local',
-        () async {
-      await ollama.setActiveProvider(AiProvider.ollama);
-      await ollama.saveSettings(url: 'ollama.example.com:11434');
-      expect(ollama.baseUrl, 'http://ollama.example.com:11434');
-      expect(ollama.sendsDataOffDevice, isTrue);
-      expect(ollama.activeDataRecipient, contains('ollama.example.com'));
+    test(
+      'a bare host:port is normalised on save, not taken as local',
+      () async {
+        await ollama.setActiveProvider(AiProvider.ollama);
+        await ollama.saveSettings(url: 'ollama.example.com:11434');
+        expect(ollama.baseUrl, 'http://ollama.example.com:11434');
+        expect(ollama.sendsDataOffDevice, isTrue);
+        expect(ollama.activeDataRecipient, contains('ollama.example.com'));
 
-      await ollama.saveSettings(url: '192.168.1.5:11434/');
-      expect(ollama.baseUrl, 'http://192.168.1.5:11434');
-      expect(ollama.sendsDataOffDevice, isFalse);
+        await ollama.saveSettings(url: '192.168.1.5:11434/');
+        expect(ollama.baseUrl, 'http://192.168.1.5:11434');
+        expect(ollama.sendsDataOffDevice, isFalse);
 
-      // Blank is "use the default", which is this machine.
-      await ollama.saveSettings(url: '');
-      expect(ollama.sendsDataOffDevice, isFalse);
-    });
+        // Blank is "use the default", which is this machine.
+        await ollama.saveSettings(url: '');
+        expect(ollama.sendsDataOffDevice, isFalse);
+      },
+    );
 
     test('a remote self-hosted server is disclosed by host', () async {
       await ollama.setActiveProvider(AiProvider.lmStudio);

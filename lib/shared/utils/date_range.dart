@@ -25,15 +25,13 @@ class DateRange {
   ///
   /// December is fine: `DateTime(2025, 13, 1)` normalises to 2026-01-01.
   factory DateRange.month(DateTime month) => DateRange(
-        DateTime(month.year, month.month, 1),
-        DateTime(month.year, month.month + 1, 1),
-      );
+    DateTime(month.year, month.month, 1),
+    DateTime(month.year, month.month + 1, 1),
+  );
 
   /// The whole calendar year containing [date].
-  factory DateRange.year(DateTime date) => DateRange(
-        DateTime(date.year, 1, 1),
-        DateTime(date.year + 1, 1, 1),
-      );
+  factory DateRange.year(DateTime date) =>
+      DateRange(DateTime(date.year, 1, 1), DateTime(date.year + 1, 1, 1));
 
   bool contains(DateTime date) => !date.isBefore(start) && date.isBefore(end);
 }

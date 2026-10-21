@@ -8,9 +8,9 @@ enum StackPeriod { threeM, sixM, oneY, all }
 
 extension StackPeriodLabel on StackPeriod {
   String get label => switch (this) {
-        StackPeriod.threeM => '3M',
-        StackPeriod.sixM => '6M',
-        StackPeriod.oneY => '1Y',
-        StackPeriod.all => 'All',
-      };
+    StackPeriod.threeM => '3M',
+    StackPeriod.sixM => '6M',
+    StackPeriod.oneY => '1Y',
+    StackPeriod.all => 'All',
+  };
 }

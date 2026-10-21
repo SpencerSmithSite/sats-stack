@@ -81,7 +81,9 @@ void main() {
   });
 
   group('a guessed category is not learned', () {
-    Future<int> newSource() => db.into(db.importSources).insert(
+    Future<int> newSource() => db
+        .into(db.importSources)
+        .insert(
           ImportSourcesCompanion.insert(
             name: 'Barclays',
             type: 'bank',
@@ -163,7 +165,9 @@ void main() {
 
   group('only a user-chosen category is learned', () {
     test('a keyword guess is not persisted as a mapping', () async {
-      final sourceId = await db.into(db.importSources).insert(
+      final sourceId = await db
+          .into(db.importSources)
+          .insert(
             ImportSourcesCompanion.insert(
               name: 'Barclays',
               type: 'bank',

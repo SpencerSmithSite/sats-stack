@@ -67,40 +67,51 @@ void main() {
     db = AppDatabase.forTesting(NativeDatabase.memory());
     ollama = _FakeHosted(db);
     importService = ImportService(db, ollama);
-    sourceId = await db.into(db.importSources).insert(
+    sourceId = await db
+        .into(db.importSources)
+        .insert(
           ImportSourcesCompanion.insert(
-              name: 'Card', type: 'bank', currency: 'USD'),
+            name: 'Card',
+            type: 'bank',
+            currency: 'USD',
+          ),
         );
     final dir = await Directory.systemTemp.createTemp('consent_test');
     csvPath = '${dir.path}/statement.csv';
-    await File(csvPath).writeAsString(
-        'Date,Description,Amount\n2026-03-01,Coffee,-12.50\n');
+    await File(
+      csvPath,
+    ).writeAsString('Date,Description,Amount\n2026-03-01,Coffee,-12.50\n');
   });
 
   tearDown(() => db.close());
 
   Future<ImportResult> run({required bool answer}) => importService.importFile(
-        filePath: csvPath,
-        fileName: 'statement.csv',
-        sourceId: sourceId,
-        onOffDeviceConsent: (_) async => answer,
-      );
+    filePath: csvPath,
+    fileName: 'statement.csv',
+    sourceId: sourceId,
+    onOffDeviceConsent: (_) async => answer,
+  );
 
   test('a completed import remembers the yes and says who read it', () async {
     final result = await run(answer: true);
 
     expect(ollama.sends, 1);
     expect(result.sentTo, 'Anthropic');
-    expect(result.aiLabel, 'Claude',
-        reason: 'the preview used to say "Ollama AI" for every provider');
+    expect(
+      result.aiLabel,
+      'Claude',
+      reason: 'the preview used to say "Ollama AI" for every provider',
+    );
     expect(await importService.offDeviceImportAllowed(), isTrue);
   });
 
   test('a cancelled import does not remember the yes', () async {
     ollama.duringSend = importService.cancelImport;
 
-    await expectLater(run(answer: true),
-        throwsA(isA<ImportCancelledException>()));
+    await expectLater(
+      run(answer: true),
+      throwsA(isA<ImportCancelledException>()),
+    );
 
     // It was written at the tap, so cancelling a second later still left
     // every future import uploading without asking.
@@ -119,8 +130,9 @@ void main() {
 
   test('consent can be withdrawn, and the next import asks again', () async {
     await run(answer: true);
-    expect(await importService.providersAllowedToReadImports(),
-        [AiProvider.claude]);
+    expect(await importService.providersAllowedToReadImports(), [
+      AiProvider.claude,
+    ]);
 
     await importService.revokeOffDeviceImportConsent();
     expect(await importService.providersAllowedToReadImports(), isEmpty);
@@ -135,23 +147,25 @@ void main() {
     expect(asked, isTrue);
   });
 
-  test('a photo is refused before consent when the backend cannot see',
-      () async {
-    final onDevice = OllamaService(db, keyStore: const _NoKeyStore());
-    await onDevice.setActiveProvider(AiProvider.appleIntelligence);
-    final service = ImportService(db, onDevice);
-    final photo = File('${File(csvPath).parent.path}/receipt.jpg')
-      ..writeAsBytesSync([0xFF, 0xD8, 0xFF]);
+  test(
+    'a photo is refused before consent when the backend cannot see',
+    () async {
+      final onDevice = OllamaService(db, keyStore: const _NoKeyStore());
+      await onDevice.setActiveProvider(AiProvider.appleIntelligence);
+      final service = ImportService(db, onDevice);
+      final photo = File('${File(csvPath).parent.path}/receipt.jpg')
+        ..writeAsBytesSync([0xFF, 0xD8, 0xFF]);
 
-    var asked = false;
-    final result = await service.importImage(
-      imagePath: photo.path,
-      sourceId: sourceId,
-      onOffDeviceConsent: (_) async => asked = true,
-    );
+      var asked = false;
+      final result = await service.importImage(
+        imagePath: photo.path,
+        sourceId: sourceId,
+        onOffDeviceConsent: (_) async => asked = true,
+      );
 
-    expect(asked, isFalse);
-    // Was generic advice about llava; the real reason is the backend.
-    expect(result.errorMessage, contains('cannot read images'));
-  });
+      expect(asked, isFalse);
+      // Was generic advice about llava; the real reason is the backend.
+      expect(result.errorMessage, contains('cannot read images'));
+    },
+  );
 }

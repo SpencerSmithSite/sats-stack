@@ -68,16 +68,22 @@ class CurrencyPage extends StatelessWidget {
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 180),
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 18, vertical: 14),
+                        horizontal: 18,
+                        vertical: 14,
+                      ),
                       decoration: BoxDecoration(
-                        color: isSelected
-                            ? AppColors.bitcoinOrange.withAlpha(26)
-                            : theme.colorScheme.surface,
+                        color:
+                            isSelected
+                                ? AppColors.bitcoinOrange.withAlpha(26)
+                                : theme.colorScheme.surface,
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: isSelected
-                              ? AppColors.bitcoinOrange
-                              : theme.colorScheme.outlineVariant.withAlpha(80),
+                          color:
+                              isSelected
+                                  ? AppColors.bitcoinOrange
+                                  : theme.colorScheme.outlineVariant.withAlpha(
+                                    80,
+                                  ),
                           width: isSelected ? 1.5 : 1,
                         ),
                       ),
@@ -88,9 +94,10 @@ class CurrencyPage extends StatelessWidget {
                             child: Text(
                               info.symbol,
                               style: theme.textTheme.titleMedium?.copyWith(
-                                color: isSelected
-                                    ? AppColors.bitcoinOrange
-                                    : context.textSecondary,
+                                color:
+                                    isSelected
+                                        ? AppColors.bitcoinOrange
+                                        : context.textSecondary,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
@@ -136,11 +143,7 @@ class CurrencyPage extends StatelessWidget {
 }
 
 class ThemePage extends StatelessWidget {
-  const ThemePage({
-    super.key,
-    required this.selected,
-    required this.onChanged,
-  });
+  const ThemePage({super.key, required this.selected, required this.onChanged});
 
   final ThemeMode selected;
   final ValueChanged<ThemeMode> onChanged;
@@ -181,9 +184,10 @@ class ThemePage extends StatelessWidget {
               itemBuilder: (context, index) {
                 final (mode, label, icon, isLight, isSystem) =
                     _themeOptions[index];
-                final Widget preview = isSystem
-                    ? const ThemePreviewSystem()
-                    : ThemePreview(isDark: !isLight);
+                final Widget preview =
+                    isSystem
+                        ? const ThemePreviewSystem()
+                        : ThemePreview(isDark: !isLight);
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: ThemeCard(
@@ -233,14 +237,16 @@ class ThemeCard extends StatelessWidget {
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: isSelected
-              ? AppColors.bitcoinOrange.withAlpha(26)
-              : theme.colorScheme.surface,
+          color:
+              isSelected
+                  ? AppColors.bitcoinOrange.withAlpha(26)
+                  : theme.colorScheme.surface,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isSelected
-                ? AppColors.bitcoinOrange
-                : theme.colorScheme.outlineVariant.withAlpha(80),
+            color:
+                isSelected
+                    ? AppColors.bitcoinOrange
+                    : theme.colorScheme.outlineVariant.withAlpha(80),
             width: isSelected ? 1.5 : 1,
           ),
         ),
@@ -254,9 +260,10 @@ class ThemeCard extends StatelessWidget {
                   Icon(
                     icon,
                     size: 18,
-                    color: isSelected
-                        ? AppColors.bitcoinOrange
-                        : context.textSecondary,
+                    color:
+                        isSelected
+                            ? AppColors.bitcoinOrange
+                            : context.textSecondary,
                   ),
                   const SizedBox(width: 8),
                   Text(
@@ -282,8 +289,7 @@ class ThemeCard extends StatelessWidget {
 }
 
 class ThemePreview extends StatelessWidget {
-  const ThemePreview({
-    super.key,required this.isDark});
+  const ThemePreview({super.key, required this.isDark});
   final bool isDark;
 
   @override
@@ -384,10 +390,7 @@ class PreviewFrame extends StatelessWidget {
             ),
           ),
           const Spacer(),
-          Container(
-            height: 10,
-            color: bar,
-          ),
+          Container(height: 10, color: bar),
         ],
       ),
     );

@@ -1,9 +1,10 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+
 import '../../../shared/theme/app_colors.dart';
-import '../../../shared/theme/category_palette.dart';
 import '../../../shared/theme/app_text_styles.dart';
+import '../../../shared/theme/category_palette.dart';
 import '../../../shared/utils/currency_utils.dart';
 import '../../../shared/utils/sat_converter.dart';
 import '../../../shared/widgets/shrink_to_fit.dart';
@@ -33,17 +34,18 @@ class SpendingChart extends StatelessWidget {
         child: Center(
           child: Text(
             'No spending this month',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: context.textSecondary,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: context.textSecondary),
           ),
         ),
       );
     }
 
     // Sort by amount descending, take top 6
-    final sorted = spendingByCategory.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
+    final sorted =
+        spendingByCategory.entries.toList()
+          ..sort((a, b) => b.value.compareTo(a.value));
     final entries = sorted.take(6).toList();
     final maxAmount = entries.first.value;
 
@@ -80,7 +82,6 @@ class _CategoryBar extends StatelessWidget {
   final double? btcPrice;
   final String currency;
 
-
   @override
   Widget build(BuildContext context) {
     final barFraction = maxAmount > 0 ? (amount / maxAmount) : 0.0;
@@ -88,9 +89,10 @@ class _CategoryBar extends StatelessWidget {
     // which disagreed with Analytics on Shopping and Subscriptions.
     final color = CategoryPalette.of(category, userHex: categoryColorHex);
     final fiatStr = CurrencyUtils.format(amount, currency, decimalDigits: 0);
-    final sats = btcPrice != null && btcPrice! > 0
-        ? SatConverter.fiatToSats(amount, btcPrice!)
-        : null;
+    final sats =
+        btcPrice != null && btcPrice! > 0
+            ? SatConverter.fiatToSats(amount, btcPrice!)
+            : null;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 5),
@@ -106,9 +108,9 @@ class _CategoryBar extends StatelessWidget {
             ),
             child: Text(
               category,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: context.textSecondary,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: context.textSecondary),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -150,23 +152,23 @@ class _CategoryBar extends StatelessWidget {
           ShrinkToFit(
             maxFraction: 0.3,
             child: Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                fiatStr,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-              ),
-              if (sats != null)
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
                 Text(
-                  '${SatConverter.formatSats(sats)} sats',
-                  style: AppTextStyles.monoSmall.copyWith(
-                    color: context.bitcoinOrangeText,
-                    fontSize: 10,
-                  ),
+                  fiatStr,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
                 ),
-            ],
+                if (sats != null)
+                  Text(
+                    '${SatConverter.formatSats(sats)} sats',
+                    style: AppTextStyles.monoSmall.copyWith(
+                      color: context.bitcoinOrangeText,
+                      fontSize: 10,
+                    ),
+                  ),
+              ],
             ),
           ),
         ],

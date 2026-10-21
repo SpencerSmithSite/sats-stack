@@ -8,6 +8,5 @@ class Wallets extends Table {
   TextColumn get xpub => text().nullable()();
   // hex color string e.g. '#F7931A'
   TextColumn get color => text().withLength(min: 7, max: 7)();
-  DateTimeColumn get createdAt =>
-      dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 }

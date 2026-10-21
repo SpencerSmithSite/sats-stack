@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../core/database/database.dart';
 import '../../../core/services/category_service.dart';
 import '../../../shared/theme/app_colors.dart';
-import '../../../shared/widgets/tappable.dart';
 import '../../../shared/utils/colour_names.dart';
+import '../../../shared/widgets/tappable.dart';
 
 // ── Public entry point ─────────────────────────────────────────────────────────
 
@@ -46,8 +46,9 @@ class CategoriesSheet extends StatelessWidget {
                   const SizedBox(width: 8),
                   Text(
                     'Categories',
-                    style: theme.textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w600),
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ],
               ),
@@ -101,10 +102,7 @@ class _CategoryList extends StatelessWidget {
 // ── Single category tile ───────────────────────────────────────────────────────
 
 class _CategoryTile extends StatelessWidget {
-  const _CategoryTile({
-    required this.category,
-    required this.categoryService,
-  });
+  const _CategoryTile({required this.category, required this.categoryService});
 
   final Category category;
   final CategoryService categoryService;
@@ -130,13 +128,13 @@ class _CategoryTile extends StatelessWidget {
         child: Icon(_iconData(category.icon), size: 18, color: color),
       ),
       title: Text(category.name),
-      subtitle: category.isSystem
-          ? Text(
-              'System',
-              style: TextStyle(
-                  fontSize: 11, color: context.textSecondary),
-            )
-          : null,
+      subtitle:
+          category.isSystem
+              ? Text(
+                'System',
+                style: TextStyle(fontSize: 11, color: context.textSecondary),
+              )
+              : null,
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -164,61 +162,71 @@ class _CategoryTile extends StatelessWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _EditCategorySheet(
-        categoryService: categoryService,
-        existing: category,
-      ),
+      builder:
+          (_) => _EditCategorySheet(
+            categoryService: categoryService,
+            existing: category,
+          ),
     );
   }
 
   Future<void> _confirmDelete(BuildContext context) async {
-    final counts = await categoryService.usageCounts(category.id, category.name);
+    final counts = await categoryService.usageCounts(
+      category.id,
+      category.name,
+    );
     if (!context.mounted) return;
 
     if (counts.transactions > 0 || counts.budgets > 0) {
       final parts = <String>[];
       if (counts.transactions > 0) {
-        parts.add('${counts.transactions} transaction${counts.transactions == 1 ? '' : 's'}');
+        parts.add(
+          '${counts.transactions} transaction${counts.transactions == 1 ? '' : 's'}',
+        );
       }
       if (counts.budgets > 0) {
         parts.add('${counts.budgets} budget${counts.budgets == 1 ? '' : 's'}');
       }
-      showDialog(
+      await showDialog<void>(
         context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Cannot delete'),
-          content: Text(
-            '"${category.name}" is used by ${parts.join(' and ')}. '
-            'Reassign or delete those first.',
-          ),
-          actions: [
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('OK'),
+        builder:
+            (ctx) => AlertDialog(
+              title: const Text('Cannot delete'),
+              content: Text(
+                '"${category.name}" is used by ${parts.join(' and ')}. '
+                'Reassign or delete those first.',
+              ),
+              actions: [
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('OK'),
+                ),
+              ],
             ),
-          ],
-        ),
       );
       return;
     }
 
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete category?'),
-        content: Text('Delete "${category.name}"? This cannot be undone.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Delete category?'),
+            content: Text('Delete "${category.name}"? This cannot be undone.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.danger,
+                ),
+                child: const Text('Delete'),
+              ),
+            ],
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
     );
     if (confirmed == true) {
       await categoryService.deleteCategory(category.id, category.name);
@@ -238,12 +246,14 @@ class _AddCategoryTile extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
       child: OutlinedButton.icon(
-        onPressed: () => showModalBottomSheet(
-          context: context,
-          isScrollControlled: true,
-          backgroundColor: Colors.transparent,
-          builder: (_) => _EditCategorySheet(categoryService: categoryService),
-        ),
+        onPressed:
+            () => showModalBottomSheet(
+              context: context,
+              isScrollControlled: true,
+              backgroundColor: Colors.transparent,
+              builder:
+                  (_) => _EditCategorySheet(categoryService: categoryService),
+            ),
         icon: const Icon(Icons.add, size: 18),
         label: const Text('Add category'),
         style: OutlinedButton.styleFrom(
@@ -257,10 +267,7 @@ class _AddCategoryTile extends StatelessWidget {
 // ── Add / Edit sheet ───────────────────────────────────────────────────────────
 
 class _EditCategorySheet extends StatefulWidget {
-  const _EditCategorySheet({
-    required this.categoryService,
-    this.existing,
-  });
+  const _EditCategorySheet({required this.categoryService, this.existing});
 
   final CategoryService categoryService;
   final Category? existing;
@@ -275,6 +282,9 @@ class _EditCategorySheetState extends State<_EditCategorySheet> {
   String _selectedColor = '#F7931A';
   String _selectedIcon = 'more_horiz';
   bool _saving = false;
+
+  /// Set when the name is already taken — see [DuplicateCategoryNameException].
+  String? _nameError;
 
   bool get _isEditing => widget.existing != null;
 
@@ -314,6 +324,9 @@ class _EditCategorySheetState extends State<_EditCategorySheet> {
         );
       }
       if (mounted) Navigator.of(context).pop();
+    } on DuplicateCategoryNameException catch (e) {
+      // Shown on the field, where the fix is, rather than as a raw error.
+      if (mounted) setState(() => _nameError = e.toString());
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -361,66 +374,92 @@ class _EditCategorySheetState extends State<_EditCategorySheet> {
                   ),
                   Text(
                     _isEditing ? 'Edit Category' : 'New Category',
-                    style: theme.textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w600),
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   const SizedBox(height: 20),
 
                   // Name
                   TextFormField(
                     controller: _nameCtrl,
-                    decoration: const InputDecoration(labelText: 'Name'),
+                    decoration: InputDecoration(
+                      labelText: 'Name',
+                      errorText: _nameError,
+                    ),
                     textCapitalization: TextCapitalization.words,
                     autofocus: !_isEditing,
-                    validator: (v) =>
-                        (v == null || v.trim().isEmpty) ? 'Enter a name' : null,
+                    onChanged: (_) {
+                      if (_nameError != null) setState(() => _nameError = null);
+                    },
+                    validator:
+                        (v) =>
+                            (v == null || v.trim().isEmpty)
+                                ? 'Enter a name'
+                                : null,
                   ),
                   const SizedBox(height: 20),
 
                   // Color picker
                   Text(
                     'Colour',
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: context.textSecondary),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: context.textSecondary,
+                    ),
                   ),
                   const SizedBox(height: 10),
                   Wrap(
                     spacing: 10,
                     runSpacing: 10,
-                    children: _kColorOptions.map((hex) {
-                      final color = Color(
-                          int.parse('FF${hex.replaceFirst('#', '')}', radix: 16));
-                      final selected = _selectedColor == hex;
-                      return Tappable(
-                        label: colourName(color),
-                        selected: selected,
-                        onTap: () => setState(() => _selectedColor = hex),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 120),
-                          width: 28,
-                          height: 28,
-                          decoration: BoxDecoration(
-                            color: color,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: selected ? Colors.white : Colors.transparent,
-                              width: 2,
+                    children:
+                        _kColorOptions.map((hex) {
+                          final color = Color(
+                            int.parse(
+                              'FF${hex.replaceFirst('#', '')}',
+                              radix: 16,
                             ),
-                            boxShadow: selected
-                                ? [BoxShadow(color: color.withAlpha(120), blurRadius: 6)]
-                                : null,
-                          ),
-                        ),
-                      );
-                    }).toList(),
+                          );
+                          final selected = _selectedColor == hex;
+                          return Tappable(
+                            label: colourName(color),
+                            selected: selected,
+                            onTap: () => setState(() => _selectedColor = hex),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 120),
+                              width: 28,
+                              height: 28,
+                              decoration: BoxDecoration(
+                                color: color,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color:
+                                      selected
+                                          ? Colors.white
+                                          : Colors.transparent,
+                                  width: 2,
+                                ),
+                                boxShadow:
+                                    selected
+                                        ? [
+                                          BoxShadow(
+                                            color: color.withAlpha(120),
+                                            blurRadius: 6,
+                                          ),
+                                        ]
+                                        : null,
+                              ),
+                            ),
+                          );
+                        }).toList(),
                   ),
                   const SizedBox(height: 20),
 
                   // Icon picker
                   Text(
                     'Icon',
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: context.textSecondary),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: context.textSecondary,
+                    ),
                   ),
                   const SizedBox(height: 10),
                   _IconGrid(
@@ -433,15 +472,19 @@ class _EditCategorySheetState extends State<_EditCategorySheet> {
                   FilledButton(
                     onPressed: _saving ? null : _save,
                     style: FilledButton.styleFrom(
-                        minimumSize: const Size(double.infinity, 48)),
-                    child: _saving
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child:
-                                CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                          )
-                        : Text(_isEditing ? 'Update' : 'Create'),
+                      minimumSize: const Size(double.infinity, 48),
+                    ),
+                    child:
+                        _saving
+                            ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                            : Text(_isEditing ? 'Update' : 'Create'),
                   ),
                 ],
               ),
@@ -494,9 +537,10 @@ class _IconGrid extends StatelessWidget {
               color: selected ? activeColor.withAlpha(30) : Colors.transparent,
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
-                color: selected
-                    ? activeColor
-                    : Theme.of(context).colorScheme.outline.withAlpha(80),
+                color:
+                    selected
+                        ? activeColor
+                        : Theme.of(context).colorScheme.outline.withAlpha(80),
                 width: selected ? 1.5 : 0.5,
               ),
             ),

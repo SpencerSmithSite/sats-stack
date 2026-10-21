@@ -39,7 +39,6 @@ class InstitutionProfile {
   /// True → single amount column where negative = debit, positive = credit.
   final bool signedAmount;
 
-
   /// True → do not rely on header names to find columns; use fixed indices.
   final bool positional;
 }
@@ -85,7 +84,12 @@ abstract final class InstitutionProfiles {
 
   static const _coinbase = InstitutionProfile(
     name: 'Coinbase',
-    requiredHeaders: {'timestamp', 'transaction type', 'asset', 'quantity transacted'},
+    requiredHeaders: {
+      'timestamp',
+      'transaction type',
+      'asset',
+      'quantity transacted',
+    },
     dateHeader: 'timestamp',
     descriptionHeader: 'notes',
     amountHeader: 'total (inclusive of fees and/or spread)',

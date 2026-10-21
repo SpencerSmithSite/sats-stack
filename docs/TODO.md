@@ -37,136 +37,30 @@ History lives elsewhere and is not duplicated into this file:
 > Those are fixed (see `AUDIT.md`). Everything below is what they found and is
 > still open, in the order I would do it.
 
-### 1. Ships broken or cannot ship
+### 10. Decisions and upgrades the CI pass surfaced
 
-- **macOS: the hand-copied LiteRT-LM frameworks are ad-hoc signed** (`macos/
-  Podfile:162,171` run `codesign --sign -`) and `Release.entitlements` has no
-  `com.apple.security.cs.disable-library-validation`. This works *only* because
-  the whole app is ad-hoc signed; the moment the target is signed with a
-  Developer ID — which registering the bundle id requires anyway — library
-  validation refuses to `dlopen` them and notarization rejects ad-hoc nested
-  code. Every `install_name_tool`/`codesign` in that phase ends in `|| true`,
-  so the failure is swallowed at build time. Drop the `|| true`s.
-- **That build phase is arm64-only and reads `${HOME}/Library/Caches`**
-  (`macos/Podfile:120-137`). On an Intel Mac it warns and the build *succeeds*
-  with a broken app. Select from `$ARCHS` and `exit 1` rather than warn.
-- **`flutter_gemma` and `flutter_gemma_litertlm` are both discontinued** on
-  pub.dev (1.4.2 / 1.3.1 installed; 1.11.4 / 1.8.6 are the last versions that
-  will ever exist). The pubspec comment chose this package *on maintenance
-  grounds*; that reasoning has inverted. Options, with what breaks:
-  (a) stay — nothing breaks today, no fix ever arrives, including for the
-  `-headerpad_max_install_names` workaround above; (b) move to the final
-  versions — resolvable, but `createModel`, the `FlutterGemma.*` statics and
-  `ModelFileType` all moved between 1.4 and 1.11, and the macOS build phase is
-  written against 1.3.1's layout; (c) replace with a direct LiteRT-LM FFI
-  binding — the only route that keeps the `.litertlm` catalogue and already
-  downloaded models; (d) drop the backend — it is the only one of six with a
-  hand-written Xcode phase, a multi-gigabyte download and an unmaintained
-  native dependency, and two other on-device backends exist.
-- **macOS bundle id and product name are still template placeholders.**
-  `AppInfo.xcconfig:11` is `com.satsstack.satsStack` against iOS's
-  `app.satsstack.SatsStack`, and `:8` makes the window title `sats_stack`.
-  (The copyright string on `:14` is fixed.)
-
-### 2. The native bridges do not stop generating when cancelled
-
-`android/.../GeminiNanoBridge.kt:132-163` and
-`ios/Runner/FoundationModelsBridge.swift:184-226`. Real on both platforms, for
-different reasons: Kotlin's `onCancel` cancels a job the collector never
-suspends on (and `scope` is a local in `onListen`, so it cannot be cancelled at
-all), while Swift's `catch` does not distinguish `CancellationError`, so
-cancelling emits `generation_failed` into a torn-down sink. Both hold a single
-`task`/`job` field on a single handler instance, so a second request orphans
-the first.
-
-**This narrows an `AUDIT.md` claim.** `serialisedOnChannel` releases its queue
-slot the instant the Dart subscription is cancelled, not when the native side
-stops — and `stream_resilience_test.dart` runs under `flutter test`, which has
-no engine, so it exercises the Dart queue alone. Net effect: cancelling one
-answer can corrupt or fail the next one, and on Android the model stays busy
-after the queue has moved on. Fix needs native work on both sides.
-
-### 9. Smaller correctness items
-
-- A category *rename* can silently move another category's transactions:
-  `Categories.name` has no unique constraint and the update matches on name, so
-  two categories can share a name and a later rename rewrites both. Budget
-  progress and the CSV export are keyed by name too, so one of the pair reads
-  zero spend forever and neither can be deleted. Needs a unique index (v8) and
-  a check in the sheet.
-- A failed database restore leaves `app.db` **closed** for the rest of the
-  session — every later query throws. Restore from the `.bak` and tell the user
-  to relaunch.
-- Today's intraday BTC price is cached permanently (`DoNothing()` on a
-  same-day row), so every transaction imported today keeps a mid-day quote.
-- `ImportSummary.imported` counts `importedTransactions` writes, not main-table
-  writes, so re-importing a file into a new source reports N imported while the
-  Transactions screen gains nothing.
-- The xpub scan dedupes against **every** wallet, so adding the same xpub twice
-  syncs the second to zero rows while reporting them all as skipped.
-- The Stack screen recomputes four O(n) aggregates on every BTC price tick;
-  the Dashboard's price and currency `ValueListenableBuilder`s wrap the whole
-  content subtree, so a price poll rebuilds all ten transaction rows.
-- Four moved widgets read `app.currencyNotifier.value` in `build` without
-  subscribing — they work only because `stack_screen.dart:151` wraps them in a
-  `ValueListenableBuilder` that *discards* the value purely to force a rebuild.
-- Three more unguarded `setState`-after-`await` (`add_transaction_sheet.dart:130`,
-  `transaction_edit_sheet.dart:136`, `import_file_screen.dart:563`).
-- `SetGoalSheetState` is public and should not be; four constructors the split
-  touched have `super.key,required this.x` crammed onto one line.
-- `_generateInsight` swallows every failure, including the specific messages
-  `CloudBackend.describeError` already produced.
-
-### 10. CI, lints and docs
-
-- **CI compiles nothing native.** `flutter analyze` + `flutter test` on ubuntu
-  cannot reach a single platform finding above: no Podfile is evaluated, no
-  entitlement read, the Android manifest merge never runs, neither bridge is
-  compiled. In value order: `dart format --set-exit-if-changed` (which needs
-  a format-only PR first — 97 of the 126 Dart files would change, so mixing
-  it into any other change buries that change),
-  `flutter build apk --debug` (would have caught the INTERNET permission),
-  and a `macos-latest` job running `flutter build ios --no-codesign` and
-  `flutter build macos`. Also use `--enforce-lockfile`.
-- `claude.yml` runs on an `@claude` mention from **any** account on a public
-  repo, with no `author_association` guard — unbounded token and compute use.
-  Neither Claude workflow has `concurrency`, so three pushes start three
-  reviews. (Both correctly use `pull_request`, not `pull_request_target`, so a
-  fork PR cannot reach the secret.)
-- `analysis_options.yaml` enables **no rules** — the `linter.rules` block is
-  entirely commented out — so "zero analyzer issues" is only as strong as
-  `flutter_lints` defaults. Nothing enables `prefer_single_quotes`,
-  `require_trailing_commas`, `unawaited_futures` or `avoid_print`.
-  `flutter_lints` is `^5.0.0`; 6.0.0 is current. The `analyzer.exclude` list
-  names five directories that contain no Dart and is inert.
-- Two of the four "Critical package version pins" in `CLAUDE.md` no longer have
-  a live reason: `fl_chart` 1.2.0 and `drift_flutter` 0.3.1 both appear in
-  `pub outdated`'s *Resolvable* column, so the stated conflicts are gone (each
-  is still a real API change, so this is about correcting the table, not
-  upgrading blind). `url_launcher ^6.3.0` is not a pin at all. The
-  `flutter_secure_storage` pin does still hold, but is holding a discontinued
-  transitive package.
-- `CLAUDE.md` is stale in more places than item 5 of this file admitted: Dart
-  3.11.3 → **3.13.2**, the iOS Podfile platform is **16.0** not 12.0, the
-  schema notes describe three migrations where there are seven, and the
-  `NSPhotoLibraryUsageDescription` rationale is now wrong (the app uses the
-  photo library directly). `README.md:26,50,63,65,110` repeats some of it and
-  still describes AI as Ollama-on-desktop.
-- `SatsStackNotes.md` is tracked at the repo root and contradicts this file —
-  it asks for zpub import and category editing, both shipped. Fold its one live
-  item (user-editable inflation rate) in and delete it.
-- `test/dedup_hash_test.dart` pins the salt table against itself rather than
-  against the call sites: every salt is hand-typed and no call site is invoked,
-  so a regression where a caller changes its salt passes untouched. It also
-  misses the collision that actually bit (two series with the *same* anchor).
-- `ITSAppUsesNonExemptEncryption` is absent from `ios/Runner/Info.plist`, so
-  every Transporter upload stops for the export-compliance question.
-- Android declares `CAMERA` with no runtime permission handling anywhere (no
-  `permission_handler` in pubspec, no request in `lib/`). Declaring it is what
-  *creates* the requirement for `ACTION_IMAGE_CAPTURE`, so the camera import
-  can throw `SecurityException` on device; undeclared, the capture intent needs
-  no grant. Needs device verification either way.
-
+- **Encrypt the database.** Decided 2026-10-20: yes. The design is in
+  [`DATABASE_ENCRYPTION_PLAN.md`](DATABASE_ENCRYPTION_PLAN.md) — SQLCipher,
+  a random key in the keychain, an in-place migration that copies drift's
+  `user_version` by hand — with two decisions still open (the export format,
+  and whether macOS waits for Developer ID signing).
+- **Android backs up the database and the API keys to Google Drive**, and
+  the API keys cannot be read after a restore. The manifest sets no
+  `allowBackup` rules, so Auto Backup is on: the plaintext database goes to
+  the user's cloud backup, and `flutter_secure_storage`'s preferences file
+  goes with it while its Keystore key does not. Exclude both with
+  `dataExtractionRules` / `fullBackupContent`. Independent of encryption and
+  worth doing first; see the plan, §5.
+- **Android toolchain, next floor.** Flutter 3.47.2 warns that Gradle 9.1,
+  AGP 9.0.1 and Kotlin 2.3.20 will be required soon. AGP 9 is a major
+  release (built-in Kotlin, changed DSL defaults), so do it on its own and
+  check every plugin builds.
+- **Typed JSON parsing** in place of the 43 `dynamic` calls
+  `avoid_dynamic_calls` would flag, then enable the rule.
+- **Recurring series ignore the wallet.** The series key and the hash both
+  leave it out, so two identical series started the same day in two manual
+  accounts are treated as one. Rare; changing the key orphans every stored
+  cursor, so it needs a migration rather than a one-line fix.
 
 > Items 11–14 were already tracked before the second pass. They are still
 > open and still worth doing; they are simply less urgent than 1–10.
@@ -205,17 +99,17 @@ answer about many addresses at once, which is the Electrum work in item 1
 
 ### 13. Close the named test gaps
 
-- **A v1 → v7 migration against a fresh `onCreate`.** There is no generated
+- **A v1 → v8 migration against a fresh `onCreate`.** There is no generated
   schema history to migrate against, which is why `migrateToV6` and
   `migrateToV7` are named methods the tests call directly. Real coverage means
   generating drift's schema history, then asserting an upgraded database
   matches a freshly created one.
-- **The dedup-hash contract across its three salts** — `''` for CSV re-import,
-  a timestamp for manual entries, `xpub_<txid>` for chain rows. Each salt means
-  something specific and nothing pins the distinction.
 - **Widget-level stream reactivity.** The import path's single-commit guarantee
   is asserted at the service level, but nothing checks that a screen subscribes
   once and survives a rebuild — which is the bug class the split just fixed.
+  `dashboard_rebuild_test.dart` now shows how to pump a whole screen against
+  real services on an in-memory database (including the teardown drift needs),
+  so the other four tabs can follow the same pattern.
 
 ### 14. Decompose Settings properly
 
@@ -229,9 +123,8 @@ worth doing on purpose rather than as a move.
 
 ## Smaller items
 
-- **"Add xpub wallet"** is the tooltip at `transactions_screen.dart:167`, but
-  ypub and zpub have always worked and testnet keys work now too. Reword it to
-  match what it actually accepts.
+- **Tab roadmap**, from the deleted `SatsStackNotes.md`: Accounts and Goals
+  as tabs of their own, and a Cash flow view.
 - **Transaction search/filter polish** — fuzzy matching, date-range picker.
 - **Home screen widget** — stack balance + BTC price. Needs `home_widget` and
   an app group entitlement.
@@ -240,8 +133,9 @@ worth doing on purpose rather than as a move.
   keeps a `.bak` on restore.
 - **BTC price alerts** — threshold notification via
   `flutter_local_notifications`, which now actually fires on iOS.
-- **Register the macOS bundle id** with Apple and switch `SecureKeyStore` to
-  the data-protection keychain. Needed for any macOS distribution anyway; the
+- **Register the macOS bundle id** (`app.satsstack.SatsStack`, settled on
+  2026-10-20) with Apple, and switch `SecureKeyStore` to the data-protection
+  keychain. Needed for any macOS distribution anyway; the
   comment in `secure_key_store.dart` explains why the file-based one is in use
   (the ad-hoc-signed target cannot carry the entitlement, so every write fails
   with `errSecMissingEntitlement`).
@@ -253,14 +147,9 @@ worth doing on purpose rather than as a move.
 
 ## Known broken / unfinished
 
-See **Next, items 1 and 2** — the second review pass found things that are
-genuinely broken rather than merely imperfect: the macOS framework signing,
-the discontinued on-device-model packages, and the native cancellation path.
-The GPL/Syncfusion licence conflict in item 1 is a decision waiting on the
-author, not a defect.
-
-The only *dead* code is the Bitcoin data-source work in item 11, which is
-waiting on a screen rather than failing.
+Nothing known to be broken. The open decisions are in item 10; the only
+*dead* code is the Bitcoin data-source work in item 11, which is waiting on a
+screen rather than failing.
 
 ## Done, for reference
 

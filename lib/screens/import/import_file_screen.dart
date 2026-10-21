@@ -86,49 +86,56 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
     final granted = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Send this statement to be read?'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '${provider.label} reads statements far better than the '
-                "built-in rules do, but it runs on $recipient's servers: the "
-                'contents of $subject would be uploaded to them.',
-                style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(height: 1.45),
-              ),
-              const SizedBox(height: 12),
-              AiPrivacyDisclosure(
-                provider: provider,
-                compact: true,
-                recipient: recipient,
-              ),
-              const SizedBox(height: 12),
-              Text(
-                '${hasLocalFallback ? 'Say no and the file is read on this '
-                    'device with the built-in rules instead.' : 'A photo can '
-                    'only be read by an AI model, so saying no cancels this '
-                    'import.'} Say yes and later imports are sent to '
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Send this statement to be read?'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${provider.label} reads statements far better than the '
+                    "built-in rules do, but it runs on $recipient's servers: the "
+                    'contents of $subject would be uploaded to them.',
+                    style: Theme.of(
+                      ctx,
+                    ).textTheme.bodyMedium?.copyWith(height: 1.45),
+                  ),
+                  const SizedBox(height: 12),
+                  AiPrivacyDisclosure(
+                    provider: provider,
+                    compact: true,
+                    recipient: recipient,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    '${hasLocalFallback ? 'Say no and the file is read on this '
+                            'device with the built-in rules instead.' : 'A photo can '
+                            'only be read by an AI model, so saying no cancels this '
+                            'import.'} Say yes and later imports are sent to '
                     '${provider.label} without asking again — you can '
                     'withdraw that in Settings → Servers.',
-                style: Theme.of(ctx).textTheme.bodySmall?.copyWith(height: 1.45),
+                    style: Theme.of(
+                      ctx,
+                    ).textTheme.bodySmall?.copyWith(height: 1.45),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text(
+                  hasLocalFallback ? 'No, keep it local' : "Don't send",
+                ),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: Text('Send to $recipient'),
               ),
             ],
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(hasLocalFallback ? 'No, keep it local' : "Don't send"),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text('Send to $recipient'),
-          ),
-        ],
-      ),
     );
     if (mounted && _isProcessing) _armTimeout();
     return granted ?? false;
@@ -179,12 +186,14 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
                         );
                       }
                       if (_aiBannerDismissed) {
-                        return const SliverToBoxAdapter(child: SizedBox.shrink());
+                        return const SliverToBoxAdapter(
+                          child: SizedBox.shrink(),
+                        );
                       }
                       return SliverToBoxAdapter(
                         child: _AiBanner(
-                          onDismiss: () =>
-                              setState(() => _aiBannerDismissed = true),
+                          onDismiss:
+                              () => setState(() => _aiBannerDismissed = true),
                           onConnect: () => context.push('/settings'),
                         ),
                       );
@@ -210,14 +219,15 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
                       padding: const EdgeInsets.all(16),
                       sliver: SliverList.separated(
                         itemCount: sources.length,
-                        separatorBuilder: (_, __) =>
-                            const SizedBox(height: 10),
-                        itemBuilder: (context, i) => _SourceCard(
-                          source: sources[i],
-                          onImport: () => _pickFile(sources[i]),
-                          onImportImage: () => _pickImageForSource(sources[i]),
-                          onDelete: () => _deleteSource(sources[i]),
-                        ),
+                        separatorBuilder: (_, _) => const SizedBox(height: 10),
+                        itemBuilder:
+                            (context, i) => _SourceCard(
+                              source: sources[i],
+                              onImport: () => _pickFile(sources[i]),
+                              onImportImage:
+                                  () => _pickImageForSource(sources[i]),
+                              onDelete: () => _deleteSource(sources[i]),
+                            ),
                       ),
                     ),
                   ],
@@ -227,13 +237,14 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
           ),
 
           // Full-screen processing overlay
-          if (_isProcessing) _ImportProgressOverlay(
-            stage: _currentStage,
-            aiOutput: _aiOutput,
-            showCancel: _showCancel,
-            scrollController: _tokenScrollController,
-            onCancel: _cancelImport,
-          ),
+          if (_isProcessing)
+            _ImportProgressOverlay(
+              stage: _currentStage,
+              aiOutput: _aiOutput,
+              showCancel: _showCancel,
+              scrollController: _tokenScrollController,
+              onCancel: _cancelImport,
+            ),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -246,9 +257,7 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
 
   Future<void> _addSource() async {
     await Navigator.of(context).push<int>(
-      MaterialPageRoute(
-        builder: (_) => const ImportSourceSetupScreen(),
-      ),
+      MaterialPageRoute(builder: (_) => const ImportSourceSetupScreen()),
     );
     // Stream auto-updates the list
   }
@@ -256,27 +265,27 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
   Future<void> _deleteSource(ImportSource source) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete Source?'),
-        content: Text(
-          'This will also delete all ${source.name} imported transactions. '
-          'This cannot be undone.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(
-              'Delete',
-              style: TextStyle(
-                  color: Theme.of(context).colorScheme.error),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Delete Source?'),
+            content: Text(
+              'This will also delete all ${source.name} imported transactions. '
+              'This cannot be undone.',
             ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: Text(
+                  'Delete',
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
     );
     if (confirmed == true) {
       try {
@@ -301,6 +310,8 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
     if (result == null || result.files.isEmpty) return;
     final file = result.files.first;
     if (file.path == null) return;
+    // The picker can stay open while the screen is closed behind it.
+    if (!mounted) return;
 
     final isPdf = file.name.toLowerCase().endsWith('.pdf');
     final aiConnected = app.aiEnabledNotifier.value;
@@ -317,32 +328,36 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
     _processingSource = source;
 
     await _processFile(
-        filePath: file.path!, fileName: file.name, source: source);
+      filePath: file.path!,
+      fileName: file.name,
+      source: source,
+    );
   }
 
   Future<bool> _showPdfNoAiDialog() async {
     final result = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('No AI provider connected'),
-        content: const Text(
-          'PDF import works best with an AI provider connected. Without it, '
-          'only text-layer PDFs can be parsed and results may be incomplete.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx, false);
-              context.push('/settings');
-            },
-            child: const Text('Connect AI'),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('No AI provider connected'),
+            content: const Text(
+              'PDF import works best with an AI provider connected. Without it, '
+              'only text-layer PDFs can be parsed and results may be incomplete.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(ctx, false);
+                  context.push('/settings');
+                },
+                child: const Text('Connect AI'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Try Anyway'),
+              ),
+            ],
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Try Anyway'),
-          ),
-        ],
-      ),
     );
     return result ?? false;
   }
@@ -352,6 +367,9 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
     required String fileName,
     required ImportSource source,
   }) async {
+    // Called straight after a picker returns, and the screen may have been
+    // closed while it was open.
+    if (!mounted) return;
     setState(() {
       _isProcessing = true;
       _currentStage = 'Reading your statement…';
@@ -396,9 +414,12 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
         onStageChange: (stage) {
           if (mounted) setState(() => _currentStage = stage);
         },
-        onOffDeviceConsent: (recipient) => _askOffDeviceConsent(
-            recipient, fileName,
-            hasLocalFallback: true),
+        onOffDeviceConsent:
+            (recipient) => _askOffDeviceConsent(
+              recipient,
+              fileName,
+              hasLocalFallback: true,
+            ),
       );
     } on ImportCancelledException {
       _cleanupProcessing();
@@ -406,9 +427,9 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
     } catch (e) {
       _cleanupProcessing();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error reading file: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error reading file: $e')));
       }
       return;
     }
@@ -419,21 +440,23 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
     if (result.needsManualMapping) {
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => ImportColumnMapperScreen(
-            result: result,
-            sourceId: source.id,
-            sourceName: source.name,
-          ),
+          builder:
+              (_) => ImportColumnMapperScreen(
+                result: result,
+                sourceId: source.id,
+                sourceName: source.name,
+              ),
         ),
       );
     } else {
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => ImportPreviewScreen(
-            result: result,
-            sourceId: source.id,
-            sourceName: source.name,
-          ),
+          builder:
+              (_) => ImportPreviewScreen(
+                result: result,
+                sourceId: source.id,
+                sourceName: source.name,
+              ),
         ),
       );
     }
@@ -472,25 +495,26 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
     showDialog<String>(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Taking longer than expected'),
-        content: const Text(
-          'This is taking longer than expected.\n\n'
-          'Try a smaller file, a faster model, or check that '
-          'your AI provider is responding.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, 'dismiss'),
-            child: const Text('Try Again'),
-          ),
-          if (isCsv)
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, 'manual'),
-              child: const Text('Map Columns Manually'),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Taking longer than expected'),
+            content: const Text(
+              'This is taking longer than expected.\n\n'
+              'Try a smaller file, a faster model, or check that '
+              'your AI provider is responding.',
             ),
-        ],
-      ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, 'dismiss'),
+                child: const Text('Try Again'),
+              ),
+              if (isCsv)
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx, 'manual'),
+                  child: const Text('Map Columns Manually'),
+                ),
+            ],
+          ),
     ).then((action) async {
       if (action == 'manual' &&
           _processingFilePath != null &&
@@ -503,11 +527,12 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
         if (mounted) {
           Navigator.of(context).push(
             MaterialPageRoute(
-              builder: (_) => ImportColumnMapperScreen(
-                result: result,
-                sourceId: _processingSource!.id,
-                sourceName: _processingSource!.name,
-              ),
+              builder:
+                  (_) => ImportColumnMapperScreen(
+                    result: result,
+                    sourceId: _processingSource!.id,
+                    sourceName: _processingSource!.name,
+                  ),
             ),
           );
         }
@@ -537,7 +562,7 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
     if (!OllamaService.looksLikeVisionModel(model)) {
       final action = await _showVisionWarningDialog(model ?? 'unknown');
       if (action == 'settings') {
-        if (mounted) context.push('/settings');
+        if (mounted) unawaited(context.push('/settings'));
         return;
       }
       if (action != 'continue') return;
@@ -556,38 +581,42 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
   Future<ImageSource?> _showImageSourceSheet() async {
     return showModalBottomSheet<ImageSource>(
       context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            Container(
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Theme.of(ctx).colorScheme.outlineVariant,
-                borderRadius: BorderRadius.circular(2),
-              ),
+      builder:
+          (ctx) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 8),
+                Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Theme.of(ctx).colorScheme.outlineVariant,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                ListTile(
+                  leading: const Icon(Icons.photo_camera_outlined),
+                  title: const Text('Take Photo'),
+                  onTap: () => Navigator.pop(ctx, ImageSource.camera),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.photo_library_outlined),
+                  title: const Text('Choose from Library'),
+                  onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+                ),
+                const SizedBox(height: 8),
+              ],
             ),
-            const SizedBox(height: 16),
-            ListTile(
-              leading: const Icon(Icons.photo_camera_outlined),
-              title: const Text('Take Photo'),
-              onTap: () => Navigator.pop(ctx, ImageSource.camera),
-            ),
-            ListTile(
-              leading: const Icon(Icons.photo_library_outlined),
-              title: const Text('Choose from Library'),
-              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
+          ),
     );
   }
 
-  Future<void> _doPickImage(ImageSource imageSource, ImportSource importSource) async {
+  Future<void> _doPickImage(
+    ImageSource imageSource,
+    ImportSource importSource,
+  ) async {
     final XFile? image = await _imagePicker.pickImage(
       source: imageSource,
       maxWidth: 2048,
@@ -607,6 +636,8 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
     required String fileName,
     required ImportSource source,
   }) async {
+    // See [_processFile].
+    if (!mounted) return;
     setState(() {
       _isProcessing = true;
       _currentStage = 'Preparing image…';
@@ -643,9 +674,12 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
         onStageChange: (stage) {
           if (mounted) setState(() => _currentStage = stage);
         },
-        onOffDeviceConsent: (recipient) => _askOffDeviceConsent(
-            recipient, 'this photo',
-            hasLocalFallback: false),
+        onOffDeviceConsent:
+            (recipient) => _askOffDeviceConsent(
+              recipient,
+              'this photo',
+              hasLocalFallback: false,
+            ),
       );
     } on ImportCancelledException {
       _cleanupProcessing();
@@ -653,9 +687,9 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
     } catch (e) {
       _cleanupProcessing();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error processing image: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error processing image: $e')));
       }
       return;
     }
@@ -665,11 +699,12 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
 
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => ImportPreviewScreen(
-          result: result,
-          sourceId: source.id,
-          sourceName: source.name,
-        ),
+        builder:
+            (_) => ImportPreviewScreen(
+              result: result,
+              sourceId: source.id,
+              sourceName: source.name,
+            ),
       ),
     );
   }
@@ -677,27 +712,28 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
   Future<void> _showImageNoAiDialog({String? reason}) async {
     await showDialog<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('AI required'),
-        content: Text(
-          '${reason == null ? '' : '$reason '}Image import needs an AI model '
-          'that can see images: Ollama or LM Studio with a vision model, or a '
-          'hosted provider. Choose one in Settings → Servers.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('AI required'),
+            content: Text(
+              '${reason == null ? '' : '$reason '}Image import needs an AI model '
+              'that can see images: Ollama or LM Studio with a vision model, or a '
+              'hosted provider. Choose one in Settings → Servers.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  context.push('/settings');
+                },
+                child: const Text('Connect AI'),
+              ),
+            ],
           ),
-          FilledButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              context.push('/settings');
-            },
-            child: const Text('Connect AI'),
-          ),
-        ],
-      ),
     );
   }
 
@@ -705,24 +741,25 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
   Future<String?> _showVisionWarningDialog(String modelName) async {
     return showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Vision not supported'),
-        content: Text(
-          'Your current model ($modelName) may not support image analysis. '
-          'For best results, switch to a vision-capable model such as '
-          'llama3.2-vision or llava in Settings.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, 'settings'),
-            child: const Text('Go to Settings'),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Vision not supported'),
+            content: Text(
+              'Your current model ($modelName) may not support image analysis. '
+              'For best results, switch to a vision-capable model such as '
+              'llama3.2-vision or llava in Settings.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, 'settings'),
+                child: const Text('Go to Settings'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, 'continue'),
+                child: const Text('Try Anyway'),
+              ),
+            ],
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, 'continue'),
-            child: const Text('Try Anyway'),
-          ),
-        ],
-      ),
     );
   }
 
@@ -733,20 +770,21 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
     showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Taking longer than expected'),
-        content: const Text(
-          'The AI is taking longer than expected to analyze the image.\n\n'
-          'Try a smaller image, a faster vision model, or check that '
-          'your AI provider is responding.',
-        ),
-        actions: [
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('OK'),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Taking longer than expected'),
+            content: const Text(
+              'The AI is taking longer than expected to analyze the image.\n\n'
+              'Try a smaller image, a faster vision model, or check that '
+              'your AI provider is responding.',
+            ),
+            actions: [
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('OK'),
+              ),
+            ],
           ),
-        ],
-      ),
     );
   }
 }
@@ -819,10 +857,9 @@ class _ImportProgressOverlay extends StatelessWidget {
                     // Stage label
                     Text(
                       stage,
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodyMedium
-                          ?.copyWith(color: cs.onSurfaceVariant),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: cs.onSurfaceVariant,
+                      ),
                     ),
 
                     // Live AI token output
@@ -834,7 +871,8 @@ class _ImportProgressOverlay extends StatelessWidget {
                           color: cs.surfaceContainerHighest,
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
-                              color: cs.outlineVariant.withValues(alpha: 0.5)),
+                            color: cs.outlineVariant.withValues(alpha: 0.5),
+                          ),
                         ),
                         child: SingleChildScrollView(
                           controller: scrollController,
@@ -842,8 +880,7 @@ class _ImportProgressOverlay extends StatelessWidget {
                           child: Text(
                             // Show last 3 000 chars so the widget stays bounded
                             aiOutput.length > 3000
-                                ? aiOutput.substring(
-                                    aiOutput.length - 3000)
+                                ? aiOutput.substring(aiOutput.length - 3000)
                                 : aiOutput,
                             style: TextStyle(
                               fontFamily: 'monospace',
@@ -886,20 +923,24 @@ class _AiConnectedBanner extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
         color: const Color(0xFF1D9E75).withValues(alpha: 0.12),
-        border: Border.all(color: const Color(0xFF1D9E75).withValues(alpha: 0.3)),
+        border: Border.all(
+          color: const Color(0xFF1D9E75).withValues(alpha: 0.3),
+        ),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         children: [
-          const Icon(Icons.check_circle_outline,
-              size: 16, color: Color(0xFF1D9E75)),
+          const Icon(
+            Icons.check_circle_outline,
+            size: 16,
+            color: Color(0xFF1D9E75),
+          ),
           const SizedBox(width: 8),
           Text(
             'AI-powered imports connected',
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
-                ?.copyWith(color: const Color(0xFF1D9E75)),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: const Color(0xFF1D9E75)),
           ),
         ],
       ),
@@ -921,13 +962,13 @@ class _AiBanner extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFFF7931A).withValues(alpha: 0.12),
         border: Border.all(
-            color: const Color(0xFFF7931A).withValues(alpha: 0.3)),
+          color: const Color(0xFFF7931A).withValues(alpha: 0.3),
+        ),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         children: [
-          const Icon(Icons.auto_awesome,
-              size: 18, color: Color(0xFFF7931A)),
+          const Icon(Icons.auto_awesome, size: 18, color: Color(0xFFF7931A)),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -938,7 +979,8 @@ class _AiBanner extends StatelessWidget {
           TextButton(
             onPressed: onConnect,
             style: TextButton.styleFrom(
-                foregroundColor: const Color(0xFFF7931A)),
+              foregroundColor: const Color(0xFFF7931A),
+            ),
             child: const Text('Connect →'),
           ),
           IconButton(
@@ -966,8 +1008,11 @@ class _EmptyState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.upload_file_outlined,
-                size: 64, color: cs.onSurfaceVariant),
+            Icon(
+              Icons.upload_file_outlined,
+              size: 64,
+              color: cs.onSurfaceVariant,
+            ),
             const SizedBox(height: 16),
             Text(
               'No import sources yet',
@@ -978,10 +1023,9 @@ class _EmptyState extends StatelessWidget {
               'Create a source for each account or exchange '
               'you want to import statements from.',
               textAlign: TextAlign.center,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyMedium
-                  ?.copyWith(color: cs.onSurfaceVariant),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
             ),
             const SizedBox(height: 24),
             FilledButton.icon(
@@ -1025,22 +1069,26 @@ class _SourceCard extends StatelessWidget {
                 color: cs.primaryContainer,
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(_typeIcon(source.type),
-                  size: 20, color: cs.onPrimaryContainer),
+              child: Icon(
+                _typeIcon(source.type),
+                size: 20,
+                color: cs.onPrimaryContainer,
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(source.name,
-                      style: Theme.of(context).textTheme.titleSmall),
+                  Text(
+                    source.name,
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
                   Text(
                     '${_typeLabel(source.type)} · ${source.currency}',
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: cs.onSurfaceVariant),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                   ),
                 ],
               ),
@@ -1075,13 +1123,18 @@ class _SourceCard extends StatelessWidget {
     final RenderBox overlay =
         Overlay.of(context).context.findRenderObject() as RenderBox;
     final offset = button.localToGlobal(
-        Offset(button.size.width, button.size.height / 2),
-        ancestor: overlay);
+      Offset(button.size.width, button.size.height / 2),
+      ancestor: overlay,
+    );
 
     showMenu<String>(
       context: context,
       position: RelativeRect.fromLTRB(
-          offset.dx, offset.dy, offset.dx + 1, offset.dy + 1),
+        offset.dx,
+        offset.dy,
+        offset.dx + 1,
+        offset.dy + 1,
+      ),
       items: [
         const PopupMenuItem(value: 'delete', child: Text('Delete source')),
       ],
@@ -1091,20 +1144,20 @@ class _SourceCard extends StatelessWidget {
   }
 
   IconData _typeIcon(String type) => switch (type) {
-        'bank' => Icons.account_balance,
-        'credit_card' => Icons.credit_card,
-        'loan' => Icons.paid,
-        'bitcoin_exchange' => Icons.currency_bitcoin,
-        'bitcoin_wallet' => Icons.account_balance_wallet,
-        _ => Icons.receipt,
-      };
+    'bank' => Icons.account_balance,
+    'credit_card' => Icons.credit_card,
+    'loan' => Icons.paid,
+    'bitcoin_exchange' => Icons.currency_bitcoin,
+    'bitcoin_wallet' => Icons.account_balance_wallet,
+    _ => Icons.receipt,
+  };
 
   String _typeLabel(String type) => switch (type) {
-        'bank' => 'Bank Account',
-        'credit_card' => 'Credit Card',
-        'loan' => 'Loan',
-        'bitcoin_exchange' => 'Bitcoin Exchange',
-        'bitcoin_wallet' => 'Bitcoin Wallet',
-        _ => 'Other',
-      };
+    'bank' => 'Bank Account',
+    'credit_card' => 'Credit Card',
+    'loan' => 'Loan',
+    'bitcoin_exchange' => 'Bitcoin Exchange',
+    'bitcoin_wallet' => 'Bitcoin Wallet',
+    _ => 'Other',
+  };
 }

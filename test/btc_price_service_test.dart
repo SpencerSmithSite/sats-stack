@@ -5,8 +5,12 @@
 /// is wrong money on every screen at once.
 library;
 
+import 'dart:convert';
+
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:sats_stack/core/database/database.dart';
 import 'package:sats_stack/core/services/btc_price_service.dart';
 
@@ -72,8 +76,99 @@ void main() {
       service.switchCurrency('EUR');
 
       expect(service.currency, 'EUR');
-      expect(service.priceNotifier.value, isNull,
-          reason: 'a USD figure must not be shown as euros');
+      expect(
+        service.priceNotifier.value,
+        isNull,
+        reason: 'a USD figure must not be shown as euros',
+      );
     });
+  });
+
+  group('historical prices', () {
+    late AppDatabase db;
+    late BtcPriceService service;
+    var requests = 0;
+    var quote = 60000.0;
+
+    // "Now" is mid-afternoon on 20 October.
+    final now = DateTime(2026, 10, 20, 15);
+
+    setUp(() {
+      db = AppDatabase.forTesting(NativeDatabase.memory());
+      service = BtcPriceService(db, clock: () => now);
+      requests = 0;
+      quote = 60000.0;
+    });
+    tearDown(() => db.close());
+
+    /// Runs [body] with every `http.get` answered by a fake mempool.
+    Future<T> offline<T>(Future<T> Function() body) => http.runWithClient(
+      body,
+      () => MockClient((_) async {
+        requests++;
+        return http.Response(
+          jsonEncode({
+            'prices': [
+              {'time': 0, 'USD': quote},
+            ],
+          }),
+          200,
+        );
+      }),
+    );
+
+    Future<List<BtcPriceHistoryData>> stored() =>
+        db.select(db.btcPriceHistory).get();
+
+    test("today's moving quote is not cached permanently", () async {
+      final price = await offline(() => service.getHistoricalPrice(now, 'USD'));
+
+      expect(price, 60000);
+      // Was written with DoNothing, so the mid-day quote stuck for good.
+      expect(await stored(), isEmpty);
+    });
+
+    test('but one import still asks for today only once', () async {
+      await offline(() async {
+        await service.getHistoricalPrice(now, 'USD');
+        await service.getHistoricalPrice(now, 'USD');
+      });
+      expect(requests, 1);
+    });
+
+    test('a settled day is cached permanently, as before', () async {
+      final march = DateTime(2026, 3, 4);
+      await offline(() => service.getHistoricalPrice(march, 'USD'));
+      quote = 1; // a later answer must not be asked for
+      final again = await offline(
+        () => service.getHistoricalPrice(march, 'USD'),
+      );
+
+      expect(again, 60000);
+      expect(requests, 1);
+      expect((await stored()).single.date, '2026-03-04');
+    });
+
+    test(
+      'a mid-day row from an earlier build is not served as final',
+      () async {
+        await db
+            .into(db.btcPriceHistory)
+            .insert(
+              BtcPriceHistoryCompanion.insert(
+                date: '2026-10-20',
+                currency: 'USD',
+                price: 1,
+              ),
+            );
+
+        final price = await offline(
+          () => service.getHistoricalPrice(now, 'USD'),
+        );
+
+        expect(price, 60000);
+        expect(await stored(), isEmpty);
+      },
+    );
   });
 }

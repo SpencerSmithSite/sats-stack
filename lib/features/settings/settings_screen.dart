@@ -3,8 +3,8 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:go_router/go_router.dart';
+import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../core/database/database.dart';
@@ -19,12 +19,12 @@ import '../../shared/constants/app_constants.dart';
 import '../../shared/theme/app_colors.dart';
 import '../../shared/utils/currency_utils.dart';
 import '../../shared/utils/platform_utils.dart';
-import 'widgets/settings_widgets.dart';
+import '../../shared/utils/sat_converter.dart';
 import '../../shared/widgets/ai_privacy_disclosure.dart';
 import 'widgets/categories_sheet.dart';
 import 'widgets/import_consent_section.dart';
 import 'widgets/on_device_ai_section.dart';
-import '../../shared/utils/sat_converter.dart';
+import 'widgets/settings_widgets.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -90,7 +90,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _currency = app.currencyNotifier.value;
     _showBtcPrice = app.showBtcPriceNotifier.value;
     _inflationRateCtrl = TextEditingController(
-        text: app.inflationRateNotifier.value.toString());
+      text: app.inflationRateNotifier.value.toString(),
+    );
 
     // AI provider
     _selectedProvider = app.ollamaService.activeProvider;
@@ -104,22 +105,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _selectedModel = app.ollamaService.ollamaSelectedModel;
 
     // LM Studio
-    _lmStudioUrlCtrl =
-        TextEditingController(text: app.ollamaService.lmStudioBaseUrl);
+    _lmStudioUrlCtrl = TextEditingController(
+      text: app.ollamaService.lmStudioBaseUrl,
+    );
     _lmStudioSelectedModel = app.ollamaService.lmStudioSelectedModel;
 
     // Maple
     _mapleUrlCtrl = TextEditingController(text: app.ollamaService.mapleBaseUrl);
-    _mapleApiKeyCtrl =
-        TextEditingController(text: app.ollamaService.mapleApiKey);
+    _mapleApiKeyCtrl = TextEditingController(
+      text: app.ollamaService.mapleApiKey,
+    );
     _mapleSelectedModel = app.ollamaService.mapleSelectedModel;
 
     // Hosted providers. The key field is seeded from the keychain so an already
     // configured provider does not look empty, and the model list starts as the
     // static fallback so the dropdown is useful before any key is entered.
     for (final p in CloudProvider.values) {
-      _cloudKeyCtrls[p.id] =
-          TextEditingController(text: app.ollamaService.cloudApiKey(p));
+      _cloudKeyCtrls[p.id] = TextEditingController(
+        text: app.ollamaService.cloudApiKey(p),
+      );
       _cloudModels[p.id] = p.fallbackModels;
       _cloudSelectedModel[p.id] = app.ollamaService.cloudModel(p);
       _cloudKeyVisible[p.id] = false;
@@ -173,12 +177,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         if (mounted) setState(() => _cloudModels[p.id] = models);
       case AiProvider.appleIntelligence:
       case AiProvider.geminiNano:
-      case AiProvider.localModel:
         // No model list to fetch: Apple and Google each ship one model the OS
-        // owns, and the downloadable catalogue is a fixed list rendered by
-        // `_LocalModelSection` rather than something queried from a server.
-        // Ask instead whether the backend can answer, which is the equivalent
-        // question for these.
+        // owns. Ask instead whether the backend can answer, which is the
+        // equivalent question for these.
         await app.ollamaService.refreshOnDeviceReadiness();
         if (mounted) setState(() {});
     }
@@ -198,21 +199,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _saveInflationRate() async {
     final raw = double.tryParse(_inflationRateCtrl.text.trim());
     if (raw == null || raw < 0 || raw > 100) {
-      setState(() =>
-          _inflationRateError = 'Please enter a value between 0 and 100');
+      setState(
+        () => _inflationRateError = 'Please enter a value between 0 and 100',
+      );
       return;
     }
     setState(() => _inflationRateError = null);
     app.inflationRateNotifier.value = raw;
-    await app.db.into(app.db.appSettings).insertOnConflictUpdate(
+    await app.db
+        .into(app.db.appSettings)
+        .insertOnConflictUpdate(
           AppSettingsCompanion.insert(
             key: AppConstants.settingInflationRate,
             value: raw.toString(),
           ),
         );
     if (mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Inflation rate saved')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Inflation rate saved')));
     }
   }
 
@@ -224,7 +229,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ThemeMode.dark => 'dark',
       ThemeMode.system => 'system',
     };
-    await app.db.into(app.db.appSettings).insertOnConflictUpdate(
+    await app.db
+        .into(app.db.appSettings)
+        .insertOnConflictUpdate(
           AppSettingsCompanion.insert(
             key: AppConstants.settingThemeMode,
             value: value,
@@ -235,7 +242,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _saveCurrency(String code) async {
     setState(() => _currency = code);
     app.currencyNotifier.value = code;
-    await app.db.into(app.db.appSettings).insertOnConflictUpdate(
+    await app.db
+        .into(app.db.appSettings)
+        .insertOnConflictUpdate(
           AppSettingsCompanion.insert(
             key: AppConstants.settingCurrency,
             value: code,
@@ -249,7 +258,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _saveShowBtcPrice(bool value) async {
     setState(() => _showBtcPrice = value);
     app.showBtcPriceNotifier.value = value;
-    await app.db.into(app.db.appSettings).insertOnConflictUpdate(
+    await app.db
+        .into(app.db.appSettings)
+        .insertOnConflictUpdate(
           AppSettingsCompanion.insert(
             key: AppConstants.settingShowBtcPrice,
             value: value.toString(),
@@ -305,9 +316,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _refreshAiEnabled();
     }
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Ollama settings saved')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Ollama settings saved')));
     }
   }
 
@@ -347,16 +358,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _saveLmStudio() async {
     final url = _lmStudioUrlCtrl.text.trim();
-    await app.ollamaService
-        .saveLmStudioSettings(url: url, model: _lmStudioSelectedModel);
+    await app.ollamaService.saveLmStudioSettings(
+      url: url,
+      model: _lmStudioSelectedModel,
+    );
     if (url.isEmpty) {
       await app.ollamaService.setConnected(false);
       _refreshAiEnabled();
     }
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('LM Studio settings saved')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('LM Studio settings saved')));
     }
   }
 
@@ -464,16 +477,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _saveMaple() async {
     final url = _mapleUrlCtrl.text.trim();
     final key = _mapleApiKeyCtrl.text.trim();
-    await app.ollamaService
-        .saveMapleSettings(url: url, model: _mapleSelectedModel, apiKey: key);
+    await app.ollamaService.saveMapleSettings(
+      url: url,
+      model: _mapleSelectedModel,
+      apiKey: key,
+    );
     if (url.isEmpty) {
       await app.ollamaService.setConnected(false);
       _refreshAiEnabled();
     }
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Maple settings saved')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Maple settings saved')));
     }
   }
 
@@ -564,24 +580,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _importDb() async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Import database?'),
-        content: const Text(
-          'This will replace all current data with the selected backup. The app will need to restart.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Import database?'),
+            content: const Text(
+              'This will replace all current data with the selected backup. The app will need to restart.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.danger,
+                ),
+                child: const Text('Replace & Restart'),
+              ),
+            ],
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(
-                backgroundColor: AppColors.danger),
-            child: const Text('Replace & Restart'),
-          ),
-        ],
-      ),
     );
     if (confirmed != true) return;
 
@@ -596,7 +614,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final srcFile = File(result.files.single.path!);
       if (!await _looksLikeSqlite(srcFile)) {
         if (mounted) {
-          _showSnack('That file is not a Sats Stack database — nothing changed');
+          _showSnack(
+            'That file is not a Sats Stack database — nothing changed',
+          );
         }
         return;
       }
@@ -604,37 +624,67 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final dbFile = await databaseFile();
 
       await app.db.close();
-      // Keep the database we are about to replace. Without this, picking the
-      // wrong backup is unrecoverable — and if the restored file turns out to
-      // be unreadable the app cannot even start, because AppDatabase is opened
-      // before runApp.
-      if (dbFile.existsSync()) {
-        await dbFile.copy('${dbFile.path}.bak');
-      }
-      await srcFile.copy(dbFile.path);
-
-      // Restart prompt — hot reload / full restart needed to reopen DB
-      if (mounted) {
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (ctx) => AlertDialog(
-            title: const Text('Import complete'),
-            content: const Text(
-              'The database has been replaced. Please restart the app to load the imported data.',
-            ),
-            actions: [
-              FilledButton(
-                onPressed: () => exit(0),
-                child: const Text('Quit & Restart'),
-              ),
-            ],
-          ),
-        );
-      }
+      // From here the database is closed for the rest of this process —
+      // `AppDatabase` is opened once, before runApp, and cannot be reopened
+      // underneath the services holding it. So every outcome ends at "quit and
+      // relaunch". A failure used to show a snackbar and carry on, and every
+      // query after it threw.
+      final restore = await replaceDatabaseFile(
+        source: srcFile,
+        target: dbFile,
+      );
+      if (!mounted) return;
+      await _showRelaunchDialog(
+        title:
+            restore.outcome == RestoreOutcome.replaced
+                ? 'Import complete'
+                : 'Import failed',
+        body: switch (restore.outcome) {
+          RestoreOutcome.replaced =>
+            'The database has been replaced. Quit '
+                'and reopen Sats Stack to load the imported data.',
+          RestoreOutcome.failedOriginalRestored =>
+            'The backup could not be '
+                'copied in (${restore.error}). Your previous data has been put '
+                'back. Quit and reopen Sats Stack to keep using it.',
+          RestoreOutcome.failedOriginalLost =>
+            'The backup could not be '
+                'copied in (${restore.error}), and your previous database could '
+                'not be put back automatically. A copy of it is at '
+                '${dbFile.path}.bak. Quit and reopen Sats Stack.',
+        },
+      );
     } catch (e) {
+      // Only reached before the database is closed — the picker or the
+      // header check — so carrying on is safe here.
       if (mounted) _showSnack('Import failed: $e');
     }
+  }
+
+  /// A dialog that can only be left by quitting, for when the database has
+  /// been closed and this process can no longer use it.
+  Future<void> _showRelaunchDialog({
+    required String title,
+    required String body,
+  }) {
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder:
+          (ctx) => PopScope(
+            canPop: false,
+            child: AlertDialog(
+              title: Text(title),
+              content: Text(body),
+              actions: [
+                FilledButton(
+                  onPressed: () => exit(0),
+                  child: const Text('Quit'),
+                ),
+              ],
+            ),
+          ),
+    );
   }
 
   Future<void> _saveBitcoinServers() async {
@@ -673,7 +723,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (heightResp.statusCode != 200) {
         if (!mounted) return;
         setState(() {
-          _esploraStatus = 'HTTP ${heightResp.statusCode} — '
+          _esploraStatus =
+              'HTTP ${heightResp.statusCode} — '
               'is this a valid Esplora / Mempool URL?';
           _testingEsplora = false;
         });
@@ -681,9 +732,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
 
       final blockHeight = int.tryParse(heightResp.body.trim()) ?? 0;
-      final heightStr = blockHeight > 0
-          ? 'Block height: ${_fmtInt(blockHeight)}'
-          : 'Connected';
+      final heightStr =
+          blockHeight > 0
+              ? 'Block height: ${_fmtInt(blockHeight)}'
+              : 'Connected';
 
       // ── 2. Price endpoint — Mempool-specific, optional ───────────────────
       String priceStr = '';
@@ -692,8 +744,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             .get(Uri.parse('$base/v1/prices'))
             .timeout(const Duration(seconds: 5));
         if (priceResp.statusCode == 200) {
-          final json =
-              jsonDecode(priceResp.body) as Map<String, dynamic>;
+          final json = jsonDecode(priceResp.body) as Map<String, dynamic>;
           final currency = app.currencyNotifier.value;
           final price = json[currency.toUpperCase()];
           if (price != null) {
@@ -734,24 +785,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _resetAllData() async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Reset all data?'),
-        content: const Text(
-          'This will permanently delete all transactions, wallets, budgets, AI conversations, settings, and any saved AI API keys.\n\nThis cannot be undone.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Reset all data?'),
+            content: const Text(
+              'This will permanently delete all transactions, wallets, budgets, AI conversations, settings, and any saved AI API keys.\n\nThis cannot be undone.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.danger,
+                ),
+                child: const Text('Delete Everything'),
+              ),
+            ],
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(
-                backgroundColor: AppColors.danger),
-            child: const Text('Delete Everything'),
-          ),
-        ],
-      ),
     );
     if (confirmed != true || !mounted) return;
 
@@ -770,17 +823,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _resetOnboarding() async {
-    await (app.db.delete(app.db.appSettings)
-          ..where((t) => t.key.equals(AppConstants.settingOnboardingComplete)))
-        .go();
+    await (app.db.delete(
+      app.db.appSettings,
+    )..where((t) => t.key.equals(AppConstants.settingOnboardingComplete))).go();
     app.onboardingCompleteNotifier.value = false;
     if (mounted) context.go('/onboarding');
   }
 
   void _showSnack(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(msg)));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   @override
@@ -796,8 +848,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             leading: const Icon(Icons.tune_outlined),
             title: const Text('General'),
             childrenPadding: EdgeInsets.zero,
-            tilePadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            tilePadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 4,
+            ),
             children: [
               SettingsTile(
                 title: 'Theme',
@@ -832,44 +886,52 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 subtitle: '${CurrencyUtils.symbolFor(_currency)} $_currency',
                 trailing: Wrap(
                   spacing: 6,
-                  children: CurrencyUtils.supported
-                      .map(
-                        (code) => ChoiceChip(
-                          label: Text(code),
-                          selected: _currency == code,
-                          onSelected: (_) => _saveCurrency(code),
-                          visualDensity: VisualDensity.compact,
-                        ),
-                      )
-                      .toList(),
+                  children:
+                      CurrencyUtils.supported
+                          .map(
+                            (code) => ChoiceChip(
+                              label: Text(code),
+                              selected: _currency == code,
+                              onSelected: (_) => _saveCurrency(code),
+                              visualDensity: VisualDensity.compact,
+                            ),
+                          )
+                          .toList(),
                 ),
               ),
               SwitchListTile(
                 secondary: const Icon(Icons.currency_bitcoin),
                 title: const Text('Show BTC price'),
                 subtitle: const Text(
-                    'Displays live price in the app bar. '
-                    'When off, no price requests are made to any server.'),
+                  'Displays live price in the app bar. '
+                  'When off, no price requests are made to any server.',
+                ),
                 value: _showBtcPrice,
                 onChanged: _saveShowBtcPrice,
               ),
               ListTile(
                 leading: const Icon(Icons.category_outlined),
                 title: const Text('Categories'),
-                subtitle:
-                    const Text('Add, edit, or remove spending categories'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => showModalBottomSheet(
-                  context: context,
-                  isScrollControlled: true,
-                  backgroundColor: Colors.transparent,
-                  builder: (_) =>
-                      CategoriesSheet(categoryService: app.categoryService),
+                subtitle: const Text(
+                  'Add, edit, or remove spending categories',
                 ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap:
+                    () => showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      backgroundColor: Colors.transparent,
+                      builder:
+                          (_) => CategoriesSheet(
+                            categoryService: app.categoryService,
+                          ),
+                    ),
               ),
               Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -882,7 +944,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           child: TextField(
                             controller: _inflationRateCtrl,
                             keyboardType: const TextInputType.numberWithOptions(
-                                decimal: true),
+                              decimal: true,
+                            ),
                             decoration: InputDecoration(
                               suffixText: '%',
                               errorText: _inflationRateError,
@@ -900,7 +963,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         FilledButton(
                           onPressed: _saveInflationRate,
                           style: FilledButton.styleFrom(
-                              visualDensity: VisualDensity.compact),
+                            visualDensity: VisualDensity.compact,
+                          ),
                           child: const Text('Save'),
                         ),
                       ],
@@ -910,10 +974,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       'Used to calculate the real purchasing power loss of '
                       'your fiat holdings over time.',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onSurfaceVariant,
-                          ),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                     ),
                   ],
                 ),
@@ -926,14 +988,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
             leading: const Icon(Icons.dns_outlined),
             title: const Text('Servers'),
             childrenPadding: EdgeInsets.zero,
-            tilePadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            tilePadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 4,
+            ),
             children: [
               ...[
                 const SettingsSectionHeader('AI Provider'),
                 Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -984,8 +1050,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ],
                       Text(
                         _providerDescription(_selectedProvider),
-                        style: theme.textTheme.bodySmall
-                            ?.copyWith(color: context.textSecondary),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: context.textSecondary,
+                        ),
                       ),
                       // The one claim in this app that must never be wrong. A
                       // hosted backend sends the user's complete financial
@@ -1012,32 +1079,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           controller: _ollamaUrlCtrl,
                           decoration: InputDecoration(
                             labelText: 'Ollama base URL',
-                            hintText: PlatformUtils.isDesktop
-                                ? 'http://localhost:11434'
-                                : 'http://your-server:11434',
+                            hintText:
+                                PlatformUtils.isDesktop
+                                    ? 'http://localhost:11434'
+                                    : 'http://your-server:11434',
                           ),
                         ),
                         const SizedBox(height: 12),
                         if (_models.isNotEmpty)
                           DropdownButtonFormField<String>(
-                            initialValue: _models.contains(_selectedModel)
-                                ? _selectedModel
-                                : null,
-                            decoration:
-                                const InputDecoration(labelText: 'Model'),
+                            initialValue:
+                                _models.contains(_selectedModel)
+                                    ? _selectedModel
+                                    : null,
+                            decoration: const InputDecoration(
+                              labelText: 'Model',
+                            ),
                             hint: const Text('Select model'),
-                            items: _models
-                                .map((m) => DropdownMenuItem(
-                                    value: m, child: Text(m)))
-                                .toList(),
-                            onChanged: (v) =>
-                                setState(() => _selectedModel = v),
+                            items:
+                                _models
+                                    .map(
+                                      (m) => DropdownMenuItem(
+                                        value: m,
+                                        child: Text(m),
+                                      ),
+                                    )
+                                    .toList(),
+                            onChanged:
+                                (v) => setState(() => _selectedModel = v),
                           )
                         else
                           Text(
                             'No models loaded — test the connection first.',
-                            style: theme.textTheme.bodySmall
-                                ?.copyWith(color: context.textSecondary),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: context.textSecondary,
+                            ),
                           ),
                         const SizedBox(height: 12),
                         if (_connectionStatus != null)
@@ -1046,29 +1122,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             child: Text(
                               _connectionStatus!,
                               style: theme.textTheme.bodySmall?.copyWith(
-                                color: _connectionStatus!
-                                        .startsWith('Connected')
-                                    ? AppColors.success
-                                    : AppColors.danger,
+                                color:
+                                    _connectionStatus!.startsWith('Connected')
+                                        ? AppColors.success
+                                        : AppColors.danger,
                               ),
                             ),
                           ),
                         Row(
                           children: [
                             OutlinedButton.icon(
-                              onPressed: _testingConnection
-                                  ? null
-                                  : _testConnection,
-                              icon: _testingConnection
-                                  ? const SizedBox(
-                                      width: 14,
-                                      height: 14,
-                                      child: CircularProgressIndicator(
-                                          strokeWidth: 2),
-                                    )
-                                  : const Icon(
-                                      Icons.wifi_tethering_outlined,
-                                      size: 18),
+                              onPressed:
+                                  _testingConnection ? null : _testConnection,
+                              icon:
+                                  _testingConnection
+                                      ? const SizedBox(
+                                        width: 14,
+                                        height: 14,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                      : const Icon(
+                                        Icons.wifi_tethering_outlined,
+                                        size: 18,
+                                      ),
                               label: const Text('Test connection'),
                             ),
                             const SizedBox(width: 8),
@@ -1092,25 +1170,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         const SizedBox(height: 12),
                         if (_lmStudioModels.isNotEmpty)
                           DropdownButtonFormField<String>(
-                            initialValue: _lmStudioModels
-                                    .contains(_lmStudioSelectedModel)
-                                ? _lmStudioSelectedModel
-                                : null,
-                            decoration:
-                                const InputDecoration(labelText: 'Model'),
+                            initialValue:
+                                _lmStudioModels.contains(_lmStudioSelectedModel)
+                                    ? _lmStudioSelectedModel
+                                    : null,
+                            decoration: const InputDecoration(
+                              labelText: 'Model',
+                            ),
                             hint: const Text('Select model'),
-                            items: _lmStudioModels
-                                .map((m) => DropdownMenuItem(
-                                    value: m, child: Text(m)))
-                                .toList(),
-                            onChanged: (v) =>
-                                setState(() => _lmStudioSelectedModel = v),
+                            items:
+                                _lmStudioModels
+                                    .map(
+                                      (m) => DropdownMenuItem(
+                                        value: m,
+                                        child: Text(m),
+                                      ),
+                                    )
+                                    .toList(),
+                            onChanged:
+                                (v) =>
+                                    setState(() => _lmStudioSelectedModel = v),
                           )
                         else
                           Text(
                             'No models loaded — test the connection first.',
-                            style: theme.textTheme.bodySmall
-                                ?.copyWith(color: context.textSecondary),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: context.textSecondary,
+                            ),
                           ),
                         const SizedBox(height: 12),
                         if (_lmStudioStatus != null)
@@ -1129,19 +1215,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         Row(
                           children: [
                             OutlinedButton.icon(
-                              onPressed: _testingLmStudio
-                                  ? null
-                                  : _testLmStudioConnection,
-                              icon: _testingLmStudio
-                                  ? const SizedBox(
-                                      width: 14,
-                                      height: 14,
-                                      child: CircularProgressIndicator(
-                                          strokeWidth: 2),
-                                    )
-                                  : const Icon(
-                                      Icons.wifi_tethering_outlined,
-                                      size: 18),
+                              onPressed:
+                                  _testingLmStudio
+                                      ? null
+                                      : _testLmStudioConnection,
+                              icon:
+                                  _testingLmStudio
+                                      ? const SizedBox(
+                                        width: 14,
+                                        height: 14,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                      : const Icon(
+                                        Icons.wifi_tethering_outlined,
+                                        size: 18,
+                                      ),
                               label: const Text('Test connection'),
                             ),
                             const SizedBox(width: 8),
@@ -1178,21 +1268,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 _mapleModels.contains(_mapleSelectedModel)
                                     ? _mapleSelectedModel
                                     : null,
-                            decoration:
-                                const InputDecoration(labelText: 'Model'),
+                            decoration: const InputDecoration(
+                              labelText: 'Model',
+                            ),
                             hint: const Text('Select model'),
-                            items: _mapleModels
-                                .map((m) => DropdownMenuItem(
-                                    value: m, child: Text(m)))
-                                .toList(),
-                            onChanged: (v) =>
-                                setState(() => _mapleSelectedModel = v),
+                            items:
+                                _mapleModels
+                                    .map(
+                                      (m) => DropdownMenuItem(
+                                        value: m,
+                                        child: Text(m),
+                                      ),
+                                    )
+                                    .toList(),
+                            onChanged:
+                                (v) => setState(() => _mapleSelectedModel = v),
                           )
                         else
                           Text(
                             'No models loaded — test the connection first.',
-                            style: theme.textTheme.bodySmall
-                                ?.copyWith(color: context.textSecondary),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: context.textSecondary,
+                            ),
                           ),
                         const SizedBox(height: 12),
                         if (_mapleStatus != null)
@@ -1201,28 +1298,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             child: Text(
                               _mapleStatus!,
                               style: theme.textTheme.bodySmall?.copyWith(
-                                color: _mapleStatus!.startsWith('Connected')
-                                    ? AppColors.success
-                                    : AppColors.danger,
+                                color:
+                                    _mapleStatus!.startsWith('Connected')
+                                        ? AppColors.success
+                                        : AppColors.danger,
                               ),
                             ),
                           ),
                         Row(
                           children: [
                             OutlinedButton.icon(
-                              onPressed: _testingMaple
-                                  ? null
-                                  : _testMapleConnection,
-                              icon: _testingMaple
-                                  ? const SizedBox(
-                                      width: 14,
-                                      height: 14,
-                                      child: CircularProgressIndicator(
-                                          strokeWidth: 2),
-                                    )
-                                  : const Icon(
-                                      Icons.wifi_tethering_outlined,
-                                      size: 18),
+                              onPressed:
+                                  _testingMaple ? null : _testMapleConnection,
+                              icon:
+                                  _testingMaple
+                                      ? const SizedBox(
+                                        width: 14,
+                                        height: 14,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                      : const Icon(
+                                        Icons.wifi_tethering_outlined,
+                                        size: 18,
+                                      ),
                               label: const Text('Test connection'),
                             ),
                             const SizedBox(width: 8),
@@ -1254,8 +1354,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 if (_selectedProvider == AiProvider.appleIntelligence ||
                     _selectedProvider == AiProvider.geminiNano)
                   PlatformModelStatus(
-                    detail: _onDeviceStatus?.detail ??
-                        'Checking with the system…',
+                    detail:
+                        _onDeviceStatus?.detail ?? 'Checking with the system…',
                     isReady: _onDeviceStatus?.available ?? false,
                     onRecheck: _refreshOnDeviceStatus,
                   ),
@@ -1263,19 +1363,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 // this is the only place the download can be started from.
                 if (_selectedProvider == AiProvider.geminiNano &&
                     !(_onDeviceStatus?.available ?? true))
-                  GeminiNanoDownloadSection(
-                    onFinished: _refreshOnDeviceStatus,
-                  ),
-                if (_selectedProvider == AiProvider.localModel)
-                  LocalModelSection(onChanged: _refreshOnDeviceStatus),
+                  GeminiNanoDownloadSection(onFinished: _refreshOnDeviceStatus),
                 const ImportConsentSection(),
 
                 const Divider(indent: 16, endIndent: 16),
               ],
               SettingsSectionHeader('Bitcoin'),
               Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -1284,7 +1382,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       decoration: const InputDecoration(
                         labelText: 'Mempool / Esplora server',
                         hintText: 'http://server:3006/api',
-                        helperText: 'Used for wallet sync and BTC price. '
+                        helperText:
+                            'Used for wallet sync and BTC price. '
                             'Leave blank to use mempool.space.',
                       ),
                     ),
@@ -1296,8 +1395,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     // — on every keystroke.
                     ValueListenableBuilder<TextEditingValue>(
                       valueListenable: _esploraUrlCtrl,
-                      builder: (_, __, ___) =>
-                          DataRoutingBanner(usingDefault: _usingDefaultServer),
+                      builder:
+                          (_, _, _) => DataRoutingBanner(
+                            usingDefault: _usingDefaultServer,
+                          ),
                     ),
                     const SizedBox(height: 12),
                     if (_esploraStatus != null)
@@ -1317,18 +1418,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     Row(
                       children: [
                         OutlinedButton.icon(
-                          onPressed: _testingEsplora
-                              ? null
-                              : _testEsploraConnection,
-                          icon: _testingEsplora
-                              ? const SizedBox(
-                                  width: 14,
-                                  height: 14,
-                                  child:
-                                      CircularProgressIndicator(strokeWidth: 2),
-                                )
-                              : const Icon(Icons.wifi_tethering_outlined,
-                                  size: 18),
+                          onPressed:
+                              _testingEsplora ? null : _testEsploraConnection,
+                          icon:
+                              _testingEsplora
+                                  ? const SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                  : const Icon(
+                                    Icons.wifi_tethering_outlined,
+                                    size: 18,
+                                  ),
                           label: const Text('Test connection'),
                         ),
                         const SizedBox(width: 8),
@@ -1349,8 +1453,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             leading: const Icon(Icons.storage_outlined),
             title: const Text('Data'),
             childrenPadding: EdgeInsets.zero,
-            tilePadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            tilePadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 4,
+            ),
             children: [
               ListTile(
                 leading: const Icon(Icons.upload_outlined),
@@ -1372,8 +1478,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             leading: const Icon(Icons.info_outline),
             title: const Text('About'),
             childrenPadding: EdgeInsets.zero,
-            tilePadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            tilePadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 4,
+            ),
             children: [
               ListTile(
                 leading: const Icon(Icons.info_outline),
@@ -1394,25 +1502,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           // ── Danger zone ───────────────────────────────────────────────
           ExpansionTile(
-            leading: const Icon(Icons.warning_amber_outlined,
-                color: AppColors.danger),
+            leading: const Icon(
+              Icons.warning_amber_outlined,
+              color: AppColors.danger,
+            ),
             title: const Text(
               'Danger Zone',
               style: TextStyle(color: AppColors.danger),
             ),
             childrenPadding: EdgeInsets.zero,
-            tilePadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            tilePadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 4,
+            ),
             children: [
               ListTile(
-                leading: const Icon(Icons.delete_forever_outlined,
-                    color: AppColors.danger),
+                leading: const Icon(
+                  Icons.delete_forever_outlined,
+                  color: AppColors.danger,
+                ),
                 title: const Text(
                   'Reset all data',
                   style: TextStyle(color: AppColors.danger),
                 ),
                 subtitle: const Text(
-                    'Permanently delete all transactions, wallets, budgets, and settings'),
+                  'Permanently delete all transactions, wallets, budgets, and settings',
+                ),
                 onTap: _resetAllData,
               ),
             ],
@@ -1449,11 +1564,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       // actually decides is the advisory helper line below.
       ValueListenableBuilder<TextEditingValue>(
         valueListenable: ctrl,
-        builder: (_, value, __) {
+        builder: (_, value, _) {
           // Advisory only. A key whose prefix has changed is still a valid
           // key, and refusing it would be far worse than accepting one that
           // turns out to be wrong — the connection test is what decides.
-          final looksWrong = value.text.trim().isNotEmpty &&
+          final looksWrong =
+              value.text.trim().isNotEmpty &&
               !value.text.trim().startsWith(cloud.keyPrefix);
           return TextField(
             controller: ctrl,
@@ -1463,11 +1579,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
             decoration: InputDecoration(
               labelText: '${cloud.label} API key',
               hintText: '${cloud.keyPrefix}…',
-              helperText: looksWrong
-                  ? '${cloud.label} keys usually start with '
-                      '"${cloud.keyPrefix}".'
-                  : 'Stored in this device\'s keychain, not in the app '
-                      'database.',
+              helperText:
+                  looksWrong
+                      ? '${cloud.label} keys usually start with '
+                          '"${cloud.keyPrefix}".'
+                      : 'Stored in this device\'s keychain, not in the app '
+                          'database.',
               helperMaxLines: 2,
               suffixIcon: IconButton(
                 icon: Icon(
@@ -1477,8 +1594,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   size: 19,
                 ),
                 tooltip: visible ? 'Hide key' : 'Show key',
-                onPressed: () =>
-                    setState(() => _cloudKeyVisible[cloud.id] = !visible),
+                onPressed:
+                    () => setState(() => _cloudKeyVisible[cloud.id] = !visible),
               ),
             ),
           );
@@ -1493,9 +1610,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
         initialValue: models.contains(selected) ? selected : null,
         decoration: const InputDecoration(labelText: 'Model'),
         hint: Text(selected ?? cloud.defaultModel),
-        items: models
-            .map((m) => DropdownMenuItem(value: m, child: Text(m)))
-            .toList(),
+        items:
+            models
+                .map((m) => DropdownMenuItem(value: m, child: Text(m)))
+                .toList(),
         onChanged: (v) {
           if (v == null) return;
           setState(() => _cloudSelectedModel[cloud.id] = v);
@@ -1508,9 +1626,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           child: Text(
             _cloudStatus!,
             style: theme.textTheme.bodySmall?.copyWith(
-              color: _cloudStatus!.startsWith('Connected')
-                  ? AppColors.success
-                  : AppColors.danger,
+              color:
+                  _cloudStatus!.startsWith('Connected')
+                      ? AppColors.success
+                      : AppColors.danger,
             ),
           ),
         ),
@@ -1518,13 +1637,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
         children: [
           OutlinedButton.icon(
             onPressed: testing ? null : () => _testCloudConnection(cloud),
-            icon: testing
-                ? const SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.wifi_tethering_outlined, size: 18),
+            icon:
+                testing
+                    ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                    : const Icon(Icons.wifi_tethering_outlined, size: 18),
             label: const Text('Test key'),
           ),
           const SizedBox(width: 8),
@@ -1538,11 +1658,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   AiBackendCatalogue get _catalogue => AiBackendCatalogue(
-        appleIntelligenceOffered: _appleLlm?.state.worthOffering ?? false,
-        geminiNanoOffered: _nano?.state.worthOffering ?? false,
-        downloadableOffered: AiBackendCatalogue.downloadableRunsHere,
-        keepSelected: _selectedProvider,
-      );
+    appleIntelligenceOffered: _appleLlm?.state.worthOffering ?? false,
+    geminiNanoOffered: _nano?.state.worthOffering ?? false,
+    keepSelected: _selectedProvider,
+  );
 
   PlatformLlmAvailability? _appleLlm;
   GeminiNanoAvailability? _nano;
@@ -1550,11 +1669,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// Ask both platform backends once on open, so the picker knows what to show
   /// before the user touches anything.
   Future<void> _loadPlatformAvailability() async {
-    final apple = PlatformLlmBackend.bridgedHere
-        ? await PlatformLlmBackend.availability()
-        : null;
+    final apple =
+        PlatformLlmBackend.bridgedHere
+            ? await PlatformLlmBackend.availability()
+            : null;
     final nano =
-        GeminiNanoBackend.bridgedHere ? await GeminiNanoBackend.availability() : null;
+        GeminiNanoBackend.bridgedHere
+            ? await GeminiNanoBackend.availability()
+            : null;
     if (mounted) {
       setState(() {
         _appleLlm = apple;
@@ -1582,45 +1704,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _providerDescription(AiProvider provider) {
     final recipient = _recipientFor(provider);
     return switch (provider) {
-        // Derived, not asserted: the URL field decides. Saying "No data
-        // leaves" for a server the user has pointed at the internet is the
-        // one claim this app must never get wrong.
-        AiProvider.lmStudio => recipient == null
+      // Derived, not asserted: the URL field decides. Saying "No data
+      // leaves" for a server the user has pointed at the internet is the
+      // one claim this app must never get wrong.
+      AiProvider.lmStudio =>
+        recipient == null
             ? 'A model running in LM Studio on this machine. No data leaves.'
             : 'LM Studio on the server you configured. Your financial figures '
                 'are sent there to answer each question.',
-        AiProvider.ollama => recipient == null
+      AiProvider.ollama =>
+        recipient == null
             ? 'A model running on your own machine or one on your network. '
                 'Nothing leaves hardware you control.'
             : 'Ollama on the server you configured. Your financial figures '
                 'are sent there to answer each question.',
-        // Deliberately not "private, zero retention" as this once read. Maple
-        // may well be both, but the app cannot verify either, and a claim it
-        // cannot stand behind does not belong next to a backend that is, by
-        // construction, off-device.
-        AiProvider.maple =>
-          'A hosted OpenAI-compatible endpoint you point at yourself.',
-        AiProvider.appleIntelligence =>
-          'The model already on this Mac or iPhone. No download, no key.',
-        AiProvider.geminiNano =>
-          'The model built into this phone, run by Android. No key.',
-        AiProvider.localModel =>
-          'A small open model you download once, then run offline anywhere.',
-        AiProvider.claude ||
-        AiProvider.chatGpt ||
-        AiProvider.gemini ||
-        AiProvider.grok =>
-          'By far the most capable option, using your own '
-              '${provider.cloudProvider!.company} API key. You pay '
-              '${provider.cloudProvider!.company} directly for what you use.',
+      // Deliberately not "private, zero retention" as this once read. Maple
+      // may well be both, but the app cannot verify either, and a claim it
+      // cannot stand behind does not belong next to a backend that is, by
+      // construction, off-device.
+      AiProvider.maple =>
+        'A hosted OpenAI-compatible endpoint you point at yourself.',
+      AiProvider.appleIntelligence =>
+        'The model already on this Mac or iPhone. No download, no key.',
+      AiProvider.geminiNano =>
+        'The model built into this phone, run by Android. No key.',
+      AiProvider.claude ||
+      AiProvider.chatGpt ||
+      AiProvider.gemini ||
+      AiProvider.grok =>
+        'By far the most capable option, using your own '
+            '${provider.cloudProvider!.company} API key. You pay '
+            '${provider.cloudProvider!.company} directly for what you use.',
     };
   }
 
   String _themeName(ThemeMode mode) => switch (mode) {
-        ThemeMode.light => 'Light',
-        ThemeMode.dark => 'Dark',
-        ThemeMode.system => 'System',
-      };
+    ThemeMode.light => 'Light',
+    ThemeMode.dark => 'Dark',
+    ThemeMode.system => 'System',
+  };
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

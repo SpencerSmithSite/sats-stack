@@ -1,18 +1,20 @@
 import 'dart:async';
+
 // Comparison operators on columns (`isBiggerOrEqualValue`) come from drift
 // extensions, which a `show` clause would hide.
 import 'package:drift/drift.dart';
+
+import '../../shared/utils/date_range.dart';
 import '../database/database.dart';
 import '../models/budget_progress.dart';
 import '../models/fx_rates.dart';
-import '../../shared/utils/date_range.dart';
 import 'notification_service.dart';
 
 class BudgetService {
   /// [rates] converts spending into the display currency before it is
   /// compared with a budget — see [DashboardService] for why it is a function.
   BudgetService(this._db, {FxRates Function()? rates})
-      : _rates = rates ?? (() => const FxRates.passthrough());
+    : _rates = rates ?? (() => const FxRates.passthrough());
 
   final AppDatabase _db;
   final FxRates Function() _rates;
@@ -37,21 +39,24 @@ class BudgetService {
     required double amountFiat,
   }) async {
     await _db.transaction(() async {
-      final existing = await (_db.select(_db.budgets)
-            ..where((b) => b.categoryId.equals(categoryId)))
-          .getSingleOrNull();
+      final existing =
+          await (_db.select(_db.budgets)
+            ..where((b) => b.categoryId.equals(categoryId))).getSingleOrNull();
 
       if (existing != null) {
-        await (_db.update(_db.budgets)..where((b) => b.id.equals(existing.id)))
-            .write(BudgetsCompanion(amountFiat: Value(amountFiat)));
+        await (_db.update(_db.budgets)..where(
+          (b) => b.id.equals(existing.id),
+        )).write(BudgetsCompanion(amountFiat: Value(amountFiat)));
       } else {
-        await _db.into(_db.budgets).insert(
-          BudgetsCompanion.insert(
-            categoryId: categoryId,
-            amountFiat: amountFiat,
-            period: 'monthly',
-          ),
-        );
+        await _db
+            .into(_db.budgets)
+            .insert(
+              BudgetsCompanion.insert(
+                categoryId: categoryId,
+                amountFiat: amountFiat,
+                period: 'monthly',
+              ),
+            );
       }
     });
   }
@@ -132,11 +137,12 @@ class BudgetService {
     // Filtered in SQL, against the v7 index on `date`. This used to read every
     // transaction ever recorded to total up one month, on every change, and it
     // runs on the UI isolate.
-    final monthTxns = await (_db.select(_db.transactions)
-          ..where((t) => t.date.isBiggerOrEqualValue(range.start))
-          ..where((t) => t.date.isSmallerThanValue(range.end))
-          ..where((t) => t.amountFiat.isSmallerThanValue(0)))
-        .get();
+    final monthTxns =
+        await (_db.select(_db.transactions)
+              ..where((t) => t.date.isBiggerOrEqualValue(range.start))
+              ..where((t) => t.date.isSmallerThanValue(range.end))
+              ..where((t) => t.amountFiat.isSmallerThanValue(0)))
+            .get();
 
     final categoryIdByName = {for (final c in categories) c.name: c.id};
     final categoryById = {for (final c in categories) c.id: c};
@@ -157,11 +163,13 @@ class BudgetService {
     for (final budget in budgets) {
       final cat = categoryById[budget.categoryId];
       if (cat == null) continue;
-      result.add(BudgetProgress(
-        budget: budget,
-        category: cat,
-        spentFiat: monthSpend[cat.id] ?? 0,
-      ));
+      result.add(
+        BudgetProgress(
+          budget: budget,
+          category: cat,
+          spentFiat: monthSpend[cat.id] ?? 0,
+        ),
+      );
     }
 
     // Sort: over-budget first, then by spent desc

@@ -10,31 +10,103 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Pinned to the SDK this project is actually developed against, so CI cannot
+# pass on a version nobody runs. Bump it here when the local SDK moves.
+env:
+  FLUTTER_VERSION: 3.47.2
+
 jobs:
   analyze-and-test:
-    name: Analyze and test
+    name: Format, analyze and test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - uses: subosito/flutter-action@v2
         with:
-          # Pinned to the SDK this project is actually developed against, so CI
-          # cannot pass on a version nobody runs. Bump it here when the local
-          # SDK moves.
-          flutter-version: 3.47.2
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
 
+      # --enforce-lockfile: resolve exactly what pubspec.lock records, and fail
+      # if the lockfile and pubspec disagree, rather than quietly resolving
+      # something newer than anyone has run.
       - name: Install dependencies
-        run: flutter pub get
+        run: flutter pub get --enforce-lockfile
 
-      # No --no-fatal-infos: the ~40 info lints it existed to tolerate are
-      # cleared, so `flutter analyze` is now held at zero issues of any
-      # severity. It exits non-zero on infos as well as errors and warnings,
-      # which is what keeps them from drifting back one deprecation at a time.
+      # Every tracked Dart file, generated code included — Drift's output is
+      # already in the formatter's style, so a schema change does not trip it.
+      - name: Format
+        run: dart format --output=none --set-exit-if-changed $(git ls-files '*.dart')
+
+      # Held at zero issues of any severity: `flutter analyze` exits non-zero
+      # on infos as well as errors and warnings, which keeps them from drifting
+      # back one deprecation at a time.
       - name: Analyze
         run: flutter analyze
 
       - name: Test
         run: flutter test
+
+  # Analysis and tests compile no native code, so none of the platform
+  # findings in docs/AUDIT.md could have been caught by the job above: no
+  # manifest merge, no Podfile, no entitlements, neither native AI bridge.
+  # A debug build of each platform is the cheapest check that reaches them —
+  # the Android one would have caught the missing INTERNET permission.
+  android:
+    name: Build Android
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 21, as used locally. Not 25: the Kotlin 2.1 Gradle plugin cannot parse
+      # that version string.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - run: flutter pub get --enforce-lockfile
+      - run: flutter build apk --debug
+
+  apple:
+    name: Build ${{ matrix.platform }}
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [ios, macos]
+    env:
+      # pod install fails with "Unicode Normalization not appropriate for
+      # ASCII-8BIT" without a UTF-8 locale.
+      LANG: en_US.UTF-8
+      LC_ALL: en_US.UTF-8
+    steps:
+      - uses: actions/checkout@v4
+
+      # The Foundation Models bridge needs a current SDK.
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - run: flutter pub get --enforce-lockfile
+
+      - name: Build iOS (unsigned)
+        if: matrix.platform == 'ios'
+        run: flutter build ios --debug --no-codesign
+
+      - name: Build macOS
+        if: matrix.platform == 'macos'
+        run: flutter build macos --debug

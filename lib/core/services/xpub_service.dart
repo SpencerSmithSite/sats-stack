@@ -3,17 +3,17 @@ import 'dart:convert';
 import 'package:bech32/bech32.dart';
 import 'package:bs58check/bs58check.dart' as bs58check;
 import 'package:crypto/crypto.dart';
-import 'package:flutter/foundation.dart';
 import 'package:drift/drift.dart' show InsertMode, Value;
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:pointycastle/digests/ripemd160.dart';
 import 'package:pointycastle/ecc/curves/secp256k1.dart';
 
-import '../database/database.dart';
-import '../services/btc_price_service.dart';
 import '../../shared/constants/app_constants.dart';
 import '../../shared/utils/hash_utils.dart';
 import '../../shared/utils/url_utils.dart';
+import '../database/database.dart';
+import '../services/btc_price_service.dart';
 
 // ── Public types ─────────────────────────────────────────────────────────────
 
@@ -83,21 +83,26 @@ Uint8List _intTo4BytesBE(int n) {
 /// coin) instead of quietly treating it as mainnet legacy.
 const _extKeyVersions = <int, ({XpubFormat format, XpubNetwork network})>{
   0x0488b21e: (format: XpubFormat.p2pkh, network: XpubNetwork.mainnet), // xpub
-  0x049d7cb2:
-      (format: XpubFormat.p2shP2wpkh, network: XpubNetwork.mainnet), // ypub
+  0x049d7cb2: (
+    format: XpubFormat.p2shP2wpkh,
+    network: XpubNetwork.mainnet,
+  ), // ypub
   0x04b24746: (format: XpubFormat.p2wpkh, network: XpubNetwork.mainnet), // zpub
   0x043587cf: (format: XpubFormat.p2pkh, network: XpubNetwork.testnet), // tpub
-  0x044a5262:
-      (format: XpubFormat.p2shP2wpkh, network: XpubNetwork.testnet), // upub
+  0x044a5262: (
+    format: XpubFormat.p2shP2wpkh,
+    network: XpubNetwork.testnet,
+  ), // upub
   0x045f1cf6: (format: XpubFormat.p2wpkh, network: XpubNetwork.testnet), // vpub
 };
 
-typedef _ExtKey = ({
-  Uint8List pubkey,
-  Uint8List chaincode,
-  XpubFormat format,
-  XpubNetwork network,
-});
+typedef _ExtKey =
+    ({
+      Uint8List pubkey,
+      Uint8List chaincode,
+      XpubFormat format,
+      XpubNetwork network,
+    });
 
 // ── Isolate entry ─────────────────────────────────────────────────────────────
 
@@ -126,14 +131,16 @@ List<String> deriveAddressWindow(List<Object> message) {
 // ── Service ───────────────────────────────────────────────────────────────────
 
 class XpubService {
-  XpubService(this._db);
+  /// [client] is for tests, which answer from memory instead of the network.
+  XpubService(this._db, {http.Client? client})
+    : _client = client ?? http.Client();
 
   final AppDatabase _db;
 
   /// One client for the whole app rather than one per request: a scan makes
   /// dozens of calls to the same host and `http.get` would open a fresh
   /// connection for each. Never closed — the service lives as long as the app.
-  final http.Client _client = http.Client();
+  final http.Client _client;
 
   String _esploraBaseUrl = AppConstants.mempoolBaseUrl;
 
@@ -154,9 +161,9 @@ class XpubService {
   // ── Settings ────────────────────────────────────────────────────────────────
 
   Future<void> loadSettings() async {
-    final rows = await (_db.select(_db.appSettings)
-          ..where((t) => t.key.equals(AppConstants.settingElectrumUrl)))
-        .get();
+    final rows =
+        await (_db.select(_db.appSettings)
+          ..where((t) => t.key.equals(AppConstants.settingElectrumUrl))).get();
     if (rows.isNotEmpty) {
       _esploraBaseUrl =
           normalizeBaseUrl(rows.first.value) ?? AppConstants.mempoolBaseUrl;
@@ -176,7 +183,9 @@ class XpubService {
   Future<String?> saveSettings({required String url}) async {
     final normalized = normalizeBaseUrl(url);
     _esploraBaseUrl = normalized ?? AppConstants.mempoolBaseUrl;
-    await _db.into(_db.appSettings).insertOnConflictUpdate(
+    await _db
+        .into(_db.appSettings)
+        .insertOnConflictUpdate(
           AppSettingsCompanion.insert(
             key: AppConstants.settingElectrumUrl,
             value: normalized ?? '',
@@ -216,7 +225,8 @@ class XpubService {
       throw ArgumentError('Invalid extended key length');
     }
     // version(4) depth(1) fingerprint(4) childIndex(4) chaincode(32) pubkey(33)
-    final version = (payload[0] << 24) |
+    final version =
+        (payload[0] << 24) |
         (payload[1] << 16) |
         (payload[2] << 8) |
         payload[3];
@@ -250,10 +260,14 @@ class XpubService {
     Uint8List parentChaincode,
     int index,
   ) {
-    assert(index < 0x80000000, 'Hardened derivation not supported for public keys');
-    final data = Uint8List(37)
-      ..setAll(0, parentPubkey)
-      ..setAll(33, _intTo4BytesBE(index));
+    assert(
+      index < 0x80000000,
+      'Hardened derivation not supported for public keys',
+    );
+    final data =
+        Uint8List(37)
+          ..setAll(0, parentPubkey)
+          ..setAll(33, _intTo4BytesBE(index));
 
     final hmac = Hmac(sha512, parentChaincode);
     // I, IL and IR are BIP32's own names for the HMAC output and its halves.
@@ -267,8 +281,9 @@ class XpubService {
     final IR = I.sublist(32, 64);
 
     final ilInt = BigInt.parse(
-        IL.map((b) => b.toRadixString(16).padLeft(2, '0')).join(),
-        radix: 16);
+      IL.map((b) => b.toRadixString(16).padLeft(2, '0')).join(),
+      radix: 16,
+    );
 
     // IL must be less than the curve order
     if (ilInt >= _curve.n) throw StateError('Derived key is invalid (IL >= n)');
@@ -319,8 +334,9 @@ class XpubService {
         // P2SH-P2WPKH: Base58Check(version || hash160(OP_0 OP_20 <hash160>))
         final version = mainnet ? 0x05 : 0xC4;
         final redeemScript = Uint8List.fromList([0x00, 0x14, ...h160]);
-        return bs58check
-            .encode(Uint8List.fromList([version, ..._hash160(redeemScript)]));
+        return bs58check.encode(
+          Uint8List.fromList([version, ..._hash160(redeemScript)]),
+        );
 
       case XpubFormat.p2wpkh:
         // P2WPKH: bech32(hrp, 0, hash160)
@@ -331,7 +347,12 @@ class XpubService {
   }
 
   // bech32 convertbits
-  static List<int> _convertBits(Uint8List data, int from, int to, {required bool pad}) {
+  static List<int> _convertBits(
+    Uint8List data,
+    int from,
+    int to, {
+    required bool pad,
+  }) {
     int acc = 0, bits = 0;
     final out = <int>[];
     final maxv = (1 << to) - 1;
@@ -409,10 +430,12 @@ class XpubService {
     int count,
   ) async {
     try {
-      return await compute(
-        deriveAddressWindow,
-        <Object>[extKey, chain, start, count],
-      );
+      return await compute(deriveAddressWindow, <Object>[
+        extKey,
+        chain,
+        start,
+        count,
+      ]);
     } catch (_) {
       return deriveWindowSync(extKey, chain, start, count);
     }
@@ -432,8 +455,7 @@ class XpubService {
     for (var attempt = 1; attempt <= _maxAttempts; attempt++) {
       http.Response response;
       try {
-        response =
-            await _client.get(Uri.parse(url)).timeout(_requestTimeout);
+        response = await _client.get(Uri.parse(url)).timeout(_requestTimeout);
       } catch (e) {
         lastError = e;
         if (attempt == _maxAttempts) break;
@@ -498,8 +520,10 @@ class XpubService {
   Future<List<List<Map<String, dynamic>>>> _fetchWindow(
     List<String> addresses,
   ) async {
-    final results =
-        List<List<Map<String, dynamic>>>.filled(addresses.length, const []);
+    final results = List<List<Map<String, dynamic>>>.filled(
+      addresses.length,
+      const [],
+    );
     var next = 0;
 
     Future<void> worker() async {
@@ -529,9 +553,10 @@ class XpubService {
     String? lastSeen;
 
     for (var page = 0; page < _maxPagesPerAddress; page++) {
-      final url = lastSeen == null
-          ? '$_esploraBaseUrl/address/$address/txs'
-          : '$_esploraBaseUrl/address/$address/txs/chain/$lastSeen';
+      final url =
+          lastSeen == null
+              ? '$_esploraBaseUrl/address/$address/txs'
+              : '$_esploraBaseUrl/address/$address/txs/chain/$lastSeen';
       final body = await _getJson(url);
       if (body is! List) {
         throw XpubSyncException(
@@ -591,14 +616,19 @@ class XpubService {
 
     final currency = btcPriceService.currency;
 
-    // Only the hashes are needed, not every column of every row.
-    final hashRows = await (_db.selectOnly(_db.transactions)
-          ..addColumns([_db.transactions.dedupHash]))
-        .get();
-    final existingHashes = hashRows
-        .map((r) => r.read(_db.transactions.dedupHash))
-        .whereType<String>()
-        .toSet();
+    // Only the hashes are needed, not every column of every row — and only
+    // this wallet's. Checking every wallet's made a second wallet on the same
+    // xpub sync to zero rows while reporting them all as skipped.
+    final hashRows =
+        await (_db.selectOnly(_db.transactions)
+              ..addColumns([_db.transactions.dedupHash])
+              ..where(_db.transactions.walletId.equals(wallet.id)))
+            .get();
+    final existingHashes =
+        hashRows
+            .map((r) => r.read(_db.transactions.dedupHash))
+            .whereType<String>()
+            .toSet();
 
     // ── Pass 1: scan both chains ────────────────────────────────────────────
     //
@@ -625,12 +655,17 @@ class XpubService {
       // walk would not also have fetched, except at most one window at the
       // very end.
       while (gapCount < _gapLimit) {
-        final addresses =
-            await _deriveWindow(extKey, chainIndex, index, _gapLimit);
+        final addresses = await _deriveWindow(
+          extKey,
+          chainIndex,
+          index,
+          _gapLimit,
+        );
         owned.addAll(addresses);
 
         onProgress?.call(
-            'Scanning $chainName addresses ${index + 1}–${index + _gapLimit}…');
+          'Scanning $chainName addresses ${index + 1}–${index + _gapLimit}…',
+        );
 
         final results = await _fetchWindow(addresses);
 
@@ -687,20 +722,27 @@ class XpubService {
       final shortId = txid.substring(0, txid.length >= 8 ? 8 : txid.length);
       final description = 'BTC $shortId';
       // Salted with the txid: one on-chain transaction is one row, however many
-      // of the wallet's addresses it touched.
-      final hash = HashUtils.transactionDedupHash(
-        date: date,
-        amount: netSats.toDouble(),
-        description: description,
-        salt: 'xpub_$txid',
+      // of the wallet's addresses it touched. Then scoped to the wallet, so the
+      // same transaction in a second wallet is its own row rather than a
+      // collision on the unique index — see `AppDatabase.migrateToV8`.
+      final hash = HashUtils.scopedToWallet(
+        HashUtils.transactionDedupHash(
+          date: date,
+          amount: netSats.toDouble(),
+          description: description,
+          salt: 'xpub_$txid',
+        ),
+        wallet.id,
       );
 
-      rows.add(_RawTx(
-        date: date,
-        netSats: netSats,
-        description: description,
-        dedupHash: hash,
-      ));
+      rows.add(
+        _RawTx(
+          date: date,
+          netSats: netSats,
+          description: description,
+          dedupHash: hash,
+        ),
+      );
     }
 
     final newRows =
@@ -714,10 +756,13 @@ class XpubService {
     var fetched = 0;
     for (final entry in datesToPrice.entries) {
       fetched++;
-      onProgress
-          ?.call('Fetching historical price $fetched/${datesToPrice.length}…');
-      priceByDay[entry.key] =
-          await btcPriceService.getHistoricalPrice(entry.value, currency);
+      onProgress?.call(
+        'Fetching historical price $fetched/${datesToPrice.length}…',
+      );
+      priceByDay[entry.key] = await btcPriceService.getHistoricalPrice(
+        entry.value,
+        currency,
+      );
     }
 
     // ── Pass 4: write ───────────────────────────────────────────────────────
@@ -726,31 +771,35 @@ class XpubService {
     // a single change rather than one per row.
     final wanted = {for (final r in rows) r.dedupHash};
     var imported = 0;
-    var skipped = rows.length - newRows.length;
+    final skipped = rows.length - newRows.length;
     var removed = 0;
 
     await _db.transaction(() async {
       // Two where clauses rather than `&`: that operator comes from a drift
       // extension this file does not import, and drift ANDs them anyway.
-      final previous = await (_db.select(_db.transactions)
-            ..where((t) => t.walletId.equals(wallet.id))
-            ..where((t) => t.source.equals('xpub')))
-          .get();
+      final previous =
+          await (_db.select(_db.transactions)
+                ..where((t) => t.walletId.equals(wallet.id))
+                ..where((t) => t.source.equals('xpub')))
+              .get();
       for (final row in previous) {
         if (!wanted.contains(row.dedupHash)) {
-          await (_db.delete(_db.transactions)..where((t) => t.id.equals(row.id)))
-              .go();
+          await (_db.delete(_db.transactions)
+            ..where((t) => t.id.equals(row.id))).go();
           removed++;
         }
       }
 
       for (final raw in newRows) {
         final price = priceByDay[_dayKey(raw.date)];
-        final amountFiat = (price != null && price > 0)
-            ? raw.netSats / 100000000 * price
-            : 0.0;
+        final amountFiat =
+            (price != null && price > 0)
+                ? raw.netSats / 100000000 * price
+                : 0.0;
 
-        await _db.into(_db.transactions).insert(
+        await _db
+            .into(_db.transactions)
+            .insert(
               TransactionsCompanion.insert(
                 walletId: wallet.id,
                 date: raw.date,

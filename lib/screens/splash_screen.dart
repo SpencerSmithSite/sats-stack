@@ -37,23 +37,39 @@ class _SplashScreenState extends State<SplashScreen>
     super.initState();
 
     _coin1Ctrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 400));
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    );
     _coin2Ctrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 400));
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    );
     _coin3Ctrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 400));
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    );
     _shakeCtrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 80));
+      vsync: this,
+      duration: const Duration(milliseconds: 80),
+    );
     _fadeCtrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 350));
+      vsync: this,
+      duration: const Duration(milliseconds: 350),
+    );
 
     // Each coin drops from 400px above its resting position with bounceOut easing.
-    _coin1Y = Tween<double>(begin: -400.0, end: 0.0).animate(
-        CurvedAnimation(parent: _coin1Ctrl, curve: Curves.bounceOut));
-    _coin2Y = Tween<double>(begin: -400.0, end: 0.0).animate(
-        CurvedAnimation(parent: _coin2Ctrl, curve: Curves.bounceOut));
-    _coin3Y = Tween<double>(begin: -400.0, end: 0.0).animate(
-        CurvedAnimation(parent: _coin3Ctrl, curve: Curves.bounceOut));
+    _coin1Y = Tween<double>(
+      begin: -400.0,
+      end: 0.0,
+    ).animate(CurvedAnimation(parent: _coin1Ctrl, curve: Curves.bounceOut));
+    _coin2Y = Tween<double>(
+      begin: -400.0,
+      end: 0.0,
+    ).animate(CurvedAnimation(parent: _coin2Ctrl, curve: Curves.bounceOut));
+    _coin3Y = Tween<double>(
+      begin: -400.0,
+      end: 0.0,
+    ).animate(CurvedAnimation(parent: _coin3Ctrl, curve: Curves.bounceOut));
 
     // Subtle screen shake: 2 px down → -1 px up → settle.
     _shakeY = TweenSequence<double>([
@@ -62,8 +78,10 @@ class _SplashScreenState extends State<SplashScreen>
       TweenSequenceItem(tween: Tween(begin: -1.0, end: 0.0), weight: 30),
     ]).animate(_shakeCtrl);
 
-    _fadeOut = Tween<double>(begin: 1.0, end: 0.0).animate(
-        CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut));
+    _fadeOut = Tween<double>(
+      begin: 1.0,
+      end: 0.0,
+    ).animate(CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut));
 
     _runSequence();
   }
@@ -120,8 +138,12 @@ class _SplashScreenState extends State<SplashScreen>
     return FadeTransition(
       opacity: _fadeOut,
       child: AnimatedBuilder(
-        animation:
-            Listenable.merge([_coin1Ctrl, _coin2Ctrl, _coin3Ctrl, _shakeCtrl]),
+        animation: Listenable.merge([
+          _coin1Ctrl,
+          _coin2Ctrl,
+          _coin3Ctrl,
+          _shakeCtrl,
+        ]),
         builder: (context, _) {
           return ColoredBox(
             color: const Color(0xFF141414),
@@ -236,12 +258,23 @@ class _CoinStackPainter extends CustomPainter {
     //   3. Vertical line down rimH to right edge of lower ellipse.
     //   4. Arc along the bottom half of the lower ellipse (right → left via bottom).
     //   5. Close (implicit left vertical line back to start).
-    final rimPath = Path()
-      ..moveTo(cx - _rx, coinCy)
-      ..arcTo(faceRect, pi, pi, false) // clockwise: 9-o'clock → 3-o'clock via 6-o'clock
-      ..lineTo(cx + _rx, coinCy + _rimH)
-      ..arcTo(lowerRect, 0, pi, false) // clockwise: 3-o'clock → 9-o'clock via 6-o'clock
-      ..close();
+    final rimPath =
+        Path()
+          ..moveTo(cx - _rx, coinCy)
+          ..arcTo(
+            faceRect,
+            pi,
+            pi,
+            false,
+          ) // clockwise: 9-o'clock → 3-o'clock via 6-o'clock
+          ..lineTo(cx + _rx, coinCy + _rimH)
+          ..arcTo(
+            lowerRect,
+            0,
+            pi,
+            false,
+          ) // clockwise: 3-o'clock → 9-o'clock via 6-o'clock
+          ..close();
 
     final List<Color> rimColors;
     final List<Color> faceColors;
@@ -274,7 +307,12 @@ class _CoinStackPainter extends CustomPainter {
     }
 
     // Gradient rect spans the full coin width so left/right stops align correctly.
-    final gradientRect = Rect.fromLTWH(cx - _rx, coinCy - _ry, _rx * 2, _ry * 2 + _rimH);
+    final gradientRect = Rect.fromLTWH(
+      cx - _rx,
+      coinCy - _ry,
+      _rx * 2,
+      _ry * 2 + _rimH,
+    );
 
     canvas.drawPath(
       rimPath,

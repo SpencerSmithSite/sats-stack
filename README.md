@@ -12,9 +12,10 @@ Track your fiat spending and your Bitcoin stack in the same place — understand
 ### Transactions
 - Manual transaction entry with categories and notes
 - CSV import with automatic bank format detection and auto-categorisation
-- xpub wallet import (BIP44/49/84) — syncs via Mempool.space Esplora
+- Bitcoin wallet import from an xpub, ypub or zpub (BIP44/49/84, mainnet and testnet) — syncs via Mempool.space Esplora or your own server
+- Bank statement import from CSV, PDF or a photo
 - Edit and delete transactions
-- Recurring transactions (daily / weekly / monthly / yearly)
+- Recurring transactions (weekly / monthly / yearly)
 - Transaction search and filter (by keyword, category, source)
 - Historical BTC price recorded per transaction at time of import
 
@@ -23,7 +24,7 @@ Track your fiat spending and your Bitcoin stack in the same place — understand
 - Fiat "leak rate" and inflation cost metrics
 - Spending breakdown by category (bar chart)
 - Per-wallet breakdown (when multiple wallets are active)
-- AI monthly insight (requires Ollama — desktop)
+- AI monthly insight — automatic with a private model, on request with a hosted one
 - Month selector for historical browsing
 
 ### Budgets
@@ -47,22 +48,42 @@ Track your fiat spending and your Bitcoin stack in the same place — understand
 - Dark / Light / System theme
 - Currency: USD, GBP, EUR, CAD, AUD
 - Custom Mempool/Esplora server (for privacy — routes all wallet sync and price data through your own node)
-- AI — Ollama server configuration (desktop)
+- AI provider — on device, your own server, or hosted (see below)
 - SQLite database export and import
 - Custom spending categories with colour and icon picker
 - Data routing banner showing exactly which servers are contacted
 
 ## Privacy
 
-By default the app contacts **mempool.space** (wallet sync, BTC price) and **CoinGecko** (price fallback). If you configure a self-hosted Mempool/Esplora server, all data is routed through it exclusively — no third-party servers are contacted.
+There is no Sats Stack account and no Sats Stack server. Your records are
+stored on your device in a SQLite database via
+[Drift](https://drift.simonbinder.eu/). The app does not encrypt that database
+itself; it relies on your device's storage encryption (on by default on iOS and
+Android, FileVault on a Mac).
 
-All data is stored locally in a SQLite database via [Drift](https://drift.simonbinder.eu/). Nothing is ever uploaded.
+What leaves the device, and when:
+
+- **Wallet sync and BTC prices** go to **mempool.space** by default, with
+  **CoinGecko** as a price fallback. A wallet sync sends your wallet's
+  addresses. Point Settings → Servers at your own Mempool/Esplora server and
+  everything goes there instead; the routing banner in Settings shows which
+  servers are contacted.
+- **AI** depends on the provider you choose — see below. A hosted provider is
+  sent your figures only when you ask: a question, an insight you tap for, or
+  a statement import you have agreed to. The import asks first, the preview
+  says when a file was sent, and Settings → Servers can withdraw the
+  permission.
 
 ## AI Features
 
-AI features use [Ollama](https://ollama.com/) running locally (desktop) or on a remote server (mobile — coming soon). No data leaves your machine unless you point it at an external Ollama instance.
+Pick one provider in Settings or during onboarding:
 
-Supported: macOS, Windows, Linux. iOS/Android support with a remote server URL is in development.
+- **On this device** — Apple Intelligence or Gemini Nano, where the device
+  has one. Nothing leaves the device.
+- **Your own server** — [Ollama](https://ollama.com/) or LM Studio, on this
+  machine or your network. A server on the internet is shown as such.
+- **Hosted, needs your API key** — Claude, ChatGPT, Gemini, Grok or Maple. Your
+  figures go to that company to answer.
 
 ## Tech Stack
 
@@ -81,10 +102,10 @@ No state management library (Provider/Riverpod/Bloc) — services are plain Dart
 
 ### Prerequisites
 
-- Flutter SDK ≥ 3.7
+- Flutter 3.47.2 (the version CI builds with)
 - For macOS: Xcode
 - For iOS: Xcode + CocoaPods (`brew install cocoapods`)
-- For AI features: [Ollama](https://ollama.com/) with at least one model pulled (e.g. `ollama pull llama3.2`)
+- For Android: JDK 21 (not 25 — see `.github/workflows/ci.yml`)
 
 ### Run
 
@@ -107,7 +128,33 @@ dart run build_runner build --delete-conflicting-outputs
 
 ### iOS note
 
-The iOS `Podfile` requires `platform :ios, '12.0'` and `use_modular_headers!` inside the `target 'Runner'` block. These are already set — if you see CocoaPods errors about modular headers, ensure both lines are present in `ios/Podfile`.
+The minimum is iOS 15, set in `ios/Podfile` and the Xcode project — the
+lowest the current Xcode supports. `pod install` needs a UTF-8 locale
+(`LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8`).
+
+### Moving macOS data from before the bundle id change
+
+On 2026-10-20 the macOS bundle id changed from the template's
+`com.satsstack.satsStack` to `app.satsstack.SatsStack`, matching iOS. The app
+is sandboxed, so a build with the new id opens a new, empty container: your
+existing data is still there, under the old id, untouched. To bring it across:
+
+1. In a build from **before** the change, open Settings → Data → **Export
+   database** and save the file somewhere you can find.
+2. Open the new build. It starts at onboarding — skip through it.
+3. Settings → Data → **Import database**, choose the export, then quit and
+   reopen.
+4. Re-enter any hosted-AI API keys in Settings → Servers. They are kept in the
+   keychain against the app's identity, so they do not come across.
+
+If you no longer have an old build, quit the app and copy the file by hand:
+
+```bash
+cp ~/Library/Containers/com.satsstack.satsStack/Data/Documents/sats_stack_db.sqlite ~/Library/Containers/app.satsstack.SatsStack/Data/Documents/
+```
+
+Run the new build once first so its container exists, and quit it before
+copying.
 
 ## Project Structure
 
@@ -122,10 +169,12 @@ lib/
     transactions/    # Transaction list, add/edit sheets
     budgets/         # Budget cards + set budget sheet
     stack/           # Stack chart, DCA simulator, goal card
-    ai_chat/         # Ollama chat screen (desktop)
+    ai_chat/         # AI chat screen
     analytics/       # Analytics screen (charts + CSV export)
     settings/        # Settings screen + categories sheet
-    onboarding/      # 3-page onboarding flow
+    onboarding/      # Onboarding flow
+  screens/
+    import/          # Statement import: source setup, parsing, preview
   shared/
     constants/       # AppConstants (settings keys, defaults)
     theme/           # AppColors, ThemeData

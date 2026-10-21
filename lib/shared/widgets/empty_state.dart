@@ -26,11 +26,7 @@ class EmptyState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              icon,
-              size: 64,
-              color: context.textSecondary.withAlpha(120),
-            ),
+            Icon(icon, size: 64, color: context.textSecondary.withAlpha(120)),
             const SizedBox(height: 20),
             Text(
               title,
@@ -49,10 +45,7 @@ class EmptyState extends StatelessWidget {
             ),
             if (actionLabel != null && onAction != null) ...[
               const SizedBox(height: 24),
-              FilledButton(
-                onPressed: onAction,
-                child: Text(actionLabel!),
-              ),
+              FilledButton(onPressed: onAction, child: Text(actionLabel!)),
             ],
           ],
         ),

@@ -1,22 +1,23 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:flutter_gemma/flutter_gemma.dart';
-import 'package:flutter_gemma_litertlm/flutter_gemma_litertlm.dart';
 
 import 'app.dart';
-import 'screens/splash_screen.dart';
 import 'core/database/database.dart';
-import 'shared/constants/app_constants.dart';
-import 'core/services/transaction_service.dart';
-import 'core/services/category_service.dart';
-import 'core/services/wallet_service.dart';
-import 'core/services/btc_price_service.dart';
 import 'core/models/fx_rates.dart';
-import 'core/services/dashboard_service.dart';
-import 'core/services/xpub_service.dart';
+import 'core/services/btc_price_service.dart';
 import 'core/services/budget_service.dart';
+import 'core/services/category_service.dart';
+import 'core/services/dashboard_service.dart';
+import 'core/services/import_service.dart';
 import 'core/services/notification_service.dart';
 import 'core/services/ollama_service.dart';
-import 'core/services/import_service.dart';
+import 'core/services/removed_model_cleanup.dart';
+import 'core/services/transaction_service.dart';
+import 'core/services/wallet_service.dart';
+import 'core/services/xpub_service.dart';
+import 'screens/splash_screen.dart';
+import 'shared/constants/app_constants.dart';
 
 late AppDatabase db;
 late TransactionService transactionService;
@@ -45,35 +46,17 @@ late ValueNotifier<double> inflationRateNotifier;
 
 /// Today's display currency and BTC prices, for converting stored amounts.
 FxRates _currentRates() => FxRates(
-      display: currencyNotifier.value,
-      btcPrices: btcPriceService.allPrices,
-    );
+  display: currencyNotifier.value,
+  btcPrices: btcPriceService.allPrices,
+);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Required before any downloadable-model call, and the engine must be passed
-  // in explicitly — adding `flutter_gemma_litertlm` to pubspec.yaml is NOT
-  // enough. `flutter_gemma` is only a core since 1.0 and registers nothing on
-  // its own.
-  //
-  // The two failure modes are distinct and both were hit in testing:
-  //   - omit this call entirely  → install fails, "FlutterGemma not initialized"
-  //   - call it with no engines  → install SUCCEEDS, then the first question
-  //                                fails with "No inference engine can handle
-  //                                this model (ModelFileType.litertlm) …
-  //                                Registered engines: ."
-  // The second is the nastier one: a 2.7 GB download completes and looks
-  // healthy, and only generation reveals the model can never run.
-  //
-  // Guarded because the plugin has no implementation on every platform this app
-  // builds for, and a throw here would take the whole app down at launch over a
-  // feature the user may never touch.
-  try {
-    await FlutterGemma.initialize(inferenceEngines: [LiteRtLmEngine()]);
-  } catch (e) {
-    debugPrint('flutter_gemma unavailable on this platform: $e');
-  }
+  // Gigabytes of model weights from the removed downloadable-model backend,
+  // which nothing else can now delete. In the background: it touches only
+  // those files, and launch must not wait on disk I/O.
+  unawaited(RemovedModelCleanup.runHere());
 
   db = AppDatabase();
   transactionService = TransactionService(db);
@@ -100,17 +83,18 @@ void main() async {
   // btcPriceService.loadSettings() is called inside initialize() below.
 
   // Onboarding state, for the router's redirect.
-  final onboardingRows = await (db.select(db.appSettings)
-        ..where((t) => t.key.equals(AppConstants.settingOnboardingComplete)))
-      .get();
+  final onboardingRows =
+      await (db.select(db.appSettings)..where(
+        (t) => t.key.equals(AppConstants.settingOnboardingComplete),
+      )).get();
   onboardingCompleteNotifier = ValueNotifier(
     onboardingRows.isNotEmpty && onboardingRows.first.value == 'true',
   );
 
   // Load persisted theme mode
-  final themeRows = await (db.select(db.appSettings)
-        ..where((t) => t.key.equals(AppConstants.settingThemeMode)))
-      .get();
+  final themeRows =
+      await (db.select(db.appSettings)
+        ..where((t) => t.key.equals(AppConstants.settingThemeMode))).get();
   final savedTheme = themeRows.isNotEmpty ? themeRows.first.value : null;
   final initialTheme = switch (savedTheme) {
     'light' => ThemeMode.light,
@@ -120,28 +104,30 @@ void main() async {
   themeModeNotifier = ValueNotifier(initialTheme);
 
   // Load persisted currency
-  final currencyRows = await (db.select(db.appSettings)
-        ..where((t) => t.key.equals(AppConstants.settingCurrency)))
-      .get();
+  final currencyRows =
+      await (db.select(db.appSettings)
+        ..where((t) => t.key.equals(AppConstants.settingCurrency))).get();
   final savedCurrency =
       currencyRows.isNotEmpty ? currencyRows.first.value : 'USD';
   currencyNotifier = ValueNotifier(savedCurrency);
 
   // Load persisted show-BTC-price toggle (default: on)
-  final showPriceRows = await (db.select(db.appSettings)
-        ..where((t) => t.key.equals(AppConstants.settingShowBtcPrice)))
-      .get();
-  final showPrice = showPriceRows.isEmpty || showPriceRows.first.value != 'false';
+  final showPriceRows =
+      await (db.select(db.appSettings)
+        ..where((t) => t.key.equals(AppConstants.settingShowBtcPrice))).get();
+  final showPrice =
+      showPriceRows.isEmpty || showPriceRows.first.value != 'false';
   showBtcPriceNotifier = ValueNotifier(showPrice);
 
   // Load persisted inflation rate (default: 3.5%)
-  final inflationRows = await (db.select(db.appSettings)
-        ..where((t) => t.key.equals(AppConstants.settingInflationRate)))
-      .get();
-  final savedInflation = inflationRows.isNotEmpty
-      ? double.tryParse(inflationRows.first.value) ??
-          AppConstants.defaultInflationRate
-      : AppConstants.defaultInflationRate;
+  final inflationRows =
+      await (db.select(db.appSettings)
+        ..where((t) => t.key.equals(AppConstants.settingInflationRate))).get();
+  final savedInflation =
+      inflationRows.isNotEmpty
+          ? double.tryParse(inflationRows.first.value) ??
+              AppConstants.defaultInflationRate
+          : AppConstants.defaultInflationRate;
   inflationRateNotifier = ValueNotifier(savedInflation);
 
   // Initialise local notifications (owned by NotificationService).
@@ -155,15 +141,19 @@ void main() async {
   await btcPriceService.initialize();
 
   // Check budgets at startup and on every subsequent transaction change.
-  budgetService.checkAndNotify(
-    notifications: notificationService,
-    currency: currencyNotifier.value,
-  ).ignore();
+  budgetService
+      .checkAndNotify(
+        notifications: notificationService,
+        currency: currencyNotifier.value,
+      )
+      .ignore();
   transactionService.watchAll().listen((_) {
-    budgetService.checkAndNotify(
-      notifications: notificationService,
-      currency: currencyNotifier.value,
-    ).ignore();
+    budgetService
+        .checkAndNotify(
+          notifications: notificationService,
+          currency: currencyNotifier.value,
+        )
+        .ignore();
   });
 
   runApp(const _AppWithSplash());

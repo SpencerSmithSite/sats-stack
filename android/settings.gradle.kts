@@ -22,8 +22,8 @@ plugins {
     // androidx.activity 1.12, which Flutter's own plugins now pull in, declare
     // AAR metadata requiring it. On 8.7.0 the build fails at
     // `checkDebugAarMetadata` before any of this project's code is compiled.
-    id("com.android.application") version "8.9.1" apply false
-    id("org.jetbrains.kotlin.android") version "2.1.0" apply false
+    id("com.android.application") version "8.11.1" apply false
+    id("org.jetbrains.kotlin.android") version "2.2.20" apply false
 }
 
 include(":app")

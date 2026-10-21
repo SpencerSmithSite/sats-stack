@@ -1,20 +1,18 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart' show ValueNotifier;
-
 import 'package:drift/drift.dart' show OrderingTerm;
+import 'package:flutter/foundation.dart' show ValueNotifier;
 import 'package:http/http.dart' as http;
 
-import '../database/database.dart';
-import '../models/ai_provider.dart';
 import '../../shared/constants/app_constants.dart';
 import '../../shared/utils/platform_utils.dart';
 import '../../shared/utils/url_utils.dart';
+import '../database/database.dart';
+import '../models/ai_provider.dart';
 import 'inference/cloud_backend.dart';
 import 'inference/gemini_nano_backend.dart';
 import 'inference/inference_backend.dart';
-import 'inference/local_model_backend.dart';
 import 'inference/platform_llm_backend.dart';
 import 'inference/remote_backends.dart';
 import 'secure_key_store.dart';
@@ -29,7 +27,7 @@ import 'secure_key_store.dart';
 /// switching on a provider enum.
 class OllamaService {
   OllamaService(this._db, {SecureKeyStore keyStore = const SecureKeyStore()})
-      : _keyStore = keyStore;
+    : _keyStore = keyStore;
 
   final AppDatabase _db;
 
@@ -73,16 +71,6 @@ class OllamaService {
   final Map<String, String> _cloudKeys = {};
   final Map<String, bool> _cloudConnected = {};
 
-  // ── On-device fields ──────────────────────────────────────────────────────
-
-  /// Which model in the downloadable catalogue is selected.
-  ///
-  /// Seeded with the conservative fallback rather than the recommendation,
-  /// because picking the recommendation requires reading device memory and that
-  /// is asynchronous. [loadSettings] replaces it with what this machine can
-  /// actually hold.
-  String _localModelId = LocalModelChoice.fallback().id;
-
   // ── Active provider ───────────────────────────────────────────────────────
 
   AiProvider _activeProvider = AiProvider.ollama;
@@ -91,70 +79,67 @@ class OllamaService {
 
   AiProvider get activeProvider => _activeProvider;
 
-  LocalModelChoice get localModel => LocalModelChoice.byId(_localModelId);
-
   /// The backend for the current selection, constructed fresh each time so a
   /// configuration edit takes effect without anything having to invalidate a
   /// cached instance.
   InferenceBackend get backend => switch (_activeProvider) {
-        AiProvider.ollama => OllamaBackend(
-            baseUrl: _baseUrl,
-            model: _selectedModel,
-            isPrivate: isLocalEndpoint(_baseUrl),
-          ),
-        AiProvider.lmStudio => OpenAiCompatBackend(
-            id: OpenAiCompatBackend.lmStudioId,
-            displayName: 'LM Studio',
-            description: isLocalEndpoint(_lmStudioBaseUrl)
-                ? 'A model running in LM Studio on this machine. Nothing '
-                    'leaves your device.'
-                : 'LM Studio on the server you configured. Your financial '
-                    'figures are sent there to answer each question.',
-            baseUrl: _lmStudioBaseUrl,
-            model: _lmStudioSelectedModel,
-            apiKey: '',
-            // Derived from the URL, not hardcoded. The field is free text, so
-            // "Nothing leaves your device" was a claim the app could not back:
-            // a user pointing it at a VPS got the reassurance anyway, and this
-            // flag now decides whether insights generate automatically and
-            // whether statements are uploaded without asking.
-            isPrivate: isLocalEndpoint(_lmStudioBaseUrl),
-            contextBudgetChars: 12000,
-          ),
-        AiProvider.maple => OpenAiCompatBackend(
-            id: OpenAiCompatBackend.mapleId,
-            displayName: 'Maple',
-            description:
-                'A hosted model. Your financial figures are sent to the server '
-                'to answer each question.',
-            baseUrl: _mapleBaseUrl,
-            model: _mapleSelectedModel,
-            apiKey: _mapleApiKey,
-            // Hosted, so the privacy disclosure has to say so — this is the one
-            // backend where the app's "nothing leaves your device" claim does
-            // not hold, and the picker must not let it stand unqualified.
-            isPrivate: false,
-            contextBudgetChars: 24000,
-          ),
-        AiProvider.appleIntelligence => const PlatformLlmBackend(),
-        AiProvider.geminiNano => const GeminiNanoBackend(),
-        AiProvider.localModel => LocalModelBackend(choice: localModel),
-        AiProvider.claude ||
-        AiProvider.chatGpt ||
-        AiProvider.gemini ||
-        AiProvider.grok =>
-          cloudBackendFor(_activeProvider.cloudProvider!),
-      };
+    AiProvider.ollama => OllamaBackend(
+      baseUrl: _baseUrl,
+      model: _selectedModel,
+      isPrivate: isLocalEndpoint(_baseUrl),
+    ),
+    AiProvider.lmStudio => OpenAiCompatBackend(
+      id: OpenAiCompatBackend.lmStudioId,
+      displayName: 'LM Studio',
+      description:
+          isLocalEndpoint(_lmStudioBaseUrl)
+              ? 'A model running in LM Studio on this machine. Nothing '
+                  'leaves your device.'
+              : 'LM Studio on the server you configured. Your financial '
+                  'figures are sent there to answer each question.',
+      baseUrl: _lmStudioBaseUrl,
+      model: _lmStudioSelectedModel,
+      apiKey: '',
+      // Derived from the URL, not hardcoded. The field is free text, so
+      // "Nothing leaves your device" was a claim the app could not back:
+      // a user pointing it at a VPS got the reassurance anyway, and this
+      // flag now decides whether insights generate automatically and
+      // whether statements are uploaded without asking.
+      isPrivate: isLocalEndpoint(_lmStudioBaseUrl),
+      contextBudgetChars: 12000,
+    ),
+    AiProvider.maple => OpenAiCompatBackend(
+      id: OpenAiCompatBackend.mapleId,
+      displayName: 'Maple',
+      description:
+          'A hosted model. Your financial figures are sent to the server '
+          'to answer each question.',
+      baseUrl: _mapleBaseUrl,
+      model: _mapleSelectedModel,
+      apiKey: _mapleApiKey,
+      // Hosted, so the privacy disclosure has to say so — this is the one
+      // backend where the app's "nothing leaves your device" claim does
+      // not hold, and the picker must not let it stand unqualified.
+      isPrivate: false,
+      contextBudgetChars: 24000,
+    ),
+    AiProvider.appleIntelligence => const PlatformLlmBackend(),
+    AiProvider.geminiNano => const GeminiNanoBackend(),
+    AiProvider.claude ||
+    AiProvider.chatGpt ||
+    AiProvider.gemini ||
+    AiProvider.grok => cloudBackendFor(_activeProvider.cloudProvider!),
+  };
 
   /// The backend for a hosted provider, whether or not it is the active one.
   ///
   /// Settings needs this to fetch a model list for a provider the user is
   /// configuring but has not switched to yet.
   CloudBackend cloudBackendFor(CloudProvider provider) => CloudBackend(
-        provider: provider,
-        model: cloudModel(provider),
-        apiKey: cloudApiKey(provider),
-      );
+    provider: provider,
+    model: cloudModel(provider),
+    apiKey: cloudApiKey(provider),
+  );
 
   /// The chosen model for a hosted provider, falling back to its default.
   String cloudModel(CloudProvider provider) =>
@@ -222,8 +207,9 @@ class OllamaService {
         host.endsWith('.localhost')) {
       return true;
     }
-    final v4 = RegExp(r'^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$')
-        .firstMatch(host);
+    final v4 = RegExp(
+      r'^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$',
+    ).firstMatch(host);
     if (v4 == null) return false;
     final a = int.parse(v4.group(1)!);
     final b = int.parse(v4.group(2)!);
@@ -246,19 +232,17 @@ class OllamaService {
   ///
   /// Null for Apple Intelligence and Gemini Nano: each ships exactly one model
   /// that the OS owns and does not name, so there is nothing for a model picker
-  /// to show. The downloadable backend does have a choice, so it reports one.
+  /// to show.
   String? get selectedModel => switch (_activeProvider) {
-        AiProvider.ollama => _selectedModel,
-        AiProvider.lmStudio => _lmStudioSelectedModel,
-        AiProvider.maple => _mapleSelectedModel,
-        AiProvider.localModel => localModel.name,
-        AiProvider.appleIntelligence || AiProvider.geminiNano => null,
-        AiProvider.claude ||
-        AiProvider.chatGpt ||
-        AiProvider.gemini ||
-        AiProvider.grok =>
-          cloudModel(_activeProvider.cloudProvider!),
-      };
+    AiProvider.ollama => _selectedModel,
+    AiProvider.lmStudio => _lmStudioSelectedModel,
+    AiProvider.maple => _mapleSelectedModel,
+    AiProvider.appleIntelligence || AiProvider.geminiNano => null,
+    AiProvider.claude ||
+    AiProvider.chatGpt ||
+    AiProvider.gemini ||
+    AiProvider.grok => cloudModel(_activeProvider.cloudProvider!),
+  };
 
   // Per-provider model getters (used by settings screen to show all providers).
   String? get ollamaSelectedModel => _selectedModel;
@@ -274,19 +258,15 @@ class OllamaService {
   /// false until that first check completes, so nothing claims readiness it has
   /// not confirmed.
   bool get isConnected => switch (_activeProvider) {
-        AiProvider.ollama => _isConnected,
-        AiProvider.lmStudio => _lmStudioConnected,
-        AiProvider.maple => _mapleConnected,
-        AiProvider.appleIntelligence ||
-        AiProvider.geminiNano ||
-        AiProvider.localModel =>
-          _onDeviceReady,
-        AiProvider.claude ||
-        AiProvider.chatGpt ||
-        AiProvider.gemini ||
-        AiProvider.grok =>
-          cloudConnected(_activeProvider.cloudProvider!),
-      };
+    AiProvider.ollama => _isConnected,
+    AiProvider.lmStudio => _lmStudioConnected,
+    AiProvider.maple => _mapleConnected,
+    AiProvider.appleIntelligence || AiProvider.geminiNano => _onDeviceReady,
+    AiProvider.claude ||
+    AiProvider.chatGpt ||
+    AiProvider.gemini ||
+    AiProvider.grok => cloudConnected(_activeProvider.cloudProvider!),
+  };
 
   /// Whether the AI tab should be visible with [provider] selected.
   ///
@@ -309,17 +289,13 @@ class OllamaService {
       // There is no host to reach. Readiness is the OS's answer, re-asked on
       // every launch, so the tab must not wait on a probe that has not
       // returned — the AI screen reports an unavailable backend itself.
-      AiProvider.appleIntelligence ||
-      AiProvider.geminiNano ||
-      AiProvider.localModel =>
-        true,
+      AiProvider.appleIntelligence || AiProvider.geminiNano => true,
       // A key is all a hosted provider needs: no local server is involved, so
       // the tab belongs on a phone.
       AiProvider.claude ||
       AiProvider.chatGpt ||
       AiProvider.gemini ||
-      AiProvider.grok =>
-        cloudApiKey(provider.cloudProvider!).isNotEmpty,
+      AiProvider.grok => cloudApiKey(provider.cloudProvider!).isNotEmpty,
       // A server-backed provider needs a host that answered.
       AiProvider.ollama => _isConnected,
       AiProvider.lmStudio => _lmStudioConnected,
@@ -357,20 +333,26 @@ class OllamaService {
 
     // Ollama
     _baseUrl = _serverUrl(
-        map[AppConstants.settingOllamaUrl], AppConstants.defaultOllamaUrl);
+      map[AppConstants.settingOllamaUrl],
+      AppConstants.defaultOllamaUrl,
+    );
     _selectedModel = map[AppConstants.settingOllamaModel];
     _isConnected = map[AppConstants.settingOllamaConnected] == 'true';
 
     // LM Studio
     _lmStudioBaseUrl = _serverUrl(
-        map[AppConstants.settingLmStudioUrl], AppConstants.defaultLmStudioUrl);
+      map[AppConstants.settingLmStudioUrl],
+      AppConstants.defaultLmStudioUrl,
+    );
     _lmStudioSelectedModel = map[AppConstants.settingLmStudioModel];
     _lmStudioConnected = map[AppConstants.settingLmStudioConnected] == 'true';
 
     // Maple
     _mapleBaseUrl = _serverUrl(
-        map[AppConstants.settingMapleUrl], AppConstants.defaultMapleUrl,
-        scheme: 'https');
+      map[AppConstants.settingMapleUrl],
+      AppConstants.defaultMapleUrl,
+      scheme: 'https',
+    );
     _mapleSelectedModel = map[AppConstants.settingMapleModel];
     _mapleConnected = map[AppConstants.settingMapleConnected] == 'true';
     _mapleApiKey = await _keyStore.read(_mapleKeyId);
@@ -388,15 +370,26 @@ class OllamaService {
     await _migrateMapleKeyToKeychain(map);
 
     // Active provider
-    _activeProvider = AiProvider.fromKey(map[AppConstants.settingAiProvider]);
-
-    // Downloadable model. Only when the user has not chosen: an explicit pick
-    // is theirs to keep, including a smaller model than the device could
-    // manage. Otherwise the recommendation is made from what this machine can
-    // actually hold, so a capable Mac is pointed at a capable model without
-    // anyone having to discover the picker.
-    _localModelId = map[AppConstants.settingLocalModelId] ??
-        (await LocalModelChoice.recommendedHere()).id;
+    var providerKey = map[AppConstants.settingAiProvider];
+    if (providerKey == AiProvider.removedLocalModelKey) {
+      // The downloadable-model backend is gone. Someone who chose it chose an
+      // on-device model, so they move to the platform's built-in one rather
+      // than falling back to Ollama — which on a phone means no AI tab at all
+      // — and certainly not to anything hosted. If it is unavailable, the
+      // status panel says why and what to do.
+      final replacement = replacementForRemovedLocalModel(
+        appleBridged: PlatformLlmBackend.bridgedHere,
+        androidBridged: GeminiNanoBackend.bridgedHere,
+      );
+      providerKey = replacement.key;
+      await _upsertSetting(AppConstants.settingAiProvider, providerKey);
+    }
+    _activeProvider = AiProvider.fromKey(providerKey);
+    if (map.containsKey(AppConstants.settingRemovedLocalModelId)) {
+      await (_db.delete(_db.appSettings)..where(
+        (t) => t.key.equals(AppConstants.settingRemovedLocalModelId),
+      )).go();
+    }
 
     // Availability is never read from disk — see [refreshOnDeviceReadiness].
     if (_activeProvider.isOnDevice) {
@@ -430,8 +423,7 @@ class OllamaService {
     }
 
     await (_db.delete(_db.appSettings)
-          ..where((t) => t.key.equals(AppConstants.settingMapleApiKey)))
-        .go();
+      ..where((t) => t.key.equals(AppConstants.settingMapleApiKey))).go();
   }
 
   /// The URL to use for a server field the user typed into.
@@ -440,16 +432,24 @@ class OllamaService {
   /// and LM Studio, which serve plain HTTP out of the box. Anything that still
   /// cannot be read is kept as typed, so the user sees their own input and the
   /// connection test fails on it, while [isLocalEndpoint] treats it as remote.
-  static String _serverUrl(String? raw, String fallback,
-      {String scheme = 'http'}) {
+  static String _serverUrl(
+    String? raw,
+    String fallback, {
+    String scheme = 'http',
+  }) {
     if (raw == null || raw.trim().isEmpty) return fallback;
     return normalizeServerUrl(raw, defaultScheme: scheme) ?? raw.trim();
   }
 
-  /// Persist the downloadable-model choice.
-  Future<void> saveLocalModel(LocalModelChoice choice) async {
-    _localModelId = choice.id;
-    await _upsertSetting(AppConstants.settingLocalModelId, choice.id);
+  /// Where a stored choice of the removed downloadable-model backend moves to:
+  /// the platform's own on-device model, or Ollama where there is none.
+  static AiProvider replacementForRemovedLocalModel({
+    required bool appleBridged,
+    required bool androidBridged,
+  }) {
+    if (appleBridged) return AiProvider.appleIntelligence;
+    if (androidBridged) return AiProvider.geminiNano;
+    return AiProvider.ollama;
   }
 
   /// Persist Ollama settings (URL and/or model).
@@ -487,8 +487,11 @@ class OllamaService {
     String? apiKey,
   }) async {
     if (url != null) {
-      _mapleBaseUrl =
-          _serverUrl(url, AppConstants.defaultMapleUrl, scheme: 'https');
+      _mapleBaseUrl = _serverUrl(
+        url,
+        AppConstants.defaultMapleUrl,
+        scheme: 'https',
+      );
       await _upsertSetting(AppConstants.settingMapleUrl, _mapleBaseUrl);
     }
     if (model != null) {
@@ -559,21 +562,11 @@ class OllamaService {
         await saveLmStudioSettings(model: model);
       case AiProvider.maple:
         await saveMapleSettings(model: model);
-      case AiProvider.localModel:
-        await saveLocalModel(
-          LocalModelChoice.catalogue.firstWhere(
-            (m) => m.name == model,
-            orElse: () => localModel,
-          ),
-        );
       case AiProvider.claude:
       case AiProvider.chatGpt:
       case AiProvider.gemini:
       case AiProvider.grok:
-        await saveCloudSettings(
-          _activeProvider.cloudProvider!,
-          model: model,
-        );
+        await saveCloudSettings(_activeProvider.cloudProvider!, model: model);
       case AiProvider.appleIntelligence:
       case AiProvider.geminiNano:
         break;
@@ -596,15 +589,21 @@ class OllamaService {
       case AiProvider.ollama:
         _isConnected = value;
         await _upsertSetting(
-            AppConstants.settingOllamaConnected, value.toString());
+          AppConstants.settingOllamaConnected,
+          value.toString(),
+        );
       case AiProvider.lmStudio:
         _lmStudioConnected = value;
         await _upsertSetting(
-            AppConstants.settingLmStudioConnected, value.toString());
+          AppConstants.settingLmStudioConnected,
+          value.toString(),
+        );
       case AiProvider.maple:
         _mapleConnected = value;
         await _upsertSetting(
-            AppConstants.settingMapleConnected, value.toString());
+          AppConstants.settingMapleConnected,
+          value.toString(),
+        );
       case AiProvider.claude:
       case AiProvider.chatGpt:
       case AiProvider.gemini:
@@ -617,7 +616,6 @@ class OllamaService {
         );
       case AiProvider.appleIntelligence:
       case AiProvider.geminiNano:
-      case AiProvider.localModel:
         // Not persisted — the OS owns this answer and it can change between
         // launches without the app doing anything.
         _onDeviceReady = value;
@@ -625,7 +623,9 @@ class OllamaService {
   }
 
   Future<void> _upsertSetting(String key, String value) async {
-    await _db.into(_db.appSettings).insertOnConflictUpdate(
+    await _db
+        .into(_db.appSettings)
+        .insertOnConflictUpdate(
           AppSettingsCompanion.insert(key: key, value: value),
         );
     configChanges.value++;
@@ -646,15 +646,14 @@ class OllamaService {
   /// model — the chat reads that live, and including it would make picking a
   /// model from the chat's own dropdown trigger a reload of the chat.
   String get configFingerprint => [
-        _activeProvider.key,
-        _baseUrl,
-        _lmStudioBaseUrl,
-        _mapleBaseUrl,
-        _mapleApiKey.isNotEmpty,
-        for (final id in _cloudKeys.keys.toList()..sort())
-          '$id:${_cloudKeys[id]!.isNotEmpty}',
-        _localModelId,
-      ].join('|');
+    _activeProvider.key,
+    _baseUrl,
+    _lmStudioBaseUrl,
+    _mapleBaseUrl,
+    _mapleApiKey.isNotEmpty,
+    for (final id in _cloudKeys.keys.toList()..sort())
+      '$id:${_cloudKeys[id]!.isNotEmpty}',
+  ].join('|');
 
   // ── Connectivity ──────────────────────────────────────────────────────────
 
@@ -708,17 +707,16 @@ class OllamaService {
     required Map<String, double> spendingByCategory,
     int? stackGoalSats,
     int? budgetChars,
-  }) =>
-      composeSystemPrompt(
-        totalStackSats: totalStackSats,
-        btcPrice: btcPrice,
-        monthlyIncome: monthlyIncome,
-        monthlySpending: monthlySpending,
-        monthlySurplus: monthlySurplus,
-        spendingByCategory: spendingByCategory,
-        stackGoalSats: stackGoalSats,
-        budgetChars: budgetChars ?? contextBudgetChars,
-      );
+  }) => composeSystemPrompt(
+    totalStackSats: totalStackSats,
+    btcPrice: btcPrice,
+    monthlyIncome: monthlyIncome,
+    monthlySpending: monthlySpending,
+    monthlySurplus: monthlySurplus,
+    spendingByCategory: spendingByCategory,
+    stackGoalSats: stackGoalSats,
+    budgetChars: budgetChars ?? contextBudgetChars,
+  );
 
   /// The prompt builder itself — a pure function of its inputs.
   ///
@@ -739,9 +737,10 @@ class OllamaService {
     final budget = budgetChars;
     final now = DateTime.now();
     final fiatValue = btcPrice > 0 ? (totalStackSats / 1e8 * btcPrice) : 0.0;
-    final goalLine = stackGoalSats != null && stackGoalSats > 0
-        ? 'Stack goal: $stackGoalSats sats (${(totalStackSats / stackGoalSats * 100).toStringAsFixed(1)}% reached)\n'
-        : '';
+    final goalLine =
+        stackGoalSats != null && stackGoalSats > 0
+            ? 'Stack goal: $stackGoalSats sats (${(totalStackSats / stackGoalSats * 100).toStringAsFixed(1)}% reached)\n'
+            : '';
 
     final head =
         '''You are a Bitcoin-native personal finance analyst embedded in Sats Stack, a privacy-first budgeting app. You give concise, actionable advice grounded in the user's real financial data. You think in sats. You are bullish on Bitcoin and understand sound money principles.
@@ -762,8 +761,9 @@ Top spending categories this month:
         'quantify them in both fiat and sats. Do not repeat the user\'s data '
         'back verbatim — use it to inform your advice.';
 
-    final ranked = spendingByCategory.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
+    final ranked =
+        spendingByCategory.entries.toList()
+          ..sort((a, b) => b.value.compareTo(a.value));
 
     final lines = <String>[];
     var used = head.length + tail.length;
@@ -780,8 +780,10 @@ Top spending categories this month:
     // matters most, and never an empty list where the user has spending — a
     // heading with nothing under it reads as "no data" to a small model.
     if (lines.isEmpty && ranked.isNotEmpty) {
-      lines.add('  - ${ranked.first.key}: '
-          '\$${ranked.first.value.toStringAsFixed(0)}');
+      lines.add(
+        '  - ${ranked.first.key}: '
+        '\$${ranked.first.value.toStringAsFixed(0)}',
+      );
     }
 
     return '$head${lines.join('\n')}$tail';
@@ -796,8 +798,7 @@ Top spending categories this month:
   Stream<String> chat(
     List<Map<String, String>> messages, {
     http.Client? client,
-  }) =>
-      backend.chat(messages, client: client);
+  }) => backend.chat(messages, client: client);
 
   // ── Vision chat ───────────────────────────────────────────────────────────
 
@@ -829,7 +830,8 @@ Top spending categories this month:
         yield* _ollamaChatWithImage(prompt, base64Image, client: client);
       case AiProvider.lmStudio:
         yield* _openAiChatWithImage(
-          prompt, base64Image,
+          prompt,
+          base64Image,
           mimeType: mimeType,
           baseUrl: _lmStudioBaseUrl,
           model: _lmStudioSelectedModel,
@@ -838,7 +840,8 @@ Top spending categories this month:
         );
       case AiProvider.maple:
         yield* _openAiChatWithImage(
-          prompt, base64Image,
+          prompt,
+          base64Image,
           mimeType: mimeType,
           baseUrl: _mapleBaseUrl,
           model: _mapleSelectedModel,
@@ -859,11 +862,9 @@ Top spending categories this month:
         );
       case AiProvider.appleIntelligence:
       case AiProvider.geminiNano:
-      case AiProvider.localModel:
-        // None of the on-device backends takes an image on the path this app
-        // uses: Apple's Foundation Models bridge here is text-only, ML Kit's
-        // Prompt API exposes multimodal input separately from the text stream,
-        // and the Qwen builds in the catalogue are text-only altogether.
+        // Neither on-device backend takes an image on the path this app uses:
+        // Apple's Foundation Models bridge here is text-only, and ML Kit's
+        // Prompt API exposes multimodal input separately from the text stream.
         //
         // Thrown rather than silently returning nothing, because the caller is
         // the receipt-photo import — a blank answer there looks like the model
@@ -898,13 +899,14 @@ Top spending categories this month:
             'role': 'user',
             'content': prompt,
             'images': [base64Image],
-          }
+          },
         ],
         'stream': true,
       });
 
-      final streamedResponse =
-          await c.send(request).timeout(const Duration(seconds: 60));
+      final streamedResponse = await c
+          .send(request)
+          .timeout(const Duration(seconds: 60));
       if (streamedResponse.statusCode != 200) {
         throw Exception('Ollama returned ${streamedResponse.statusCode}');
       }
@@ -918,7 +920,9 @@ Top spending categories this month:
           final data = jsonDecode(line) as Map<String, dynamic>;
           if (data['done'] == true) return;
           final token =
-              (data['message'] as Map<String, dynamic>?)?['content'] as String? ?? '';
+              (data['message'] as Map<String, dynamic>?)?['content']
+                  as String? ??
+              '';
           if (token.isNotEmpty) yield token;
         } catch (_) {}
       }
@@ -943,10 +947,14 @@ Top spending categories this month:
     final ownedClient = client == null;
     final c = client ?? http.Client();
     try {
-      final request =
-          http.Request('POST', Uri.parse('$baseUrl/chat/completions'));
+      final request = http.Request(
+        'POST',
+        Uri.parse('$baseUrl/chat/completions'),
+      );
       request.headers['Content-Type'] = 'application/json';
-      if (apiKey.isNotEmpty) request.headers['Authorization'] = 'Bearer $apiKey';
+      if (apiKey.isNotEmpty) {
+        request.headers['Authorization'] = 'Bearer $apiKey';
+      }
       request.body = jsonEncode({
         'model': model,
         'messages': [
@@ -957,18 +965,16 @@ Top spending categories this month:
                 'type': 'image_url',
                 'image_url': {'url': 'data:$mimeType;base64,$base64Image'},
               },
-              {
-                'type': 'text',
-                'text': prompt,
-              },
+              {'type': 'text', 'text': prompt},
             ],
-          }
+          },
         ],
         'stream': true,
       });
 
-      final streamedResponse =
-          await c.send(request).timeout(const Duration(seconds: 60));
+      final streamedResponse = await c
+          .send(request)
+          .timeout(const Duration(seconds: 60));
       if (streamedResponse.statusCode != 200) {
         throw Exception('Server returned ${streamedResponse.statusCode}');
       }
@@ -1004,16 +1010,18 @@ Top spending categories this month:
   // ── Monthly insight ───────────────────────────────────────────────────────
 
   Future<String?> loadCachedInsight() async {
-    final rows = await (_db.select(_db.appSettings)
-          ..where((t) => t.key.equals(AppConstants.settingMonthlyInsight)))
-        .get();
+    final rows =
+        await (_db.select(_db.appSettings)..where(
+          (t) => t.key.equals(AppConstants.settingMonthlyInsight),
+        )).get();
     return rows.isNotEmpty ? rows.first.value : null;
   }
 
   Future<bool> isInsightStale() async {
-    final dateRows = await (_db.select(_db.appSettings)
-          ..where((t) => t.key.equals(AppConstants.settingMonthlyInsightDate)))
-        .get();
+    final dateRows =
+        await (_db.select(_db.appSettings)..where(
+          (t) => t.key.equals(AppConstants.settingMonthlyInsightDate),
+        )).get();
     if (dateRows.isEmpty) return true;
     final stored = DateTime.tryParse(dateRows.first.value);
     if (stored == null) return true;
@@ -1054,6 +1062,13 @@ Top spending categories this month:
       buffer.write(token);
     }
     final insight = buffer.toString().trim();
+    // Not cached: an empty answer saved as the month's insight would stand
+    // until the next month made it stale.
+    if (insight.isEmpty) {
+      throw InferenceException(
+        '${backend.displayName} returned an empty answer.',
+      );
+    }
 
     await _upsertSetting(AppConstants.settingMonthlyInsight, insight);
     await _upsertSetting(
@@ -1071,7 +1086,9 @@ Top spending categories this month:
     required String response,
   }) async {
     final model = selectedModel ?? 'unknown';
-    await _db.into(_db.aiConversations).insert(
+    await _db
+        .into(_db.aiConversations)
+        .insert(
           AiConversationsCompanion.insert(
             prompt: prompt,
             response: response,

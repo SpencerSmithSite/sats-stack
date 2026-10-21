@@ -9,11 +9,11 @@ import com.google.mlkit.genai.prompt.GenerativeModel
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -111,9 +111,28 @@ object GeminiNanoBridge {
         }
     }
 
-    /** Streams one generation at a time. */
+    /**
+     * Streams one generation at a time.
+     *
+     * **Cancellation.** A cancelled generation used to keep talking: the
+     * coroutine unwound by throwing `CancellationException`, which the
+     * catch-all reported as `generation_failed`. And a new request started at
+     * once, while the model could still be busy with the one just cancelled.
+     * Now each generation holds a token, every emission is dropped unless that
+     * token is still current (checked on the main thread, where `onCancel`
+     * also runs, so the two cannot race), cancellation is rethrown rather than
+     * reported, and a new generation joins the cancelled one before starting.
+     * The same shape as `FoundationModelsBridge.swift`, where the bug was
+     * reproduced: an answer asked for straight after a cancelled one arrived
+     * empty.
+     */
     private class GenerationStreamHandler : EventChannel.StreamHandler {
+        /** One scope for the handler's life, so a generation can be joined. */
+        private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         private var job: Job? = null
+
+        /** Which generation may emit. Main thread only. */
+        private var current: Any? = null
 
         override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
             val sink = events ?: return
@@ -128,26 +147,39 @@ object GeminiNanoBridge {
                 return
             }
 
-            val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+            val token = Any()
+            current = token
+            val previous = job
+            previous?.cancel()
+
+            fun emit(block: (EventChannel.EventSink) -> Unit) {
+                main.post { if (current === token) block(sink) }
+            }
+
             job = scope.launch {
+                // The model answers one request at a time; starting before the
+                // cancelled one has unwound races it.
+                previous?.join()
                 try {
                     model.generateContentStream(prompt).collect { chunk ->
-                        if (!isActive) return@collect
                         // ML Kit emits deltas rather than the whole answer so
                         // far — the opposite of Apple's framework — so this is
                         // forwarded as-is with no diffing.
                         val text = chunk.candidates.firstOrNull()?.text.orEmpty()
-                        if (text.isNotEmpty()) main.post { sink.success(text) }
+                        if (text.isNotEmpty()) emit { it.success(text) }
                     }
-                    main.post { sink.endOfStream() }
+                    emit { it.endOfStream() }
+                } catch (e: CancellationException) {
+                    // A cancel is the caller's choice, not a failure.
+                    throw e
                 } catch (e: Throwable) {
-                    main.post {
-                        sink.error(
+                    emit {
+                        it.error(
                             "generation_failed",
                             e.message ?: "Gemini Nano failed to answer.",
                             null,
                         )
-                        sink.endOfStream()
+                        it.endOfStream()
                     }
                 }
             }
@@ -155,11 +187,12 @@ object GeminiNanoBridge {
 
         /**
          * Dart cancelling its subscription — the user leaving the chat screen
-         * mid-answer — must stop the work, not leave it running.
+         * mid-answer — must stop the work, not leave it running. The job is
+         * kept, cancelled, so the next generation can join it.
          */
         override fun onCancel(arguments: Any?) {
+            current = null
             job?.cancel()
-            job = null
         }
     }
 
@@ -197,6 +230,9 @@ object GeminiNanoBridge {
                         }
                     }
                     main.post { sink.endOfStream() }
+                } catch (e: CancellationException) {
+                    // Dart stopped listening; the sink is gone. Not a failure.
+                    throw e
                 } catch (e: Throwable) {
                     main.post {
                         sink.error(

@@ -35,25 +35,28 @@ Future<void> _pump(
   tester.platformDispatcher.textScaleFactorTestValue = textScale;
   addTearDown(tester.view.reset);
   addTearDown(tester.platformDispatcher.clearAllTestValues);
-  await tester.pumpWidget(MaterialApp(
-    theme: AppTheme.light(),
-    home: Scaffold(body: child),
-  ));
+  await tester.pumpWidget(
+    MaterialApp(theme: AppTheme.light(), home: Scaffold(body: child)),
+  );
 }
 
 void main() {
   group('Tappable', () {
-    testWidgets('is announced as a labelled, selectable button',
-        (tester) async {
+    testWidgets('is announced as a labelled, selectable button', (
+      tester,
+    ) async {
       final handle = tester.ensureSemantics();
-      await _pump(tester, Center(
-        child: Tappable(
-          label: 'Red',
-          selected: true,
-          onTap: () {},
-          child: const SizedBox(width: 20, height: 20),
+      await _pump(
+        tester,
+        Center(
+          child: Tappable(
+            label: 'Red',
+            selected: true,
+            onTap: () {},
+            child: const SizedBox(width: 20, height: 20),
+          ),
         ),
-      ));
+      );
 
       expect(
         tester.getSemantics(find.byType(Tappable)),
@@ -74,12 +77,15 @@ void main() {
     });
 
     testWidgets('pads a 20px control out to a 48px target', (tester) async {
-      await _pump(tester, Center(
-        child: Tappable(
-          onTap: () {},
-          child: const SizedBox(width: 20, height: 20),
+      await _pump(
+        tester,
+        Center(
+          child: Tappable(
+            onTap: () {},
+            child: const SizedBox(width: 20, height: 20),
+          ),
         ),
-      ));
+      );
       final size = tester.getSize(find.byType(Tappable));
       expect(size.width, greaterThanOrEqualTo(48));
       expect(size.height, greaterThanOrEqualTo(48));
@@ -87,18 +93,22 @@ void main() {
       expect(tester.getSize(find.byType(SizedBox).last), const Size(20, 20));
     });
 
-    testWidgets('a row of period chips meets the platform guidelines',
-        (tester) async {
+    testWidgets('a row of period chips meets the platform guidelines', (
+      tester,
+    ) async {
       final handle = tester.ensureSemantics();
-      await _pump(tester, Center(
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (final p in const ['1M', '3M', '1Y', 'All'])
-              PeriodChip(label: p, selected: p == '1Y', onTap: () {}),
-          ],
+      await _pump(
+        tester,
+        Center(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final p in const ['1M', '3M', '1Y', 'All'])
+                PeriodChip(label: p, selected: p == '1Y', onTap: () {}),
+            ],
+          ),
         ),
-      ));
+      );
       await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
       await expectLater(tester, meetsGuideline(iOSTapTargetGuideline));
       await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
@@ -107,19 +117,24 @@ void main() {
   });
 
   group('MonthSelector', () {
-    testWidgets('names its arrows and meets the tap-target guideline',
-        (tester) async {
+    testWidgets('names its arrows and meets the tap-target guideline', (
+      tester,
+    ) async {
       final handle = tester.ensureSemantics();
-      await _pump(tester, MonthSelector(
-        month: DateTime(2026, 3),
-        onPrevious: () {},
-        onNext: null,
-      ));
+      await _pump(
+        tester,
+        MonthSelector(
+          month: DateTime(2026, 3),
+          onPrevious: () {},
+          onNext: null,
+        ),
+      );
 
       expect(find.byTooltip('Previous month'), findsOneWidget);
       expect(find.byTooltip('Next month'), findsOneWidget);
-      final next = tester.widget<IconButton>(find.widgetWithIcon(
-          IconButton, Icons.chevron_right));
+      final next = tester.widget<IconButton>(
+        find.widgetWithIcon(IconButton, Icons.chevron_right),
+      );
       expect(next.onPressed, isNull, reason: 'no stepping into the future');
       await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
       await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
@@ -132,20 +147,22 @@ void main() {
       tester.platformDispatcher.textScaleFactorTestValue = 2;
       addTearDown(tester.view.reset);
       addTearDown(tester.platformDispatcher.clearAllTestValues);
-      await tester.pumpWidget(MaterialApp(
-        home: Scaffold(
-          appBar: AppBar(
-            title: MonthSelector(
-              month: DateTime(2026, 9), // "September" — the longest
-              onPrevious: () {},
-              onNext: () {},
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            appBar: AppBar(
+              title: MonthSelector(
+                month: DateTime(2026, 9), // "September" — the longest
+                onPrevious: () {},
+                onNext: () {},
+              ),
+              actions: [
+                IconButton(icon: const Icon(Icons.settings), onPressed: () {}),
+              ],
             ),
-            actions: [
-              IconButton(icon: const Icon(Icons.settings), onPressed: () {}),
-            ],
           ),
         ),
-      ));
+      );
       expect(tester.takeException(), isNull);
     });
   });
@@ -166,9 +183,11 @@ void main() {
     );
 
     for (final scale in const [1.0, 2.0, 3.0]) {
-      testWidgets('a transaction row does not overflow at ${scale}x',
-          (tester) async {
-        await _pump(tester, 
+      testWidgets('a transaction row does not overflow at ${scale}x', (
+        tester,
+      ) async {
+        await _pump(
+          tester,
           TransactionListItem(transaction: tx, category: null, btcPrice: 80000),
           textScale: scale,
           width: 360,
@@ -189,13 +208,16 @@ void main() {
 
   testWidgets('a Tappable can be pressed from the keyboard', (tester) async {
     var taps = 0;
-    await _pump(tester, Center(
-      child: Tappable(
-        label: 'Refresh',
-        onTap: () => taps++,
-        child: const Icon(Icons.refresh, size: 14),
+    await _pump(
+      tester,
+      Center(
+        child: Tappable(
+          label: 'Refresh',
+          onTap: () => taps++,
+          child: const Icon(Icons.refresh, size: 14),
+        ),
       ),
-    ));
+    );
     await tester.sendKeyEvent(LogicalKeyboardKey.tab);
     await tester.pump();
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);

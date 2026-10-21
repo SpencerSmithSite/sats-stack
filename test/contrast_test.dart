@@ -30,13 +30,13 @@ const aa = 4.5;
 /// Every background a banner actually sits on in light mode: 7–12% of the
 /// accent, over a white card or the off-white scaffold.
 List<Color> realTints(Color accent) => [
-      for (final surface in const [
-        AppColors.lightSurface,
-        AppColors.lightBackground,
-      ])
-        for (final alpha in const [0.07, 0.08, 0.10, 0.12])
-          Color.alphaBlend(accent.withValues(alpha: alpha), surface),
-    ];
+  for (final surface in const [
+    AppColors.lightSurface,
+    AppColors.lightBackground,
+  ])
+    for (final alpha in const [0.07, 0.08, 0.10, 0.12])
+      Color.alphaBlend(accent.withValues(alpha: alpha), surface),
+];
 
 /// The accents the banners use.
 const accents = {
@@ -52,13 +52,17 @@ Future<void> withTheme(
   ThemeData theme,
   void Function(BuildContext context) body,
 ) async {
-  await tester.pumpWidget(MaterialApp(
-    theme: theme,
-    home: Builder(builder: (context) {
-      body(context);
-      return const SizedBox();
-    }),
-  ));
+  await tester.pumpWidget(
+    MaterialApp(
+      theme: theme,
+      home: Builder(
+        builder: (context) {
+          body(context);
+          return const SizedBox();
+        },
+      ),
+    ),
+  );
 }
 
 void main() {
@@ -72,8 +76,11 @@ void main() {
           AppColors.lightSurface,
           Color(0xFFF0EDEA), // light surfaceContainerHighest
         ]) {
-          expect(contrast(text, bg), greaterThanOrEqualTo(aa),
-              reason: 'on $bg');
+          expect(
+            contrast(text, bg),
+            greaterThanOrEqualTo(aa),
+            reason: 'on $bg',
+          );
         }
       });
     });
@@ -86,8 +93,11 @@ void main() {
           AppColors.darkBackground,
           AppColors.darkSurface,
         ]) {
-          expect(contrast(text, bg), greaterThanOrEqualTo(aa),
-              reason: 'on $bg');
+          expect(
+            contrast(text, bg),
+            greaterThanOrEqualTo(aa),
+            reason: 'on $bg',
+          );
         }
       });
     });
@@ -95,10 +105,14 @@ void main() {
     test('no single grey could have served both themes', () {
       // Why this is two values and not one better constant: the old shared
       // value fails light while passing dark.
-      expect(contrast(AppColors.textSecondaryDark, AppColors.lightBackground),
-          lessThan(aa));
-      expect(contrast(AppColors.textSecondaryDark, AppColors.darkBackground),
-          greaterThanOrEqualTo(aa));
+      expect(
+        contrast(AppColors.textSecondaryDark, AppColors.lightBackground),
+        lessThan(aa),
+      );
+      expect(
+        contrast(AppColors.textSecondaryDark, AppColors.darkBackground),
+        greaterThanOrEqualTo(aa),
+      );
     });
   });
 
@@ -106,42 +120,56 @@ void main() {
     testWidgets('is legible on light surfaces', (tester) async {
       await withTheme(tester, AppTheme.light(), (context) {
         final text = context.bitcoinOrangeText;
-        expect(contrast(text, AppColors.lightSurface), greaterThanOrEqualTo(aa));
         expect(
-            contrast(text, AppColors.lightBackground), greaterThanOrEqualTo(aa));
+          contrast(text, AppColors.lightSurface),
+          greaterThanOrEqualTo(aa),
+        );
+        expect(
+          contrast(text, AppColors.lightBackground),
+          greaterThanOrEqualTo(aa),
+        );
       });
     });
 
     testWidgets('keeps the brand colour in dark mode', (tester) async {
       await withTheme(tester, AppTheme.dark(), (context) {
         expect(context.bitcoinOrangeText, AppColors.bitcoinOrange);
-        expect(contrast(AppColors.bitcoinOrange, AppColors.darkSurface),
-            greaterThanOrEqualTo(aa));
+        expect(
+          contrast(AppColors.bitcoinOrange, AppColors.darkSurface),
+          greaterThanOrEqualTo(aa),
+        );
       });
     });
 
     test('the brand orange really does fail as light-mode text', () {
-      expect(contrast(AppColors.bitcoinOrange, AppColors.lightSurface),
-          lessThan(3.0)); // fails even the large-text threshold
+      expect(
+        contrast(AppColors.bitcoinOrange, AppColors.lightSurface),
+        lessThan(3.0),
+      ); // fails even the large-text threshold
     });
   });
 
   group('legibleAccent', () {
-    testWidgets('clears AA against every real tint, in light mode',
-        (tester) async {
+    testWidgets('clears AA against every real tint, in light mode', (
+      tester,
+    ) async {
       await withTheme(tester, AppTheme.light(), (context) {
         for (final entry in accents.entries) {
           final text = context.legibleAccent(entry.value);
           for (final tint in realTints(entry.value)) {
-            expect(contrast(text, tint), greaterThanOrEqualTo(aa),
-                reason: '${entry.key} on $tint');
+            expect(
+              contrast(text, tint),
+              greaterThanOrEqualTo(aa),
+              reason: '${entry.key} on $tint',
+            );
           }
         }
       });
     });
 
-    testWidgets('the raw accents fail, which is the bug it fixes',
-        (tester) async {
+    testWidgets('the raw accents fail, which is the bug it fixes', (
+      tester,
+    ) async {
       await withTheme(tester, AppTheme.light(), (context) {
         for (final entry in accents.entries) {
           final worst = realTints(entry.value)

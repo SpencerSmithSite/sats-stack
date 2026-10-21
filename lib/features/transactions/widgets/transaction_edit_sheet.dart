@@ -4,8 +4,8 @@ import 'package:intl/intl.dart';
 
 import '../../../core/database/database.dart';
 import '../../../core/services/import_service.dart';
-import '../../../shared/theme/app_colors.dart';
 import '../../../main.dart' as app;
+import '../../../shared/theme/app_colors.dart';
 
 /// A bottom sheet for editing a transaction.
 ///
@@ -26,13 +26,9 @@ class TransactionEditSheet extends StatefulWidget {
     ParsedTransaction tx, {
     VoidCallback? onSaved,
     Key? key,
-  }) =>
-      TransactionEditSheet._(key: key, parsedTx: tx, onSaved: onSaved);
+  }) => TransactionEditSheet._(key: key, parsedTx: tx, onSaved: onSaved);
 
-  factory TransactionEditSheet.forExisting(
-    Transaction tx, {
-    Key? key,
-  }) =>
+  factory TransactionEditSheet.forExisting(Transaction tx, {Key? key}) =>
       TransactionEditSheet._(key: key, existingTx: tx);
 
   final ParsedTransaction? parsedTx;
@@ -74,8 +70,7 @@ class _TransactionEditSheetState extends State<TransactionEditSheet> {
       final tx = widget.parsedTx!;
       _unit = _AmountUnit.forCurrency(tx.currency);
       _descCtrl = TextEditingController(text: tx.description);
-      _amountCtrl =
-          TextEditingController(text: _unit.format(tx.amount.abs()));
+      _amountCtrl = TextEditingController(text: _unit.format(tx.amount.abs()));
       _direction = tx.direction;
       _date = tx.date;
       _selectedCategory = tx.category;
@@ -87,9 +82,7 @@ class _TransactionEditSheetState extends State<TransactionEditSheet> {
       _descCtrl = TextEditingController(text: tx.description);
       _amountCtrl = TextEditingController(
         text: _unit.format(
-          tx.isBitcoin
-              ? tx.amountSats.abs().toDouble()
-              : tx.amountFiat.abs(),
+          tx.isBitcoin ? tx.amountSats.abs().toDouble() : tx.amountFiat.abs(),
         ),
       );
       _direction =
@@ -133,7 +126,7 @@ class _TransactionEditSheetState extends State<TransactionEditSheet> {
       firstDate: DateTime(2009, 1, 3),
       lastDate: DateTime.now().add(const Duration(days: 1)),
     );
-    if (picked != null) setState(() => _date = picked);
+    if (picked != null && mounted) setState(() => _date = picked);
   }
 
   Future<void> _save() async {
@@ -142,14 +135,18 @@ class _TransactionEditSheetState extends State<TransactionEditSheet> {
     // Zero is rejected, not just negatives: it was how the rounded-to-"0.00"
     // BTC amount got through.
     if (amount == null || amount <= 0) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Enter a valid amount')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Enter a valid amount')));
       return;
     }
 
-    final category = _showCustomCat
-        ? (_customCatCtrl.text.trim().isEmpty ? null : _customCatCtrl.text.trim())
-        : _selectedCategory;
+    final category =
+        _showCustomCat
+            ? (_customCatCtrl.text.trim().isEmpty
+                ? null
+                : _customCatCtrl.text.trim())
+            : _selectedCategory;
 
     setState(() => _saving = true);
     try {
@@ -189,11 +186,12 @@ class _TransactionEditSheetState extends State<TransactionEditSheet> {
         if (tx.isBitcoin) {
           // Sats are what was typed; fiat follows at the recorded rate.
           newSats = sign * amount.round();
-          signedFiat = hasRate
-              ? sign * (amount * oldFiat / oldSats)
-              // Nothing to derive it from, so keep the stored magnitude and
-              // move the sign with the direction.
-              : sign * oldFiat;
+          signedFiat =
+              hasRate
+                  ? sign * (amount * oldFiat / oldSats)
+                  // Nothing to derive it from, so keep the stored magnitude and
+                  // move the sign with the direction.
+                  : sign * oldFiat;
         } else {
           signedFiat = sign * amount;
           if (hasRate) {
@@ -203,9 +201,10 @@ class _TransactionEditSheetState extends State<TransactionEditSheet> {
             // was unavailable at the time). Fall back to today's price — but
             // in the row's own currency, never the active one.
             final price = app.btcPriceService.priceFor(tx.fiatCurrency);
-            newSats = (price != null && price > 0)
-                ? (signedFiat / price * 100000000).round()
-                : tx.amountSats;
+            newSats =
+                (price != null && price > 0)
+                    ? (signedFiat / price * 100000000).round()
+                    : tx.amountSats;
           }
         }
 
@@ -230,9 +229,9 @@ class _TransactionEditSheetState extends State<TransactionEditSheet> {
 
         if (mounted) {
           Navigator.pop(context);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Transaction updated')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Transaction updated')));
         }
       }
     } finally {
@@ -243,29 +242,30 @@ class _TransactionEditSheetState extends State<TransactionEditSheet> {
   Future<void> _delete() async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Delete transaction?'),
-        content: const Text('This cannot be undone.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+      builder:
+          (_) => AlertDialog(
+            title: const Text('Delete transaction?'),
+            content: const Text('This cannot be undone.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: TextButton.styleFrom(foregroundColor: AppColors.danger),
+                child: const Text('Delete'),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: AppColors.danger),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
     );
     if (confirmed != true || !mounted) return;
     await app.transactionService.deleteById(widget.existingTx!.id);
     if (mounted) {
       Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Transaction deleted')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Transaction deleted')));
     }
   }
 
@@ -333,7 +333,8 @@ class _TransactionEditSheetState extends State<TransactionEditSheet> {
             TextField(
               controller: _amountCtrl,
               keyboardType: TextInputType.numberWithOptions(
-                  decimal: _unit.decimals > 0),
+                decimal: _unit.decimals > 0,
+              ),
               decoration: InputDecoration(
                 labelText: _unit.label,
                 border: const OutlineInputBorder(),
@@ -345,17 +346,18 @@ class _TransactionEditSheetState extends State<TransactionEditSheet> {
             SegmentedButton<String>(
               segments: const [
                 ButtonSegment(
-                    value: 'debit',
-                    label: Text('Debit'),
-                    icon: Icon(Icons.arrow_upward, size: 16)),
+                  value: 'debit',
+                  label: Text('Debit'),
+                  icon: Icon(Icons.arrow_upward, size: 16),
+                ),
                 ButtonSegment(
-                    value: 'credit',
-                    label: Text('Credit'),
-                    icon: Icon(Icons.arrow_downward, size: 16)),
+                  value: 'credit',
+                  label: Text('Credit'),
+                  icon: Icon(Icons.arrow_downward, size: 16),
+                ),
               ],
               selected: {_direction},
-              onSelectionChanged: (s) =>
-                  setState(() => _direction = s.first),
+              onSelectionChanged: (s) => setState(() => _direction = s.first),
             ),
             const SizedBox(height: 12),
 
@@ -377,21 +379,20 @@ class _TransactionEditSheetState extends State<TransactionEditSheet> {
             // Category
             if (_categories.isNotEmpty) ...[
               DropdownButtonFormField<String>(
-                initialValue: _showCustomCat
-                    ? '__custom__'
-                    : (_categories
-                            .any((c) => c.name == _selectedCategory)
-                        ? _selectedCategory
-                        : null),
+                initialValue:
+                    _showCustomCat
+                        ? '__custom__'
+                        : (_categories.any((c) => c.name == _selectedCategory)
+                            ? _selectedCategory
+                            : null),
                 decoration: const InputDecoration(
                   labelText: 'Category',
                   border: OutlineInputBorder(),
                 ),
                 items: [
-                  ..._categories.map((c) => DropdownMenuItem(
-                        value: c.name,
-                        child: Text(c.name),
-                      )),
+                  ..._categories.map(
+                    (c) => DropdownMenuItem(value: c.name, child: Text(c.name)),
+                  ),
                   const DropdownMenuItem(
                     value: '__custom__',
                     child: Text('Custom…'),
@@ -432,14 +433,17 @@ class _TransactionEditSheetState extends State<TransactionEditSheet> {
               width: double.infinity,
               child: FilledButton(
                 onPressed: _saving ? null : _save,
-                child: _saving
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child:
-                            CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Text('Save'),
+                child:
+                    _saving
+                        ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                        : const Text('Save'),
               ),
             ),
           ],
@@ -460,12 +464,12 @@ enum _AmountUnit {
   final String label;
   final int decimals;
 
-  factory _AmountUnit.forCurrency(String currency) =>
-      switch (currency.toUpperCase()) {
-        'BTC' => _AmountUnit.btc,
-        'SATS' => _AmountUnit.sats,
-        _ => _AmountUnit.fiat,
-      };
+  factory _AmountUnit.forCurrency(String currency) => switch (currency
+      .toUpperCase()) {
+    'BTC' => _AmountUnit.btc,
+    'SATS' => _AmountUnit.sats,
+    _ => _AmountUnit.fiat,
+  };
 
   String format(double amount) => amount.toStringAsFixed(decimals);
 }

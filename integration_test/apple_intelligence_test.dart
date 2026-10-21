@@ -1,7 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
-import 'package:sats_stack/core/services/device_memory.dart';
-import 'package:sats_stack/core/services/device_storage.dart';
 import 'package:sats_stack/core/services/inference/platform_llm_backend.dart';
 
 /// Exercises the Apple Intelligence bridge against the real framework.
@@ -29,7 +27,8 @@ void main() {
       expect(
         report.state,
         isNot(PlatformLlmState.unsupportedPlatform),
-        reason: 'The bridge is not registered. Check that '
+        reason:
+            'The bridge is not registered. Check that '
             'FoundationModelsBridge.register runs in MainFlutterWindow '
             '(macOS) or AppDelegate (iOS), and that the channel names match '
             'the Dart side.',
@@ -49,7 +48,8 @@ void main() {
       await for (final token in backend.chat([
         {
           'role': 'system',
-          'content': 'You are a personal finance analyst. Answer in one short '
+          'content':
+              'You are a personal finance analyst. Answer in one short '
               'sentence.',
         },
         {'role': 'user', 'content': 'Is spending \$412 on dining a lot?'},
@@ -71,8 +71,11 @@ void main() {
       // A cumulative-forwarding bug shows up as the first chunk appearing again
       // inside the second.
       if (chunks.length > 1 && chunks.first.length > 3) {
-        expect(chunks[1].contains(chunks.first), isFalse,
-            reason: 'chunks look cumulative, not deltas');
+        expect(
+          chunks[1].contains(chunks.first),
+          isFalse,
+          reason: 'chunks look cumulative, not deltas',
+        );
       }
     }, timeout: const Timeout(Duration(minutes: 2)));
 
@@ -86,26 +89,48 @@ void main() {
       const backend = PlatformLlmBackend();
       // Leaving the chat screen mid-answer must cancel the Swift Task rather
       // than leaving it running.
-      final sub = backend.chat([
-        {'role': 'user', 'content': 'Write a long paragraph about budgeting.'},
-      ]).listen(null);
+      final errors = <Object>[];
+      final sub = backend
+          .chat([
+            {
+              'role': 'user',
+              'content': 'Write a long paragraph about budgeting.',
+            },
+          ])
+          .listen(null, onError: errors.add);
       await Future<void>.delayed(const Duration(milliseconds: 300));
       await sub.cancel();
+      // A cancel is not a failure. The bridge used to catch the
+      // CancellationError like any other and report "generation_failed".
+      await Future<void>.delayed(const Duration(seconds: 1));
+      expect(errors, isEmpty);
     }, timeout: const Timeout(Duration(minutes: 1)));
-  });
 
-  group('Device probes', () {
-    test('memory reads a plausible figure', () async {
-      final mb = await DeviceMemory.totalMb();
-      // Null is permitted by design, but on macOS the sysctl path should work.
-      expect(mb, isNotNull);
-      expect(mb, greaterThan(1000));
-    });
+    test('an answer straight after a cancelled one still arrives', () async {
+      final report = await PlatformLlmBackend.availability(refresh: true);
+      if (!report.isAvailable) {
+        markTestSkipped('Apple Intelligence unavailable: ${report.detail}');
+        return;
+      }
 
-    test('free disk reads a plausible figure', () async {
-      final mb = await DeviceStorage.freeMb();
-      expect(mb, isNotNull);
-      expect(mb, greaterThanOrEqualTo(0));
-    });
+      const backend = PlatformLlmBackend();
+      final first = backend
+          .chat([
+            {
+              'role': 'user',
+              'content': 'Write a long paragraph about budgeting.',
+            },
+          ])
+          .listen(null, onError: (_) {});
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      await first.cancel();
+
+      // Immediately, as a user who stops one answer and asks again would.
+      final second =
+          await backend.chat([
+            {'role': 'user', 'content': 'Say "ready" and nothing else.'},
+          ]).join();
+      expect(second.trim(), isNotEmpty);
+    }, timeout: const Timeout(Duration(minutes: 2)));
   });
 }

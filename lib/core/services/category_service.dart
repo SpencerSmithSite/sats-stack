@@ -1,36 +1,58 @@
 import 'package:drift/drift.dart';
 import '../database/database.dart';
 
+/// A category with this name already exists.
+///
+/// Names are the key that transactions, budgets and imports use, so they must
+/// be unique — see the index on `Categories`.
+class DuplicateCategoryNameException implements Exception {
+  const DuplicateCategoryNameException(this.name);
+  final String name;
+
+  @override
+  String toString() => 'A category called "$name" already exists';
+}
+
 class CategoryService {
   CategoryService(this._db);
 
   final AppDatabase _db;
 
   Stream<List<Category>> watchAll() {
-    return (_db.select(_db.categories)
-          ..orderBy([
-            // System categories first, then custom alphabetically
-            (t) => OrderingTerm.asc(t.isSystem),
-            (t) => OrderingTerm.asc(t.name),
-          ]))
-        .watch();
+    return (_db.select(_db.categories)..orderBy([
+      // System categories first, then custom alphabetically
+      (t) => OrderingTerm.asc(t.isSystem),
+      (t) => OrderingTerm.asc(t.name),
+    ])).watch();
   }
 
   Future<List<Category>> getAll() {
     return _db.select(_db.categories).get();
   }
 
+  /// Throws [DuplicateCategoryNameException] if [name] is taken by another
+  /// category than [exceptId].
+  ///
+  /// Case-insensitive, which is stricter than the index: "Food" and "food"
+  /// would be two keys to the database but one to anybody reading the list.
+  Future<void> _checkNameFree(String name, {int? exceptId}) async {
+    final lower = name.toLowerCase();
+    final clash = (await getAll()).any(
+      (c) => c.id != exceptId && c.name.toLowerCase() == lower,
+    );
+    if (clash) throw DuplicateCategoryNameException(name);
+  }
+
   Future<void> createCategory({
     required String name,
     required String color,
     required String icon,
-  }) {
-    return _db.into(_db.categories).insert(
-          CategoriesCompanion.insert(
-            name: name,
-            color: color,
-            icon: icon,
-          ),
+  }) async {
+    await _checkNameFree(name);
+    await _db
+        .into(_db.categories)
+        .insert(
+          CategoriesCompanion.insert(name: name, color: color, icon: icon),
         );
   }
 
@@ -54,9 +76,10 @@ class CategoryService {
     required String icon,
   }) async {
     await _db.transaction(() async {
-      final existing = await (_db.select(_db.categories)
-            ..where((t) => t.id.equals(id)))
-          .getSingleOrNull();
+      await _checkNameFree(name, exceptId: id);
+      final existing =
+          await (_db.select(_db.categories)
+            ..where((t) => t.id.equals(id))).getSingleOrNull();
 
       await (_db.update(_db.categories)..where((t) => t.id.equals(id))).write(
         CategoriesCompanion(
@@ -69,30 +92,30 @@ class CategoryService {
       final oldName = existing?.name;
       if (oldName == null || oldName == name) return;
 
-      await (_db.update(_db.transactions)
-            ..where((t) => t.category.equals(oldName)))
-          .write(TransactionsCompanion(category: Value(name)));
-      await (_db.update(_db.importedTransactions)
-            ..where((t) => t.category.equals(oldName)))
-          .write(ImportedTransactionsCompanion(category: Value(name)));
-      await (_db.update(_db.descriptionCategoryMappings)
-            ..where((t) => t.category.equals(oldName)))
-          .write(DescriptionCategoryMappingsCompanion(category: Value(name)));
+      await (_db.update(_db.transactions)..where(
+        (t) => t.category.equals(oldName),
+      )).write(TransactionsCompanion(category: Value(name)));
+      await (_db.update(_db.importedTransactions)..where(
+        (t) => t.category.equals(oldName),
+      )).write(ImportedTransactionsCompanion(category: Value(name)));
+      await (_db.update(_db.descriptionCategoryMappings)..where(
+        (t) => t.category.equals(oldName),
+      )).write(DescriptionCategoryMappingsCompanion(category: Value(name)));
     });
   }
 
   /// Returns the number of transactions and budgets referencing this category.
   /// Call before delete to check if safe.
   Future<({int transactions, int budgets})> usageCounts(
-      int categoryId, String categoryName) async {
-    final txCount = await (_db.select(_db.transactions)
-          ..where((t) => t.category.equals(categoryName)))
-        .get()
-        .then((l) => l.length);
-    final budgetCount = await (_db.select(_db.budgets)
-          ..where((b) => b.categoryId.equals(categoryId)))
-        .get()
-        .then((l) => l.length);
+    int categoryId,
+    String categoryName,
+  ) async {
+    final txCount = await (_db.select(_db.transactions)..where(
+      (t) => t.category.equals(categoryName),
+    )).get().then((l) => l.length);
+    final budgetCount = await (_db.select(_db.budgets)..where(
+      (b) => b.categoryId.equals(categoryId),
+    )).get().then((l) => l.length);
     return (transactions: txCount, budgets: budgetCount);
   }
 
@@ -102,8 +125,7 @@ class CategoryService {
     final counts = await usageCounts(categoryId, categoryName);
     if (counts.transactions > 0 || counts.budgets > 0) return false;
     await (_db.delete(_db.categories)
-          ..where((t) => t.id.equals(categoryId)))
-        .go();
+      ..where((t) => t.id.equals(categoryId))).go();
     return true;
   }
 }

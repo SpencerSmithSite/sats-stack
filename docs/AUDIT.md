@@ -835,6 +835,226 @@ passed against the row that overflowed: it faked the screen width with a
 out in. It sets the test view now, and fails against the old row at 2× and
 3×. Not yet checked with VoiceOver or TalkBack on a device.
 
+### The smaller correctness items
+
+Addressed 2026-10-20 (`TODO.md` item 9).
+
+- **Two categories could share a name** (schema v8). Transactions, budget
+  progress, imports and learned mappings all key on the *name*, so a pair was
+  indistinguishable: a rename rewrote both, one read zero spend forever, and
+  neither could be deleted. `Categories.name` now has a unique index, and the
+  service rejects a clash — case-insensitively, which is stricter than the
+  index — with a message on the name field instead of a raw SQLite error.
+  `migrateToV8` **renames** existing duplicates ("Pets (2)") rather than
+  deleting them, unlike v6 and v7, because a category has budgets pointing at
+  its id; the transactions stay with the oldest, since they were matched by
+  name and there was never a way to tell whose they were.
+- **The same xpub in two wallets synced the second to nothing** while
+  reporting every row as skipped: the dedupe looked at every wallet's hashes,
+  and the hash was salted with the txid alone. The scan now dedupes against
+  its own wallet, and the hash is scoped with `HashUtils.scopedToWallet` —
+  derived from the stored hash rather than added to the salt, because a row
+  keeps only eight characters of its txid. That let `migrateToV8` rescope
+  every stored xpub row in place: a delete-and-resync would have dropped every
+  category and note the user had set on them. `XpubService` takes an optional
+  HTTP client, so the sync is now tested end to end against a fake chain.
+- **A failed restore left the database closed** for the rest of the session,
+  so every later query threw, and a copy that stopped partway left a torn file
+  for the next launch. `replaceDatabaseFile` copies the original back over a
+  failed copy, and every outcome now ends at a dialog that can only be left by
+  quitting — the database cannot be reopened under the running services.
+- **Today's BTC price was cached permanently** on first request, so anything
+  dated today kept that mid-day quote for good. Only a settled day — more than
+  two days old, since the key is a local date and the sources bucket by UTC —
+  goes into the permanent cache; an unsettled day is cached in memory for 15
+  minutes, so one import still fetches it once. A mid-day row an earlier build
+  wrote for an unsettled day is deleted rather than later served as final.
+  Rows such builds wrote for days that have since settled cannot be told
+  apart, and are left.
+- **"Imported" counted rows recorded against the source, not the ledger**, so
+  importing a statement under a second source reported every row while the
+  Transactions screen gained nothing. Both inserts use
+  `insertReturningOrNull`, which says whether a row was written (`insert`
+  with insertOrIgnore returns a rowid either way), and the summary reports
+  rows already in the ledger separately and says why.
+- **The Stack screen walked every transaction four times per BTC price
+  tick**, through getters on its content widget. `StackStats` does it in one
+  pass when the rows change, and recomputes when the calendar month turns.
+- **The Dashboard rebuilt every section and every row on each price poll**:
+  its price and currency listeners wrapped the whole content. Each section
+  that shows a price-derived figure now listens for itself, and a
+  transaction row with stored sats — almost all of them — does not listen at
+  all.
+- **Four Stack widgets read `app.currencyNotifier.value` in `build`** without
+  subscribing, kept correct only by a parent listener that discarded the value.
+  They take the currency as a parameter now, and no longer import `main.dart`.
+- **`setState` after an await without a `mounted` check**: two date pickers,
+  and the two import entry points, which are only ever called straight after
+  a picker returns and so ran `setState` first thing on a possibly closed
+  screen.
+- **Insight failures were silent.** A tap on Generate with an unreachable
+  server or a rejected key did nothing visible, dropping the readable message
+  `CloudBackend.describeError` builds. A tap now says why; the automatic
+  refresh stays quiet. An empty answer is an error rather than being cached as
+  the month's insight.
+- Tidied: `SetGoalSheetState` is private, and the constructors with
+  `super.key,required` crammed on one line are formatted.
+
+Found while testing: the Dashboard's section header ("Spending Breakdown …
+View Analytics") overflowed at large text sizes — the same bug as the
+transaction row, in a header the accessibility pass missed. Its title gives
+way now.
+
+`dashboard_rebuild_test.dart` is the first test to pump a whole screen against
+real services on an in-memory database. It measures rebuild scope by widget
+identity — a row whose parent did not rebuild keeps the same widget object —
+and fails against the old structure. The other fixes are covered in
+`schema_integrity_test.dart`, `xpub_service_test.dart`,
+`database_restore_test.dart`, `btc_price_service_test.dart`,
+`import_service_test.dart`, `stack_stats_test.dart` and `insight_test.dart`;
+the xpub test was also run against the old sync, which gives the second wallet
+0 rows. The restore dialog and the insight snackbar were not exercised by hand.
+
+### CI, lints and docs
+
+Addressed 2026-10-20 (`TODO.md` item 10), in two PRs: a format-only one, so
+nothing else had to be read through 7,000 lines of re-indentation, and this.
+
+- **Android did not build at all** on the pinned Flutter 3.47.2. It now
+  refuses Gradle below 8.14, AGP below 8.11.1 and Kotlin below 2.2.20, and the
+  project was on 8.11.1 / 8.9.1 / 2.1.0. Nothing noticed, because CI built
+  nothing native. Raised to exactly those floors; Flutter already warns that
+  Gradle 9.1, AGP 9.0.1 and Kotlin 2.3.20 are next (`TODO.md`).
+- **CI compiled nothing native.** It now also checks `dart format`, resolves
+  with `--enforce-lockfile`, builds a debug APK on ubuntu, and builds iOS
+  (unsigned) and macOS in parallel on a Mac runner — the cheapest checks that
+  reach the manifest merge, the Podfiles, the entitlements and both native AI
+  bridges. The Android build above is what it would have caught.
+- **`claude.yml` ran for anyone** who wrote "@claude" on this public repo. It
+  now requires an owner, member or collaborator, and queues per issue rather
+  than running in parallel. The review workflow cancels a superseded run, and
+  skips drafts and fork PRs (which run without the secret and could only
+  fail).
+- **No lint rules were enabled.** `flutter_lints` is on 6.0.0, and the rules
+  added are the ones that catch bug classes this code has had —
+  `unawaited_futures`, `cancel_subscriptions`, `close_sinks`,
+  `avoid_void_async`, `only_throw_errors` — plus conventions it already
+  follows. `close_sinks` found a real leak: a failed Electrum handshake never
+  closed its socket. `require_trailing_commas` is deliberately off: from
+  language 3.7 the formatter owns trailing commas. `avoid_dynamic_calls` (43
+  sites) and `discarded_futures` (47) are recorded as not enabled, with why.
+- **The onboarding screen's first privacy claim was false**: "an encrypted
+  SQLite database … Nothing leaves." The database is plain SQLite, and a
+  wallet sync sends addresses to a block explorer. It now says what is true;
+  the README's privacy section is rewritten the same way and lists what
+  leaves the device and when. Real encryption is a decision in `TODO.md`.
+- **Android declared CAMERA and READ_MEDIA_IMAGES.** The audit's version of
+  this was wrong — `image_picker` *does* request CAMERA at runtime when the
+  manifest declares it, so nothing crashed. But neither is needed: the capture
+  intent and the system photo picker work without them, declaring CAMERA only
+  added a prompt, and Google Play's photo-permission policy rejects
+  READ_MEDIA_IMAGES for occasional picking. Both removed; the merged manifest
+  of a real build confirms neither comes back from a plugin.
+- `ITSAppUsesNonExemptEncryption` is `false` in both Apple Info.plists, with
+  the reasoning beside it, so uploads stop asking.
+- `dedup_hash_test.dart` now also runs the real import and recurring call
+  sites and checks what they stored, including two series started the same
+  day; the xpub call site is covered in `xpub_service_test.dart`.
+- `SatsStackNotes.md` is deleted: four of its five items had shipped, and the
+  fifth (a tab roadmap) is now in `TODO.md`. The README's stale lines are
+  fixed, as is the "Add xpub wallet" tooltip. `CLAUDE.md` is gitignored, so its
+  corrections (SDK, pins, schema notes, Podfile, Info.plist rationale) are
+  local.
+
+`flutter build apk --debug`, `flutter build ios --debug --no-codesign` and
+`flutter build macos --debug` were run locally before the workflow was
+pushed; the workflow itself is proven only by its first run on the PR.
+
+### The macOS model build phase, and cancelling on-device answers
+
+Addressed 2026-10-20 (`TODO.md` items 1, in part, and 2).
+
+- **The LiteRT-LM build phase swallowed every failure.** Each
+  `install_name_tool` and `codesign` ended in `2>/dev/null || true`. With
+  those removed, the very first build failed: `libLiteRtTopKMetalSampler`
+  does not exist in this flutter_gemma version, and every earlier build had
+  printed a warning about it and carried on. It turns out to be optional —
+  LiteRT loads it if present and samples on the CPU without it — so it is now
+  skipped by name, while the two libraries LiteRT cannot run without fail the
+  build if missing.
+- **The copied frameworks were always signed ad hoc**, which library
+  validation refuses to load into a Developer ID-signed app and notarization
+  rejects. They are now signed with the identity Xcode is signing the app
+  with (`EXPANDED_CODE_SIGN_IDENTITY`), with the hardened runtime and a
+  timestamp when that is a real identity. No
+  `disable-library-validation` entitlement is needed: same-team code loads.
+- **Architecture.** LiteRT-LM ships arm64 only. The phase now skips an
+  arm64-less build instead of failing, and still installs for a universal
+  one. More importantly, `LocalModelChoice.runsHere` checked the OS rather
+  than the CPU — its comment said "Apple silicon (not Intel)" while the code
+  said any Mac — so an Intel Mac, or a 32-bit or x86 Android device, was
+  offered a multi-gigabyte download that could never load. It checks the ABI
+  now.
+- **The product name was the template's**, so the window title read
+  `sats_stack`. It is "Sats Stack"; the bundle id is a separate decision
+  (`TODO.md` item 1), because changing it moves the sandboxed data.
+- **Cancelling an on-device answer broke the next one.** Reproduced first, on
+  this Mac: an answer requested straight after a cancelled one arrived
+  **empty**. The cancelled Swift task unwound by throwing
+  `CancellationError`, which the catch reported as `generation_failed`, then
+  sent end-of-stream through a sink that by then belonged to the next request.
+  Both bridges now give each generation a token and drop any emission whose
+  token is no longer current — checked on the main thread, where `onCancel`
+  runs, so the two cannot race — treat cancellation as cancellation, and make
+  a new generation wait for the cancelled one to unwind. This also retires the
+  narrowed claim about `serialisedOnChannel`: its queue slot is released on
+  cancel, and the native side now waits for itself.
+
+  The TODO's account of the Kotlin side was partly wrong: `collect` does
+  suspend between chunks, so cancelling the job did stop it. The real faults
+  were the same two as Swift's — cancellation reported as failure, and no
+  wait before the next request.
+
+`integration_test/apple_intelligence_test.dart` gained the cancel-then-ask
+case; it fails against the old bridge and passes against the new one on macOS
+(three runs) and on the iOS 27 simulator. The Kotlin bridge compiles cleanly
+but is **not verified on a device** — Gemini Nano needs AICore on a physical
+phone. The renamed app also passes the native macOS `RunnerTests`, whose test
+host had the old name hardcoded.
+
+### The downloadable-model backend is removed, and macOS has its real id
+
+Decided 2026-10-20 (`TODO.md` item 1's two decisions).
+
+- **`flutter_gemma` is gone.** Both it and `flutter_gemma_litertlm` are
+  discontinued, and the backend they powered was the only one of six with an
+  unmaintained native dependency, a hand-written Xcode build phase and
+  multi-gigabyte downloads. Removed with it: the backend, its Settings
+  section and onboarding card, the memory and storage probes that existed only
+  to size its catalogue (and their native channels on iOS and Android), the
+  macOS LiteRT build phase, and a dozen transitive packages. Apple
+  Intelligence, Gemini Nano, the self-hosted and the hosted backends remain.
+  iOS goes back to a 15.0 minimum — the floor flutter_gemma had raised.
+- **Nobody who used it is stranded.** A stored choice of it moves to the
+  platform's built-in on-device model — Apple Intelligence or Gemini Nano —
+  rather than falling back to Ollama, which on a phone means no AI tab, and
+  never to anything hosted. Its model setting is deleted.
+- **Its weights are deleted.** They were 0.6–5 GB each, and with the backend
+  gone no screen could remove them. `RemovedModelCleanup` deletes them at
+  launch, by exact file name (and their partial downloads) in Documents, and
+  the package's own folder in Application Support on macOS. The database
+  lives in the same Documents folder, so a test pins that it, its backup and
+  an unrelated file with the same extension all survive.
+- **macOS uses `app.satsstack.SatsStack`**, matching iOS, instead of the
+  template's `com.satsstack.satsStack`. The app is sandboxed, so a new id is a
+  new, empty container; the old data is untouched where it was, and the
+  README gives the export/import steps and the one-line copy. API keys do not
+  come across and have to be re-entered.
+
+Covered by `removed_local_model_test.dart`. All three platforms build; the
+Apple Intelligence integration test passes on macOS under the new id, and the
+container appears where the README says it will.
+
 ### Test gaps
 
 The suite went from 102 tests to 209 over this work. Month boundaries, category
