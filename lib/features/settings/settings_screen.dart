@@ -20,6 +20,7 @@ import '../../shared/theme/app_colors.dart';
 import '../../shared/utils/currency_utils.dart';
 import '../../shared/utils/platform_utils.dart';
 import '../../shared/utils/sat_converter.dart';
+import '../../shared/utils/url_utils.dart';
 import '../../shared/widgets/ai_privacy_disclosure.dart';
 import 'widgets/categories_sheet.dart';
 import 'widgets/import_consent_section.dart';
@@ -710,9 +711,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _esploraStatus = null;
     });
 
-    // Normalise the URL: trim trailing slashes, fall back to mempool.space.
-    final raw = _esploraUrlCtrl.text.trim().replaceAll(RegExp(r'/+$'), '');
-    final base = raw.isNotEmpty ? raw : 'https://mempool.space/api';
+    // The same normalisation Save applies, so what is tested is what would
+    // be used. A bare `myserver.lan:3006/api` has no scheme: http.get threw
+    // ArgumentError for it, which the Exception catch below let through, and
+    // the spinner never stopped.
+    final base =
+        normalizeServerUrl(_esploraUrlCtrl.text) ?? AppConstants.mempoolBaseUrl;
 
     try {
       // ── 1. Block height — standard Esplora endpoint ──────────────────────
@@ -764,7 +768,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _testingEsplora = false;
         });
       }
-    } on Exception catch (e) {
+    } catch (e) {
       if (mounted) {
         setState(() {
           _esploraStatus =
