@@ -27,6 +27,11 @@ class BudgetCard extends StatelessWidget {
     final color =
         _parseColor(progress.category.color) ?? AppColors.bitcoinOrange;
 
+    final decimals = CurrencyUtils.decimalsFor([
+      progress.spentFiat,
+      progress.budget.amountFiat,
+      progress.remainingFiat,
+    ]);
     final clampedProgress = progress.progress.clamp(0.0, 1.0);
     final progressColor =
         progress.isOverBudget
@@ -100,7 +105,7 @@ class BudgetCard extends StatelessWidget {
                   else
                     Text(
                       progress.remainingFiat >= 0
-                          ? '${CurrencyUtils.format(progress.remainingFiat, currency, decimalDigits: 0)} left'
+                          ? '${CurrencyUtils.format(progress.remainingFiat, currency, decimalDigits: decimals)} left'
                           : '',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: progressColor,
@@ -137,7 +142,7 @@ class BudgetCard extends StatelessWidget {
                     CurrencyUtils.format(
                       progress.spentFiat,
                       currency,
-                      decimalDigits: 0,
+                      decimalDigits: decimals,
                     ),
                     style: AppTextStyles.monoSmall.copyWith(
                       color: progressColor,
@@ -145,7 +150,7 @@ class BudgetCard extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    ' / ${CurrencyUtils.format(progress.budget.amountFiat, currency, decimalDigits: 0)}',
+                    ' / ${CurrencyUtils.format(progress.budget.amountFiat, currency, decimalDigits: decimals)}',
                     style: AppTextStyles.monoSmall.copyWith(
                       color: context.textSecondary,
                     ),

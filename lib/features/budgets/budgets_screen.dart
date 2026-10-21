@@ -98,8 +98,32 @@ class _BudgetsScreenState extends State<BudgetsScreen> {
     );
   }
 
-  Future<void> _deleteBudget(int id) async {
-    await app.budgetService.deleteById(id);
+  /// Asks first: the option sits one long-press away, and deleted
+  /// immediately with no way back.
+  Future<void> _deleteBudget(BudgetProgress p) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Delete budget?'),
+            content: Text(
+              'Remove the ${p.category.name} budget? Its transactions are '
+              'not affected.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                style: TextButton.styleFrom(foregroundColor: AppColors.danger),
+                child: const Text('Delete'),
+              ),
+            ],
+          ),
+    );
+    if (confirmed == true) await app.budgetService.deleteById(p.budget.id);
   }
 
   /// Hands the check to [BudgetService], which goes through
@@ -196,7 +220,7 @@ class _BudgetsScreenState extends State<BudgetsScreen> {
               btcPrice: btcPrice,
               currency: currency,
               onEdit: (p) => _openSetBudget(existing: p),
-              onDelete: (id) => _deleteBudget(id),
+              onDelete: (p) => _deleteBudget(p),
             );
           },
         );
@@ -220,7 +244,7 @@ class _BudgetList extends StatelessWidget {
   final double? btcPrice;
   final String currency;
   final void Function(BudgetProgress) onEdit;
-  final void Function(int id) onDelete;
+  final void Function(BudgetProgress p) onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -250,7 +274,7 @@ class _BudgetList extends StatelessWidget {
             btcPrice: btcPrice,
             currency: currency,
             onEdit: () => onEdit(p),
-            onDelete: () => onDelete(p.budget.id),
+            onDelete: () => onDelete(p),
           ),
         const SizedBox(height: 12),
       ],
@@ -282,6 +306,11 @@ class _SummaryBar extends StatelessWidget {
     final remainingColor =
         remaining >= 0 ? AppColors.success : AppColors.danger;
 
+    final decimals = CurrencyUtils.decimalsFor([
+      totalBudgeted,
+      totalSpent,
+      remaining,
+    ]);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Container(
@@ -302,7 +331,7 @@ class _SummaryBar extends StatelessWidget {
                 value: CurrencyUtils.format(
                   totalBudgeted,
                   currency,
-                  decimalDigits: 0,
+                  decimalDigits: decimals,
                 ),
                 color: context.textSecondary,
               ),
@@ -318,7 +347,7 @@ class _SummaryBar extends StatelessWidget {
                 value: CurrencyUtils.format(
                   totalSpent,
                   currency,
-                  decimalDigits: 0,
+                  decimalDigits: decimals,
                 ),
                 color: theme.colorScheme.onSurface,
               ),
@@ -334,7 +363,7 @@ class _SummaryBar extends StatelessWidget {
                 value: CurrencyUtils.format(
                   remaining.abs(),
                   currency,
-                  decimalDigits: 0,
+                  decimalDigits: decimals,
                 ),
                 color: remainingColor,
               ),

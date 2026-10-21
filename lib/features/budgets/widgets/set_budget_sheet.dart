@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+
 import '../../../core/database/database.dart';
 import '../../../core/models/budget_progress.dart';
 import '../../../core/services/budget_service.dart';
@@ -7,6 +7,7 @@ import '../../../core/services/category_service.dart';
 import '../../../main.dart' as app;
 import '../../../shared/theme/app_colors.dart';
 import '../../../shared/theme/app_text_styles.dart';
+import '../../../shared/utils/amount_input.dart';
 import '../../../shared/utils/currency_utils.dart';
 import '../../../shared/widgets/tappable.dart';
 
@@ -33,6 +34,7 @@ class _SetBudgetSheetState extends State<SetBudgetSheet> {
 
   List<Category> _categories = [];
   List<Budget> _existingBudgets = [];
+  bool _loaded = false;
   Category? _selectedCategory;
   bool _saving = false;
   String? _error;
@@ -55,8 +57,8 @@ class _SetBudgetSheetState extends State<SetBudgetSheet> {
     setState(() {
       _categories = cats.where((c) => c.name != 'Income').toList();
       _existingBudgets = budgets;
-      _selectedCategory ??=
-          _unbudgetedCategories.firstOrNull ?? _categories.firstOrNull;
+      _loaded = true;
+      _selectedCategory ??= _unbudgetedCategories.firstOrNull;
     });
   }
 
@@ -68,7 +70,7 @@ class _SetBudgetSheetState extends State<SetBudgetSheet> {
   Future<void> _save() async {
     final cat = _selectedCategory;
     if (cat == null) return;
-    final amount = double.tryParse(_amountController.text.replaceAll(',', ''));
+    final amount = parseUserAmount(_amountController.text);
     if (amount == null || amount <= 0) {
       setState(() => _error = 'Enter a valid amount');
       return;
@@ -146,11 +148,23 @@ class _SetBudgetSheetState extends State<SetBudgetSheet> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  _CategoryGrid(
-                    categories: _categories,
-                    selected: _selectedCategory,
-                    onSelect: (c) => setState(() => _selectedCategory = c),
-                  ),
+                  // Only the categories without a budget. Listing them all let
+                  // "add" pick one that had a budget and Save replace it —
+                  // Food's £300 silently became £50.
+                  if (_loaded && _unbudgetedCategories.isEmpty)
+                    Text(
+                      'Every category has a budget. Long-press one to change '
+                      'it.',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: context.textSecondary,
+                      ),
+                    )
+                  else
+                    _CategoryGrid(
+                      categories: _unbudgetedCategories,
+                      selected: _selectedCategory,
+                      onSelect: (c) => setState(() => _selectedCategory = c),
+                    ),
                   const SizedBox(height: 20),
                 ] else ...[
                   _SelectedCategoryRow(category: widget.existing!.category),
@@ -163,9 +177,7 @@ class _SetBudgetSheetState extends State<SetBudgetSheet> {
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
                   ),
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
-                  ],
+                  inputFormatters: [amountInputFormatter],
                   style: AppTextStyles.monoLarge.copyWith(
                     color: theme.colorScheme.onSurface,
                   ),
@@ -186,7 +198,8 @@ class _SetBudgetSheetState extends State<SetBudgetSheet> {
                 const SizedBox(height: 24),
 
                 FilledButton(
-                  onPressed: _saving ? null : _save,
+                  onPressed:
+                      _saving || _selectedCategory == null ? null : _save,
                   style: FilledButton.styleFrom(
                     minimumSize: const Size(double.infinity, 48),
                   ),

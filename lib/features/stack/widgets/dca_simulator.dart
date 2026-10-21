@@ -4,11 +4,11 @@ library;
 import 'dart:math';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import '../../../shared/theme/app_colors.dart';
 import '../../../shared/theme/app_text_styles.dart';
+import '../../../shared/utils/amount_input.dart';
 import '../../../shared/utils/currency_utils.dart';
 import '../../../shared/utils/sat_converter.dart';
 import 'period_chip.dart';
@@ -58,7 +58,7 @@ class DcaSimulator extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final price = btcPrice ?? 0;
-    final monthly = double.tryParse(controller.text.replaceAll(',', '')) ?? 0;
+    final monthly = parseUserAmount(controller.text) ?? 0;
     final months = years * 12;
     final totalInvested = monthly * months;
     final fiatFmt = NumberFormat.currency(
@@ -84,11 +84,7 @@ class DcaSimulator extends StatelessWidget {
                       keyboardType: const TextInputType.numberWithOptions(
                         decimal: true,
                       ),
-                      inputFormatters: [
-                        FilteringTextInputFormatter.allow(
-                          RegExp(r'^\d*\.?\d*'),
-                        ),
-                      ],
+                      inputFormatters: [amountInputFormatter],
                       style: AppTextStyles.monoMedium.copyWith(
                         color: theme.colorScheme.onSurface,
                       ),
