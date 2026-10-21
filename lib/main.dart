@@ -96,12 +96,7 @@ void main() async {
       await (db.select(db.appSettings)
         ..where((t) => t.key.equals(AppConstants.settingThemeMode))).get();
   final savedTheme = themeRows.isNotEmpty ? themeRows.first.value : null;
-  final initialTheme = switch (savedTheme) {
-    'light' => ThemeMode.light,
-    'dark' => ThemeMode.dark,
-    _ => ThemeMode.dark,
-  };
-  themeModeNotifier = ValueNotifier(initialTheme);
+  themeModeNotifier = ValueNotifier(themeModeFromSetting(savedTheme));
 
   // Load persisted currency
   final currencyRows =
@@ -189,3 +184,15 @@ class _AppWithSplashState extends State<_AppWithSplash> {
     );
   }
 }
+
+/// The theme saved under [AppConstants.settingThemeMode]; Dark when unset.
+///
+/// Settings and onboarding both offer System and save it as 'system', which
+/// this did not recognise: a user who chose System came back to Dark on the
+/// next launch.
+@visibleForTesting
+ThemeMode themeModeFromSetting(String? value) => switch (value) {
+  'light' => ThemeMode.light,
+  'system' => ThemeMode.system,
+  _ => ThemeMode.dark,
+};

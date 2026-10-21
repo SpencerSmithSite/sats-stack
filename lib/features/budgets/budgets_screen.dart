@@ -282,6 +282,11 @@ class _SummaryBar extends StatelessWidget {
     final remainingColor =
         remaining >= 0 ? AppColors.success : AppColors.danger;
 
+    final decimals = CurrencyUtils.decimalsFor([
+      totalBudgeted,
+      totalSpent,
+      remaining,
+    ]);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Container(
@@ -302,7 +307,7 @@ class _SummaryBar extends StatelessWidget {
                 value: CurrencyUtils.format(
                   totalBudgeted,
                   currency,
-                  decimalDigits: 0,
+                  decimalDigits: decimals,
                 ),
                 color: context.textSecondary,
               ),
@@ -318,7 +323,7 @@ class _SummaryBar extends StatelessWidget {
                 value: CurrencyUtils.format(
                   totalSpent,
                   currency,
-                  decimalDigits: 0,
+                  decimalDigits: decimals,
                 ),
                 color: theme.colorScheme.onSurface,
               ),
@@ -334,7 +339,7 @@ class _SummaryBar extends StatelessWidget {
                 value: CurrencyUtils.format(
                   remaining.abs(),
                   currency,
-                  decimalDigits: 0,
+                  decimalDigits: decimals,
                 ),
                 color: remainingColor,
               ),

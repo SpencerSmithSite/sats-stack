@@ -6,6 +6,7 @@ import '../../../core/database/database.dart';
 import '../../../core/services/import_service.dart';
 import '../../../main.dart' as app;
 import '../../../shared/theme/app_colors.dart';
+import '../../../shared/utils/amount_input.dart';
 
 /// A bottom sheet for editing a transaction.
 ///
@@ -131,7 +132,7 @@ class _TransactionEditSheetState extends State<TransactionEditSheet> {
 
   Future<void> _save() async {
     final desc = _descCtrl.text.trim();
-    final amount = double.tryParse(_amountCtrl.text.replaceAll(',', ''));
+    final amount = parseUserAmount(_amountCtrl.text);
     // Zero is rejected, not just negatives: it was how the rounded-to-"0.00"
     // BTC amount got through.
     if (amount == null || amount <= 0) {

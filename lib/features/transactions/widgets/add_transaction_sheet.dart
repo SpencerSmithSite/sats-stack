@@ -1,6 +1,5 @@
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/database/database.dart';
@@ -11,6 +10,7 @@ import '../../../core/services/wallet_service.dart';
 import '../../../main.dart' as app;
 import '../../../shared/theme/app_colors.dart';
 import '../../../shared/theme/app_text_styles.dart';
+import '../../../shared/utils/amount_input.dart';
 import '../../../shared/utils/currency_utils.dart';
 import '../../../shared/utils/hash_utils.dart';
 import '../../../shared/utils/sat_converter.dart';
@@ -83,7 +83,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   }
 
   String get _conversionLabel {
-    final raw = double.tryParse(_amountController.text.replaceAll(',', ''));
+    final raw = parseUserAmount(_amountController.text);
     if (raw == null || raw == 0) return '';
     final price = _btcPrice;
     if (price == null || price <= 0) return 'BTC price unavailable';
@@ -112,9 +112,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     setState(() => _saving = true);
 
     try {
-      final rawAmount = double.parse(
-        _amountController.text.replaceAll(',', ''),
-      );
+      final rawAmount = parseUserAmount(_amountController.text)!;
       final wallet = await widget.walletService.getDefaultManual();
       if (wallet == null) {
         if (mounted) {
@@ -271,11 +269,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                           keyboardType: const TextInputType.numberWithOptions(
                             decimal: true,
                           ),
-                          inputFormatters: [
-                            FilteringTextInputFormatter.allow(
-                              RegExp(r'^\d*\.?\d*'),
-                            ),
-                          ],
+                          inputFormatters: [amountInputFormatter],
                           style: AppTextStyles.monoLarge.copyWith(
                             color: theme.colorScheme.onSurface,
                           ),
@@ -293,7 +287,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                           onChanged: (_) => setState(() {}),
                           validator: (v) {
                             if (v == null || v.isEmpty) return 'Enter amount';
-                            final n = double.tryParse(v.replaceAll(',', ''));
+                            final n = parseUserAmount(v);
                             if (n == null || n <= 0) {
                               return 'Enter a valid amount';
                             }
