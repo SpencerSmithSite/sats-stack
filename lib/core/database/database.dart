@@ -53,30 +53,39 @@ class AppDatabase extends _$AppDatabase {
       await _seedSystemCategories();
       await _seedDefaultWallet();
     },
+    // One transaction for the whole upgrade, so it either all happens or none
+    // of it does. Without it, a launch killed partway through v8 left the new
+    // index created but the schema version unchanged: the next launch ran v8
+    // again, failed on "index already exists", and the app could not open its
+    // database at all — or, killed later in the step, re-scoped every xpub
+    // hash a second time. sqlite's DDL is transactional, so the indexes roll
+    // back with the rest.
     onUpgrade: (m, from, to) async {
-      if (from < 2) {
-        await m.addColumn(transactions, transactions.recurringPeriod);
-        await m.addColumn(transactions, transactions.recurringAnchorDate);
-      }
-      if (from < 3) {
-        await m.createTable(btcPriceHistory);
-      }
-      if (from < 4) {
-        await m.createTable(importSources);
-        await m.createTable(importedTransactions);
-      }
-      if (from < 5) {
-        await m.createTable(descriptionCategoryMappings);
-      }
-      if (from < 6) {
-        await migrateToV6(m);
-      }
-      if (from < 7) {
-        await migrateToV7(m);
-      }
-      if (from < 8) {
-        await migrateToV8(m);
-      }
+      await transaction(() async {
+        if (from < 2) {
+          await m.addColumn(transactions, transactions.recurringPeriod);
+          await m.addColumn(transactions, transactions.recurringAnchorDate);
+        }
+        if (from < 3) {
+          await m.createTable(btcPriceHistory);
+        }
+        if (from < 4) {
+          await m.createTable(importSources);
+          await m.createTable(importedTransactions);
+        }
+        if (from < 5) {
+          await m.createTable(descriptionCategoryMappings);
+        }
+        if (from < 6) {
+          await migrateToV6(m);
+        }
+        if (from < 7) {
+          await migrateToV7(m);
+        }
+        if (from < 8) {
+          await migrateToV8(m);
+        }
+      });
     },
     beforeOpen: (details) async {
       // sqlite ignores foreign keys unless asked, per connection, so every
