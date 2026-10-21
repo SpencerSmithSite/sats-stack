@@ -63,10 +63,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
       setState(() => _categoriesByName = {for (final c in cats) c.name: c});
     });
     if (app.aiEnabledNotifier.value) _initInsight();
+    app.ollamaService.configChanges.addListener(_onAiConfigChange);
+    app.aiEnabledNotifier.addListener(_onAiConfigChange);
   }
 
   @override
   void dispose() {
+    app.ollamaService.configChanges.removeListener(_onAiConfigChange);
+    app.aiEnabledNotifier.removeListener(_onAiConfigChange);
     app.inflationRateNotifier.removeListener(_onInflationChange);
     app.currencyNotifier.removeListener(_onCurrencyChange);
     _categorySub?.cancel();
@@ -96,18 +100,38 @@ class _DashboardScreenState extends State<DashboardScreen> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  /// The tab stays alive for the whole session, so the insight card's
+  /// "Sends … to" line has to follow Settings. It was worked out once, in
+  /// initState: switch from Ollama to Claude and the card showed no recipient
+  /// while a tap sent the month to Anthropic; start with AI off, add a key,
+  /// and the card never loaded at all.
+  void _onAiConfigChange() {
+    if (!mounted || !app.aiEnabledNotifier.value) return;
+    if (!_insightInitialised) {
+      _initInsight();
+      return;
+    }
+    setState(() => _insightRecipient = _currentRecipient());
+  }
+
+  String? _currentRecipient() =>
+      app.ollamaService.sendsDataOffDevice
+          ? app.ollamaService.activeDataRecipient
+          : null;
+
+  bool _insightInitialised = false;
+
   Future<void> _initInsight() async {
+    _insightInitialised = true;
     _cachedInsight = await app.ollamaService.loadCachedInsight();
     // A hosted provider is told nothing unless the user asks. Generating this
     // automatically meant that selecting Claude in Settings and opening the
     // Dashboard uploaded the month's income, spending, surplus, stack total
     // and full category breakdown to a third party with no user action and no
     // disclosure — while the disclosure widget promised the opposite.
-    final offDevice = app.ollamaService.sendsDataOffDevice;
-    _insightRecipient =
-        offDevice ? app.ollamaService.activeDataRecipient : null;
+    _insightRecipient = _currentRecipient();
     if (mounted) setState(() {});
-    if (offDevice) return;
+    if (app.ollamaService.sendsDataOffDevice) return;
     final stale = await app.ollamaService.isInsightStale();
     // Not awaited: the card shows the cached insight meanwhile, and the
     // generator handles its own failures.
@@ -124,27 +148,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
   /// `CloudBackend.describeError` takes care to make readable, was dropped.
   Future<void> _generateInsight({bool userAsked = true}) async {
     if (_isGeneratingInsight) return;
-    final available = await app.ollamaService.isAvailable();
-    if (!mounted) return;
-    if (!available) {
-      if (userAsked) {
-        _showInsightError(
-          '${app.ollamaService.backend.displayName} is not available right '
-          'now. Check it in Settings → Servers.',
-        );
-      }
-      return;
-    }
-
+    // The automatic refresh is for a private backend only. Checked again here:
+    // the backend may have changed while the staleness check was awaited.
+    if (!userAsked && app.ollamaService.sendsDataOffDevice) return;
+    // Set before the first await: set after `isAvailable`, a double tap got
+    // two generations in — two paid requests, and the figures sent twice.
     setState(() => _isGeneratingInsight = true);
     try {
+      final available = await app.ollamaService.isAvailable();
+      if (!mounted) return;
+      if (!available) {
+        if (userAsked) {
+          _showInsightError(
+            '${app.ollamaService.backend.displayName} is not available right '
+            'now. Check it in Settings → Servers.',
+          );
+        }
+        return;
+      }
+
+      // The last complete month — which the card says, and the prompt names.
       final now = DateTime.now();
       final lastMonth = DateTime(now.year, now.month - 1);
       final data = await app.dashboardService.getDashboard(lastMonth);
-      final btcPrice = app.btcPriceService.priceNotifier.value ?? 0;
       final insight = await app.ollamaService.generateMonthlyInsight(
         totalStackSats: data.totalStackSats,
-        btcPrice: btcPrice,
+        btcPrice: app.btcPriceService.priceNotifier.value,
+        currency: app.currencyNotifier.value,
+        month: lastMonth,
         monthlyIncome: data.monthlyIncomeFiat,
         monthlySpending: data.monthlySpendingFiat,
         monthlySurplus: data.monthlySurplusFiat,

@@ -4,9 +4,12 @@ import 'dart:convert';
 import 'package:drift/drift.dart' show OrderingTerm;
 import 'package:flutter/foundation.dart' show ValueNotifier;
 import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart' show DateFormat;
 
 import '../../shared/constants/app_constants.dart';
+import '../../shared/utils/currency_utils.dart';
 import '../../shared/utils/platform_utils.dart';
+import '../../shared/utils/sat_converter.dart';
 import '../../shared/utils/url_utils.dart';
 import '../database/database.dart';
 import '../models/ai_provider.dart';
@@ -168,19 +171,67 @@ class OllamaService {
   /// `AiProvider.dataRecipient` covers the hosted providers, which have a fixed
   /// endpoint. Ollama and LM Studio do not: their URL is whatever the user
   /// typed, so the recipient is that host — known only here.
-  String? get activeDataRecipient {
-    final fixed = _activeProvider.dataRecipient;
-    if (fixed != null) return fixed;
-    final url = switch (_activeProvider) {
-      AiProvider.ollama => _baseUrl,
-      AiProvider.lmStudio => _lmStudioBaseUrl,
-      _ => null,
-    };
-    if (url == null || isLocalEndpoint(url)) return null;
-    final host = Uri.tryParse(url)?.host;
-    return host == null || host.isEmpty
-        ? 'the server you configured'
-        : 'the server you configured ($host)';
+  String? get activeDataRecipient =>
+      recipientFor(_activeProvider, _activeServerUrl ?? '');
+
+  /// Who receives the user's figures if [provider] is used with [url] (its
+  /// server, for the providers whose server the user chooses), phrased for a
+  /// sentence; null when nothing leaves hardware the user controls.
+  ///
+  /// Static so onboarding can judge a URL that is still being typed, rather
+  /// than the provider alone: `AiProvider.isPrivate` is true for Ollama and
+  /// LM Studio, whose URL can point anywhere.
+  static String? recipientFor(AiProvider provider, String url) {
+    String? host() {
+      final h = Uri.tryParse(normalizeServerUrl(url) ?? url)?.host;
+      return h == null || h.isEmpty ? null : h;
+    }
+
+    switch (provider) {
+      case AiProvider.maple:
+        // Hosted, but at whatever URL the user typed: name the host too.
+        final h = host();
+        return h == null
+            ? provider.dataRecipient
+            : '${provider.dataRecipient} ($h)';
+      case AiProvider.ollama:
+      case AiProvider.lmStudio:
+        if (isLocalEndpoint(
+          normalizeServerUrl(url, defaultScheme: 'http') ?? url,
+        )) {
+          return null;
+        }
+        final h = host();
+        return h == null
+            ? 'the server you configured'
+            : 'the server you configured ($h)';
+      default:
+        return provider.dataRecipient;
+    }
+  }
+
+  /// The URL the active provider sends to, for the providers whose endpoint
+  /// is the user's to choose; null for the rest.
+  String? get _activeServerUrl => switch (_activeProvider) {
+    AiProvider.ollama => _baseUrl,
+    AiProvider.lmStudio => _lmStudioBaseUrl,
+    AiProvider.maple => _mapleBaseUrl,
+    _ => null,
+  };
+
+  /// What a consent to send data off the device was given *to*.
+  ///
+  /// For a hosted provider with a fixed endpoint, the provider is enough. For
+  /// Ollama, LM Studio and Maple it is the server: consent given for one host
+  /// must not carry over when the URL is changed to another, which it did
+  /// while consent was stored per provider.
+  String get activeConsentScope {
+    final url = _activeServerUrl;
+    if (url == null) return 'hosted';
+    final uri = Uri.tryParse(url);
+    return uri == null || uri.host.isEmpty
+        ? url
+        : '${uri.scheme}://${uri.host}${uri.hasPort ? ':${uri.port}' : ''}';
   }
 
   /// Whether [url] is this device or a machine on the user's own network.
@@ -700,7 +751,9 @@ class OllamaService {
   /// prompt for a backend other than the active one.
   String buildSystemPrompt({
     required int totalStackSats,
-    required double btcPrice,
+    required double? btcPrice,
+    required String currency,
+    required DateTime month,
     required double monthlyIncome,
     required double monthlySpending,
     required double monthlySurplus,
@@ -710,6 +763,8 @@ class OllamaService {
   }) => composeSystemPrompt(
     totalStackSats: totalStackSats,
     btcPrice: btcPrice,
+    currency: currency,
+    month: month,
     monthlyIncome: monthlyIncome,
     monthlySpending: monthlySpending,
     monthlySurplus: monthlySurplus,
@@ -724,36 +779,64 @@ class OllamaService {
   /// because `OllamaService` requires an `AppDatabase`, which cannot be
   /// constructed under `flutter test`. Keeping the logic here means the sizing
   /// rules are testable without a database or a device.
+  ///
+  /// Every figure is in [currency], the one the dashboard aggregated into, and
+  /// is labelled with it. The prompt used to print a `$` and "USD" whatever
+  /// the user's currency, round each figure to a whole unit, report a missing
+  /// price as "$0", and not say which month the figures were for — so a GBP
+  /// user was answered in dollars, with sats worked out from nonsense.
   static String composeSystemPrompt({
     required int totalStackSats,
-    required double btcPrice,
+    required double? btcPrice,
+    required String currency,
+    required DateTime month,
     required double monthlyIncome,
     required double monthlySpending,
     required double monthlySurplus,
     required Map<String, double> spendingByCategory,
     required int budgetChars,
     int? stackGoalSats,
+    DateTime? now,
   }) {
     final budget = budgetChars;
-    final now = DateTime.now();
-    final fiatValue = btcPrice > 0 ? (totalStackSats / 1e8 * btcPrice) : 0.0;
+    final today = now ?? DateTime.now();
+    String money(double v) => '${CurrencyUtils.format(v, currency)} $currency';
+    final price = (btcPrice != null && btcPrice > 0) ? btcPrice : null;
+
+    final priceLine =
+        price == null
+            ? 'BTC price: unavailable — do not estimate fiat values of sats, '
+                'or sats values of fiat.'
+            : 'BTC price: ${money(price)} '
+                '(1 $currency = ${SatConverter.formatSats((1e8 / price).round())} '
+                'sats)';
+    final stackValue =
+        price == null ? '' : ' (≈ ${money(totalStackSats / 1e8 * price)})';
     final goalLine =
         stackGoalSats != null && stackGoalSats > 0
-            ? 'Stack goal: $stackGoalSats sats (${(totalStackSats / stackGoalSats * 100).toStringAsFixed(1)}% reached)\n'
+            ? 'Stack goal: ${SatConverter.formatSats(stackGoalSats)} sats '
+                '(${(totalStackSats / stackGoalSats * 100).toStringAsFixed(1)}% '
+                'reached)\n'
             : '';
+    final isCurrent = month.year == today.year && month.month == today.month;
+    final period =
+        '${DateFormat.yMMMM().format(month)}'
+        '${isCurrent ? ' (month to date)' : ' (complete month)'}';
 
     final head =
         '''You are a Bitcoin-native personal finance analyst embedded in Sats Stack, a privacy-first budgeting app. You give concise, actionable advice grounded in the user's real financial data. You think in sats. You are bullish on Bitcoin and understand sound money principles.
 
-Current date: ${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}
-BTC price: \$${btcPrice.toStringAsFixed(0)} USD
+Current date: ${DateFormat('yyyy-MM-dd').format(today)}
+The user's currency is $currency: give every fiat amount in it.
+$priceLine
 
 USER FINANCIAL SNAPSHOT
-Total Bitcoin stack: $totalStackSats sats (≈ \$${fiatValue.toStringAsFixed(0)})
-${goalLine}Monthly income:   \$${monthlyIncome.toStringAsFixed(0)}
-Monthly spending: \$${monthlySpending.toStringAsFixed(0)}
-Monthly surplus:  \$${monthlySurplus.toStringAsFixed(0)}
-Top spending categories this month:
+Total Bitcoin stack: ${SatConverter.formatSats(totalStackSats)} sats$stackValue
+${goalLine}Figures for $period:
+Income:   ${money(monthlyIncome)}
+Spending: ${money(monthlySpending)}
+Surplus:  ${money(monthlySurplus)}
+Top spending categories:
 ''';
 
     const tail =
@@ -768,7 +851,7 @@ Top spending categories this month:
     final lines = <String>[];
     var used = head.length + tail.length;
     for (final e in ranked) {
-      final line = '  - ${e.key}: \$${e.value.toStringAsFixed(0)}';
+      final line = '  - ${e.key}: ${money(e.value)}';
       // +1 for the newline joining it to the previous line.
       final cost = line.length + (lines.isEmpty ? 0 : 1);
       if (used + cost > budget) break;
@@ -780,10 +863,7 @@ Top spending categories this month:
     // matters most, and never an empty list where the user has spending — a
     // heading with nothing under it reads as "no data" to a small model.
     if (lines.isEmpty && ranked.isNotEmpty) {
-      lines.add(
-        '  - ${ranked.first.key}: '
-        '\$${ranked.first.value.toStringAsFixed(0)}',
-      );
+      lines.add('  - ${ranked.first.key}: ${money(ranked.first.value)}');
     }
 
     return '$head${lines.join('\n')}$tail';
@@ -1030,7 +1110,9 @@ Top spending categories this month:
 
   Future<String> generateMonthlyInsight({
     required int totalStackSats,
-    required double btcPrice,
+    required double? btcPrice,
+    required String currency,
+    required DateTime month,
     required double monthlyIncome,
     required double monthlySpending,
     required double monthlySurplus,
@@ -1040,6 +1122,8 @@ Top spending categories this month:
     final systemPrompt = buildSystemPrompt(
       totalStackSats: totalStackSats,
       btcPrice: btcPrice,
+      currency: currency,
+      month: month,
       monthlyIncome: monthlyIncome,
       monthlySpending: monthlySpending,
       monthlySurplus: monthlySurplus,

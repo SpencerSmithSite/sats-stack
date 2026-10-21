@@ -17,6 +17,7 @@ import 'package:sats_stack/core/models/fx_rates.dart';
 import 'package:sats_stack/core/services/btc_price_service.dart';
 import 'package:sats_stack/core/services/category_service.dart';
 import 'package:sats_stack/core/services/dashboard_service.dart';
+import 'package:sats_stack/core/services/ollama_service.dart';
 import 'package:sats_stack/features/dashboard/dashboard_screen.dart';
 import 'package:sats_stack/features/dashboard/widgets/hero_card.dart';
 import 'package:sats_stack/features/transactions/widgets/transaction_list_item.dart';
@@ -54,6 +55,7 @@ void main() {
       app.currencyNotifier = ValueNotifier('USD');
       app.inflationRateNotifier = ValueNotifier(3.5);
       app.aiEnabledNotifier = ValueNotifier(false);
+      app.ollamaService = OllamaService(app.db);
       app.showBtcPriceNotifier = ValueNotifier(false);
       app.dashboardService = DashboardService(
         app.db,

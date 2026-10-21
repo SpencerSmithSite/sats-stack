@@ -744,6 +744,8 @@ void main() {
       String prompt(int budget) => OllamaService.composeSystemPrompt(
         totalStackSats: 5000000,
         btcPrice: 100000,
+        currency: 'USD',
+        month: DateTime(2026, 3),
         monthlyIncome: 6000,
         monthlySpending: 4000,
         monthlySurplus: 2000,

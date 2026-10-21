@@ -86,6 +86,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
+    // The privacy line under each AI provider is read from the saved URL.
+    // Saving a new one rebuilt nothing, so after saving a public server's URL
+    // the screen still said nothing leaves hardware you control.
+    app.ollamaService.configChanges.addListener(_onAiConfigChange);
     _themeMode = app.themeModeNotifier.value;
     _currency = app.currencyNotifier.value;
     _showBtcPrice = app.showBtcPriceNotifier.value;
@@ -141,6 +145,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   void dispose() {
+    app.ollamaService.configChanges.removeListener(_onAiConfigChange);
     _inflationRateCtrl.dispose();
     _ollamaUrlCtrl.dispose();
     _lmStudioUrlCtrl.dispose();
@@ -303,6 +308,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// so clearing it does not refill it with the default.
   void _showEffectiveUrl(TextEditingController ctrl, String saved) {
     if (ctrl.text.trim().isNotEmpty && ctrl.text != saved) ctrl.text = saved;
+  }
+
+  void _onAiConfigChange() {
+    if (mounted) setState(() {});
   }
 
   // ── Ollama ──────────────────────────────────────────────────────────────
