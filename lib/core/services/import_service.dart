@@ -863,7 +863,11 @@ Rules:
 
     // --- Tier 2: Rule-based ---
     onStageChange?.call('Applying smart rules…');
-    final txns = await parseWithRules(content, currency: currency);
+    final txns = await parseWithRules(
+      content,
+      currency: currency,
+      sourceType: source?.type,
+    );
     _checkCancelled();
 
     if (txns != null && txns.isNotEmpty) {
@@ -1094,9 +1098,12 @@ FILE CONTENT:
 
   // ── Tier 2: Rule-based CSV parsing ───────────────────────────────────────
 
+  /// [sourceType] is the account's type (`credit_card`, `bank`, …), which
+  /// decides how a signed amount column is read — see [_parseRowsGeneric].
   Future<List<ParsedTransaction>?> parseWithRules(
     String csvContent, {
     required String currency,
+    String? sourceType,
   }) async {
     final parsedRows = _parseCsvRows(csvContent);
     if (parsedRows.length < 2) return null;
@@ -1140,6 +1147,7 @@ FILE CONTENT:
       creditCol: creditCol,
       signedAmount: amountCol != null,
       currency: currency,
+      chargesMaySignPositive: sourceType == 'credit_card',
     );
   }
 
@@ -1210,6 +1218,11 @@ FILE CONTENT:
     String currency,
   ) {
     int? dateCol, descCol, amountCol, debitCol, creditCol;
+    int? column(String? header) {
+      if (header == null) return null;
+      final i = headers.indexOf(header);
+      return i == -1 ? null : i;
+    }
 
     if (profile.positional) {
       dateCol = profile.dateColumn;
@@ -1253,9 +1266,14 @@ FILE CONTENT:
       debitCol: debitCol,
       creditCol: creditCol,
       signedAmount: profile.signedAmount,
-      // The account's own currency, not the profile's: a profile identifies a
-      // column layout, and the user is the authority on what the account holds.
-      currency: currency,
+      // The account's own currency unless the layout says which currency its
+      // amount column is in. An exchange export's "Amount USD" is dollars
+      // whatever the account holds: stamping it with the account's currency
+      // read a $500 purchase in a BTC account as 500 BTC.
+      currency: profile.amountCurrency ?? currency,
+      currencyCol: column(profile.currencyHeader),
+      typeCol: column(profile.typeHeader),
+      creditTypes: profile.creditTypes,
       // Honoured at last: a positional profile (Wells Fargo) has no header
       // line, and skipping row 0 regardless dropped its first transaction.
       skipHeaderRow: profile.skipHeaderRow,
@@ -1272,6 +1290,10 @@ FILE CONTENT:
     required bool signedAmount,
     required String currency,
     bool skipHeaderRow = true,
+    bool chargesMaySignPositive = false,
+    int? currencyCol,
+    int? typeCol,
+    Set<String> creditTypes = const {},
   }) {
     if (dateCol == null) return null;
 
@@ -1296,12 +1318,28 @@ FILE CONTENT:
     // whatever the header says: treating it as signed books every charge on a
     // credit-card export as income.
     final amountIndex = amountCol;
-    final columnHasNegative =
-        amountIndex != null &&
-        dataRows.any(
-          (r) => amountIndex < r.length && (amountOf(r[amountIndex]) ?? 0) < 0,
-        );
-    final amountIsSigned = signedAmount && columnHasNegative;
+    final amountCells = [
+      if (amountIndex != null)
+        for (final r in dataRows)
+          if (amountIndex < r.length) r[amountIndex],
+    ];
+    final values = amountCells.map(amountOf).whereType<double>();
+    final negatives = values.where((v) => v < 0).length;
+    final positives = values.where((v) => v > 0).length;
+    final amountIsSigned = signedAmount && negatives > 0;
+
+    // Which sign is money out. Negative, for a bank account. A card statement
+    // is mostly charges, and issuers disagree on their sign — Chase writes a
+    // purchase as -4.50, Amex as 4.50 with the payments negative — so for a
+    // card the majority sign is the charges. Reading Amex as "negative is
+    // money out" booked every purchase as income.
+    final positiveIsDebit =
+        amountIsSigned && chargesMaySignPositive && positives > negatives;
+
+    // A column that marks some amounts CR and has no negatives is a UK card
+    // statement: CR is a payment or refund and an unmarked figure is a
+    // charge. ('12.50 DR' parses as negative, so a DR column is signed.)
+    final crMarked = !amountIsSigned && amountCells.any(_crSuffix.hasMatch);
 
     final result = <ParsedTransaction>[];
     for (int i = startRow; i < allRows.length; i++) {
@@ -1324,12 +1362,19 @@ FILE CONTENT:
       if (amountCol != null && amountCol < row.length) {
         final raw = amountOf(row[amountCol]);
         if (raw == null) continue;
+        amount = raw.abs();
+        final type =
+            (typeCol != null && typeCol < row.length)
+                ? row[typeCol].trim().toLowerCase()
+                : null;
         if (amountIsSigned) {
-          amount = raw.abs();
-          direction = raw < 0 ? 'debit' : 'credit';
+          direction = (raw < 0) != positiveIsDebit ? 'debit' : 'credit';
+        } else if (type != null && type.isNotEmpty) {
+          direction = creditTypes.contains(type) ? 'credit' : 'debit';
+        } else if (crMarked) {
+          direction = _crSuffix.hasMatch(row[amountCol]) ? 'credit' : 'debit';
         } else {
-          amount = raw.abs();
-          direction = 'debit'; // default for unsigned single-column amounts
+          direction = _unsignedDirection(description);
         }
       } else {
         final dAmt =
@@ -1357,11 +1402,32 @@ FILE CONTENT:
           amount: amount,
           direction: direction,
           description: description,
-          currency: currency,
+          currency: _rowCurrency(row, currencyCol, currency),
         ),
       );
     }
     return result.isEmpty ? null : result;
+  }
+
+  static final _crSuffix = RegExp(r'\s*CR\.?$', caseSensitive: false);
+  static final _balanceLine = RegExp(
+    r'\b(?:opening|closing|previous|new|start(?:ing)?|end(?:ing)?)\s+balance'
+    r'|balance\s+(?:brought|carried)\s+forward|\bbalance\s+b/?f\b',
+  );
+
+  /// The direction of an amount when nothing in the file says which way the
+  /// money went. Most such rows are spending; an unmistakable credit — a
+  /// salary, a refund, interest — is the exception worth catching, or a
+  /// deposits-only savings export reads as all spending.
+  String _unsignedDirection(String description) =>
+      matchCategory(description) == 'Income' ? 'credit' : 'debit';
+  static final _currencyCode = RegExp(r'^[A-Z]{3,4}$');
+
+  /// The currency named in [row]'s [col], if it names one, else [fallback].
+  static String _rowCurrency(List<String> row, int? col, String fallback) {
+    if (col == null || col >= row.length) return fallback;
+    final code = row[col].trim().toUpperCase();
+    return _currencyCode.hasMatch(code) ? code : fallback;
   }
 
   // ── Tier 3: Manual column mapping ─────────────────────────────────────────
@@ -1531,22 +1597,50 @@ FILE CONTENT:
     // Before the write transaction opens: `getHistoricalPrice` goes to the
     // network and writes its own cache rows, neither of which belongs inside a
     // held write lock.
+    //
+    // Priced in the row's own currency. A EUR account's sats were worked out
+    // from the display currency's price — euros divided by a dollar price.
+    // A Bitcoin row is valued in the display currency, as everywhere else.
     final displayCurrency = btcPriceService.currency;
-    final datesToPrice = <String, DateTime>{
-      for (final tx in toInsert) _dayKey(tx.date): tx.date,
+    String priceCurrency(ParsedTransaction tx) =>
+        _isBitcoinCurrency(tx.currency) || tx.currency.length != 3
+            ? displayCurrency
+            : tx.currency;
+    final toPrice = <String, (DateTime, String)>{
+      for (final tx in toInsert)
+        '${_dayKey(tx.date)}|${priceCurrency(tx)}': (
+          tx.date,
+          priceCurrency(tx),
+        ),
     };
     final priceByDay = <String, double?>{};
-    for (final entry in datesToPrice.entries) {
-      priceByDay[entry.key] = await btcPriceService.getHistoricalPrice(
-        entry.value,
-        displayCurrency,
+    for (final MapEntry(:key, value: (date, currency)) in toPrice.entries) {
+      priceByDay[key] = await btcPriceService.getHistoricalPrice(
+        date,
+        currency,
       );
     }
 
-    double? priceFor(DateTime date) {
-      final historical = priceByDay[_dayKey(date)];
+    double? priceFor(ParsedTransaction tx) {
+      final currency = priceCurrency(tx);
+      final historical = priceByDay['${_dayKey(tx.date)}|$currency'];
       if (historical != null && historical > 0) return historical;
-      return (btcPrice != null && btcPrice > 0) ? btcPrice : null;
+      // The live price is in the display currency, so it is no stand-in for
+      // any other.
+      return (currency == displayCurrency && btcPrice != null && btcPrice > 0)
+          ? btcPrice
+          : null;
+    }
+
+    // How many times each row has already appeared in this file, so that two
+    // genuinely identical rows — two bus fares, same day, same amount — are
+    // two transactions. Keyed as each hash is, below.
+    final seenUnsigned = <String, int>{};
+    final seenSigned = <String, int>{};
+    int occurrence(Map<String, int> seen, String key) {
+      final n = seen[key] ?? 0;
+      seen[key] = n + 1;
+      return n;
     }
 
     // ── One write transaction for the whole import ──────────────────────────
@@ -1560,7 +1654,16 @@ FILE CONTENT:
     await db.transaction(() async {
       for (final tx in toInsert) {
         final cents = _toSmallestUnit(tx.amount, tx.currency);
-        final hash = computeHash(sourceId, tx.date, cents, tx.rawDescription);
+        final hash = computeHash(
+          sourceId,
+          tx.date,
+          cents,
+          tx.rawDescription,
+          occurrence: occurrence(
+            seenUnsigned,
+            '${tx.date.toIso8601String()}|$cents|${tx.rawDescription}',
+          ),
+        );
 
         if (existingHashes.contains(hash)) {
           duplicatesSkipped++;
@@ -1606,8 +1709,8 @@ FILE CONTENT:
         // Also write into the main transactions table so the Transactions screen
         // can display imported data alongside manual and xpub entries.
         if (walletId != null) {
-          final isBitcoin = tx.currency == 'BTC' || tx.currency == 'SATS';
-          final price = priceFor(tx.date);
+          final isBitcoin = _isBitcoinCurrency(tx.currency);
+          final price = priceFor(tx);
           // The signed amount in the account's own currency.
           final signedSource =
               tx.direction == 'credit' ? tx.amount : -tx.amount;
@@ -1629,17 +1732,27 @@ FILE CONTENT:
             amountSats =
                 price != null ? (signedSource / price * 100000000).round() : 0;
           }
-          // Hash the *signed* amount, and scope it to the wallet.
+          // Hash the *signed* amount, and scope it to the import source.
           //
           // `tx.amount` is always positive, so a charge and its same-day refund
           // hashed identically and the refund was dropped by the unique index —
-          // silently, because the insert is insertOrIgnore. The wallet salt stops
-          // the same rent figure in two accounts colliding the same way.
+          // silently, because the insert is insertOrIgnore. The source salt
+          // stops the same figure in two accounts colliding the same way: it
+          // used to be the wallet's, but every source writes to the one manual
+          // wallet, so that separated nothing. Re-importing into the same
+          // source is caught by the source's own import hash first.
           final dedupHash = HashUtils.transactionDedupHash(
             date: tx.date,
             amount: signedSource,
             description: tx.rawDescription,
-            salt: 'wallet_$walletId',
+            salt: importDedupSalt(
+              sourceId,
+              occurrence(
+                seenSigned,
+                '${tx.date.toIso8601String()}|$signedSource|'
+                '${tx.rawDescription}',
+              ),
+            ),
           );
           try {
             final added = await db
@@ -1888,19 +2001,20 @@ FILE CONTENT:
     ]);
     double? amountOf(String raw) => _parseAmount(raw, dotGroupsThousands: dots);
 
-    String columnCtx = 'debit'; // updated when column headers are detected
+    // Set by a column header line, when there is one; null until then.
+    String? columnCtx;
+    // Whether the statement has a running-balance column, and the balance
+    // after the last line read. With one, each line's direction is whichever
+    // way its amount moves the balance — the only reliable signal in an
+    // "Amount  Balance" layout, where both numbers are positive.
+    var hasBalanceColumn = false;
+    double? balance;
     final result = <ParsedTransaction>[];
 
     for (int i = 0; i < lines.length; i++) {
       final line = lines[i].trim();
       if (line.isEmpty) continue;
-
-      // Update column context from header-like lines.
       final lower = line.toLowerCase();
-      final hasDebit = lower.contains('withdrawal') || lower.contains('debit');
-      final hasCredit = lower.contains('deposit') || lower.contains('credit');
-      if (hasDebit && !hasCredit) columnCtx = 'debit';
-      if (hasCredit && !hasDebit) columnCtx = 'credit';
 
       // Find the first date match on this line.
       RegExpMatch? dateMatch;
@@ -1908,7 +2022,24 @@ FILE CONTENT:
         dateMatch = pat.firstMatch(line);
         if (dateMatch != null) break;
       }
-      if (dateMatch == null) continue;
+
+      // A line with no date may be a column header; update the context from
+      // those only. Reading it from every line flipped the rest of the
+      // statement to "credit" at the first "CREDIT INTEREST" transaction.
+      if (dateMatch == null) {
+        final hasDebit =
+            lower.contains('withdrawal') || lower.contains('debit');
+        final hasCredit = lower.contains('deposit') || lower.contains('credit');
+        if (hasDebit && !hasCredit) columnCtx = 'debit';
+        if (hasCredit && !hasDebit) columnCtx = 'credit';
+        if (lower.contains('balance')) {
+          hasBalanceColumn = true;
+          // "Balance brought forward  1,500.00" seeds the running balance.
+          final amounts = amtPat.allMatches(line).toList();
+          if (amounts.length == 1) balance = amountOf(amounts.first.group(0)!);
+        }
+        continue;
+      }
 
       final date = _parseDate(dateMatch.group(0)!, dayFirst: dayFirst);
       if (date == null) continue;
@@ -1921,6 +2052,15 @@ FILE CONTENT:
                 (m) => m.end <= dateMatch!.start || m.start >= dateMatch.end,
               )
               .toList();
+
+      // An opening or closing balance line is not a transaction, but an
+      // opening one gives the first line something to be measured against.
+      if (_balanceLine.hasMatch(lower)) {
+        if (amtMatches.length == 1) {
+          balance = amountOf(amtMatches.first.group(0)!);
+        }
+        continue;
+      }
 
       double amount;
       String direction;
@@ -1940,7 +2080,31 @@ FILE CONTENT:
         }
         if (lookAhead == null) continue;
         amount = lookAhead.abs();
-        direction = lookAhead < 0 ? 'debit' : columnCtx;
+        direction =
+            lookAhead < 0 ? 'debit' : columnCtx ?? _unsignedDirection(line);
+      } else if (amtMatches.length >= 2 &&
+          hasBalanceColumn &&
+          amountOf(amtMatches.first.group(0)!) != null &&
+          amountOf(amtMatches.last.group(0)!) != null) {
+        // Amount, then the running balance. Read the direction off the
+        // balance: assuming "first column is withdrawals" booked every
+        // salary in such a statement as spending.
+        final a = amountOf(amtMatches.first.group(0)!)!;
+        final after = amountOf(amtMatches.last.group(0)!)!;
+        if (a.abs() < 0.001) continue;
+        amount = a.abs();
+        final before = balance;
+        balance = after;
+        if (a < 0) {
+          direction = 'debit';
+        } else if (before != null && (before - amount - after).abs() < 0.005) {
+          direction = 'debit';
+        } else if (before != null && (before + amount - after).abs() < 0.005) {
+          direction = 'credit';
+        } else {
+          // The first line, with no opening balance to measure from.
+          direction = _unsignedDirection(line);
+        }
       } else if (amtMatches.length >= 2) {
         // Two-column format: first column = withdrawals, second = deposits.
         // Whichever is non-zero is the transaction amount.
@@ -1959,7 +2123,7 @@ FILE CONTENT:
         final p = amountOf(amtMatches[0].group(0)!);
         if (p == null || p.abs() < 0.001) continue;
         amount = p.abs();
-        direction = p < 0 ? 'debit' : columnCtx;
+        direction = p < 0 ? 'debit' : columnCtx ?? _unsignedDirection(line);
       }
 
       // Extract description: text between end of date and start of first amount.
@@ -1996,16 +2160,36 @@ FILE CONTENT:
   static String _dayKey(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
+  /// The source-scoped hash that stops a re-import writing a row twice.
+  ///
+  /// [occurrence] is how many identical rows (same date, unsigned amount and
+  /// description) came before this one in the same file. Without it the
+  /// second of two identical bus fares — or a refund, which has the same
+  /// unsigned amount as its charge — was dropped as a duplicate. The first
+  /// occurrence hashes exactly as before, so files imported earlier still
+  /// dedupe.
   String computeHash(
     int sourceId,
     DateTime date,
     int amountCents,
-    String rawDescription,
-  ) {
+    String rawDescription, {
+    int occurrence = 0,
+  }) {
     final input =
-        '$sourceId|${date.toIso8601String()}|$amountCents|$rawDescription';
+        '$sourceId|${date.toIso8601String()}|$amountCents|$rawDescription'
+        '${occurrence == 0 ? '' : '#$occurrence'}';
     return sha256.convert(utf8.encode(input)).toString();
   }
+
+  /// The salt for an imported row's `Transactions.dedupHash`: the source,
+  /// plus the row's [occurrence] among identical signed rows in its file
+  /// (see [computeHash]).
+  @visibleForTesting
+  static String importDedupSalt(int sourceId, int occurrence) =>
+      'source_$sourceId${occurrence == 0 ? '' : '#$occurrence'}';
+
+  static bool _isBitcoinCurrency(String currency) =>
+      currency == 'BTC' || currency == 'SATS';
 
   int _toSmallestUnit(double amount, String currency) {
     switch (currency.toUpperCase()) {
@@ -2408,6 +2592,8 @@ FILE CONTENT:
       'cashback',
       'dividend',
       'interest paid',
+      'credit interest',
+      'interest earned',
       'deposit',
     ],
     'Food & Dining': [
