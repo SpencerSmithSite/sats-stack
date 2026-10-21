@@ -160,6 +160,7 @@ class _CategoryTile extends StatelessWidget {
   void _openEdit(BuildContext context) {
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder:
@@ -249,6 +250,7 @@ class _AddCategoryTile extends StatelessWidget {
         onPressed:
             () => showModalBottomSheet(
               context: context,
+              useRootNavigator: true,
               isScrollControlled: true,
               backgroundColor: Colors.transparent,
               builder:

@@ -62,6 +62,7 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen> {
     final tx = _txns[index];
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder:

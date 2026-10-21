@@ -919,6 +919,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onTap:
                     () => showModalBottomSheet(
                       context: context,
+                      useRootNavigator: true,
                       isScrollControlled: true,
                       backgroundColor: Colors.transparent,
                       builder:

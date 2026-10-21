@@ -96,6 +96,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   void _openAddSheet() {
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder:
@@ -111,6 +112,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   void _openAddWallet() {
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder:
@@ -125,6 +127,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   void _openFilterSheet() {
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder:
@@ -623,6 +626,7 @@ class _TransactionRow extends StatelessWidget {
   void _openEditSheet(BuildContext context, Transaction tx) {
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => TransactionEditSheet.forExisting(tx),
