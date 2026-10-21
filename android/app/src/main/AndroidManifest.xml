@@ -13,10 +13,15 @@
          it must be granted before the capture intent may be used), and
          declaring READ_MEDIA_IMAGES falls under Google Play's photo-permission
          policy, which rejects apps that only pick the odd photo. -->
+    <!-- Backup rules: see res/xml/data_extraction_rules.xml. Without them the
+         database went to Google Drive in plaintext, and the API keys went with
+         it in a form a restored phone could not read. -->
     <application
         android:label="Sats Stack"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules">
         <activity
             android:name=".MainActivity"
             android:exported="true"

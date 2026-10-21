@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Auto Backup rules for Android 8–11; Android 12 and later read
+     data_extraction_rules.xml instead, which explains each exclusion. This
+     format cannot tell cloud backup from device transfer, so both lose the
+     database here — the stricter reading of the two. -->
+<full-backup-content>
+    <exclude domain="root" path="app_flutter/" />
+    <exclude domain="sharedpref" path="FlutterSecureStorage.xml" />
+</full-backup-content>

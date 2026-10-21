@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- What Android may copy off the device, on Android 12 and later. The older
+     format, for Android 8–11, is backup_rules.xml; keep the two in step.
+
+     Cloud backup (Google Drive) gets neither the database nor the API keys:
+     - The database is the user's whole financial record, in plaintext until
+       docs/DATABASE_ENCRYPTION_PLAN.md lands. It used to go to Drive by
+       default, because the manifest set no rules at all. Moving to a new phone
+       is Settings → Data → Export, then Import.
+     - The keys live in flutter_secure_storage's EncryptedSharedPreferences,
+       whose master key is in the Android Keystore and never leaves the device.
+       Restored without it, the file cannot be read, so a restore brought back
+       keys that only produced errors.
+
+     Device-to-device transfer (cable or Wi-Fi, at phone setup) keeps the
+     database but still not the keys, for the same Keystore reason. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" path="app_flutter/" />
+        <exclude domain="sharedpref" path="FlutterSecureStorage.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="FlutterSecureStorage.xml" />
+    </device-transfer>
+</data-extraction-rules>

@@ -120,6 +120,11 @@ keychain. So export has to change, and this is the first decision below.
 
 ### 5. Android backup
 
+**Done separately, 2026-10-20** (see `AUDIT.md`): cloud backup now excludes
+the database and the secure-storage file, and device transfer excludes the
+secure-storage file. When encryption ships, device transfer must exclude the
+database as well — a transferred encrypted file arrives without its key.
+
 The manifest does not set `android:allowBackup` **[verified]**, so Android
 Auto Backup is on by default. That has two consequences, one of which is
 already a problem today:
