@@ -91,8 +91,9 @@ Future<void> _teardown(WidgetTester tester) async {
 }
 
 Future<int> _rowCount(WidgetTester tester) async =>
-    (await tester.runAsync(() => app.db.select(app.db.transactions).get()))!
-        .length;
+    (await tester.runAsync(
+      () => app.db.select(app.db.transactions).get(),
+    ))!.length;
 
 void main() {
   driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
