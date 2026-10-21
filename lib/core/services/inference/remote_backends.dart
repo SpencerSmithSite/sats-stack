@@ -126,7 +126,7 @@ class OllamaBackend implements InferenceBackend {
 
       if (streamedResponse.statusCode != 200) {
         throw InferenceException(
-          'Ollama returned ${streamedResponse.statusCode}.',
+          await _describeFailure('Ollama', streamedResponse),
         );
       }
 
@@ -135,17 +135,18 @@ class OllamaBackend implements InferenceBackend {
           .idleTimeout(_idleGap, displayName)
           .transform(const LineSplitter())) {
         if (line.trim().isEmpty) continue;
-        try {
-          final data = jsonDecode(line) as Map<String, dynamic>;
-          if (data['done'] == true) return;
-          final token =
-              (data['message'] as Map<String, dynamic>?)?['content']
-                  as String? ??
-              '';
-          if (token.isNotEmpty) yield token;
-        } catch (_) {
-          // Malformed JSON line — skip.
-        }
+        final data = _jsonObject(line);
+        // Malformed line — skip.
+        if (data == null) continue;
+        // Ollama reports a failure partway through (the model ran out of
+        // memory, say) as an `error` line. It was skipped like a malformed
+        // one, so the half-answer so far was saved as if it were complete.
+        final error = _errorMessage(data);
+        if (error != null) throw InferenceException('Ollama: $error');
+        if (data['done'] == true) return;
+        final message = data['message'];
+        final token = message is Map ? message['content'] : null;
+        if (token is String && token.isNotEmpty) yield token;
       }
     } finally {
       if (ownedClient) c.close();
@@ -272,7 +273,7 @@ class OpenAiCompatBackend implements InferenceBackend {
 
       if (streamedResponse.statusCode != 200) {
         throw InferenceException(
-          'Server returned ${streamedResponse.statusCode}.',
+          await _describeFailure(displayName, streamedResponse),
         );
       }
 
@@ -291,16 +292,22 @@ class OpenAiCompatBackend implements InferenceBackend {
         if (payload == '[DONE]') return;
         if (payload.isEmpty) continue;
 
-        try {
-          final data = jsonDecode(payload) as Map<String, dynamic>;
-          final choices = data['choices'] as List?;
-          if (choices == null || choices.isEmpty) continue;
-          final delta = choices[0]['delta'] as Map<String, dynamic>?;
-          final token = delta?['content'] as String? ?? '';
-          if (token.isNotEmpty) yield token;
-        } catch (_) {
-          // Malformed SSE frame — skip.
-        }
+        final data = _jsonObject(payload);
+        // Malformed SSE frame — skip.
+        if (data == null) continue;
+        // A failure partway through arrives as an `error` frame, which was
+        // skipped like a malformed one.
+        final error = _errorMessage(data);
+        if (error != null) throw InferenceException('$displayName: $error');
+        // Read defensively: `choices[0]` as a string, or a `delta` that is
+        // not a map, threw a TypeError out of the stream rather than an
+        // InferenceException the chat could explain.
+        final choices = data['choices'];
+        if (choices is! List || choices.isEmpty) continue;
+        final first = choices.first;
+        final delta = first is Map ? first['delta'] : null;
+        final token = delta is Map ? delta['content'] : null;
+        if (token is String && token.isNotEmpty) yield token;
       }
     } finally {
       if (ownedClient) c.close();
@@ -309,4 +316,59 @@ class OpenAiCompatBackend implements InferenceBackend {
 
   @override
   void dispose() {}
+}
+
+/// [text] as a JSON object, or null if it is not one.
+Map<String, dynamic>? _jsonObject(String text) {
+  try {
+    final decoded = jsonDecode(text);
+    return decoded is Map<String, dynamic> ? decoded : null;
+  } on FormatException {
+    return null;
+  }
+}
+
+/// The error a server put in a JSON body: Ollama's `{"error": "…"}`, or the
+/// OpenAI shape `{"error": {"message": "…"}}`.
+String? _errorMessage(Map<String, dynamic> data) {
+  final error = data['error'];
+  if (error is String && error.isNotEmpty) return error;
+  if (error is Map && error['message'] is String) {
+    return error['message'] as String;
+  }
+  return null;
+}
+
+/// What went wrong with a non-200 response, in the server's own words when it
+/// gave any. Only the status code used to be reported, so "model 'llama3'
+/// not found" — the one thing the user needed to read — came out as "Ollama
+/// returned 404."
+Future<String> _describeFailure(
+  String server,
+  http.StreamedResponse response,
+) async {
+  // Never the body of an auth failure: a server may echo part of the key it
+  // rejected, and this message is shown on screen. The hosted backend follows
+  // the same rule.
+  final status = response.statusCode;
+  if (status == 401 || status == 403) {
+    return '$server rejected the API key ($status).';
+  }
+  String? detail;
+  try {
+    final body = await response.stream
+        .transform(utf8.decoder)
+        .join()
+        .timeout(const Duration(seconds: 5));
+    final data = _jsonObject(body);
+    detail = data == null ? null : _errorMessage(data);
+    if (detail == null && body.trim().isNotEmpty && body.length <= 200) {
+      detail = body.trim();
+    }
+  } catch (_) {
+    // The status code alone, then.
+  }
+  return detail == null
+      ? '$server returned ${response.statusCode}.'
+      : '$server returned ${response.statusCode}: $detail';
 }

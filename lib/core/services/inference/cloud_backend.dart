@@ -25,12 +25,14 @@ enum CloudProvider {
     // Sonnet rather than Opus: the questions this app asks are short, the
     // answers are two or three sentences, and the user is paying per token on
     // their own key. Opus is one dropdown away for anyone who wants it.
-    defaultModel: 'claude-sonnet-5',
+    // The fallback is what a user sees when the live list cannot be fetched,
+    // so it is the current generation, not the one before it.
+    defaultModel: 'claude-sonnet-5-5',
     fallbackModels: [
-      'claude-opus-5',
-      'claude-sonnet-5',
-      'claude-haiku-4-5-20251001',
-      'claude-fable-5',
+      'claude-opus-5-5',
+      'claude-sonnet-5-5',
+      'claude-haiku-5-5',
+      'claude-fable-5-1',
     ],
     keyUrl: 'https://console.anthropic.com/settings/keys',
     keyPrefix: 'sk-ant-',
@@ -608,9 +610,11 @@ class CloudBackend implements InferenceBackend {
       // on the chunk stream.
       var buffer = '';
       var truncated = false;
-      await for (final chunk in response.stream
-          .transform(utf8.decoder)
-          .idleTimeout(_idleGap, provider.label)) {
+      await for (final chunk in _endingInNewline(
+        response.stream
+            .transform(utf8.decoder)
+            .idleTimeout(_idleGap, provider.label),
+      )) {
         buffer += chunk;
         while (true) {
           final newline = buffer.indexOf('\n');
@@ -700,4 +704,11 @@ class CloudBackend implements InferenceBackend {
 
   @override
   void dispose() {}
+}
+
+/// [chunks], then a newline: a final frame the server did not end with one
+/// stayed in the buffer below and was dropped — the last words of an answer.
+Stream<String> _endingInNewline(Stream<String> chunks) async* {
+  yield* chunks;
+  yield '\n';
 }
