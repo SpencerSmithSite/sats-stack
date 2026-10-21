@@ -3,6 +3,7 @@ library;
 
 import 'package:flutter/material.dart';
 import '../../../shared/theme/app_colors.dart';
+import 'page_frame.dart';
 
 class ReadyPage extends StatelessWidget {
   const ReadyPage({super.key});
@@ -10,51 +11,47 @@ class ReadyPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 36, vertical: 48),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Spacer(),
-          const Icon(
-            Icons.check_circle_outline,
-            color: AppColors.bitcoinOrange,
-            size: 56,
+    return OnboardingPageFrame(
+      children: [
+        const Spacer(),
+        const Icon(
+          Icons.check_circle_outline,
+          color: AppColors.bitcoinOrange,
+          size: 56,
+        ),
+        const SizedBox(height: 28),
+        Text(
+          "You're ready.",
+          style: theme.textTheme.displaySmall?.copyWith(
+            fontWeight: FontWeight.w800,
+            letterSpacing: -1.5,
           ),
-          const SizedBox(height: 28),
-          Text(
-            "You're ready.",
-            style: theme.textTheme.displaySmall?.copyWith(
-              fontWeight: FontWeight.w800,
-              letterSpacing: -1.5,
-            ),
+        ),
+        const SizedBox(height: 16),
+        Text(
+          'Start by adding a transaction manually, importing a bank CSV, or syncing a Bitcoin wallet via xpub.',
+          style: theme.textTheme.bodyLarge?.copyWith(
+            color: context.textSecondary,
+            height: 1.6,
           ),
-          const SizedBox(height: 16),
-          Text(
-            'Start by adding a transaction manually, importing a bank CSV, or syncing a Bitcoin wallet via xpub.',
-            style: theme.textTheme.bodyLarge?.copyWith(
-              color: context.textSecondary,
-              height: 1.6,
-            ),
-          ),
-          const SizedBox(height: 24),
-          TipRow(
-            icon: Icons.receipt_long_outlined,
-            text: 'Log income and expenses in the Transactions tab.',
-          ),
-          const SizedBox(height: 16),
-          TipRow(
-            icon: Icons.pie_chart_outline,
-            text: 'Set monthly budgets per category to control spending.',
-          ),
-          const SizedBox(height: 16),
-          TipRow(
-            icon: Icons.trending_up_outlined,
-            text: 'Watch your sat stack grow in the Stack tab.',
-          ),
-          const Spacer(flex: 2),
-        ],
-      ),
+        ),
+        const SizedBox(height: 24),
+        TipRow(
+          icon: Icons.receipt_long_outlined,
+          text: 'Log income and expenses in the Transactions tab.',
+        ),
+        const SizedBox(height: 16),
+        TipRow(
+          icon: Icons.pie_chart_outline,
+          text: 'Set monthly budgets per category to control spending.',
+        ),
+        const SizedBox(height: 16),
+        TipRow(
+          icon: Icons.trending_up_outlined,
+          text: 'Watch your sat stack grow in the Stack tab.',
+        ),
+        const Spacer(flex: 2),
+      ],
     );
   }
 }

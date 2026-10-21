@@ -3,6 +3,7 @@ library;
 
 import 'package:flutter/material.dart';
 import '../../../shared/theme/app_colors.dart';
+import 'page_frame.dart';
 
 class WelcomePage extends StatelessWidget {
   const WelcomePage({super.key});
@@ -10,57 +11,50 @@ class WelcomePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 36, vertical: 48),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Spacer(),
-          Container(
-            width: 72,
-            height: 72,
-            decoration: BoxDecoration(
-              color: AppColors.bitcoinOrange.withAlpha(26),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Center(
-              child: Text(
-                '₿',
-                style: TextStyle(
-                  fontSize: 40,
-                  color: context.bitcoinOrangeText,
-                ),
-              ),
+    return OnboardingPageFrame(
+      children: [
+        const Spacer(),
+        Container(
+          width: 72,
+          height: 72,
+          decoration: BoxDecoration(
+            color: AppColors.bitcoinOrange.withAlpha(26),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Center(
+            child: Text(
+              '₿',
+              style: TextStyle(fontSize: 40, color: context.bitcoinOrangeText),
             ),
           ),
-          const SizedBox(height: 28),
-          Text(
-            'Sats Stack',
-            style: theme.textTheme.displaySmall?.copyWith(
-              fontWeight: FontWeight.w800,
-              letterSpacing: -1.5,
-              color: context.bitcoinOrangeText,
-            ),
+        ),
+        const SizedBox(height: 28),
+        Text(
+          'Sats Stack',
+          style: theme.textTheme.displaySmall?.copyWith(
+            fontWeight: FontWeight.w800,
+            letterSpacing: -1.5,
+            color: context.bitcoinOrangeText,
           ),
-          const SizedBox(height: 12),
-          Text(
-            'Your finances.\nYour device.\nYour keys.',
-            style: theme.textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.w600,
-              height: 1.4,
-            ),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          'Your finances.\nYour device.\nYour keys.',
+          style: theme.textTheme.headlineSmall?.copyWith(
+            fontWeight: FontWeight.w600,
+            height: 1.4,
           ),
-          const SizedBox(height: 20),
-          Text(
-            'A Bitcoin-native budget tracker that lives entirely on your device. No cloud. No accounts. No compromises.',
-            style: theme.textTheme.bodyLarge?.copyWith(
-              color: context.textSecondary,
-              height: 1.6,
-            ),
+        ),
+        const SizedBox(height: 20),
+        Text(
+          'A Bitcoin-native budget tracker that lives entirely on your device. No cloud. No accounts. No compromises.',
+          style: theme.textTheme.bodyLarge?.copyWith(
+            color: context.textSecondary,
+            height: 1.6,
           ),
-          const Spacer(flex: 2),
-        ],
-      ),
+        ),
+        const Spacer(flex: 2),
+      ],
     );
   }
 }
@@ -71,50 +65,46 @@ class FeaturesPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 36, vertical: 48),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Spacer(),
-          Text(
-            'Built for\nprivacy.',
-            style: theme.textTheme.displaySmall?.copyWith(
-              fontWeight: FontWeight.w800,
-              letterSpacing: -1.5,
-              height: 1.2,
-            ),
+    return OnboardingPageFrame(
+      children: [
+        const Spacer(),
+        Text(
+          'Built for\nprivacy.',
+          style: theme.textTheme.displaySmall?.copyWith(
+            fontWeight: FontWeight.w800,
+            letterSpacing: -1.5,
+            height: 1.2,
           ),
-          const SizedBox(height: 40),
-          // Both halves of what this used to say were false: the database is
-          // plain SQLite, not encrypted by the app, and a wallet sync sends
-          // its addresses to a block explorer. Say what is true instead — and
-          // keep it true; it is the first privacy claim a user reads.
-          const FeatureRow(
-            icon: Icons.lock_outline,
-            title: 'Your records stay here',
-            body:
-                'Kept in a database on this device — no account, no Sats Stack '
-                'server. Wallet syncs and prices use a public server, or your '
-                'own.',
-          ),
-          const SizedBox(height: 28),
-          const FeatureRow(
-            icon: Icons.wifi_off_outlined,
-            title: 'Fully offline',
-            body:
-                'Add transactions, track budgets, and review your stack — even on a plane.',
-          ),
-          const SizedBox(height: 28),
-          const FeatureRow(
-            icon: Icons.currency_bitcoin,
-            title: 'Think in sats',
-            body:
-                'Every expense is converted to its sats equivalent at the live BTC price.',
-          ),
-          const Spacer(flex: 2),
-        ],
-      ),
+        ),
+        const SizedBox(height: 40),
+        // Both halves of what this used to say were false: the database is
+        // plain SQLite, not encrypted by the app, and a wallet sync sends
+        // its addresses to a block explorer. Say what is true instead — and
+        // keep it true; it is the first privacy claim a user reads.
+        const FeatureRow(
+          icon: Icons.lock_outline,
+          title: 'Your records stay here',
+          body:
+              'Kept in a database on this device — no account, no Sats Stack '
+              'server. Wallet syncs and prices use a public server, or your '
+              'own.',
+        ),
+        const SizedBox(height: 28),
+        const FeatureRow(
+          icon: Icons.wifi_off_outlined,
+          title: 'Fully offline',
+          body:
+              'Add transactions, track budgets, and review your stack — even on a plane.',
+        ),
+        const SizedBox(height: 28),
+        const FeatureRow(
+          icon: Icons.currency_bitcoin,
+          title: 'Think in sats',
+          body:
+              'Every expense is converted to its sats equivalent at the live BTC price.',
+        ),
+        const Spacer(flex: 2),
+      ],
     );
   }
 }
