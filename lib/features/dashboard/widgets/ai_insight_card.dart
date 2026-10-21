@@ -145,8 +145,10 @@ class AiInsightCard extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              'Sends this month\'s totals and category breakdown to '
-              '$offDeviceRecipient.',
+              // What generateMonthlyInsight sends: last month's figures (it
+              // said "this month's"), and the stack, which it did not mention.
+              'Sends last month\'s totals, category breakdown and stack size '
+              'to $offDeviceRecipient.',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
                 height: 1.4,

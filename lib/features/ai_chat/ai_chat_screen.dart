@@ -141,10 +141,11 @@ class _AiChatScreenState extends State<AiChatScreen> {
   Future<String> _buildSystemPrompt() async {
     final now = DateTime.now();
     final data = await app.dashboardService.getDashboard(now);
-    final price = app.btcPriceService.priceNotifier.value ?? 0;
     return app.ollamaService.buildSystemPrompt(
       totalStackSats: data.totalStackSats,
-      btcPrice: price,
+      btcPrice: app.btcPriceService.priceNotifier.value,
+      currency: app.currencyNotifier.value,
+      month: now,
       monthlyIncome: data.monthlyIncomeFiat,
       monthlySpending: data.monthlySpendingFiat,
       monthlySurplus: data.monthlySurplusFiat,
@@ -153,45 +154,28 @@ class _AiChatScreenState extends State<AiChatScreen> {
     );
   }
 
-  /// Builds the request, newest turns first, within the backend's budget.
-  ///
-  /// The whole transcript used to be re-sent every turn with no limit, while
-  /// the budget was applied to the system prompt alone. On Apple Intelligence
-  /// (4,000 characters) or a 0.6B Qwen that overruns the window after a few
-  /// exchanges and the answers quietly degrade; on a hosted provider every
-  /// turn costs more than the last for no benefit.
-  List<Map<String, String>> _buildApiMessages(String userMessage) {
-    final systemPrompt = _systemPrompt;
-    final budget = app.ollamaService.contextBudgetChars;
-
-    var remaining = budget - (systemPrompt?.length ?? 0) - userMessage.length;
-
-    // Walk backwards so the most recent context is what survives, and keep
-    // whole turns: half an exchange reads worse than one fewer.
-    final history = <Map<String, String>>[];
-    for (final m in _messages.reversed) {
-      final cost = m.content.length;
-      if (cost > remaining) break;
-      remaining -= cost;
-      history.insert(0, {
-        'role': m.role == _Role.user ? 'user' : 'assistant',
-        'content': m.content,
-      });
-    }
-
-    return [
-      if (systemPrompt != null) {'role': 'system', 'content': systemPrompt},
-      ...history,
-      {'role': 'user', 'content': userMessage},
-    ];
-  }
-
   Future<void> _send([String? override]) async {
     final text = (override ?? _inputCtrl.text).trim();
     if (text.isEmpty || _isStreaming) return;
 
     _inputCtrl.clear();
     final userMsg = _Msg(role: _Role.user, content: text);
+    // From the history *before* this message is added to it. Built after, the
+    // new message was in the history and was then appended again, so every
+    // question reached the model twice — and a hosted provider billed it
+    // twice.
+    final apiMessages = buildChatRequest(
+      systemPrompt: _systemPrompt,
+      history: [
+        for (final m in _messages)
+          (
+            role: m.role == _Role.user ? 'user' : 'assistant',
+            content: m.content,
+          ),
+      ],
+      userMessage: text,
+      budgetChars: app.ollamaService.contextBudgetChars,
+    );
 
     setState(() {
       _messages = [..._messages, userMsg];
@@ -202,7 +186,6 @@ class _AiChatScreenState extends State<AiChatScreen> {
 
     _scrollToBottom();
 
-    final apiMessages = _buildApiMessages(text);
     final buffer = StringBuffer();
 
     // An owned client and a held subscription, so leaving the screen actually
@@ -1129,4 +1112,40 @@ class _AiSettingsSheetState extends State<_AiSettingsSheet> {
       ),
     );
   }
+}
+
+/// The messages for one chat turn: the system prompt, as much of [history]
+/// as fits [budgetChars] (newest kept), then [userMessage].
+///
+/// The whole transcript used to be re-sent every turn with no limit, while
+/// the budget was applied to the system prompt alone. On Apple Intelligence
+/// (4,000 characters) that overruns the window after a few exchanges and the
+/// answers quietly degrade; on a hosted provider every turn costs more than
+/// the last for no benefit.
+///
+/// [history] must not already contain [userMessage].
+@visibleForTesting
+List<Map<String, String>> buildChatRequest({
+  required String? systemPrompt,
+  required List<({String role, String content})> history,
+  required String userMessage,
+  required int budgetChars,
+}) {
+  var remaining =
+      budgetChars - (systemPrompt?.length ?? 0) - userMessage.length;
+
+  // Walk backwards so the most recent context is what survives.
+  final kept = <Map<String, String>>[];
+  for (final m in history.reversed) {
+    final cost = m.content.length;
+    if (cost > remaining) break;
+    remaining -= cost;
+    kept.insert(0, {'role': m.role, 'content': m.content});
+  }
+
+  return [
+    if (systemPrompt != null) {'role': 'system', 'content': systemPrompt},
+    ...kept,
+    {'role': 'user', 'content': userMessage},
+  ];
 }

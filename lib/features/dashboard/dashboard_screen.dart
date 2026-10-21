@@ -124,27 +124,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
   /// `CloudBackend.describeError` takes care to make readable, was dropped.
   Future<void> _generateInsight({bool userAsked = true}) async {
     if (_isGeneratingInsight) return;
-    final available = await app.ollamaService.isAvailable();
-    if (!mounted) return;
-    if (!available) {
-      if (userAsked) {
-        _showInsightError(
-          '${app.ollamaService.backend.displayName} is not available right '
-          'now. Check it in Settings → Servers.',
-        );
-      }
-      return;
-    }
-
+    // Set before the first await: set after `isAvailable`, a double tap got
+    // two generations in — two paid requests, and the figures sent twice.
     setState(() => _isGeneratingInsight = true);
     try {
+      final available = await app.ollamaService.isAvailable();
+      if (!mounted) return;
+      if (!available) {
+        if (userAsked) {
+          _showInsightError(
+            '${app.ollamaService.backend.displayName} is not available right '
+            'now. Check it in Settings → Servers.',
+          );
+        }
+        return;
+      }
+
+      // The last complete month — which the card says, and the prompt names.
       final now = DateTime.now();
       final lastMonth = DateTime(now.year, now.month - 1);
       final data = await app.dashboardService.getDashboard(lastMonth);
-      final btcPrice = app.btcPriceService.priceNotifier.value ?? 0;
       final insight = await app.ollamaService.generateMonthlyInsight(
         totalStackSats: data.totalStackSats,
-        btcPrice: btcPrice,
+        btcPrice: app.btcPriceService.priceNotifier.value,
+        currency: app.currencyNotifier.value,
+        month: lastMonth,
         monthlyIncome: data.monthlyIncomeFiat,
         monthlySpending: data.monthlySpendingFiat,
         monthlySurplus: data.monthlySurplusFiat,

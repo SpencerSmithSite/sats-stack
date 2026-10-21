@@ -39,6 +39,8 @@ void main() {
   Future<String> generate(OllamaService s) => s.generateMonthlyInsight(
     totalStackSats: 1000000,
     btcPrice: 80000,
+    currency: 'USD',
+    month: DateTime(2026, 3),
     monthlyIncome: 4000,
     monthlySpending: 3000,
     monthlySurplus: 1000,
