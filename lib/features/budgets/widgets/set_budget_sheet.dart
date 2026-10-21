@@ -34,6 +34,7 @@ class _SetBudgetSheetState extends State<SetBudgetSheet> {
 
   List<Category> _categories = [];
   List<Budget> _existingBudgets = [];
+  bool _loaded = false;
   Category? _selectedCategory;
   bool _saving = false;
   String? _error;
@@ -56,8 +57,8 @@ class _SetBudgetSheetState extends State<SetBudgetSheet> {
     setState(() {
       _categories = cats.where((c) => c.name != 'Income').toList();
       _existingBudgets = budgets;
-      _selectedCategory ??=
-          _unbudgetedCategories.firstOrNull ?? _categories.firstOrNull;
+      _loaded = true;
+      _selectedCategory ??= _unbudgetedCategories.firstOrNull;
     });
   }
 
@@ -147,11 +148,23 @@ class _SetBudgetSheetState extends State<SetBudgetSheet> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  _CategoryGrid(
-                    categories: _categories,
-                    selected: _selectedCategory,
-                    onSelect: (c) => setState(() => _selectedCategory = c),
-                  ),
+                  // Only the categories without a budget. Listing them all let
+                  // "add" pick one that had a budget and Save replace it —
+                  // Food's £300 silently became £50.
+                  if (_loaded && _unbudgetedCategories.isEmpty)
+                    Text(
+                      'Every category has a budget. Long-press one to change '
+                      'it.',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: context.textSecondary,
+                      ),
+                    )
+                  else
+                    _CategoryGrid(
+                      categories: _unbudgetedCategories,
+                      selected: _selectedCategory,
+                      onSelect: (c) => setState(() => _selectedCategory = c),
+                    ),
                   const SizedBox(height: 20),
                 ] else ...[
                   _SelectedCategoryRow(category: widget.existing!.category),
@@ -185,7 +198,8 @@ class _SetBudgetSheetState extends State<SetBudgetSheet> {
                 const SizedBox(height: 24),
 
                 FilledButton(
-                  onPressed: _saving ? null : _save,
+                  onPressed:
+                      _saving || _selectedCategory == null ? null : _save,
                   style: FilledButton.styleFrom(
                     minimumSize: const Size(double.infinity, 48),
                   ),
