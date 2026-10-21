@@ -632,20 +632,23 @@ class _TransactionRow extends StatelessWidget {
   void _confirmDelete(BuildContext context) {
     showDialog(
       context: context,
+      // Pop with the dialog's own context: the dialog is on the root
+      // navigator, and `context` is this row's, inside the tab's navigator —
+      // popping that removed the tab's only page and blanked the app.
       builder:
-          (_) => AlertDialog(
+          (ctx) => AlertDialog(
             title: const Text('Delete transaction?'),
             content: Text(
               'Remove "${transaction.description.isEmpty ? 'this transaction' : transaction.description}"?',
             ),
             actions: [
               TextButton(
-                onPressed: () => Navigator.pop(context),
+                onPressed: () => Navigator.pop(ctx),
                 child: const Text('Cancel'),
               ),
               TextButton(
                 onPressed: () {
-                  Navigator.pop(context);
+                  Navigator.pop(ctx);
                   app.transactionService.deleteById(transaction.id);
                 },
                 style: TextButton.styleFrom(foregroundColor: AppColors.danger),
