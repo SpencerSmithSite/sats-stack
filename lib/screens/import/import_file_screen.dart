@@ -581,6 +581,7 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
   Future<ImageSource?> _showImageSourceSheet() async {
     return showModalBottomSheet<ImageSource>(
       context: context,
+      useRootNavigator: true,
       builder:
           (ctx) => SafeArea(
             child: Column(

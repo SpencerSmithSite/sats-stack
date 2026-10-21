@@ -87,6 +87,7 @@ class _BudgetsScreenState extends State<BudgetsScreen> {
   void _openSetBudget({BudgetProgress? existing}) {
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder:

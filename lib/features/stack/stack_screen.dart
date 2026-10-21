@@ -153,6 +153,7 @@ class _StackScreenState extends State<StackScreen> {
   void _openSetGoal(BuildContext context) {
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => SetGoalSheet(current: _stackGoalSats, onSave: _saveGoal),
