@@ -255,18 +255,21 @@ void main() {
     );
 
     test(
-      'counts what reached the ledger, not what reached the source',
+      'two sources are two accounts, even when their rows are identical',
       () async {
         final first = await save(await newSource('USD'));
-        // The same statement, imported again under a second source.
+        // The same rows, imported under a second source.
         final second = await save(await newSource('USD'));
 
         expect(first.imported, 2);
-        // Was 2: the rows were new to the second source, but the ledger —
-        // deduplicated per wallet — gained nothing.
-        expect(second.imported, 0);
-        expect(second.alreadyInLedger, 2);
-        expect(await db.select(db.transactions).get(), hasLength(2));
+        // The ledger used to be deduplicated per wallet, and every source
+        // writes to the one manual wallet, so this was 0: the same charge on
+        // the same day in two real accounts kept only one of them, silently.
+        // A statement imported twice by mistake is now two visible copies,
+        // which Delete source undoes; a dropped row could not be seen at all.
+        expect(second.imported, 2);
+        expect(second.alreadyInLedger, 0);
+        expect(await db.select(db.transactions).get(), hasLength(4));
       },
     );
 

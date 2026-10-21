@@ -15,6 +15,10 @@ class InstitutionProfile {
     this.skipHeaderRow = true,
     this.signedAmount = false,
     this.positional = false,
+    this.amountCurrency,
+    this.currencyHeader,
+    this.typeHeader,
+    this.creditTypes = const {},
   });
 
   final String name;
@@ -41,6 +45,23 @@ class InstitutionProfile {
 
   /// True → do not rely on header names to find columns; use fixed indices.
   final bool positional;
+
+  /// The currency the amount column is in, when the layout fixes it — Swan's
+  /// "Amount USD". Null when it is the account's own currency.
+  ///
+  /// The exchange layouts read a fiat column. Stamping those rows with the
+  /// account's currency booked a $500 purchase into a BTC account as 500 BTC.
+  final String? amountCurrency;
+
+  /// A column naming each row's currency, for layouts that mix them
+  /// (lowercased). Read before [amountCurrency].
+  final String? currencyHeader;
+
+  /// A column naming the kind of transaction (lowercased), and the kinds in
+  /// it that are money in. With an unsigned amount column this is the only
+  /// way to tell a sale from a purchase.
+  final String? typeHeader;
+  final Set<String> creditTypes;
 }
 
 abstract final class InstitutionProfiles {
@@ -62,7 +83,8 @@ abstract final class InstitutionProfiles {
     signedAmount: true,
   );
 
-  // Wells Fargo exports: "Date","Amount","*","*","Description" — positional, no real headers
+  // Wells Fargo exports: "Date","Amount","*","","Description" — positional,
+  // and with no header line at all, so row 0 is the first transaction.
   static const _wellsFargo = InstitutionProfile(
     name: 'Wells Fargo',
     requiredHeaders: {'*'},
@@ -71,6 +93,7 @@ abstract final class InstitutionProfiles {
     descriptionColumn: 4,
     signedAmount: true,
     positional: true,
+    skipHeaderRow: false,
   );
 
   static const _capitalOne = InstitutionProfile(
@@ -92,8 +115,21 @@ abstract final class InstitutionProfiles {
     },
     dateHeader: 'timestamp',
     descriptionHeader: 'notes',
+    // In the "Spot Price Currency" of the row, not in the asset.
     amountHeader: 'total (inclusive of fees and/or spread)',
+    currencyHeader: 'spot price currency',
     signedAmount: false,
+    typeHeader: 'transaction type',
+    creditTypes: {
+      'sell',
+      'advanced trade sell',
+      'receive',
+      'deposit',
+      'rewards income',
+      'staking income',
+      'learning reward',
+      'inflation reward',
+    },
   );
 
   static const _strike = InstitutionProfile(
@@ -101,8 +137,12 @@ abstract final class InstitutionProfiles {
     requiredHeaders: {'date', 'type', 'asset', 'amount', 'fee', 'total'},
     dateHeader: 'date',
     descriptionHeader: 'type',
+    // Denominated in the row's asset.
     amountHeader: 'total',
+    currencyHeader: 'asset',
     signedAmount: false,
+    typeHeader: 'type',
+    creditTypes: {'deposit', 'sell', 'receive'},
   );
 
   static const _swan = InstitutionProfile(
@@ -111,6 +151,7 @@ abstract final class InstitutionProfiles {
     dateHeader: 'date',
     descriptionHeader: 'type',
     amountHeader: 'amount usd',
+    amountCurrency: 'USD',
     signedAmount: false,
   );
 
@@ -130,8 +171,10 @@ abstract final class InstitutionProfiles {
     final headerSet = headers.toSet();
     for (final profile in all) {
       if (profile.positional) {
-        // Wells Fargo: look for '*' in columns 2 and 3
-        if (headers.length >= 5 && headers[2] == '*' && headers[3] == '*') {
+        // Wells Fargo: five columns with '*' in the third. The fourth is the
+        // check number — empty on almost every row, which requiring '*' there
+        // too meant a real export never matched.
+        if (headers.length == 5 && headers[2] == '*') {
           return profile;
         }
       } else {
