@@ -60,10 +60,11 @@ History lives elsewhere and is not duplicated into this file:
 
 ### 11. Wire up the Bitcoin data-source picker
 
-`ElectrumService`, `BitcoinNodeService`, `BitcoinDataSource` and
-`ManageWalletsSheet` all compile, are unit-tested where they can be
-(`scripthash_test.dart`), and are referenced by nothing. They are the only dead
-code in the repo, and they exist for this feature:
+`ElectrumService`, `BitcoinNodeService` and `BitcoinDataSource` compile and
+are referenced by nothing; they exist for this feature. (`ManageWalletsSheet`
+used to be listed here too, but it is the app's only re-sync UI and should be
+wired up now — see item 15. `scripthash_test.dart` does not test
+`ElectrumService`: it tests a helper defined inside itself.)
 
 - Settings → Servers gains a picker: Mempool/Esplora (today's only path), the
   user's own Electrum server, or Bitcoin Core RPC.
@@ -87,7 +88,7 @@ built as described.** Skipping addresses below a high-water mark would miss new
 payments to an address that was already used, and skipping the gap window would
 miss an address funded since the last scan — so nothing in the range is
 actually safe to skip. Reducing the request count needs a server that can
-answer about many addresses at once, which is the Electrum work in item 1
+answer about many addresses at once, which is the Electrum work in item 11
 (`blockchain.scripthash.subscribe`), not a cursor.
 
 ### 13. Close the named test gaps
@@ -111,6 +112,138 @@ the file split. Its bulk is one state class holding every controller and every
 connection test, so per-section files mean handing all of it back in as
 parameters and callbacks. That is a design change with real behavioural risk,
 worth doing on purpose rather than as a move.
+
+### 15. Third review pass, 2026-10-21 — still open
+
+Fixed items from this pass are in `AUDIT.md` ("Third pass"), in PRs #22–#28.
+Everything below was checked against the code and is still open. Roughly in
+the order to do it; the first group can lose or misstate the user's data.
+
+**Data and money**
+- **Recurring series split on edit.** The series key includes the
+  description and amount, so editing an instance (or the anchor) starts a new
+  series and the old one regenerates — duplicate rows; renaming the anchor
+  recreates nearly every past instance. Needs a stable series id. Related:
+  there is no way to stop a series (deleting all but the anchor regenerates
+  them), and each instance copies the anchor's `amountSats` rather than
+  pricing its own date.
+- **xpub wallets cannot be re-synced or removed.** `ManageWalletsSheet` is
+  the only re-sync UI and nothing opens it, so a wallet is never refreshed
+  after it is added; re-adding the xpub doubles the stack, and a failed first
+  sync leaves an empty wallet (it is created before the sync). Item 11 lists
+  the sheet as dead code; it should be wired up first, on its own.
+- **Budgets have no currency**: switching currency reinterprets every budget
+  (and can fire an overspend notification).
+- **Notification dedupe is per session**: a new month never alerts again
+  within a session, every cold start re-fires, and the stack-goal
+  notification fires on each launch.
+- **A failed historical price is cached as 0 forever** (xpub sync), and a
+  custom plain-Esplora server gives no prices at all, with no warning.
+- **xpub key handling**: an `xpub`-prefixed BIP84/49 key is scanned as
+  legacy; testnet keys are accepted, scanned on mainnet, and priced as real
+  BTC.
+- **The dashboard's "unconverted" count spans all history**, not the month;
+  the spending breakdown still rounds per figure (£12.50 shows as £13).
+- **Product decision:** should fiat income/spending include Bitcoin
+  movements? Today an xpub self-transfer counts as both.
+
+**Import flow**
+- A cancelled import can resume and upload, and a new import clears the old
+  one's cancel flag (state on the singleton; needs a per-import token).
+  Leaving the import screen does not cancel.
+- The column mapper reads headers from row 0 rather than the detected header
+  row, and its dates overflow (25/12/2025 as MM/DD becomes 2027) instead of
+  being rejected; DD/MM only accepts `/`.
+- On-device AI is never ready for import (no selected model); a PDF gets no
+  heuristic fallback when the AI fails; AI input is cut at 100k characters
+  without saying so; the saved column mapping is written before parsing and
+  cannot be cleared; learned category mappings key on the edited
+  description; renaming a system category breaks keyword categorisation.
+- Historical prices are fetched one per second, serially, with no progress.
+- Smaller: mapper back navigation, "Other…" currency, a no-op "Try again",
+  ISO codes and U+202F in amounts, trusting the model's per-row currency.
+
+**AI**
+- Markdown is shown raw in the chat.
+- Live model lists are unfiltered (embeddings, TTS…), and the dropdown can
+  show a model other than the one in use.
+- Gemini reads only `parts.first`; refusals and safety stops are saved as
+  complete answers; xAI's 400 for a bad key gets a generic message.
+- Chat transcripts are written to `ai_conversations` and never read — every
+  prompt and answer accumulates in the exported database for no feature.
+  Stop writing them or build the history screen.
+- `KeychainAccessibility.first_unlock` is justified by background work that
+  does not exist; `first_unlock_this_device` is the safer class (see also the
+  encryption plan's 2026-10-21 notes).
+- LAN hosts count as "nothing leaves"; plain `http` to a remote host gets no
+  warning.
+
+**UI**
+- `assets/fonts/RobotoMono-*.ttf` are GitHub HTML pages, not fonts (since
+  the initial commit): every monospaced figure falls back to the system font,
+  and ~600 KB of HTML ships in the bundle. Needs the real files (Apache 2.0);
+  then declare the Medium face with `weight: 500`.
+- Remaining overflows at large text: the transaction row's category line, the
+  hero's fiat row, the budget card's amounts, `StackGoalTile`, Settings' button
+  rows.
+- Remaining contrast: the budget card's raw orange sats figure and green
+  "left" text (after #26), selected chips' labels in the raw category colour.
+- Analytics ignores user category colours; `CategoryPalette` seeds disagree
+  with the database seed (four system categories are the same grey).
+- The DCA simulator ignores typing (no listener) and its scenarios rank
+  backwards (valued at today's price); the stack goal's monthly average skips
+  idle months, so the projected date is optimistic; the live price is never
+  refreshed while the app is open.
+- The hero's "Import a Bitcoin wallet" pill looks tappable and is not; a
+  dead gap between "Add notes" and "Repeat"; copy still says "xpub address"
+  and "bank CSV" (PDF and photo exist); the 33 px icon-grid targets; icon
+  buttons without tooltips; error snackbars behind sheets; a stream built in
+  `CategoriesSheet.build`; a month change briefly shows the previous month.
+- The splash adds ~2.5 s to every cold start, ignores reduced motion, and its
+  `initFuture` is never passed.
+
+**Native, build, CI**
+- CI builds debug only, where the debug manifest declares INTERNET whatever
+  `src/main` says — so it cannot catch what its comment says it catches. Add a
+  release-variant manifest check (and R8).
+- `ndkVersion` is pinned to r27 (a leftover; Flutter's default is 28.2), and
+  CI downloads it every run.
+- No Android 12+ splash config (white flash); notifications use the
+  full-colour launcher icon; no `NSLocalNetworkUsageDescription` for a LAN
+  Ollama; Gemini Nano download progress is always indeterminate though the API
+  gives a total; a transient AICore error hides Nano for the session.
+- The iOS icon set mixes legacy and universal entries (one with a bogus
+  `luminosity: light`); the launch image is iPhone-only and its 1x is the
+  wrong size, and `flutter_native_splash` would overwrite it.
+- `assets/icons/` is bundled but never loaded; `file_picker` 10 pulls in
+  DKCamera, CoreLocation and MediaPlayer.
+- Dead native config: the macOS Podfile's sqlite3 block, the iOS
+  `use_modular_headers!` rationale, a mangled
+  `ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS`,
+  `enableJetifier`, legacy mipmaps, Windows/Linux template identity.
+- CI hygiene: unpinned Xcode, Node 20 actions, no Gradle/Pods cache, no
+  top-level `permissions:`, no check that generated drift code is current.
+
+**Tests that cannot fail, and dead code**
+- `month_boundary_test`'s aggregate group (see AUDIT, seconds); the DST test
+  passes trivially in CI's UTC (set `TZ`); the unknown-xpub-prefix test fails
+  on its checksum, not the version; `scripthash_test` tests itself;
+  `database_restore_test`'s failed-copy case never tears the target;
+  `ai_enabled_test`'s seed case is always true on desktop; the privacy
+  invariant cannot catch a forgotten hosted provider (assert the private set
+  exactly); `tab_state_test` does not use the app's router.
+- `auto_category_test` makes real network calls — add a
+  `flutter_test_config.dart` that refuses non-loopback HTTP.
+- Untested: the xpub money maths beyond one receive, the keychain migration,
+  export/import, budget thresholds, the DCA simulator.
+- Dead: `TransactionService.getAll`, `WalletService.getAll/watchAll`,
+  `BudgetService.watchAll`, `BtcPriceService.getCachedPrice`,
+  `ImportService.listSources/getTransactionsForSource`, the
+  `*Connected` getters, `GeminiNanoState.needsDownload`,
+  `CloudProvider.fromId`, `AppConstants.appName/coinGeckoPriceUrl/defaultCurrency`,
+  `ImportTier.pdfExtracted`, `ImportFileType.unknown`, an empty
+  `widget_test.dart`. `clearAllApiKeys` does not delete the RPC password
+  entry item 11 will use.
 
 ---
 
@@ -140,9 +273,8 @@ worth doing on purpose rather than as a move.
 
 ## Known broken / unfinished
 
-Nothing known to be broken. The open decisions are in item 10; the only
-*dead* code is the Bitcoin data-source work in item 11, which is waiting on a
-screen rather than failing.
+See item 15 for what the 2026-10-21 pass found still open, starting with the
+data-loss items. The open decisions are in item 10.
 
 ## Done, for reference
 

@@ -12,8 +12,9 @@ so none of it has to be re-investigated.
 
 ## What is left
 
-Nothing from this audit is open. The three P2 items that were still listed here
-on 2026-10-18 — streaming idle timeouts, the on-device channel collision, and
+Nothing from the 2026-10-17 audit is open. The third pass (2026-10-21, at the
+end of this file) left items open; they are in `TODO.md` item 15. The three P2
+items that were still listed here on 2026-10-18 — streaming idle timeouts, the on-device channel collision, and
 the per-navigation database read in the router redirect — are fixed below.
 
 Forward-looking work lives in **[`TODO.md`](TODO.md)**, which is the single
@@ -22,7 +23,8 @@ because they are features and judgement calls rather than defects:
 
 - Wiring up the Bitcoin data-source picker, which is what the dead
   `ElectrumService` / `BitcoinNodeService` code exists for.
-- Getting xpub derivation off the UI isolate and giving the scan a cursor.
+- Reducing the xpub scan's request count. (Derivation is off the UI isolate
+  now; the scan cursor once proposed here is not safe — see TODO.md.)
 - Decomposing `settings_screen.dart`, which needs a design change rather than
   the file move the other two screens got.
 - The remaining test gaps, and the fact that `CLAUDE.md` is gitignored so its
@@ -1080,7 +1082,109 @@ with a backup transport, and the rules are declarative.
 The suite went from 102 tests to 209 over this work. Month boundaries, category
 renames, the AI-tab rule, the migrations, the categoriser, the price map, the
 dedup hash's wallet scoping, the formatters and the stream guards are all
-covered. What is still missing is listed in [`TODO.md`](TODO.md) item 3.
+covered. What is still missing is listed in [`TODO.md`](TODO.md) item 13.
+
+---
+
+## Third pass — 2026-10-21
+
+Seven parallel reviews (import, data layer, Bitcoin, AI, UI, native/CI/docs,
+tests and dead code), a live run on the iOS simulator, and a check of each
+finding against the code before it was fixed. About 180 findings; the ones
+below are fixed, each with a test that fails on the old code unless noted.
+What is still open is in [`TODO.md`](TODO.md) item 15.
+
+**Status:** these landed as PRs #22–#28, each cut from `main`. Until they
+merge, `main` does not have them.
+
+### Screens that broke outright — #22
+- Both ways of deleting a transaction were broken: the confirmation dialogs
+  popped with the row's or the sheet's context, which sits in the tab's
+  navigator while the dialog is on the root one. Long-press → Delete popped
+  the tab's only page (a blank app in release); the edit sheet's Delete closed
+  the sheet and deleted nothing.
+- The Bitcoin server onboarding page rendered blank on every device: Spacers
+  in a scroll view throw in layout. The other text pages overflowed rather than
+  scrolling on a small phone or at large text. All four share
+  `OnboardingPageFrame` now.
+- Bottom sheets opened inside the tab, so the tab bar stayed live behind them.
+  They open on the root navigator; the budget options sheet, which would then
+  have popped the Budgets tab, pops itself.
+- Settings' server test hung forever on a URL with no scheme (`ArgumentError`
+  is not an `Exception`).
+
+### Import money — #23
+- Swan, Coinbase and Strike profiles booked a fiat column in the account's
+  currency: $500 into a BTC account was 500 BTC. Profiles now say what their
+  amount column is in.
+- A non-display-currency account's sats used the display currency's price.
+- Amex-style cards (charges positive) became all income; `CR`-marked UK
+  statements all spending; a PDF with a running balance read every salary as
+  spending, and a "CREDIT INTEREST" line flipped the rest of it.
+- A same-day refund, or a second identical row, was dropped as a duplicate;
+  the same charge in two accounts kept one row. Hashes now carry the row's
+  occurrence in the file and are scoped to the source, not the one shared
+  wallet. **Behaviour change:** the same statement imported under two sources
+  is now two visible copies rather than one.
+- The Wells Fargo profile never matched a real export, and skipped its first
+  row.
+
+### AI: what it is sent, and the disclosures — #24
+- The prompt hardcoded `$`/USD, rounded every figure, sent a missing price as
+  `$0` and named no month: a GBP user's £12.50 came back as "-$13".
+- Every chat question was sent twice.
+- Import consent for Ollama, LM Studio and Maple carried over to a different
+  server; the Dashboard insight card's recipient went stale after a provider
+  switch; Settings kept saying "nothing leaves" after a public URL was saved;
+  onboarding and the chat sheet judged self-hosted privacy by provider, not
+  URL; the chat sheet offered an "Apple Intelligence URL".
+
+### Data that could be lost or locked — #25
+- The schema upgrade had no transaction: killed partway through v8, the
+  database could never be opened again ("index already exists").
+- An xpub row's hash came from a local time with no offset, so a timezone
+  change made the next sync delete and re-add every row, losing each category
+  and note. Hashes are UTC now, and rows under an older hash are re-keyed in
+  place.
+
+### UI that showed or saved the wrong thing — #26
+- Budgets rounded each figure on its own ("£13 spent, £88 remaining").
+- A decimal comma was dropped or read as grouping ("4,50" → 450).
+- "Add budget" could replace an existing one; delete did not confirm.
+- The System theme came back as Dark; an unpriced Bitcoin send showed as a
+  green "+".
+- Re-running onboarding wrote defaults over the real settings — including
+  switching a self-hosted Esplora server back to mempool.space; Reset left
+  most in-memory state behind; "Show BTC price: off" promised no price
+  requests, which was never true.
+
+### AI setup and errors — #27
+- A self-hosted server could never pass its first connection test: no model
+  meant "unavailable", and models were only listed once available.
+- Server errors before and during an answer were dropped or reduced to a
+  status code; a half-answer was saved as complete; the offline screen gave
+  server advice to every backend. A hosted answer lost its last frame without
+  a trailing newline.
+
+### Light mode — #28
+- White on Bitcoin orange is 2.4:1, on every filled button, the FABs and the
+  hero card; text buttons were 2.3:1; the status bar was white on light;
+  several accents were 1.5–2.1:1 as small text.
+
+### Claims in this file that were wrong
+
+- **"The last 999 ms of the month fall into no month."** Drift stores
+  `DateTime` as whole seconds (there is no `build.yaml`), so a saved row never
+  had sub-second precision; the half-open `DateRange` is still right, but the
+  `month_boundary_test` aggregate group cannot fail against the old code.
+- **"One palette"** — Analytics still ignores user colours, and its seeded
+  colours disagree with the database seed.
+- **"Streams are built once"** — `CategoriesSheet` still builds one in
+  `build()`.
+- **48 px tap targets** — the category icon grid's cells are 33 px.
+- **"The only dead code is item 11's"**, and **`scripthash_test` covers
+  `ElectrumService`** — it tests a helper defined inside itself.
+- **The Wells Fargo `skipHeaderRow` fix** was never applied to the profile.
 
 ---
 
