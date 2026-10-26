@@ -354,6 +354,8 @@ class _AiChatScreenState extends State<AiChatScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        // Left-aligned like every other tab; iOS centres by default.
+        centerTitle: false,
         title:
             _checking
                 ? const Text('AI Analyst')
@@ -792,7 +794,7 @@ class _SendButton extends StatelessWidget {
             enabled
                 ? const Icon(
                   Icons.arrow_upward_rounded,
-                  color: Colors.white,
+                  color: AppColors.onBitcoinOrange,
                   size: 20,
                 )
                 : const SizedBox(
@@ -802,7 +804,7 @@ class _SendButton extends StatelessWidget {
                     padding: EdgeInsets.all(10),
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      color: Colors.white,
+                      color: AppColors.onBitcoinOrange,
                     ),
                   ),
                 ),
@@ -1117,7 +1119,7 @@ class _AiSettingsSheetState extends State<_AiSettingsSheet> {
                             width: 18,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              color: Colors.white,
+                              color: AppColors.onBitcoinOrange,
                             ),
                           )
                           : const Text('Save & Test Connection'),

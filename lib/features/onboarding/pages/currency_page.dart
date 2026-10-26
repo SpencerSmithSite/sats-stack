@@ -96,7 +96,7 @@ class CurrencyPage extends StatelessWidget {
                               style: theme.textTheme.titleMedium?.copyWith(
                                 color:
                                     isSelected
-                                        ? AppColors.bitcoinOrange
+                                        ? context.bitcoinOrangeText
                                         : context.textSecondary,
                                 fontWeight: FontWeight.w700,
                               ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'app_colors.dart';
 
 abstract final class AppTheme {
@@ -7,11 +8,13 @@ abstract final class AppTheme {
 
   static ThemeData _build(Brightness brightness) {
     final isDark = brightness == Brightness.dark;
+    final orangeText =
+        isDark ? AppColors.bitcoinOrange : AppColors.bitcoinOrangeOnLight;
 
     final colorScheme = ColorScheme(
       brightness: brightness,
       primary: AppColors.bitcoinOrange,
-      onPrimary: Colors.white,
+      onPrimary: AppColors.onBitcoinOrange,
       primaryContainer:
           isDark ? const Color(0xFF3D2600) : const Color(0xFFFFE0B2),
       onPrimaryContainer:
@@ -78,8 +81,24 @@ abstract final class AppTheme {
         }),
       ),
 
+      // Text buttons and outlined buttons put their label in the primary
+      // colour, which as text on a light surface is 2.3:1 — "Back" in
+      // onboarding, "Test connection" and "Check again" in Settings. Their
+      // label is text, so it takes the legible orange; fills keep the brand.
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(foregroundColor: orangeText),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(foregroundColor: orangeText),
+      ),
+
       appBarTheme: AppBarTheme(
         backgroundColor: Colors.transparent,
+        // Said outright: with a transparent bar Flutter cannot work out the
+        // brightness behind it, and picked light icons — a white clock and
+        // battery on the light background of every tab.
+        systemOverlayStyle:
+            isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
         elevation: 0,
         scrolledUnderElevation: 0,
         titleTextStyle: TextStyle(

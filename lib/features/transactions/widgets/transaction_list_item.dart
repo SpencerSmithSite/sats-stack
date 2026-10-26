@@ -119,7 +119,8 @@ class TransactionListItem extends StatelessWidget {
                       color:
                           isExpense
                               ? theme.colorScheme.onSurface
-                              : AppColors.success,
+                              // 3.4:1 as raw green on white.
+                              : context.legibleAccent(AppColors.success),
                     ),
                   ),
                   if (satsDisplay != null)

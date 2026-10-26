@@ -41,6 +41,13 @@ abstract final class AppColors {
   /// small text needs this. Read it through `context.bitcoinOrangeText`.
   static const bitcoinOrangeOnLight = Color(0xFF9A5600);
 
+  /// Text and icons on a Bitcoin-orange fill: buttons, the FABs, the hero.
+  ///
+  /// White on #F7931A is 2.4:1 — below even the 3:1 that large text needs —
+  /// and it was on every primary button and the dashboard's headline figure.
+  /// This near-black is 8.1:1.
+  static const onBitcoinOrange = Color(0xFF1A1A1A);
+
   // Borders
   static const borderDark = Color(0x80333333);
   static const borderLight = Color(0x80CCCCCC);

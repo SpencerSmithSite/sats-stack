@@ -509,7 +509,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                               width: 18,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
-                                color: Colors.white,
+                                color: AppColors.onBitcoinOrange,
                               ),
                             )
                             : const Text('Save Transaction'),

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+
+import '../../../shared/theme/app_colors.dart';
 import '../../../shared/widgets/tappable.dart';
 
 /// Shows the latest AI insight if available, otherwise a static Bitcoiner tip.
@@ -63,6 +65,9 @@ class AiInsightCard extends StatelessWidget {
     final isDark = theme.brightness == Brightness.dark;
     final bgColor = accent.withValues(alpha: isDark ? 0.12 : 0.08);
     final borderColor = accent.withValues(alpha: isDark ? 0.35 : 0.20);
+    // The accent as text: 2.06:1 on this card's tint in light mode, which the
+    // other banners' legibleAccent pass had missed here.
+    final accentText = context.legibleAccent(accent);
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -86,7 +91,7 @@ class AiInsightCard extends StatelessWidget {
               Text(
                 aiEnabled ? 'AI Insight' : 'Tip',
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: accent,
+                  color: accentText,
                   fontWeight: FontWeight.w600,
                   letterSpacing: 0.3,
                 ),
@@ -115,8 +120,10 @@ class AiInsightCard extends StatelessWidget {
           isGenerating && !_hasInsight
               ? Text(
                 'Generating insight…',
+                // 1.53:1 as 60% of the accent; the secondary text colour reads
+                // as "in progress" just as well.
                 style: TextStyle(
-                  color: accent.withValues(alpha: 0.6),
+                  color: theme.colorScheme.onSurfaceVariant,
                   fontSize: 14,
                   fontStyle: FontStyle.italic,
                 ),
@@ -137,7 +144,7 @@ class AiInsightCard extends StatelessWidget {
                 icon: const Icon(Icons.auto_awesome, size: 15),
                 label: const Text('Generate an insight'),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: accent,
+                  foregroundColor: accentText,
                   side: BorderSide(color: accent.withValues(alpha: 0.5)),
                   visualDensity: VisualDensity.compact,
                 ),
@@ -160,7 +167,7 @@ class AiInsightCard extends StatelessWidget {
               child: Text(
                 'Ask the AI analyst →',
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: accent,
+                  color: accentText,
                   fontWeight: FontWeight.w600,
                 ),
               ),

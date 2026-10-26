@@ -579,7 +579,7 @@ class _YtdCard extends StatelessWidget {
                 currency,
                 decimalDigits: 0,
               ),
-              color: AppColors.success,
+              color: context.legibleAccent(AppColors.success),
             ),
             const _Divider(),
             _YtdStat(
@@ -589,14 +589,16 @@ class _YtdCard extends StatelessWidget {
                 currency,
                 decimalDigits: 0,
               ),
-              color: AppColors.danger,
+              color: context.legibleAccent(AppColors.danger),
             ),
             const _Divider(),
             _YtdStat(
               label: 'Surplus',
               value:
                   '${surplusPositive ? '+' : ''}${CurrencyUtils.format(data.ytdSurplus, currency, decimalDigits: 0)}',
-              color: surplusPositive ? AppColors.success : AppColors.danger,
+              color: context.legibleAccent(
+                surplusPositive ? AppColors.success : AppColors.danger,
+              ),
             ),
           ],
         ),

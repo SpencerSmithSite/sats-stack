@@ -199,4 +199,53 @@ void main() {
       });
     });
   });
+
+  group('on and around Bitcoin orange', () {
+    for (final (name, theme) in [
+      ('dark', AppTheme.dark()),
+      ('light', AppTheme.light()),
+    ]) {
+      test('$name: a filled button\'s label is legible', () {
+        // White was 2.4:1, on every primary button and the FABs.
+        final cs = theme.colorScheme;
+        expect(contrast(cs.onPrimary, cs.primary), greaterThanOrEqualTo(aa));
+      });
+
+      test('$name: a text button\'s label is legible', () {
+        final style = theme.textButtonTheme.style!;
+        final fg = style.foregroundColor!.resolve({})!;
+        expect(
+          contrast(fg, theme.colorScheme.surface),
+          greaterThanOrEqualTo(aa),
+        );
+        expect(
+          contrast(fg, theme.scaffoldBackgroundColor),
+          greaterThanOrEqualTo(aa),
+        );
+        final outlined = theme.outlinedButtonTheme.style!;
+        expect(outlined.foregroundColor!.resolve({}), fg);
+      });
+    }
+
+    test('the hero card\'s figures are legible on its gradient', () {
+      // White on the hero's orange gradient was 2.4–2.7:1.
+      for (final stop in const [Color(0xFFE8840F), AppColors.bitcoinOrange]) {
+        expect(
+          contrast(AppColors.onBitcoinOrange, stop),
+          greaterThanOrEqualTo(aa),
+        );
+      }
+    });
+  });
+
+  test('status bar icons are dark on the light theme', () {
+    expect(
+      AppTheme.light().appBarTheme.systemOverlayStyle?.statusBarIconBrightness,
+      Brightness.dark,
+    );
+    expect(
+      AppTheme.dark().appBarTheme.systemOverlayStyle?.statusBarIconBrightness,
+      Brightness.light,
+    );
+  });
 }

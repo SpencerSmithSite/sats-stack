@@ -141,7 +141,7 @@ class _BudgetsScreenState extends State<BudgetsScreen> {
       floatingActionButton: FloatingActionButton(
         onPressed: () => _openSetBudget(),
         backgroundColor: AppColors.bitcoinOrange,
-        foregroundColor: Colors.white,
+        foregroundColor: AppColors.onBitcoinOrange,
         tooltip: 'Add budget',
         child: const Icon(Icons.add),
       ),

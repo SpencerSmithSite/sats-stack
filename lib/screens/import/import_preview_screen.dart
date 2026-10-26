@@ -329,7 +329,7 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen> {
                                     height: 16,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2,
-                                      color: Colors.white,
+                                      color: AppColors.onBitcoinOrange,
                                     ),
                                   )
                                   : const Icon(Icons.download_done),
