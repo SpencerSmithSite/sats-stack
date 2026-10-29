@@ -302,11 +302,16 @@ class ImportService {
             AppConstants.aiImportConsentKey(ollama.activeProvider.key),
           ),
         )).getSingleOrNull();
-    return row?.value == 'true';
+    final scope = ollama.activeConsentScope;
+    // 'true' is how a consent was stored before it named its server. It still
+    // stands for a hosted provider, whose endpoint cannot change; for one
+    // whose URL is the user's, it is asked again.
+    return row?.value == scope || (row?.value == 'true' && scope == 'hosted');
   }
 
-  /// Records the user's answer for the active provider, so they are asked once
-  /// rather than on every import.
+  /// Records the user's answer for the active provider — and, for one whose
+  /// server the user chose, for that server — so they are asked once rather
+  /// than on every import.
   Future<void> setOffDeviceImportAllowed(bool allowed) async {
     if (!ollama.sendsDataOffDevice) return;
     await db
@@ -314,7 +319,7 @@ class ImportService {
         .insertOnConflictUpdate(
           AppSettingsCompanion.insert(
             key: AppConstants.aiImportConsentKey(ollama.activeProvider.key),
-            value: allowed.toString(),
+            value: allowed ? ollama.activeConsentScope : 'false',
           ),
         );
   }
@@ -330,7 +335,7 @@ class ImportService {
           ..where((t) => t.key.isIn(_consentKeys.keys))).get();
     return [
       for (final r in rows)
-        if (r.value == 'true') _consentKeys[r.key]!,
+        if (r.value.isNotEmpty && r.value != 'false') _consentKeys[r.key]!,
     ]..sort((a, b) => a.index.compareTo(b.index));
   }
 

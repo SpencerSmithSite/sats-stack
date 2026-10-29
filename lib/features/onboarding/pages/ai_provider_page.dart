@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/models/ai_backend_group.dart';
 import '../../../core/models/ai_provider.dart';
+import '../../../core/services/ollama_service.dart';
 import '../../../shared/constants/app_constants.dart';
 import '../../../shared/theme/app_colors.dart';
 import '../../../shared/utils/platform_utils.dart';
@@ -56,14 +57,15 @@ class AiProviderPage extends StatelessWidget {
       subtitle: 'Self-hosted',
       description:
           'Runs on your own machine or home server. Install Ollama and '
-          'pull any model — nothing leaves your network.',
+          'pull any model. Your figures go only to the server you point it '
+          'at.',
       icon: Icons.computer_outlined,
     ),
     AiProvider.lmStudio => (
       subtitle: 'Self-hosted',
       description:
-          'Runs models on this machine through LM Studio\'s local '
-          'server. Nothing leaves your network.',
+          'Runs models through LM Studio\'s local server. Your figures go '
+          'only to the server you point it at.',
       icon: Icons.storage_outlined,
     ),
     AiProvider.maple => (
@@ -488,13 +490,28 @@ class ProviderConfigSection extends StatelessWidget {
               ),
             ),
           ],
-          // Maple is hosted like the four major providers, so the same disclosure
-          // applies. Driven off `isPrivate` rather than named explicitly, so a
-          // backend added to this branch later cannot quietly skip it.
-          if (!provider.isPrivate) ...[
-            const SizedBox(height: 14),
-            AiPrivacyDisclosure(provider: provider, compact: true),
-          ],
+          // Judged from the URL as it is typed, not from the provider: Ollama
+          // and LM Studio count as private only while they point at hardware
+          // the user controls, and this field can point them at a VPS. Maple
+          // is hosted, so it always discloses.
+          ValueListenableBuilder<TextEditingValue>(
+            valueListenable: urlController,
+            builder: (context, value, _) {
+              final recipient = OllamaService.recipientFor(
+                provider,
+                value.text,
+              );
+              if (recipient == null) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.only(top: 14),
+                child: AiPrivacyDisclosure(
+                  provider: provider,
+                  recipient: recipient,
+                  compact: true,
+                ),
+              );
+            },
+          ),
           const SizedBox(height: 14),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),

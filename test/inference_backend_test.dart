@@ -208,6 +208,8 @@ void main() {
     String build(int budget) => OllamaService.composeSystemPrompt(
       totalStackSats: 5000000,
       btcPrice: 65000,
+      currency: 'USD',
+      month: DateTime(2026, 3),
       monthlyIncome: 6000,
       monthlySpending: 4000,
       monthlySurplus: 2000,
@@ -238,7 +240,7 @@ void main() {
       expect(categoryCount(small), lessThan(categoryCount(large)));
       // Whole lines only — never a category cut mid-word.
       for (final line in small.split('\n').where((l) => l.startsWith('  - '))) {
-        expect(line, matches(RegExp(r'^  - .+: \$\d+$')));
+        expect(line, matches(RegExp(r'^  - .+: \$[\d,]+\.\d\d USD$')));
       }
     });
 
@@ -263,8 +265,8 @@ void main() {
       // A prompt missing the actual numbers is useless at any size, so these
       // are never dropped — the budget only flexes the category list.
       final tiny = build(200);
-      expect(tiny, contains('5000000 sats'));
-      expect(tiny, contains('Monthly surplus'));
+      expect(tiny, contains('5,000,000 sats'));
+      expect(tiny, contains('Surplus:'));
       expect(
         categoryCount(tiny),
         1,
@@ -276,6 +278,8 @@ void main() {
       final none = OllamaService.composeSystemPrompt(
         totalStackSats: 0,
         btcPrice: 65000,
+        currency: 'USD',
+        month: DateTime(2026, 3),
         monthlyIncome: 0,
         monthlySpending: 0,
         monthlySurplus: 0,
@@ -283,7 +287,7 @@ void main() {
         budgetChars: 4000,
       );
       expect(categoryCount(none), 0);
-      expect(none, contains('Monthly surplus'));
+      expect(none, contains('Surplus:'));
     });
 
     test('a large budget includes everything available', () {
