@@ -44,6 +44,22 @@ void main() {
     expect(StackStats.from(txns, now).avgMonthlySats, 90000);
   });
 
+  test('idle months count, so the goal date is not optimistic', () {
+    // 120k in January and nothing since: over January–September that is
+    // 120k / 9, not 120k / 1.
+    final s = StackStats.from([tx(DateTime(2026, 1, 5), 120000)], now);
+    expect(s.avgMonthlySats, (120000 / 9).round());
+  });
+
+  test('the average looks back a year at most', () {
+    // A burst three years ago and steady 10k for the last twelve months.
+    final s = StackStats.from([
+      tx(DateTime(2023, 3, 1), 5000000),
+      for (var m = 1; m <= 12; m++) tx(DateTime(2025, 9 + m, 1), 10000),
+    ], now);
+    expect(s.avgMonthlySats, 10000);
+  });
+
   test('history is cumulative and in order', () {
     expect(StackStats.from(txns, now).history, {
       DateTime(2026, 8): 150000,

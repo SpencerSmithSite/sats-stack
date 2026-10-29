@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:drift/drift.dart';
@@ -107,6 +108,38 @@ class BtcPriceService {
     if (isPriceStale) {
       fetchAndCache().ignore();
     }
+  }
+
+  /// How old the live price may get while the app is open.
+  static const liveRefreshInterval = Duration(minutes: 10);
+
+  Timer? _refreshTimer;
+
+  /// Keeps the live price fresh while the app runs.
+  ///
+  /// It was fetched at launch, if the cached one was over an hour old, and
+  /// never again: an app left open all day showed the morning's price on
+  /// every sats figure. Ticks every [liveRefreshInterval]; also call
+  /// [refreshIfOlderThan] when the app returns to the foreground, since a
+  /// suspended app's timers do not run.
+  void startAutoRefresh() {
+    _refreshTimer?.cancel();
+    _refreshTimer = Timer.periodic(
+      liveRefreshInterval,
+      (_) => refreshIfOlderThan(liveRefreshInterval),
+    );
+  }
+
+  void stopAutoRefresh() {
+    _refreshTimer?.cancel();
+    _refreshTimer = null;
+  }
+
+  /// Fetches the live price if the last fetch is older than [age].
+  Future<void> refreshIfOlderThan(Duration age) async {
+    final last = lastFetchedAt;
+    if (last != null && _now().difference(last) < age) return;
+    await fetchAndCache();
   }
 
   /// Switches the active currency and immediately updates [priceNotifier]

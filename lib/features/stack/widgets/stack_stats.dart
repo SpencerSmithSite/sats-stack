@@ -31,15 +31,38 @@ class StackStats {
     }
 
     // Average over complete calendar months only, so the current partial
-    // month does not drag it down mid-month.
-    final complete = [
-      for (final e in byMonth.entries)
-        if (e.key.isBefore(currentMonth)) e.value,
-    ];
-    final avg =
-        complete.isEmpty
-            ? 0
-            : (complete.fold(0, (s, v) => s + v) / complete.length).round();
+    // month does not drag it down mid-month — and over *every* one of them in
+    // the window, idle months included. It averaged only the months with
+    // activity, so stacking in two months of a year read as stacking every
+    // month, and the goal's projected date came out far too soon.
+    //
+    // The window is the last [avgWindowMonths] complete months, or since the
+    // first activity if that is more recent, so it reflects the current pace
+    // rather than a burst years ago.
+    final first =
+        byMonth.keys.isEmpty
+            ? null
+            : byMonth.keys.reduce((a, b) => a.isBefore(b) ? a : b);
+    var avg = 0;
+    if (first != null && first.isBefore(currentMonth)) {
+      final sinceFirst =
+          (currentMonth.year - first.year) * 12 +
+          currentMonth.month -
+          first.month;
+      final window =
+          sinceFirst < avgWindowMonths ? sinceFirst : avgWindowMonths;
+      final windowStart = DateTime(
+        currentMonth.year,
+        currentMonth.month - window,
+      );
+      var sum = 0;
+      for (final e in byMonth.entries) {
+        if (!e.key.isBefore(windowStart) && e.key.isBefore(currentMonth)) {
+          sum += e.value;
+        }
+      }
+      avg = (sum / window).round();
+    }
 
     // Cumulative balance at the end of each month with activity.
     final sorted = byMonth.keys.toList()..sort();
@@ -57,12 +80,17 @@ class StackStats {
     );
   }
 
+  /// How many complete months the average looks back over, at most.
+  static const avgWindowMonths = 12;
+
   final int totalSats;
 
   /// Net sats since the start of [month].
   final int monthSats;
 
-  /// Mean net sats per complete calendar month before [month].
+  /// Mean net sats per complete calendar month before [month], over the last
+  /// [avgWindowMonths] of them (or since the first activity), idle months
+  /// counted as zero.
   final int avgMonthlySats;
 
   /// Month → cumulative sats at its end, oldest first.
