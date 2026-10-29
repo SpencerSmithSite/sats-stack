@@ -725,9 +725,14 @@ class XpubService {
       // of the wallet's addresses it touched. Then scoped to the wallet, so the
       // same transaction in a second wallet is its own row rather than a
       // collision on the unique index — see `AppDatabase.migrateToV8`.
+      //
+      // Hashed from the UTC time. `date` is local, and its ISO string carries
+      // no offset, so the hash used to change with the device's timezone: one
+      // flight and the next sync deleted every row and wrote it again,
+      // dropping each category and note the user had set.
       final hash = HashUtils.scopedToWallet(
         HashUtils.transactionDedupHash(
-          date: date,
+          date: date.toUtc(),
           amount: netSats.toDouble(),
           description: description,
           salt: 'xpub_$txid',
@@ -745,8 +750,57 @@ class XpubService {
       );
     }
 
+    // ── Rows stored under another hash ──────────────────────────────────────
+    //
+    // A stored row whose hash no longer matches is not necessarily gone: rows
+    // written before the hash was taken in UTC, or in another timezone, hash
+    // differently for the same transaction. Deleting and re-adding those
+    // loses what the user set on them, so recognise them — by the txid prefix
+    // in the description and the amount, or failing that (the description is
+    // editable) by amount and a block time within a day — and re-key them.
+    final stored =
+        await (_db.select(_db.transactions)
+              ..where((t) => t.walletId.equals(wallet.id))
+              ..where((t) => t.source.equals('xpub')))
+            .get();
+    final claimed = <int>{
+      for (final row in stored)
+        if (rows.any((r) => r.dedupHash == row.dedupHash)) row.id,
+    };
+    final rekey = <int, _RawTx>{};
+    // Two passes, the stronger match first, so a match by date alone cannot
+    // take a row that another transaction matches by its txid prefix.
+    for (final byDescription in [true, false]) {
+      for (final r in rows) {
+        if (existingHashes.contains(r.dedupHash)) continue;
+        if (rekey.values.contains(r)) continue;
+        final match =
+            stored
+                .where((row) => !claimed.contains(row.id))
+                .where((row) => row.amountSats == r.netSats)
+                .where(
+                  (row) =>
+                      byDescription
+                          ? row.description == r.description
+                          : row.date.difference(r.date).abs() <
+                              const Duration(days: 1),
+                )
+                .firstOrNull;
+        if (match == null) continue;
+        claimed.add(match.id);
+        rekey[match.id] = r;
+      }
+    }
+    final rekeyed = {for (final r in rekey.values) r.dedupHash};
+
     final newRows =
-        rows.where((r) => !existingHashes.contains(r.dedupHash)).toList();
+        rows
+            .where(
+              (r) =>
+                  !existingHashes.contains(r.dedupHash) &&
+                  !rekeyed.contains(r.dedupHash),
+            )
+            .toList();
 
     // ── Pass 3: historical prices, once per date ────────────────────────────
     final datesToPrice = <String, DateTime>{
@@ -769,21 +823,22 @@ class XpubService {
     //
     // One transaction, so the dashboard, budgets and notification listeners see
     // a single change rather than one per row.
-    final wanted = {for (final r in rows) r.dedupHash};
     var imported = 0;
     final skipped = rows.length - newRows.length;
     var removed = 0;
 
     await _db.transaction(() async {
-      // Two where clauses rather than `&`: that operator comes from a drift
-      // extension this file does not import, and drift ANDs them anyway.
-      final previous =
-          await (_db.select(_db.transactions)
-                ..where((t) => t.walletId.equals(wallet.id))
-                ..where((t) => t.source.equals('xpub')))
-              .get();
-      for (final row in previous) {
-        if (!wanted.contains(row.dedupHash)) {
+      for (final row in stored) {
+        final replacement = rekey[row.id];
+        if (replacement != null) {
+          await (_db.update(_db.transactions)
+            ..where((t) => t.id.equals(row.id))).write(
+            TransactionsCompanion(
+              dedupHash: Value(replacement.dedupHash),
+              date: Value(replacement.date),
+            ),
+          );
+        } else if (!claimed.contains(row.id)) {
           await (_db.delete(_db.transactions)
             ..where((t) => t.id.equals(row.id))).go();
           removed++;
@@ -797,9 +852,10 @@ class XpubService {
                 ? raw.netSats / 100000000 * price
                 : 0.0;
 
-        await _db
+        // Counted only if written: insertOrIgnore returns a rowid either way.
+        final written = await _db
             .into(_db.transactions)
-            .insert(
+            .insertReturningOrNull(
               TransactionsCompanion.insert(
                 walletId: wallet.id,
                 date: raw.date,
@@ -814,7 +870,7 @@ class XpubService {
               ),
               mode: InsertMode.insertOrIgnore,
             );
-        imported++;
+        if (written != null) imported++;
       }
     });
 

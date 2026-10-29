@@ -278,5 +278,80 @@ void main() {
       expect(again.skipped, 1);
       expect(again.removed, 0);
     }, timeout: const Timeout(Duration(minutes: 1)));
+
+    Future<BtcPriceService> cachedPrices() async {
+      final prices = BtcPriceService(db);
+      await db
+          .into(db.btcPriceHistory)
+          .insert(
+            BtcPriceHistoryCompanion.insert(
+              date: '2025-03-04',
+              currency: prices.currency,
+              price: 80000,
+            ),
+          );
+      return prices;
+    }
+
+    test('a row stored under another hash is kept, with its edits', () async {
+      // As every row was after a timezone change: the hash was built from a
+      // local time with no offset, so the same transaction hashed differently
+      // and the sync deleted the row and wrote it again — dropping whatever
+      // category the user had given it.
+      final prices = await cachedPrices();
+      final sync = withChain();
+      final wallet = await xpubWallet('Cold');
+      await sync.syncWallet(wallet: wallet, btcPriceService: prices);
+      final original = await db.select(db.transactions).getSingle();
+      await (db.update(db.transactions)
+        ..where((t) => t.id.equals(original.id))).write(
+        const TransactionsCompanion(
+          dedupHash: Value('hashed-in-another-timezone'),
+          category: Value('Income'),
+        ),
+      );
+
+      final again = await sync.syncWallet(
+        wallet: wallet,
+        btcPriceService: prices,
+      );
+
+      expect(again.removed, 0);
+      expect(again.imported, 0);
+      final row = await db.select(db.transactions).getSingle();
+      expect(row.id, original.id);
+      expect(row.category, 'Income');
+      expect(row.dedupHash, original.dedupHash, reason: 're-keyed');
+    }, timeout: const Timeout(Duration(minutes: 1)));
+
+    test('a transaction the server no longer has is still removed', () async {
+      final prices = await cachedPrices();
+      final sync = withChain();
+      final wallet = await xpubWallet('Cold');
+      await db
+          .into(db.transactions)
+          .insert(
+            TransactionsCompanion.insert(
+              walletId: wallet.id,
+              date: DateTime(2024, 1, 1),
+              description: 'BTC deadbeef',
+              amountSats: 12345,
+              amountFiat: 0,
+              fiatCurrency: 'USD',
+              source: 'xpub',
+              dedupHash: 'gone',
+            ),
+          );
+
+      final result = await sync.syncWallet(
+        wallet: wallet,
+        btcPriceService: prices,
+      );
+
+      expect(result.removed, 1);
+      expect(result.imported, 1);
+      final rows = await db.select(db.transactions).get();
+      expect(rows.map((r) => r.amountSats), [50000]);
+    }, timeout: const Timeout(Duration(minutes: 1)));
   });
 }
