@@ -717,12 +717,29 @@ class OllamaService {
   /// Ollama, a valid key for a hosted model, and something else entirely for
   /// the on-device backends — supported hardware, a setting switched on, or
   /// weights present. Each backend is the only thing that knows which.
-  Future<bool> isAvailable() async => (await backend.checkStatus()).available;
+  Future<bool> isAvailable() async => (await checkStatus()).available;
 
   /// The same check, keeping the reason. Prefer this where the UI has room to
   /// say what is wrong: "Apple Intelligence is switched off. Turn it on in
   /// Settings" is actionable in a way that a greyed-out row is not.
-  Future<BackendStatus> checkStatus() => backend.checkStatus();
+  ///
+  /// A self-hosted server with no model chosen yet gets one: the first it
+  /// lists. Ollama, LM Studio and Maple report "unavailable" without a model,
+  /// and every caller listed models only once the backend was available — so
+  /// a first-time setup could never pass its connection test, never list a
+  /// model, and so never get one.
+  Future<BackendStatus> checkStatus() async {
+    if (_activeProvider.defaultUrl != null &&
+        (selectedModel?.isEmpty ?? true)) {
+      final models = await backend.availableModels();
+      if (models.isNotEmpty) await saveModelForActiveProvider(models.first);
+    }
+    return lastStatus = await backend.checkStatus();
+  }
+
+  /// What the most recent [checkStatus] or [isAvailable] found, so a screen
+  /// that only asked yes or no can still say why not.
+  BackendStatus? lastStatus;
 
   // ── Models ────────────────────────────────────────────────────────────────
 

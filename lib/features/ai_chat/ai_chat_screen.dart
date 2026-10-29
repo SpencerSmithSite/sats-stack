@@ -7,7 +7,6 @@ import 'package:http/http.dart' as http;
 import '../../core/models/ai_provider.dart';
 import '../../core/services/ollama_service.dart';
 import '../../main.dart' as app;
-import '../../shared/constants/app_constants.dart';
 import '../../shared/theme/app_colors.dart';
 import '../../shared/theme/app_text_styles.dart';
 import '../../shared/utils/platform_utils.dart';
@@ -52,6 +51,10 @@ class _AiChatScreenState extends State<AiChatScreen> {
 
   List<String> _models = [];
   bool _ollamaAvailable = false;
+
+  /// The backend's own explanation of why it is unavailable — "Apple
+  /// Intelligence is switched off", "The server rejected the API key".
+  String? _offlineReason;
   bool _checking = true;
   String? _systemPrompt;
 
@@ -116,6 +119,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
     if (!available) {
       setState(() {
         _ollamaAvailable = false;
+        _offlineReason = app.ollamaService.lastStatus?.detail;
         _checking = false;
       });
       return;
@@ -369,7 +373,11 @@ class _AiChatScreenState extends State<AiChatScreen> {
           _checking
               ? const Center(child: CircularProgressIndicator())
               : !_ollamaAvailable
-              ? _OfflineState(onRetry: _init, onOpenSettings: _openSettings)
+              ? _OfflineState(
+                reason: _offlineReason,
+                onRetry: _init,
+                onOpenSettings: _openSettings,
+              )
               : Column(
                 children: [
                   Expanded(
@@ -803,7 +811,16 @@ class _SendButton extends StatelessWidget {
 // ── Offline state ─────────────────────────────────────────────────────────────
 
 class _OfflineState extends StatelessWidget {
-  const _OfflineState({required this.onRetry, required this.onOpenSettings});
+  const _OfflineState({
+    required this.reason,
+    required this.onRetry,
+    required this.onOpenSettings,
+  });
+
+  /// Shown in place of the generic advice when the backend gave one. It used
+  /// to be dropped, and every backend got server advice: an Apple
+  /// Intelligence user was told to check a server URL they do not have.
+  final String? reason;
   final VoidCallback onRetry;
   final VoidCallback onOpenSettings;
 
@@ -815,6 +832,7 @@ class _OfflineState extends StatelessWidget {
     final providerName = provider.label;
     final isLocal =
         provider == AiProvider.ollama || provider == AiProvider.lmStudio;
+    final hasServer = provider.defaultUrl != null;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -830,20 +848,25 @@ class _OfflineState extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              'Cannot reach $providerName',
+              hasServer
+                  ? 'Cannot reach $providerName'
+                  : '$providerName is not available',
               style: theme.textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w600,
               ),
             ),
             const SizedBox(height: 8),
             Text(
-              provider == AiProvider.ollama && isDesktop
-                  ? 'Install Ollama and pull a model, then tap Retry.\n\nollama pull llama3.2'
-                  : provider == AiProvider.lmStudio
-                  ? 'Make sure LM Studio is running with server mode enabled, then tap Retry.'
-                  : provider == AiProvider.maple
-                  ? 'Check that your Maple proxy URL and API key are correct in Settings.'
-                  : 'Check that your server URL is correct and reachable, then tap Retry.',
+              reason ??
+                  (provider == AiProvider.ollama && isDesktop
+                      ? 'Install Ollama and pull a model, then tap Retry.\n\nollama pull llama3.2'
+                      : provider == AiProvider.lmStudio
+                      ? 'Make sure LM Studio is running with server mode enabled, then tap Retry.'
+                      : provider == AiProvider.maple
+                      ? 'Check that your Maple proxy URL and API key are correct in Settings.'
+                      : hasServer
+                      ? 'Check that your server URL is correct and reachable, then tap Retry.'
+                      : 'Check it in Settings → Servers, then tap Retry.'),
               textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: context.textSecondary,
@@ -853,7 +876,7 @@ class _OfflineState extends StatelessWidget {
             if (provider == AiProvider.ollama && isDesktop) ...[
               const SizedBox(height: 8),
               Text(
-                AppConstants.defaultOllamaUrl,
+                app.ollamaService.baseUrl,
                 style: AppTextStyles.monoSmall.copyWith(
                   color: context.textSecondary,
                 ),
