@@ -1310,6 +1310,28 @@ Item 15's open list, fixed one PR at a time, in the order `TODO.md` gave.
   `CategoryService` records each rename of a built-in category
   (`system_category_name:<seeded name>`), and imports use the current name.
 
+### Import: pricing, and the smaller misreadings
+- Historical prices were fetched one day per second, serially, behind a bare
+  spinner — five minutes for a year of statement. `prefetchHistoricalPrices`
+  takes a Mempool server's whole price history for the currency in one
+  request when five or more days are uncached, and caches each day's nearest
+  point; the per-day lookups that follow are cache hits. The import button
+  says "Pricing day n of m". It also sends the price server no transaction
+  dates. `BtcPriceService` takes an injectable `http.Client`.
+- "Try Again" on the timeout dialog only closed it; the import had already
+  been cancelled. It runs the import again, and "Close" closes.
+- The column mapper replaced itself with the preview, so backing out lost
+  every column choice. It pushes the preview, and removes itself once the
+  import is done so the summary's Done still returns to the import screen.
+- "Other…" currency could not be chosen: it copied the listed code into the
+  field's state, so the dropdown snapped back and the field never appeared.
+  The custom code must be three letters.
+- Amounts with an ISO code (`GBP 12.50`, `12,50 EUR`), grouped with a narrow
+  no-break space (U+202F) or a Swiss apostrophe did not parse.
+- A model's per-row currency was taken as given. It is kept only when the file
+  names that currency (by code, or by an unambiguous symbol); a photo, which
+  gives nothing to check against, uses the account's.
+
 ---
 
 ## Verified correct (no action)

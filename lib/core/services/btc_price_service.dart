@@ -8,12 +8,19 @@ import '../../shared/constants/app_constants.dart';
 import '../database/database.dart';
 
 class BtcPriceService {
-  /// [clock] is for tests that need "today" to be a known date.
-  BtcPriceService(this._db, {DateTime Function()? clock})
-    : _now = clock ?? DateTime.now;
+  /// [clock] is for tests that need "today" to be a known date; [client] for
+  /// tests that answer from memory instead of the network.
+  BtcPriceService(this._db, {DateTime Function()? clock, http.Client? client})
+    : _now = clock ?? DateTime.now,
+      _client = client;
 
   final AppDatabase _db;
   final DateTime Function() _now;
+  final http.Client? _client;
+
+  /// The top-level `http.get` when no client was given, so a caller's
+  /// `http.runWithClient` still reaches it.
+  Future<http.Response> _get(Uri uri) => _client?.get(uri) ?? http.get(uri);
 
   /// Reactive price notifier — always reflects the price in [_currency].
   final ValueNotifier<double?> priceNotifier = ValueNotifier(null);
@@ -261,7 +268,7 @@ class BtcPriceService {
   Future<Map<String, double>?> _fetchMempoolPrices(String baseUrl) async {
     try {
       final uri = Uri.parse('$baseUrl/v1/prices');
-      final response = await http.get(uri).timeout(const Duration(seconds: 8));
+      final response = await _get(uri).timeout(const Duration(seconds: 8));
       if (response.statusCode == 200) {
         return currencyEntries(
           jsonDecode(response.body) as Map<String, dynamic>,
@@ -278,7 +285,7 @@ class BtcPriceService {
       final uri = Uri.parse(
         'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=$vsParam',
       );
-      final response = await http.get(uri).timeout(const Duration(seconds: 10));
+      final response = await _get(uri).timeout(const Duration(seconds: 10));
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
         final btc = json['bitcoin'];
@@ -330,6 +337,116 @@ class BtcPriceService {
     _lastHistoricalFetch = DateTime.now();
 
     return _fetchAndCacheHistorical(date, cur, settled: settled);
+  }
+
+  /// Caches [currency]'s price for every settled day in [dates] that is not
+  /// cached yet, from one request where the server allows it.
+  ///
+  /// [getHistoricalPrice] asks for one day at a time, at most once a second,
+  /// so a year of statement took five minutes to price — with nothing on
+  /// screen but a spinner. A Mempool server can return the whole price history
+  /// for a currency at once; each day then takes the point nearest the same
+  /// moment the one-day request asks for. Days it cannot cover are left for
+  /// [getHistoricalPrice], which is unchanged.
+  ///
+  /// Returns how many days were filled. Never throws: this is only a shortcut.
+  Future<int> prefetchHistoricalPrices(
+    Iterable<DateTime> dates,
+    String currency,
+  ) async {
+    final cur = currency.toUpperCase();
+    final wanted = <String, DateTime>{
+      for (final d in dates)
+        if (_isSettled(d)) _dateKey(d): d,
+    };
+    if (wanted.isEmpty) return 0;
+    final cached =
+        await (_db.select(_db.btcPriceHistory)..where(
+          (t) => t.currency.equals(cur) & t.date.isIn(wanted.keys),
+        )).get();
+    for (final row in cached) {
+      wanted.remove(row.date);
+    }
+    // Below this, the one-day requests are quicker than a megabyte download.
+    if (wanted.length < _bulkThreshold) return 0;
+
+    final series = await _fetchMempoolPriceSeries(cur);
+    if (series == null || series.isEmpty) return 0;
+
+    var filled = 0;
+    await _db.batch((b) {
+      for (final MapEntry(key: dateStr, value: date) in wanted.entries) {
+        final t = date.millisecondsSinceEpoch ~/ 1000;
+        final nearest = _nearest(series, t);
+        // Older history is weekly; a point further off than that is not this
+        // day's price.
+        if (nearest == null || (nearest.time - t).abs() > 8 * 86400) continue;
+        b.insert(
+          _db.btcPriceHistory,
+          BtcPriceHistoryCompanion.insert(
+            date: dateStr,
+            currency: cur,
+            price: nearest.price,
+          ),
+          onConflict: DoNothing(),
+        );
+        filled++;
+      }
+    });
+    return filled;
+  }
+
+  static const _bulkThreshold = 5;
+
+  /// [series] is sorted by time ascending.
+  static ({int time, double price})? _nearest(
+    List<({int time, double price})> series,
+    int t,
+  ) {
+    var lo = 0, hi = series.length - 1;
+    while (lo < hi) {
+      final mid = (lo + hi) >> 1;
+      if (series[mid].time < t) {
+        lo = mid + 1;
+      } else {
+        hi = mid;
+      }
+    }
+    final after = series[lo];
+    if (lo == 0) return after;
+    final before = series[lo - 1];
+    return (t - before.time) <= (after.time - t) ? before : after;
+  }
+
+  /// Every price a Mempool server holds for [currency], oldest first.
+  Future<List<({int time, double price})>?> _fetchMempoolPriceSeries(
+    String currency,
+  ) async {
+    final custom = _esploraBaseUrl;
+    final base =
+        (custom != null && custom.isNotEmpty)
+            ? custom
+            : AppConstants.mempoolBaseUrl;
+    try {
+      final uri = Uri.parse('$base/v1/historical-price?currency=$currency');
+      final response = await _get(uri).timeout(const Duration(seconds: 30));
+      if (response.statusCode != 200) return null;
+      final json = jsonDecode(response.body);
+      if (json is! Map<String, dynamic>) return null;
+      final prices = json['prices'];
+      if (prices is! List) return null;
+      final series = [
+        for (final p in prices)
+          if (p is Map<String, dynamic> &&
+              p['time'] is int &&
+              p[currency] is num &&
+              (p[currency] as num) > 0)
+            (time: p['time'] as int, price: (p[currency] as num).toDouble()),
+      ]..sort((a, b) => a.time.compareTo(b.time));
+      return series;
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Whether [date]'s price is final. A two-day margin rather than "before
@@ -411,7 +528,7 @@ class BtcPriceService {
       final uri = Uri.parse(
         '$baseUrl/v1/historical-price?timestamp=$timestamp',
       );
-      final response = await http.get(uri).timeout(const Duration(seconds: 10));
+      final response = await _get(uri).timeout(const Duration(seconds: 10));
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
         final pricesList = json['prices'] as List<dynamic>?;
@@ -442,7 +559,7 @@ class BtcPriceService {
         'https://api.coingecko.com/api/v3/coins/bitcoin/history'
         '?date=$dateStr&localization=false',
       );
-      final response = await http.get(uri).timeout(const Duration(seconds: 10));
+      final response = await _get(uri).timeout(const Duration(seconds: 10));
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
         final marketData = json['market_data'] as Map<String, dynamic>?;

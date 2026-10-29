@@ -529,6 +529,12 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx, 'dismiss'),
+                child: const Text('Close'),
+              ),
+              // It said "Try Again" and only closed the dialog: the import had
+              // already been cancelled, so nothing was tried again.
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, 'retry'),
                 child: const Text('Try Again'),
               ),
               if (isCsv)
@@ -539,6 +545,17 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
             ],
           ),
     ).then((action) async {
+      if (action == 'retry' &&
+          _processingFilePath != null &&
+          _processingFileName != null &&
+          _processingSource != null) {
+        await _processFile(
+          filePath: _processingFilePath!,
+          fileName: _processingFileName!,
+          source: _processingSource!,
+        );
+        return;
+      }
       if (action == 'manual' &&
           _processingFilePath != null &&
           _processingFileName != null &&
