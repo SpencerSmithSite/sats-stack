@@ -7,7 +7,7 @@
 ///
 /// | caller | salt | intent |
 /// |---|---|---|
-/// | statement import | `wallet_<id>` | re-importing the same file must dedupe |
+/// | statement import | `source_<id>`, plus `#n` for the n-th identical row in a file | re-importing into a source dedupes; two accounts, or two identical rows, do not |
 /// | manual entry | microsecond timestamp | an intentional duplicate must be kept |
 /// | recurring series | `recurring_<anchor>_<due>` | one row per due date, idempotent |
 /// | xpub sync | `xpub_<txid>`, then `HashUtils.scopedToWallet` | one row per on-chain transaction, per wallet |
@@ -34,13 +34,14 @@ void main() {
   String importHash({
     required double amount,
     String description = 'AMAZON MKTPLACE',
-    int walletId = 1,
+    int sourceId = 1,
+    int occurrence = 0,
     DateTime? on,
   }) => HashUtils.transactionDedupHash(
     date: on ?? date,
     amount: amount,
     description: description,
-    salt: 'wallet_$walletId',
+    salt: ImportService.importDedupSalt(sourceId, occurrence),
   );
 
   group('statement import: the same row dedupes, different rows do not', () {
@@ -58,10 +59,19 @@ void main() {
     });
 
     test('the same figure in two accounts is two rows', () {
-      // RENT 1500.00 on the 1st, in two different accounts.
+      // RENT 1500.00 on the 1st, in two different accounts. Scoped to the
+      // source, not the wallet: every source writes to the same wallet.
       expect(
-        importHash(amount: -1500, description: 'RENT', walletId: 1),
-        isNot(importHash(amount: -1500, description: 'RENT', walletId: 2)),
+        importHash(amount: -1500, description: 'RENT', sourceId: 1),
+        isNot(importHash(amount: -1500, description: 'RENT', sourceId: 2)),
+      );
+    });
+
+    test('two identical rows in one file are two rows', () {
+      // Two bus fares, same day, same amount.
+      expect(
+        importHash(amount: -2.8, occurrence: 0),
+        isNot(importHash(amount: -2.8, occurrence: 1)),
       );
     });
 
@@ -261,7 +271,7 @@ void main() {
     tearDown(() => db.close());
 
     test(
-      'statement import hashes the signed amount with the wallet salt',
+      'statement import hashes the signed amount with the source salt',
       () async {
         final service = ImportService(db, OllamaService(db));
         final prices = BtcPriceService(db);
@@ -304,7 +314,7 @@ void main() {
             date: day,
             amount: -49.99,
             description: 'AMAZON MKTPLACE',
-            salt: 'wallet_$walletId',
+            salt: 'source_$source',
           ),
         );
       },
