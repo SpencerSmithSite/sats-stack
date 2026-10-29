@@ -33,6 +33,10 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
 
   // Timers & subscriptions
   Timer? _cancelTimer;
+
+  /// The running import's own cancel switch. Leaving the screen used to leave
+  /// the import running — and uploading — with nobody to show the result to.
+  ImportCancelToken? _importToken;
   Timer? _timeoutTimer;
   StreamSubscription<String>? _tokenSub;
   final _tokenScrollController = ScrollController();
@@ -47,6 +51,7 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
 
   @override
   void dispose() {
+    _importToken?.cancel();
     _cancelTimer?.cancel();
     _timeoutTimer?.cancel();
     _tokenSub?.cancel();
@@ -407,7 +412,9 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
 
     ImportResult result;
     try {
+      final token = _importToken = ImportCancelToken();
       result = await app.importService.importFile(
+        cancelToken: token,
         filePath: filePath,
         fileName: fileName,
         sourceId: source.id,
@@ -481,12 +488,12 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
   }
 
   void _cancelImport() {
-    app.importService.cancelImport();
+    _importToken?.cancel();
     _cleanupProcessing();
   }
 
   void _handleTimeout(ImportSource source) {
-    app.importService.cancelImport();
+    _importToken?.cancel();
     _cleanupProcessing();
     if (!mounted) return;
 
@@ -669,7 +676,9 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
 
     ImportResult result;
     try {
+      final token = _importToken = ImportCancelToken();
       result = await app.importService.importImage(
+        cancelToken: token,
         imagePath: filePath,
         sourceId: source.id,
         onStageChange: (stage) {
@@ -765,7 +774,7 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
   }
 
   void _handleImageTimeout() {
-    app.importService.cancelImport();
+    _importToken?.cancel();
     _cleanupProcessing();
     if (!mounted) return;
     showDialog<void>(

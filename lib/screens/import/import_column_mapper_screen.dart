@@ -33,6 +33,7 @@ class _ImportColumnMapperScreenState extends State<ImportColumnMapperScreen> {
     'MM/DD/YYYY',
     'MM/DD/YY',
     'DD/MM/YYYY',
+    'DD/MM/YY',
     'YYYY-MM-DD',
     'MM-DD-YYYY',
     'DD MMM YYYY',
@@ -73,17 +74,23 @@ class _ImportColumnMapperScreenState extends State<ImportColumnMapperScreen> {
             .take(3)
             .toList();
     if (values.isEmpty) return;
-    if (values.every((v) => RegExp(r'^\d{4}-\d{2}-\d{2}').hasMatch(v))) {
+    if (values.every((v) => RegExp(r'^\d{4}[-/.]\d{1,2}').hasMatch(v))) {
       _mapping.dateFormat = 'YYYY-MM-DD';
-    } else if (values.every(
-      (v) => RegExp(r'^\d{1,2}/\d{1,2}/\d{2}(?!\d)').hasMatch(v),
-    )) {
-      _mapping.dateFormat = 'MM/DD/YY';
-    } else if (values.every(
-      (v) => RegExp(r'^\d{1,2}/\d{1,2}/\d{4}').hasMatch(v),
-    )) {
-      _mapping.dateFormat = 'MM/DD/YYYY';
+      return;
     }
+    final numeric = RegExp(r'^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4}|\d{2})(?!\d)');
+    final matches = values.map(numeric.firstMatch).toList();
+    if (matches.any((m) => m == null)) return;
+    // A first part over 12 can only be a day. Without this, a DD/MM export
+    // was offered as MM/DD and every date after the 12th was rejected.
+    final dayFirst = matches.any((m) => int.parse(m!.group(1)!) > 12);
+    final shortYear = matches.every((m) => m!.group(3)!.length == 2);
+    _mapping.dateFormat = switch ((dayFirst, shortYear)) {
+      (true, true) => 'DD/MM/YY',
+      (true, false) => 'DD/MM/YYYY',
+      (false, true) => 'MM/DD/YY',
+      (false, false) => 'MM/DD/YYYY',
+    };
   }
 
   void _onAssign(int colIndex, String assignment) {

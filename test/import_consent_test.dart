@@ -6,6 +6,7 @@
 /// can be withdrawn, and the result says who read the file.
 library;
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:drift/native.dart';
@@ -117,6 +118,63 @@ void main() {
     // It was written at the tap, so cancelling a second later still left
     // every future import uploading without asking.
     expect(await importService.offDeviceImportAllowed(), isFalse);
+  });
+
+  group('each import has its own cancel switch', () {
+    test('a second import does not revive a cancelled first', () async {
+      // The first import is waiting on its consent dialog when the user
+      // cancels and starts another. The cancel flag lived on the service, so
+      // the second import's start cleared it and the first, answered yes a
+      // moment later, uploaded anyway.
+      final firstToken = ImportCancelToken();
+      final answer = Completer<bool>();
+      final first = importService.importFile(
+        filePath: csvPath,
+        fileName: 'statement.csv',
+        sourceId: sourceId,
+        cancelToken: firstToken,
+        onOffDeviceConsent: (_) => answer.future,
+      );
+      await Future<void>.delayed(Duration.zero);
+      firstToken.cancel();
+
+      final second = importService.importFile(
+        filePath: csvPath,
+        fileName: 'statement.csv',
+        sourceId: sourceId,
+        cancelToken: ImportCancelToken(),
+        onOffDeviceConsent: (_) async => false,
+      );
+      answer.complete(true);
+
+      await expectLater(first, throwsA(isA<ImportCancelledException>()));
+      expect((await second).tierUsed, ImportTier.rules);
+      expect(ollama.sends, 0, reason: 'nothing was uploaded');
+    });
+
+    test('cancelling one import leaves another running', () async {
+      final a = ImportCancelToken();
+      final b = ImportCancelToken();
+      ollama.duringSend = a.cancel;
+      final first = importService.importFile(
+        filePath: csvPath,
+        fileName: 'statement.csv',
+        sourceId: sourceId,
+        cancelToken: a,
+        onOffDeviceConsent: (_) async => true,
+      );
+      await expectLater(first, throwsA(isA<ImportCancelledException>()));
+
+      ollama.duringSend = null;
+      final second = await importService.importFile(
+        filePath: csvPath,
+        fileName: 'statement.csv',
+        sourceId: sourceId,
+        cancelToken: b,
+        onOffDeviceConsent: (_) async => true,
+      );
+      expect(second.transactions, hasLength(1));
+    });
   });
 
   test('a no sends nothing and falls back to the local rules', () async {

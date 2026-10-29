@@ -119,12 +119,6 @@ the order to do it; the first group can lose or misstate the user's data.
   movements? Today an xpub self-transfer counts as both.
 
 **Import flow**
-- A cancelled import can resume and upload, and a new import clears the old
-  one's cancel flag (state on the singleton; needs a per-import token).
-  Leaving the import screen does not cancel.
-- The column mapper reads headers from row 0 rather than the detected header
-  row, and its dates overflow (25/12/2025 as MM/DD becomes 2027) instead of
-  being rejected; DD/MM only accepts `/`.
 - On-device AI is never ready for import (no selected model); a PDF gets no
   heuristic fallback when the AI fails; AI input is cut at 100k characters
   without saying so; the saved column mapping is written before parsing and
