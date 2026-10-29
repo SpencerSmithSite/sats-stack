@@ -130,11 +130,6 @@ the order to do it; the first group can lose or misstate the user's data.
 **UI**
 
 **Native, build, CI**
-- CI builds debug only, where the debug manifest declares INTERNET whatever
-  `src/main` says — so it cannot catch what its comment says it catches. Add a
-  release-variant manifest check (and R8).
-- `ndkVersion` is pinned to r27 (a leftover; Flutter's default is 28.2), and
-  CI downloads it every run.
 - No Android 12+ splash config (white flash); notifications use the
   full-colour launcher icon; no `NSLocalNetworkUsageDescription` for a LAN
   Ollama; Gemini Nano download progress is always indeterminate though the API
@@ -147,9 +142,7 @@ the order to do it; the first group can lose or misstate the user's data.
 - Dead native config: the macOS Podfile's sqlite3 block, the iOS
   `use_modular_headers!` rationale, a mangled
   `ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS`,
-  `enableJetifier`, legacy mipmaps, Windows/Linux template identity.
-- CI hygiene: unpinned Xcode, Node 20 actions, no Gradle/Pods cache, no
-  top-level `permissions:`, no check that generated drift code is current.
+  legacy mipmaps, Windows/Linux template identity.
 
 **Tests that cannot fail, and dead code**
 - `month_boundary_test`'s aggregate group (see AUDIT, seconds); the DST test
