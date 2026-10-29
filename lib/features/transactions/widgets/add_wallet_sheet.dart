@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/database/database.dart';
 import '../../../core/services/btc_price_service.dart';
 import '../../../core/services/wallet_service.dart';
 import '../../../core/services/xpub_service.dart';
@@ -57,8 +58,9 @@ class _AddWalletSheetState extends State<AddWalletSheet> {
       _error = null;
     });
 
+    Wallet? wallet;
     try {
-      final wallet = await widget.walletService.addXpubWallet(
+      wallet = await widget.walletService.addXpubWallet(
         label: label,
         xpub: extKey,
         color: _selectedColor,
@@ -78,11 +80,24 @@ class _AddWalletSheetState extends State<AddWalletSheet> {
           _step = _SheetStep.done;
         });
       }
-    } catch (e) {
+    } on DuplicateWalletException catch (e) {
       if (mounted) {
         setState(() {
           _step = _SheetStep.form;
-          _error = 'Error: $e';
+          _error = e.toString();
+        });
+      }
+    } catch (e) {
+      // The wallet is created before the sync, so a failed first sync used to
+      // leave an empty wallet behind — and then the duplicate check would
+      // refuse the retry. Take it away again; the form still holds the key.
+      if (wallet != null) {
+        await widget.walletService.deleteXpubWallet(wallet.id);
+      }
+      if (mounted) {
+        setState(() {
+          _step = _SheetStep.form;
+          _error = 'Could not sync this wallet: $e';
         });
       }
     }
