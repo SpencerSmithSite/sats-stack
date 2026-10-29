@@ -18,6 +18,7 @@ import '../../main.dart' as app;
 import '../../shared/constants/app_constants.dart';
 import '../../shared/theme/app_colors.dart';
 import '../../shared/utils/currency_utils.dart';
+import '../../shared/utils/model_choices.dart';
 import '../../shared/utils/platform_utils.dart';
 import '../../shared/utils/sat_converter.dart';
 import '../../shared/utils/url_utils.dart';
@@ -1126,7 +1127,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         if (_models.isNotEmpty)
                           DropdownButtonFormField<String>(
                             initialValue:
-                                _models.contains(_selectedModel)
+                                modelChoices(
+                                      _models,
+                                      _selectedModel,
+                                    ).contains(_selectedModel)
                                     ? _selectedModel
                                     : null,
                             decoration: const InputDecoration(
@@ -1134,7 +1138,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                             hint: const Text('Select model'),
                             items:
-                                _models
+                                modelChoices(_models, _selectedModel)
                                     .map(
                                       (m) => DropdownMenuItem(
                                         value: m,
@@ -1675,16 +1679,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ApiKeyHelpLink(provider: _selectedProvider),
       const SizedBox(height: 4),
       DropdownButtonFormField<String>(
-        // The saved model may not be in the live list — deprecated, or only
-        // available on a different tier — so fall back to showing no selection
-        // rather than throwing on a value the dropdown has no item for.
-        initialValue: models.contains(selected) ? selected : null,
+        // The saved model may not be in the live list — deprecated, filtered,
+        // or only on a different tier — so it is added to the choices rather
+        // than shown as no selection while it is still the one in use.
+        initialValue: selected,
         decoration: const InputDecoration(labelText: 'Model'),
-        hint: Text(selected ?? cloud.defaultModel),
+        hint: Text(cloud.defaultModel),
         items:
-            models
-                .map((m) => DropdownMenuItem(value: m, child: Text(m)))
-                .toList(),
+            modelChoices(
+              models,
+              selected,
+            ).map((m) => DropdownMenuItem(value: m, child: Text(m))).toList(),
         onChanged: (v) {
           if (v == null) return;
           setState(() => _cloudSelectedModel[cloud.id] = v);

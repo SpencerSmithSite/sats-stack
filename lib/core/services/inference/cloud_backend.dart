@@ -271,13 +271,22 @@ class CloudBackend implements InferenceBackend {
           return data
               .map((m) => m is Map ? m['id'] as String? : null)
               .whereType<String>()
+              .where(isChatModel)
               .toList();
         case CloudProvider.gemini:
           final models = decoded['models'];
           if (models is! List) return const [];
           return models
+              .where((m) {
+                // Google says which calls a model takes; one that cannot
+                // generateContent cannot chat.
+                final methods =
+                    m is Map ? m['supportedGenerationMethods'] : null;
+                return methods is! List || methods.contains('generateContent');
+              })
               .map((m) => m is Map ? m['name'] as String? : null)
               .whereType<String>()
+              .where(isChatModel)
               // Google returns "models/gemini-3.6-flash"; the generate call
               // wants the bare id, so strip the collection prefix here rather
               // than at every use.
@@ -287,6 +296,34 @@ class CloudBackend implements InferenceBackend {
     } on FormatException {
       return const [];
     }
+  }
+
+  /// Whether [id] names a model that can hold a chat.
+  ///
+  /// The list endpoints return everything the account can call — embeddings,
+  /// speech, transcription, image generation, moderation — and all of it was
+  /// offered in the picker, where choosing one failed on the first message.
+  static bool isChatModel(String id) {
+    final lower = id.toLowerCase();
+    const notChat = [
+      'embed',
+      'tts',
+      'whisper',
+      'transcribe',
+      'dall-e',
+      'image',
+      'imagen',
+      'imagine',
+      'moderation',
+      'realtime',
+      'audio',
+      'davinci',
+      'babbage',
+      'aqa',
+      'veo',
+      'computer-use',
+    ];
+    return !notChat.any(lower.contains);
   }
 
   // ── Request bodies ────────────────────────────────────────────────────────
@@ -493,8 +530,17 @@ class CloudBackend implements InferenceBackend {
         if (candidates is! List || candidates.isEmpty) return null;
         final parts = candidates.first['content']?['parts'];
         if (parts is! List || parts.isEmpty) return null;
-        // A part can carry a function call or inline data instead of text.
-        return parts.first is Map ? parts.first['text'] as String? : null;
+        // Every text part, not just the first: a frame can carry several, and
+        // the rest of the answer was dropped. A part can also carry a function
+        // call or inline data instead of text, or be the model's own reasoning
+        // (`thought: true`), which is not the answer.
+        final text =
+            [
+              for (final p in parts)
+                if (p is Map && p['thought'] != true && p['text'] is String)
+                  p['text'] as String,
+            ].join();
+        return text.isEmpty ? null : text;
     }
   }
 
@@ -524,6 +570,62 @@ class CloudBackend implements InferenceBackend {
       return 'the response stream ended with an error';
     }
     return null;
+  }
+
+  /// Why the model declined to answer, if this frame says it did — or null.
+  ///
+  /// A refusal or a safety stop ends the stream like any other, so the
+  /// partial (often empty) answer was saved and shown as complete, with
+  /// nothing saying the provider had stopped it.
+  ///
+  /// Static and public so each provider's frame shape can be tested directly.
+  static String? indicatesRefusal(
+    CloudProvider provider,
+    Map<String, dynamic> data,
+  ) {
+    switch (provider) {
+      case CloudProvider.anthropic:
+        if (data['type'] != 'message_delta') return null;
+        final delta = data['delta'];
+        return delta is Map && delta['stop_reason'] == 'refusal'
+            ? 'it declined to answer'
+            : null;
+
+      case CloudProvider.openai:
+      case CloudProvider.xai:
+        final choices = data['choices'];
+        if (choices is! List || choices.isEmpty) return null;
+        final first = choices.first;
+        if (first is! Map) return null;
+        final refusal =
+            first['delta'] is Map ? first['delta']['refusal'] : null;
+        if (refusal is String && refusal.isNotEmpty) return refusal;
+        return first['finish_reason'] == 'content_filter'
+            ? 'its content filter stopped the answer'
+            : null;
+
+      case CloudProvider.gemini:
+        final blocked = data['promptFeedback'];
+        if (blocked is Map && blocked['blockReason'] is String) {
+          return 'it blocked the request (${blocked['blockReason']})';
+        }
+        final candidates = data['candidates'];
+        if (candidates is! List || candidates.isEmpty) return null;
+        final first = candidates.first;
+        final reason = first is Map ? first['finishReason'] : null;
+        const stops = {
+          'SAFETY',
+          'RECITATION',
+          'BLOCKLIST',
+          'PROHIBITED_CONTENT',
+          'SPII',
+          'LANGUAGE',
+          'OTHER',
+        };
+        return stops.contains(reason)
+            ? 'it stopped the answer (${(reason as String).toLowerCase()})'
+            : null;
+    }
   }
 
   /// Whether this frame says the answer was cut off by [maxOutputTokens].
@@ -638,6 +740,10 @@ class CloudBackend implements InferenceBackend {
               throw InferenceException('${provider.label}: $streamError');
             }
             if (indicatesTruncation(provider, decoded)) truncated = true;
+            final refusal = indicatesRefusal(provider, decoded);
+            if (refusal != null) {
+              throw InferenceException('${provider.label}: $refusal.');
+            }
 
             final text = extractDelta(provider, decoded);
             if (text != null && text.isNotEmpty) yield text;
@@ -671,13 +777,24 @@ class CloudBackend implements InferenceBackend {
     // with `Incorrect API key provided: sk-proj-ab****XYZ` — a partial copy of
     // the user's key, which the chat screen then prints verbatim and into any
     // screenshot or bug report. The canned string below says the same thing.
-    if (status != 401 && status != 403) {
+    //
+    // xAI answers a bad key with a 400, not a 401, and its message — a plain
+    // string in `error` — echoes the key the same way. It came out as a bare
+    // "request failed (HTTP 400)".
+    final keyRejected =
+        status == 401 ||
+        status == 403 ||
+        (status == 400 && body.toLowerCase().contains('api key'));
+    if (!keyRejected) {
       try {
         final decoded = jsonDecode(body);
+        final error = decoded is Map ? decoded['error'] : null;
         final message =
             decoded is Map
-                ? (decoded['error'] is Map
-                    ? decoded['error']['message']
+                ? (error is Map
+                    ? error['message']
+                    : error is String
+                    ? error
                     : decoded['message'])
                 : null;
         if (message is String && message.isNotEmpty) {
@@ -686,6 +803,9 @@ class CloudBackend implements InferenceBackend {
       } on FormatException {
         // Not JSON — fall through to the status mapping.
       }
+    }
+    if (keyRejected) {
+      return '${provider.label} rejected the API key. Check it in Settings.';
     }
 
     return switch (status) {
