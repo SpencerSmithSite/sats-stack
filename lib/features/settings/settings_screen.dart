@@ -14,6 +14,7 @@ import '../../core/services/inference/cloud_backend.dart';
 import '../../core/services/inference/gemini_nano_backend.dart';
 import '../../core/services/inference/inference_backend.dart';
 import '../../core/services/inference/platform_llm_backend.dart';
+import '../../core/services/ollama_service.dart';
 import '../../main.dart' as app;
 import '../../shared/constants/app_constants.dart';
 import '../../shared/theme/app_colors.dart';
@@ -1109,6 +1110,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           recipient: _selectedRecipient,
                         ),
                       ],
+                      if (_urlCtrlFor(_selectedProvider) case final ctrl?)
+                        ValueListenableBuilder<TextEditingValue>(
+                          valueListenable: ctrl,
+                          builder:
+                              (_, value, _) => TransportNote(
+                                OllamaService.transportNoteFor(
+                                  _selectedProvider,
+                                  value.text,
+                                ),
+                              ),
+                        ),
                       const SizedBox(height: 14),
 
                       // ── Ollama fields ───────────────────────────────
@@ -1777,6 +1789,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   String? get _selectedRecipient => _recipientFor(_selectedProvider);
 
+  /// The URL field for a provider whose server the user chooses.
+  TextEditingController? _urlCtrlFor(AiProvider provider) => switch (provider) {
+    AiProvider.ollama => _ollamaUrlCtrl,
+    AiProvider.lmStudio => _lmStudioUrlCtrl,
+    AiProvider.maple => _mapleUrlCtrl,
+    _ => null,
+  };
+
   String _providerDescription(AiProvider provider) {
     final recipient = _recipientFor(provider);
     return switch (provider) {
@@ -1791,7 +1811,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       AiProvider.ollama =>
         recipient == null
             ? 'A model running on your own machine or one on your network. '
-                'Nothing leaves hardware you control.'
+                'Your figures go no further than that machine.'
             : 'Ollama on the server you configured. Your financial figures '
                 'are sent there to answer each question.',
       // Deliberately not "private, zero retention" as this once read. Maple

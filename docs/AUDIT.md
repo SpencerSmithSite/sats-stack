@@ -1355,6 +1355,26 @@ Item 15's open list, fixed one PR at a time, in the order `TODO.md` gave.
   first model as if it were answering, and Settings show none. `modelChoices`
   keeps the model in use in the list.
 
+### AI: where it goes, and what is kept
+- Every chat question and answer was written to `ai_conversations` and never
+  read — no screen shows them — so they piled up in the database and in every
+  export of it. Nothing writes there now, and launch clears what earlier
+  builds stored (`OllamaService.clearStoredTranscripts`). The table stays, so
+  no schema change.
+- API keys were stored under `first_unlock`, justified by a background insight
+  refresh that does not exist, and that class lets a key travel in an
+  encrypted backup to another device. iOS uses `first_unlock_this_device`;
+  existing keys are rewritten once (`keychain_keys_device_only`), which the
+  plugin does by replacing the old item. macOS keeps `first_unlock`: its
+  plugin puts the class in the read query, so a change could hide every key,
+  and the file-based keychain does not restore onto other devices anyway.
+- A server on the local network was described as "nothing leaves", though the
+  figures cross the network to another machine; a remote server over plain
+  `http://` got no warning. `OllamaService.transportNoteFor` says which, under
+  the URL field in Settings, onboarding and the chat's settings sheet. The
+  local network still counts as the user's own hardware for consent — an open
+  decision, now in TODO.
+
 ---
 
 ## Verified correct (no action)

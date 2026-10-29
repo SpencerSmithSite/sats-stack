@@ -85,6 +85,8 @@ void main() async {
   budgetService = BudgetService(db, rates: _currentRates);
   ollamaService = OllamaService(db);
   await ollamaService.loadSettings();
+  // Chat transcripts are no longer stored; drop any an earlier build kept.
+  unawaited(ollamaService.clearStoredTranscripts());
   importService = ImportService(db, ollamaService);
   // One rule, owned by OllamaService. Seeding this from
   // `isDesktop || isConnected` meant an on-device provider lost the tab on

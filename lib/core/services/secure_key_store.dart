@@ -21,11 +21,25 @@ class SecureKeyStore {
     // Without this Android falls back to plain SharedPreferences on older API
     // levels, which would defeat the point of moving the keys at all.
     aOptions: AndroidOptions(encryptedSharedPreferences: true),
-    // `first_unlock` rather than the default `unlocked`: the monthly insight
-    // can be generated from a background refresh while the device is locked,
-    // and the stricter class would make the key unreadable exactly then.
-    iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
+    // `first_unlock_this_device`. This was `first_unlock`, justified by a
+    // background insight refresh that does not exist — the insight is only
+    // ever generated in the foreground — and the plain class lets the key
+    // travel in an encrypted backup onto another device, which a credential
+    // for a paid account should not. `this_device` keeps it here. Readable
+    // after the first unlock, so a key is never missing in the foreground.
+    //
+    // The iOS plugin's reads ignore the class, so keys stored under the old
+    // one are still found; `OllamaService.loadSettings` rewrites them once,
+    // which the plugin does by deleting the old item and adding one under
+    // this class.
+    iOptions: IOSOptions(
+      accessibility: KeychainAccessibility.first_unlock_this_device,
+    ),
     mOptions: MacOsOptions(
+      // Unchanged on macOS. The macOS plugin puts the class in its read query,
+      // so changing it could make every stored key unfindable; and the
+      // file-based keychain used below is a file on this Mac that no backup
+      // restores onto another device, which is what `this_device` prevents.
       accessibility: KeychainAccessibility.first_unlock,
       // The file-based keychain rather than the data-protection one.
       //

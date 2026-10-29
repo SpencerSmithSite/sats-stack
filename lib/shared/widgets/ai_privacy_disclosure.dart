@@ -117,6 +117,40 @@ class AiPrivacyDisclosure extends StatelessWidget {
   }
 }
 
+/// A line about how the user's server is reached — see
+/// `OllamaService.transportNoteFor`. Renders nothing for a null [note].
+class TransportNote extends StatelessWidget {
+  const TransportNote(this.note, {super.key});
+
+  final String? note;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = note;
+    if (text == null) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.lan_outlined, size: 15, color: context.textSecondary),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              text,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: context.textSecondary,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// A link to where the user creates an API key for [provider].
 ///
 /// "Where do I get this?" is the first question every time a key field appears,

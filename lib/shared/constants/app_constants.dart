@@ -79,6 +79,10 @@ abstract final class AppConstants {
   /// fingerprint of the period, anchor, description and amount, which changed
   /// whenever an instance was edited — see
   /// `AppDatabase.adoptLegacyRecurringSeries`.
+  /// Set once the API keys have been rewritten under the device-only keychain
+  /// class — see `SecureKeyStore`.
+  static const settingKeysDeviceOnly = 'keychain_keys_device_only';
+
   /// `AppSettings` key prefix recording what a built-in category is called
   /// now: `<prefix><seeded name>` → current name. Written by
   /// `CategoryService.updateCategory`, read by the import categoriser, whose

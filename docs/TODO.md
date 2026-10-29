@@ -121,14 +121,11 @@ the order to do it; the first group can lose or misstate the user's data.
 **Import flow**
 
 **AI**
-- Chat transcripts are written to `ai_conversations` and never read — every
-  prompt and answer accumulates in the exported database for no feature.
-  Stop writing them or build the history screen.
-- `KeychainAccessibility.first_unlock` is justified by background work that
-  does not exist; `first_unlock_this_device` is the safer class (see also the
-  encryption plan's 2026-10-21 notes).
-- LAN hosts count as "nothing leaves"; plain `http` to a remote host gets no
-  warning.
+- **Decision:** should a server on the local network still count as the
+  user's own hardware (no import consent prompt, no off-device banner)? A
+  private address on a shared network — a café, an office — is someone else's
+  machine. Kept as-is for now, with honest wording; see AUDIT "AI: where it
+  goes, and what is kept".
 
 **UI**
 - Remaining overflows at large text: the transaction row's category line, the
