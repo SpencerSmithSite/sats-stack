@@ -1,8 +1,6 @@
-import 'dart:convert';
+import 'dart:math';
 
-import 'package:crypto/crypto.dart';
 import 'package:drift/drift.dart';
-import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import '../../shared/constants/app_constants.dart';
 import '../../shared/utils/hash_utils.dart';
@@ -44,133 +42,181 @@ class TransactionService {
       ..where((t) => t.id.equals(companion.id.value))).write(companion);
   }
 
-  /// Finds all recurring transaction templates and inserts any instances that
-  /// have come due since the last run. Safe to call on every app launch —
-  /// the dedup hash prevents double-insertion.
+  /// A fresh id for a series the user is starting. Random rather than derived
+  /// from the row, so nothing the user later edits can change it.
+  static String newSeriesId() {
+    final r = Random.secure();
+    return List.generate(
+      8,
+      (_) => r.nextInt(256).toRadixString(16).padLeft(2, '0'),
+    ).join();
+  }
+
+  /// Finds all recurring series and inserts any instances that have come due
+  /// since the last run. Safe to call on every app launch — each series'
+  /// cursor, and behind it the dedup hash, prevent double-insertion.
+  ///
+  /// [priceAt] prices each instance on its own date: a fiat series keeps its
+  /// fiat amount and gets that day's sats, a Bitcoin one the reverse. Without
+  /// it — or when a day's price cannot be had — the newest instance's figures
+  /// are copied, which is what every instance used to get: a monthly £1,200
+  /// rent stacked the same sats in a bull market as in a bear one.
   ///
   /// [now] exists for tests; production callers omit it.
-  Future<void> generateDueRecurring({DateTime? now}) async {
-    final recurring =
-        await (_db.select(_db.transactions)
-          ..where((t) => t.recurringPeriod.isNotNull())).get();
+  Future<void> generateDueRecurring({
+    DateTime? now,
+    Future<double?> Function(DateTime date, String currency)? priceAt,
+  }) async {
+    await _db.adoptLegacyRecurringSeries();
 
+    final recurring =
+        await (_db.select(_db.transactions)..where(
+          (t) =>
+              t.recurringPeriod.isNotNull() &
+              t.recurringAnchorDate.isNotNull() &
+              t.recurringSeriesId.isNotNull(),
+        )).get();
     if (recurring.isEmpty) return;
 
-    // Group the instances into series.
-    //
-    // The identity includes the description and amount, not just the period
-    // and anchor date: `showDatePicker` returns midnight, so two series
-    // started on the same day had byte-identical anchors and collided — one of
-    // them never generated at all, and they shared a cursor.
     final seriesRows = <String, List<Transaction>>{};
     for (final tx in recurring) {
-      if (tx.recurringAnchorDate == null) continue;
-      (seriesRows[seriesKey(tx)] ??= <Transaction>[]).add(tx);
+      (seriesRows[tx.recurringSeriesId!] ??= <Transaction>[]).add(tx);
     }
 
     final today = _dateOnly(now ?? DateTime.now());
 
+    // ── Plan: which occurrences are due, per series ─────────────────────────
+    final plans = <_SeriesPlan>[];
+    for (final MapEntry(key: seriesId, value: rows) in seriesRows.entries) {
+      // The newest instance carries the series' current figures, so editing
+      // it is how the user changes what future instances look like.
+      final template = rows.reduce((a, b) => a.date.isAfter(b.date) ? a : b);
+      final period = template.recurringPeriod!;
+      final anchor = template.recurringAnchorDate!;
+
+      // The resume point is the high-water mark, never just the latest
+      // surviving row: deleting the most recent instance used to lower it and
+      // the next launch brought that row straight back. With a stable series
+      // id the cursor is authoritative — before v9 it had to be second-guessed
+      // when a series looked re-created, and that let deleting every instance
+      // but the anchor regenerate them all.
+      final cursorKey = AppConstants.recurringCursorKey(seriesId);
+      final cursorRow =
+          await (_db.select(_db.appSettings)
+            ..where((t) => t.key.equals(cursorKey))).getSingleOrNull();
+      final cursor = int.tryParse(cursorRow?.value ?? '');
+
+      var resumeFrom = cursor;
+      if (resumeFrom == null) {
+        // No cursor yet: a new series, or one from before cursors existed.
+        // Resume after the highest occurrence it still has a row for.
+        resumeFrom = 0;
+        for (final row in rows) {
+          final i = _occurrenceIndex(anchor, row.date, period);
+          if (i > resumeFrom!) resumeFrom = i;
+        }
+      }
+
+      // Dates are always derived from the anchor rather than by stepping
+      // from the previous instance, so a clamped month (Jan 31 → Feb 28)
+      // doesn't pull every later month back to the 28th. Calendar days are
+      // compared: an instance due today is generated today even when the
+      // series carries a time of day.
+      final due = <DateTime>[];
+      var n = resumeFrom! < 0 ? 1 : resumeFrom + 1;
+      for (
+        var next = _occurrence(anchor, period, n);
+        !_dateOnly(next).isAfter(today);
+        next = _occurrence(anchor, period, ++n)
+      ) {
+        due.add(next);
+      }
+
+      plans.add(
+        _SeriesPlan(
+          seriesId: seriesId,
+          template: template,
+          due: due,
+          // n is now the first occurrence *not* generated. Written even when
+          // nothing was due, so a series created today records its anchor and
+          // a deletion cannot rewind past it.
+          mark: n - 1,
+          cursorKey: cursorKey,
+          writeCursor: cursor == null || n - 1 > cursor,
+        ),
+      );
+    }
+
+    // ── Price each occurrence on its own day ────────────────────────────────
+    //
+    // Outside the write transaction: these can reach the network, and holding
+    // the database lock across that would stall every screen.
+    final prices = <(String, DateTime), double>{};
+    if (priceAt != null) {
+      for (final plan in plans) {
+        for (final date in plan.due) {
+          try {
+            final price = await priceAt(date, plan.template.fiatCurrency);
+            if (price != null && price > 0) {
+              prices[(plan.seriesId, date)] = price;
+            }
+          } catch (_) {
+            // Falls back to the template's figures below.
+          }
+        }
+      }
+    }
+
+    // ── Write ───────────────────────────────────────────────────────────────
+    //
     // One transaction so a launch that catches up on many missed periods
     // notifies stream listeners (dashboard, budgets, notifications) once
     // rather than once per inserted row.
     await _db.transaction(() async {
-      for (final entry in seriesRows.entries) {
-        final rows = entry.value;
-        // Any row carries the series' shape; the newest is the conventional
-        // one to copy from.
-        final template = rows.reduce((a, b) => a.date.isAfter(b.date) ? a : b);
-        final period = template.recurringPeriod!;
-        final anchor = template.recurringAnchorDate!;
-        // Dates are always derived from the anchor rather than by stepping
-        // from the previous instance, so a clamped month (Jan 31 → Feb 28)
-        // doesn't pull every later month back to the 28th.
-        //
-        // The resume point is the high-water mark, never just the latest
-        // surviving row: deleting the most recent instance used to lower it
-        // and the next launch brought that row straight back.
-        final cursorKey = AppConstants.recurringCursorKey(entry.key);
-        final cursorRow =
-            await (_db.select(_db.appSettings)
-              ..where((t) => t.key.equals(cursorKey))).getSingleOrNull();
-        final cursor = int.tryParse(cursorRow?.value ?? '');
+      for (final plan in plans) {
+        final t = plan.template;
+        for (final date in plan.due) {
+          final price = prices[(plan.seriesId, date)];
+          final sats =
+              (price == null || t.isBitcoin)
+                  ? t.amountSats
+                  : (t.amountFiat / price * 100000000).round();
+          final fiat =
+              (price == null || !t.isBitcoin)
+                  ? t.amountFiat
+                  : t.amountSats / 100000000 * price;
 
-        // The highest occurrence the series still has a row for.
-        var highestSurviving = 0;
-        for (final row in rows) {
-          final i = _occurrenceIndex(anchor, row.date, period);
-          if (i > highestSurviving) highestSurviving = i;
-        }
-
-        // The cursor is authoritative, with one exception.
-        //
-        // Taking `max(cursor, latestSurviving)` — what this did before — meant
-        // that editing one instance's date forward dragged the cursor with it
-        // and every occurrence in between was skipped for good.
-        //
-        // The exception is a series whose only surviving row is its anchor
-        // while the cursor sits above it: that is a series the user deleted
-        // and re-created, and honouring the stale mark meant it never
-        // generated again. A series where the newest instance alone was
-        // deleted still has its middle instances, so it keeps the cursor and
-        // the deleted row stays deleted.
-        final resumeFrom =
-            (cursor != null && highestSurviving > 0)
-                ? cursor
-                : highestSurviving;
-
-        var n = resumeFrom + 1;
-        if (n < 1) n = 1;
-        var nextDue = _occurrence(anchor, period, n);
-        final startedAt = n;
-
-        // Compare calendar days: an instance due today is generated today even
-        // when the series carries a time of day.
-        while (!_dateOnly(nextDue).isAfter(today)) {
-          final salt =
-              'recurring_${anchor.millisecondsSinceEpoch}_${nextDue.millisecondsSinceEpoch}';
-          final dedupHash = HashUtils.transactionDedupHash(
-            date: nextDue,
-            amount: template.amountFiat,
-            description: template.description,
-            salt: salt,
-          );
-
-          // insertOrIgnore: the unique dedupHash means "already inserted".
           await _db
               .into(_db.transactions)
               .insert(
                 TransactionsCompanion.insert(
-                  walletId: template.walletId,
-                  date: nextDue,
-                  description: template.description,
-                  amountSats: template.amountSats,
-                  amountFiat: template.amountFiat,
-                  fiatCurrency: template.fiatCurrency,
-                  category: Value(template.category),
+                  walletId: t.walletId,
+                  date: date,
+                  description: t.description,
+                  amountSats: sats,
+                  amountFiat: fiat,
+                  fiatCurrency: t.fiatCurrency,
+                  category: Value(t.category),
                   source: 'manual',
-                  notes: Value(template.notes),
-                  dedupHash: dedupHash,
-                  recurringPeriod: Value(template.recurringPeriod),
-                  recurringAnchorDate: Value(template.recurringAnchorDate),
+                  isBitcoin: Value(t.isBitcoin),
+                  notes: Value(t.notes),
+                  dedupHash: recurringDedupHash(plan.seriesId, date),
+                  recurringPeriod: Value(t.recurringPeriod),
+                  recurringAnchorDate: Value(t.recurringAnchorDate),
+                  recurringSeriesId: Value(plan.seriesId),
                 ),
+                // The unique dedupHash means "already inserted".
                 mode: InsertMode.insertOrIgnore,
               );
-
-          n++;
-          nextDue = _occurrence(anchor, period, n);
         }
 
-        // n is now the first occurrence *not* generated, so n - 1 is the mark.
-        // Written even when nothing was due, so a series created today records
-        // its anchor and a deletion cannot rewind past it.
-        final mark = n - 1;
-        if (cursor == null || mark > cursor || startedAt == n) {
+        if (plan.writeCursor) {
           await _db
               .into(_db.appSettings)
               .insertOnConflictUpdate(
                 AppSettingsCompanion.insert(
-                  key: cursorKey,
-                  value: mark.toString(),
+                  key: plan.cursorKey,
+                  value: plan.mark.toString(),
                 ),
               );
         }
@@ -178,19 +224,39 @@ class TransactionService {
     });
   }
 
-  /// Identifies the series an instance belongs to.
+  /// The dedup hash of [seriesId]'s occurrence on [due].
   ///
-  /// Period, anchor, description and amount — enough that two series started
-  /// on the same day stay separate, and stable across launches so the cursor
-  /// written under it is found again. Hashed because it becomes an
-  /// `AppSettings` key.
-  @visibleForTesting
-  static String seriesKey(Transaction tx) {
-    final raw =
-        '${tx.recurringPeriod}|'
-        '${tx.recurringAnchorDate!.millisecondsSinceEpoch}|'
-        '${tx.description}|${tx.amountFiat}';
-    return sha256.convert(utf8.encode(raw)).toString().substring(0, 16);
+  /// Built only from what cannot change — the series and the due date — so
+  /// an occurrence hashes the same however the series' description or amount
+  /// is edited. It used to include both, which is how an edit let the same
+  /// occurrence be inserted a second time.
+  static String recurringDedupHash(String seriesId, DateTime due) =>
+      HashUtils.transactionDedupHash(
+        date: due,
+        amount: 0,
+        description: '',
+        salt: 'recurring_${seriesId}_${due.millisecondsSinceEpoch}',
+      );
+
+  /// Ends [seriesId]: its rows stay, as one-off transactions, and no more are
+  /// generated.
+  ///
+  /// There was no way to do this. Deleting every instance but the anchor
+  /// regenerated them, and deleting the anchor too lost the history.
+  Future<void> stopSeries(String seriesId) {
+    return _db.transaction(() async {
+      await (_db.update(_db.transactions)
+        ..where((t) => t.recurringSeriesId.equals(seriesId))).write(
+        const TransactionsCompanion(
+          recurringPeriod: Value(null),
+          recurringAnchorDate: Value(null),
+          recurringSeriesId: Value(null),
+        ),
+      );
+      await (_db.delete(_db.appSettings)..where(
+        (t) => t.key.equals(AppConstants.recurringCursorKey(seriesId)),
+      )).go();
+    });
   }
 
   static DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
@@ -259,4 +325,22 @@ class TransactionService {
     final maxDay = DateTime(first.year, first.month + 1, 0).day;
     return _onDay(anchor, first.year, first.month, anchor.day.clamp(1, maxDay));
   }
+}
+
+class _SeriesPlan {
+  _SeriesPlan({
+    required this.seriesId,
+    required this.template,
+    required this.due,
+    required this.mark,
+    required this.cursorKey,
+    required this.writeCursor,
+  });
+
+  final String seriesId;
+  final Transaction template;
+  final List<DateTime> due;
+  final int mark;
+  final String cursorKey;
+  final bool writeCursor;
 }

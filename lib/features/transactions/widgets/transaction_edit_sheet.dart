@@ -272,6 +272,38 @@ class _TransactionEditSheetState extends State<TransactionEditSheet> {
     }
   }
 
+  Future<void> _stopRepeating() async {
+    final tx = widget.existingTx!;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder:
+          (ctx) => AlertDialog(
+            title: Text('Stop "${tx.description}" repeating?'),
+            content: const Text(
+              'The entries already added stay. No new ones will be added.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Stop repeating'),
+              ),
+            ],
+          ),
+    );
+    if (confirmed != true || !mounted) return;
+    await app.transactionService.stopSeries(tx.recurringSeriesId!);
+    if (mounted) {
+      Navigator.pop(context);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Stopped repeating')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -378,6 +410,27 @@ class _TransactionEditSheetState extends State<TransactionEditSheet> {
               ),
             ),
             const SizedBox(height: 12),
+
+            // Repeat
+            if (widget.existingTx?.recurringSeriesId != null) ...[
+              Row(
+                children: [
+                  Icon(Icons.repeat, size: 18, color: context.textSecondary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Repeats ${widget.existingTx!.recurringPeriod}',
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: _stopRepeating,
+                    child: const Text('Stop repeating'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+            ],
 
             // Category
             if (_categories.isNotEmpty) ...[

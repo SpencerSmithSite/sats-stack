@@ -129,11 +129,15 @@ void main() async {
   notificationService = NotificationService();
   await notificationService.initialize();
 
-  // Generate any recurring transactions that came due since last launch
-  transactionService.generateDueRecurring().ignore();
-
   // Load cached BTC price before first frame; fetches fresh in background if stale
   await btcPriceService.initialize();
+
+  // Generate any recurring transactions that came due since last launch,
+  // each priced on its own date. After the price service is set up, since
+  // that is where the configured price server comes from.
+  transactionService
+      .generateDueRecurring(priceAt: btcPriceService.getHistoricalPrice)
+      .ignore();
 
   // Check budgets at startup and on every subsequent transaction change.
   budgetService

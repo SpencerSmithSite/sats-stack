@@ -33,10 +33,14 @@ void main() {
     addTearDown(() => dir.delete(recursive: true));
     final file = File('${dir.path}/db.sqlite');
 
-    // A v7 database: current tables, without v8's index, version 7.
+    // A v7 database: current tables, without v8's index, version 7…
     final fresh = AppDatabase.forTesting(NativeDatabase(file));
     await fresh.customSelect('SELECT 1').get();
     await fresh.customStatement('DROP INDEX idx_categories_name');
+    // …and without v9's column.
+    await fresh.customStatement(
+      'ALTER TABLE transactions DROP COLUMN recurring_series_id',
+    );
     await fresh.customStatement('PRAGMA user_version = 7');
     await fresh.close();
 
@@ -51,7 +55,7 @@ void main() {
     final relaunched = AppDatabase.forTesting(NativeDatabase(file));
     final version =
         await relaunched.customSelect('PRAGMA user_version').getSingle();
-    expect(version.data.values.single, 8);
+    expect(version.data.values.single, 9);
     final index =
         await relaunched
             .customSelect(
