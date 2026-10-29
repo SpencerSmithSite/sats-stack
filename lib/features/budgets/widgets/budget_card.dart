@@ -115,13 +115,18 @@ class BudgetCard extends StatelessWidget {
                       ),
                     )
                   else
-                    Text(
-                      remaining != null && remaining >= 0
-                          ? '${CurrencyUtils.format(remaining, currency, decimalDigits: decimals)} left'
-                          : '',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: progressColor,
-                        fontWeight: FontWeight.w500,
+                    Flexible(
+                      child: Text(
+                        remaining != null && remaining >= 0
+                            ? '${CurrencyUtils.format(remaining, currency, decimalDigits: decimals)} left'
+                            : '',
+                        textAlign: TextAlign.end,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          // Raw green on white is 3.4:1; as text it needs the
+                          // darkened shade.
+                          color: context.legibleAccent(progressColor),
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
                 ],
@@ -148,26 +153,37 @@ class BudgetCard extends StatelessWidget {
               const SizedBox(height: 10),
 
               // ── Amounts row ─────────────────────────────────────────────────────
-              Row(
+              // Wraps rather than overflowing: at a large text size the
+              // figures and the sats cost do not fit on one line.
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 12,
+                runSpacing: 4,
                 children: [
-                  Text(
-                    CurrencyUtils.format(
-                      progress.spentFiat,
-                      currency,
-                      decimalDigits: decimals,
-                    ),
-                    style: AppTextStyles.monoSmall.copyWith(
-                      color: progressColor,
-                      fontWeight: FontWeight.w600,
+                  Text.rich(
+                    TextSpan(
+                      children: [
+                        TextSpan(
+                          text: CurrencyUtils.format(
+                            progress.spentFiat,
+                            currency,
+                            decimalDigits: decimals,
+                          ),
+                          style: AppTextStyles.monoSmall.copyWith(
+                            color: context.legibleAccent(progressColor),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        TextSpan(
+                          text: ' / $limitLabel',
+                          style: AppTextStyles.monoSmall.copyWith(
+                            color: context.textSecondary,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  Text(
-                    ' / $limitLabel',
-                    style: AppTextStyles.monoSmall.copyWith(
-                      color: context.textSecondary,
-                    ),
-                  ),
-                  const Spacer(),
                   // Sats opportunity cost
                   if (btcPrice != null &&
                       btcPrice! > 0 &&
@@ -266,12 +282,18 @@ class _SatsCost extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(Icons.currency_bitcoin, size: 11, color: AppColors.bitcoinOrange),
-        Text(
-          '$formatted sats',
-          style: AppTextStyles.monoSmall.copyWith(
-            color: context.bitcoinOrangeText,
-            fontSize: 11,
+        Icon(
+          Icons.currency_bitcoin,
+          size: 11,
+          color: context.bitcoinOrangeText,
+        ),
+        Flexible(
+          child: Text(
+            '$formatted sats',
+            style: AppTextStyles.monoSmall.copyWith(
+              color: context.bitcoinOrangeText,
+              fontSize: 11,
+            ),
           ),
         ),
       ],

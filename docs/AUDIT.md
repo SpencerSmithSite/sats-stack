@@ -1391,6 +1391,23 @@ Item 15's open list, fixed one PR at a time, in the order `TODO.md` gave.
   minutes while the app runs and on returning to the foreground
   (`BtcPriceService.startAutoRefresh`, `refreshIfOlderThan`).
 
+### Large text, contrast and category colours
+- Overflows at large text sizes, each now covered in `accessibility_test` at
+  1×, 2× and 3× on a 360 px screen: the transaction row's category line (the
+  existing test used a row with no category), the hero card's fiat-and-change
+  line, the budget card's figures and its sats cost, `StackGoalTile`'s header,
+  and the five button rows in Settings, which wrap now.
+- Contrast: the budget card's spent figure and "left" text were the raw
+  progress colour (green 3.4:1 on white), and selected category chips set
+  their label in the raw category colour. All go through `legibleAccent`.
+- Analytics ignored the colours chosen in Settings → Categories; it reads them
+  now, as the dashboard does.
+- The database seeded Housing, Shopping, Subscriptions and Other in one grey,
+  Transport in the Bitcoin orange and Entertainment in the Income green, while
+  `CategoryPalette` had its own table. There is one table now
+  (`AppConstants.seededCategoryColours`) with nine distinct colours, and the
+  v11 migration recolours built-ins the user never recoloured.
+
 ---
 
 ## Verified correct (no action)

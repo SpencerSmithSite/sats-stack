@@ -47,7 +47,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 10;
+  int get schemaVersion => 11;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -94,6 +94,9 @@ class AppDatabase extends _$AppDatabase {
         }
         if (from < 10) {
           await migrateToV10(m);
+        }
+        if (from < 11) {
+          await migrateToV11();
         }
       });
     },
@@ -279,6 +282,35 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
+  /// v10 → v11: built-in categories the user never recoloured get distinct
+  /// colours.
+  ///
+  /// The seed made Housing, Shopping, Subscriptions and Other the same grey,
+  /// Transport the Bitcoin orange and Entertainment the Income green, so four
+  /// slices of a pie chart could not be told apart. Only a row still named and
+  /// coloured as seeded is changed: a colour the user picked is theirs.
+  Future<void> migrateToV11() async {
+    const before = {
+      'Transport': '#F7931A',
+      'Housing': '#888780',
+      'Shopping': '#888780',
+      'Subscriptions': '#888780',
+      'Entertainment': '#1D9E75',
+    };
+    for (final MapEntry(key: name, value: old) in before.entries) {
+      await (update(categories)..where(
+        (c) =>
+            c.isSystem.equals(true) &
+            c.name.equals(name) &
+            c.color.upper().equals(old),
+      )).write(
+        CategoriesCompanion(
+          color: Value(AppConstants.seededCategoryColours[name]!),
+        ),
+      );
+    }
+  }
+
   /// "Name (n)", trimmed so it still fits the 60-character name column.
   static String _withSuffix(String name, int n) {
     final suffix = ' ($n)';
@@ -309,55 +341,55 @@ class AppDatabase extends _$AppDatabase {
     final systemCategories = [
       CategoriesCompanion.insert(
         name: 'Food & Dining',
-        color: '#E24B4A',
+        color: AppConstants.seededCategoryColours['Food & Dining']!,
         icon: 'restaurant',
         isSystem: const Value(true),
       ),
       CategoriesCompanion.insert(
         name: 'Transport',
-        color: '#F7931A',
+        color: AppConstants.seededCategoryColours['Transport']!,
         icon: 'directions_car',
         isSystem: const Value(true),
       ),
       CategoriesCompanion.insert(
         name: 'Housing',
-        color: '#888780',
+        color: AppConstants.seededCategoryColours['Housing']!,
         icon: 'home',
         isSystem: const Value(true),
       ),
       CategoriesCompanion.insert(
         name: 'Shopping',
-        color: '#888780',
+        color: AppConstants.seededCategoryColours['Shopping']!,
         icon: 'shopping_bag',
         isSystem: const Value(true),
       ),
       CategoriesCompanion.insert(
         name: 'Subscriptions',
-        color: '#888780',
+        color: AppConstants.seededCategoryColours['Subscriptions']!,
         icon: 'subscriptions',
         isSystem: const Value(true),
       ),
       CategoriesCompanion.insert(
         name: 'Entertainment',
-        color: '#1D9E75',
+        color: AppConstants.seededCategoryColours['Entertainment']!,
         icon: 'movie',
         isSystem: const Value(true),
       ),
       CategoriesCompanion.insert(
         name: 'Bitcoin',
-        color: '#F7931A',
+        color: AppConstants.seededCategoryColours['Bitcoin']!,
         icon: 'currency_bitcoin',
         isSystem: const Value(true),
       ),
       CategoriesCompanion.insert(
         name: 'Income',
-        color: '#1D9E75',
+        color: AppConstants.seededCategoryColours['Income']!,
         icon: 'payments',
         isSystem: const Value(true),
       ),
       CategoriesCompanion.insert(
         name: 'Other',
-        color: '#888780',
+        color: AppConstants.seededCategoryColours['Other']!,
         icon: 'more_horiz',
         isSystem: const Value(true),
       ),

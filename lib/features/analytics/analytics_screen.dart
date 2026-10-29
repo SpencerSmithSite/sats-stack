@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -5,6 +6,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/database/database.dart';
 import '../../core/models/analytics_data.dart';
 import '../../main.dart' as app;
 import '../../shared/theme/app_colors.dart';
@@ -41,15 +43,27 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   /// re-ran the six-month aggregate on every currency tick.
   late Stream<AnalyticsData> _analytics;
 
+  /// Category name → the colour the user chose in Settings → Categories.
+  ///
+  /// The dashboard used these and Analytics did not, so a category the user
+  /// had recoloured was one colour on the dashboard and another here.
+  Map<String, String> _categoryHex = const {};
+  StreamSubscription<List<Category>>? _categorySub;
+
   @override
   void initState() {
     super.initState();
     _analytics = app.dashboardService.watchAnalytics(_selectedMonth);
     app.currencyNotifier.addListener(_onCurrencyChange);
+    _categorySub = app.categoryService.watchAll().listen((cats) {
+      if (!mounted) return;
+      setState(() => _categoryHex = {for (final c in cats) c.name: c.color});
+    });
   }
 
   @override
   void dispose() {
+    _categorySub?.cancel();
     app.currencyNotifier.removeListener(_onCurrencyChange);
     super.dispose();
   }
@@ -157,7 +171,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                         onPressed: _exportCsv,
                       ),
                     ),
-                    _PieSection(data: data, currency: currency),
+                    _PieSection(
+                      data: data,
+                      currency: currency,
+                      categoryHex: _categoryHex,
+                    ),
                     const SizedBox(height: 24),
                   ],
 
@@ -166,6 +184,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   _TrendChart(
                     monthlyTotals: data.monthlyTotals,
                     currency: currency,
+                    categoryHex: _categoryHex,
                   ),
                   const SizedBox(height: 24),
 
@@ -187,7 +206,13 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
 // ── Pie chart + legend ────────────────────────────────────────────────────────
 
 class _PieSection extends StatefulWidget {
-  const _PieSection({required this.data, required this.currency});
+  const _PieSection({
+    required this.data,
+    required this.currency,
+    required this.categoryHex,
+  });
+
+  final Map<String, String> categoryHex;
   final AnalyticsData data;
   final String currency;
 
@@ -216,7 +241,7 @@ class _PieSectionState extends State<_PieSection> {
           final isTouched = i == _touched;
           return PieChartSectionData(
             value: e.value,
-            color: _colorFor(e.key),
+            color: _colorFor(e.key, userHex: widget.categoryHex[e.key]),
             radius: isTouched ? 72 : 60,
             title:
                 isTouched
@@ -278,7 +303,10 @@ class _PieSectionState extends State<_PieSection> {
                     width: 10,
                     height: 10,
                     decoration: BoxDecoration(
-                      color: _colorFor(e.key),
+                      color: _colorFor(
+                        e.key,
+                        userHex: widget.categoryHex[e.key],
+                      ),
                       shape: BoxShape.circle,
                     ),
                   ),
@@ -320,7 +348,13 @@ class _PieSectionState extends State<_PieSection> {
 // ── 6-month bar chart ─────────────────────────────────────────────────────────
 
 class _TrendChart extends StatefulWidget {
-  const _TrendChart({required this.monthlyTotals, required this.currency});
+  const _TrendChart({
+    required this.monthlyTotals,
+    required this.currency,
+    required this.categoryHex,
+  });
+
+  final Map<String, String> categoryHex;
   final List<MonthlyTotal> monthlyTotals;
   final String currency;
 
@@ -355,7 +389,10 @@ class _TrendChartState extends State<_TrendChart> {
     final chartMax = maxY > 0 ? (maxY * 1.2).ceilToDouble() : 100.0;
     final barColor =
         _selectedCategory != null
-            ? _colorFor(_selectedCategory!).withAlpha(200)
+            ? _colorFor(
+              _selectedCategory!,
+              userHex: widget.categoryHex[_selectedCategory],
+            ).withAlpha(200)
             : AppColors.danger.withAlpha(200);
 
     return Column(
@@ -379,7 +416,7 @@ class _TrendChartState extends State<_TrendChart> {
                   _ChipOption(
                     label: cat,
                     selected: _selectedCategory == cat,
-                    color: _colorFor(cat),
+                    color: _colorFor(cat, userHex: widget.categoryHex[cat]),
                     onTap: () => setState(() => _selectedCategory = cat),
                   ),
               ],

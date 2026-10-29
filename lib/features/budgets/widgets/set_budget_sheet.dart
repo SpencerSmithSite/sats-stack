@@ -340,7 +340,11 @@ class _CategoryChip extends StatelessWidget {
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                color: isSelected ? color : context.textSecondary,
+                // Darkened to read on its own tint; see `legibleAccent`.
+                color:
+                    isSelected
+                        ? context.legibleAccent(color)
+                        : context.textSecondary,
               ),
             ),
           ],

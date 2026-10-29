@@ -7,10 +7,15 @@
 /// not a number picked here.
 library;
 
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sats_stack/core/database/database.dart';
+import 'package:sats_stack/core/models/budget_progress.dart';
+import 'package:sats_stack/features/budgets/widgets/budget_card.dart';
+import 'package:sats_stack/features/dashboard/widgets/hero_card.dart';
+import 'package:sats_stack/features/dashboard/widgets/metric_tile.dart';
 import 'package:sats_stack/features/stack/widgets/period_chip.dart';
 import 'package:sats_stack/features/transactions/widgets/transaction_list_item.dart';
 import 'package:sats_stack/shared/theme/app_theme.dart';
@@ -193,6 +198,112 @@ void main() {
           width: 360,
         );
         // Was a RenderFlex overflow: the amount column would not give way.
+        expect(tester.takeException(), isNull);
+      });
+
+      testWidgets('a categorised, repeating row does not overflow at '
+          '${scale}x', (tester) async {
+        await _pump(
+          tester,
+          TransactionListItem(
+            transaction: tx.copyWith(recurringPeriod: const Value('monthly')),
+            category: const Category(
+              id: 1,
+              name: 'Subscriptions and memberships',
+              color: '#6AB0E8',
+              icon: 'subscriptions',
+              isSystem: false,
+            ),
+            btcPrice: 80000,
+          ),
+          textScale: scale,
+          width: 360,
+        );
+        // The category line was a Row of unconstrained text.
+        expect(tester.takeException(), isNull);
+      });
+
+      testWidgets('the hero card does not overflow at ${scale}x', (
+        tester,
+      ) async {
+        await _pump(
+          tester,
+          const SingleChildScrollView(
+            child: HeroCard(
+              totalStackSats: 123456789,
+              monthChangeSats: -2345678,
+              btcPrice: 81234.56,
+              currency: 'USD',
+            ),
+          ),
+          textScale: scale,
+          width: 360,
+        );
+        expect(tester.takeException(), isNull);
+      });
+
+      testWidgets('a budget card does not overflow at ${scale}x', (
+        tester,
+      ) async {
+        await _pump(
+          tester,
+          SingleChildScrollView(
+            child: BudgetCard(
+              progress: BudgetProgress(
+                budget: Budget(
+                  id: 1,
+                  categoryId: 1,
+                  amountFiat: 12345.67,
+                  currency: 'USD',
+                  period: 'monthly',
+                  createdAt: DateTime(2026),
+                ),
+                category: const Category(
+                  id: 1,
+                  name: 'Food & Dining',
+                  color: '#E24B4A',
+                  icon: 'restaurant',
+                  isSystem: true,
+                ),
+                spentFiat: 9876.54,
+                limitFiat: 12345.67,
+              ),
+              btcPrice: 81234.56,
+              currency: 'USD',
+              onEdit: () {},
+              onDelete: () {},
+            ),
+          ),
+          textScale: scale,
+          width: 360,
+        );
+        expect(tester.takeException(), isNull);
+      });
+
+      testWidgets('the stack goal tile does not overflow at ${scale}x', (
+        tester,
+      ) async {
+        await _pump(
+          tester,
+          const SingleChildScrollView(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: StackGoalTile(
+                    progress: 0.123,
+                    currentSats: 12345678,
+                    goalSats: 100000000,
+                  ),
+                ),
+                SizedBox(width: 10),
+                Expanded(child: SizedBox()),
+              ],
+            ),
+          ),
+          textScale: scale,
+          width: 360,
+        );
         expect(tester.takeException(), isNull);
       });
     }

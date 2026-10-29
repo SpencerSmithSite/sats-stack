@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../constants/app_constants.dart';
+
 /// The one place that decides what colour a category is drawn in.
 ///
 /// There were three copies of this map, and they disagreed: Shopping was
@@ -10,17 +12,10 @@ import 'package:flutter/material.dart';
 /// stored all along, and a custom category fell through to grey — several of
 /// them, all identical and indistinguishable in a pie chart.
 abstract final class CategoryPalette {
-  /// The nine seeded categories, keeping the colours the app already shipped.
-  static const _seeded = <String, Color>{
-    'Food & Dining': Color(0xFFE24B4A),
-    'Transport': Color(0xFFF7931A),
-    'Housing': Color(0xFF888780),
-    'Shopping': Color(0xFF9B59B6),
-    'Subscriptions': Color(0xFF3498DB),
-    'Entertainment': Color(0xFF1D9E75),
-    'Bitcoin': Color(0xFFF7931A),
-    'Income': Color(0xFF1D9E75),
-    'Other': Color(0xFF888780),
+  /// The nine seeded categories, in the colours the database seeds them with.
+  static final _seeded = <String, Color>{
+    for (final e in AppConstants.seededCategoryColours.entries)
+      e.key: parseHex(e.value)!,
   };
 
   /// Distinct, legible in both themes, and deliberately not including the

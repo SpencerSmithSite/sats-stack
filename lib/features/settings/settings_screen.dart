@@ -1186,7 +1186,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               ),
                             ),
                           ),
-                        Row(
+                        Wrap(
+                          // Wraps at a large text size rather than overflowing.
+                          spacing: 8,
+                          runSpacing: 8,
+                          crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
                             OutlinedButton.icon(
                               onPressed:
@@ -1206,7 +1210,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                       ),
                               label: const Text('Test connection'),
                             ),
-                            const SizedBox(width: 8),
                             FilledButton(
                               onPressed: _saveOllama,
                               child: const Text('Save'),
@@ -1273,7 +1276,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               ),
                             ),
                           ),
-                        Row(
+                        Wrap(
+                          // Wraps at a large text size rather than overflowing.
+                          spacing: 8,
+                          runSpacing: 8,
+                          crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
                             OutlinedButton.icon(
                               onPressed:
@@ -1295,7 +1302,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                       ),
                               label: const Text('Test connection'),
                             ),
-                            const SizedBox(width: 8),
                             FilledButton(
                               onPressed: _saveLmStudio,
                               child: const Text('Save'),
@@ -1370,7 +1376,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               ),
                             ),
                           ),
-                        Row(
+                        Wrap(
+                          // Wraps at a large text size rather than overflowing.
+                          spacing: 8,
+                          runSpacing: 8,
+                          crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
                             OutlinedButton.icon(
                               onPressed:
@@ -1390,7 +1400,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                       ),
                               label: const Text('Test connection'),
                             ),
-                            const SizedBox(width: 8),
                             FilledButton(
                               onPressed: _saveMaple,
                               child: const Text('Save'),
@@ -1482,7 +1491,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                         ),
                       ),
-                    Row(
+                    Wrap(
+                      // Wraps at a large text size rather than overflowing.
+                      spacing: 8,
+                      runSpacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         OutlinedButton.icon(
                           onPressed:
@@ -1502,7 +1515,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   ),
                           label: const Text('Test connection'),
                         ),
-                        const SizedBox(width: 8),
                         FilledButton(
                           onPressed: _saveBitcoinServers,
                           child: const Text('Save'),
@@ -1721,7 +1733,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
         ),
-      Row(
+      Wrap(
+        // Wraps at a large text size rather than overflowing.
+        spacing: 8,
+        runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           OutlinedButton.icon(
             onPressed: testing ? null : () => _testCloudConnection(cloud),
@@ -1735,7 +1751,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     : const Icon(Icons.wifi_tethering_outlined, size: 18),
             label: const Text('Test key'),
           ),
-          const SizedBox(width: 8),
           FilledButton(
             onPressed: () => _saveCloud(cloud),
             child: const Text('Save'),
