@@ -126,15 +126,11 @@ secure-storage file. When encryption ships, device transfer must exclude the
 database as well — a transferred encrypted file arrives without its key.
 
 The manifest does not set `android:allowBackup` **[verified]**, so Android
-Auto Backup is on by default. That has two consequences, one of which is
-already a problem today:
-
-- **Now:** the plaintext database goes into the user's Google Drive backup,
-  and the API keys go with it in `flutter_secure_storage`'s
-  EncryptedSharedPreferences — whose Keystore key does not. A restore to a new
-  phone brings back a key file that cannot be read.
-- **After encryption:** a restored database would be unreadable for the same
-  reason.
+Auto Backup is on by default. Before the fix above, that sent the plaintext
+database and the API keys to the user's Google Drive backup (the keys in
+`flutter_secure_storage`'s EncryptedSharedPreferences, whose Keystore key does
+not travel, so a restore brought back a file that could not be read). After
+encryption, a restored database would be unreadable for the same reason.
 
 Fix both together with `dataExtractionRules` (Android 12+) and
 `fullBackupContent` (Android 11 and earlier). Exclude the secure-storage
@@ -193,6 +189,31 @@ says this key has to be revisited.
   SQLCipher with migration → export/import → the error screen.
 
 ---
+
+## Found since, 2026-10-21 (for whoever picks this up)
+
+Facts the re-audit turned up that bear on the design. They are not decisions;
+the two below are still on hold.
+
+- **`sqlcipher_flutter_libs` is end of life.** `flutter pub outdated` lists
+  its latest as `0.7.0+eol` (and `sqlite3_flutter_libs` as `0.6.0+eol`), with
+  `sqlite3` 3.x resolvable. Section 1's "stay on `sqlite3` 2.x" would build on
+  a package that gets no fixes. In `sqlite3` 3.x SQLCipher is chosen through
+  build hooks, so the 3.x / `drift_flutter` 0.3 move probably comes first.
+- **The keychain class decides what an iCloud backup protects.** The key
+  would be stored as `first_unlock`, which is not a `…ThisDeviceOnly` class,
+  so it travels in the same encrypted iCloud or Finder backup as the
+  database — contrary to "What encrypted will mean". `first_unlock_this_device`
+  makes a backup useless without an export; the current class makes it
+  portable but unprotected. Either way it should be chosen and written down,
+  and the restore paths tested. (The comment justifying `first_unlock` cites a
+  background refresh; the app has no background execution at all.)
+- **Export compliance (section 8):** the annual self-classification report
+  was removed for most mass-market items by the March 2021 BIS rule. Check
+  current guidance rather than relying on that sentence.
+- **Agent access** ([`AGENT_ACCESS_PLAN.md`](AGENT_ACCESS_PLAN.md)) has an
+  external binary reading the SQLite file, which an encrypted database with a
+  keychain-held key does not allow. One of the two designs has to give.
 
 ## Decisions needed
 

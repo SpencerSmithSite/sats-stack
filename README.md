@@ -33,7 +33,7 @@ Track your fiat spending and your Bitcoin stack in the same place — understand
 - Overspend notifications (≥ 80% warning, > 100% alert)
 
 ### Bitcoin Stack
-- All-time cumulative sats chart with time filters (1M / 3M / 6M / 1Y / All)
+- All-time cumulative sats chart with time filters (3M / 6M / 1Y / All)
 - DCA simulator — model future stack growth
 - Stack goal with progress bar, projected completion date, and average sats/month
 - Goal-reached notification
@@ -104,7 +104,7 @@ No state management library (Provider/Riverpod/Bloc) — services are plain Dart
 
 - Flutter 3.47.2 (the version CI builds with)
 - For macOS: Xcode
-- For iOS: Xcode + CocoaPods (`brew install cocoapods`)
+- For iOS and macOS: Xcode + CocoaPods (`brew install cocoapods`) — macOS has a Podfile too, for `flutter_secure_storage_macos`
 - For Android: JDK 21 (not 25 — see `.github/workflows/ci.yml`)
 
 ### Run

@@ -2,6 +2,16 @@
 
 **Status:** Research complete, not started
 **Researched:** 2026-08-09
+> **Out of date, 2026-10-21.** The facts in section 1 were observed on
+> 2026-08-09. Since then the macOS bundle id is `app.satsstack.SatsStack`
+> (the container path changes with it), the schema is v8, and the open-call
+> line numbers have moved. A sandboxed app cannot write
+> `~/Library/Application Support/SatsStack/db_path.txt`, only inside its
+> container. And the database is to be encrypted
+> ([`DATABASE_ENCRYPTION_PLAN.md`](DATABASE_ENCRYPTION_PLAN.md)), which an
+> external binary reading the file has no key for. Re-check all of it before
+> building on this.
+
 **Goal:** Let external AI agents (Claude Desktop, Claude Code, and any MCP-capable
 third-party agent) read and write Sats Stack data — e.g. *"How much did I spend on
 dining out last month?"* and *"I just spent $50 at XYZ store, log it."*
