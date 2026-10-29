@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/services/import_service.dart';
 import '../../main.dart' as app;
+import '../../shared/theme/app_colors.dart';
 import 'import_preview_screen.dart';
 
 class ImportColumnMapperScreen extends StatefulWidget {
@@ -385,7 +386,7 @@ class _ImportColumnMapperScreenState extends State<ImportColumnMapperScreen> {
                             height: 16,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              color: Colors.white,
+                              color: AppColors.onBitcoinOrange,
                             ),
                           )
                           : const Icon(Icons.play_arrow),

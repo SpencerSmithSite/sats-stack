@@ -48,7 +48,7 @@ class DataRoutingBanner extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               'The operators of these services can see which addresses and prices you request. '
-              'Set a self-hosted server below to route all data through it instead.',
+              'Set a self-hosted server above to route all data through it instead.',
               // Theme text, not the accent: two paragraphs set in the accent over a
               // tint of it measured 1.97–2.20:1 in light mode.
               style: theme.textTheme.bodySmall?.copyWith(

@@ -874,6 +874,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             leading: const Icon(Icons.tune_outlined),
             title: const Text('General'),
             childrenPadding: EdgeInsets.zero,
+            // Left, like the rows in them: the default centres the section
+            // headers ("AI PROVIDER", "BITCOIN") and nothing else.
+            expandedCrossAxisAlignment: CrossAxisAlignment.start,
             tilePadding: const EdgeInsets.symmetric(
               horizontal: 16,
               vertical: 4,
@@ -1019,6 +1022,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             leading: const Icon(Icons.dns_outlined),
             title: const Text('Servers'),
             childrenPadding: EdgeInsets.zero,
+            // Left, like the rows in them: the default centres the section
+            // headers ("AI PROVIDER", "BITCOIN") and nothing else.
+            expandedCrossAxisAlignment: CrossAxisAlignment.start,
             tilePadding: const EdgeInsets.symmetric(
               horizontal: 16,
               vertical: 4,
@@ -1155,8 +1161,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color:
                                     _connectionStatus!.startsWith('Connected')
-                                        ? AppColors.success
-                                        : AppColors.danger,
+                                        ? context.legibleAccent(
+                                          AppColors.success,
+                                        )
+                                        : context.legibleAccent(
+                                          AppColors.danger,
+                                        ),
                               ),
                             ),
                           ),
@@ -1238,8 +1248,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color:
                                     _lmStudioStatus!.startsWith('Connected')
-                                        ? AppColors.success
-                                        : AppColors.danger,
+                                        ? context.legibleAccent(
+                                          AppColors.success,
+                                        )
+                                        : context.legibleAccent(
+                                          AppColors.danger,
+                                        ),
                               ),
                             ),
                           ),
@@ -1331,8 +1345,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color:
                                     _mapleStatus!.startsWith('Connected')
-                                        ? AppColors.success
-                                        : AppColors.danger,
+                                        ? context.legibleAccent(
+                                          AppColors.success,
+                                        )
+                                        : context.legibleAccent(
+                                          AppColors.danger,
+                                        ),
                               ),
                             ),
                           ),
@@ -1416,6 +1434,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         helperText:
                             'Used for wallet sync and BTC price. '
                             'Leave blank to use mempool.space.',
+                        // It was cut off at one line: "Leave blank to us…".
+                        helperMaxLines: 3,
                       ),
                     ),
                     const SizedBox(height: 10),
@@ -1441,8 +1461,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             color:
                                 _esploraStatus!.startsWith('Could not') ||
                                         _esploraStatus!.startsWith('HTTP')
-                                    ? AppColors.danger
-                                    : AppColors.success,
+                                    ? context.legibleAccent(AppColors.danger)
+                                    : context.legibleAccent(AppColors.success),
                           ),
                         ),
                       ),
@@ -1484,6 +1504,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             leading: const Icon(Icons.storage_outlined),
             title: const Text('Data'),
             childrenPadding: EdgeInsets.zero,
+            // Left, like the rows in them: the default centres the section
+            // headers ("AI PROVIDER", "BITCOIN") and nothing else.
+            expandedCrossAxisAlignment: CrossAxisAlignment.start,
             tilePadding: const EdgeInsets.symmetric(
               horizontal: 16,
               vertical: 4,
@@ -1509,6 +1532,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             leading: const Icon(Icons.info_outline),
             title: const Text('About'),
             childrenPadding: EdgeInsets.zero,
+            // Left, like the rows in them: the default centres the section
+            // headers ("AI PROVIDER", "BITCOIN") and nothing else.
+            expandedCrossAxisAlignment: CrossAxisAlignment.start,
             tilePadding: const EdgeInsets.symmetric(
               horizontal: 16,
               vertical: 4,
@@ -1542,6 +1568,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               style: TextStyle(color: AppColors.danger),
             ),
             childrenPadding: EdgeInsets.zero,
+            // Left, like the rows in them: the default centres the section
+            // headers ("AI PROVIDER", "BITCOIN") and nothing else.
+            expandedCrossAxisAlignment: CrossAxisAlignment.start,
             tilePadding: const EdgeInsets.symmetric(
               horizontal: 16,
               vertical: 4,
@@ -1659,8 +1688,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             style: theme.textTheme.bodySmall?.copyWith(
               color:
                   _cloudStatus!.startsWith('Connected')
-                      ? AppColors.success
-                      : AppColors.danger,
+                      ? context.legibleAccent(AppColors.success)
+                      : context.legibleAccent(AppColors.danger),
             ),
           ),
         ),

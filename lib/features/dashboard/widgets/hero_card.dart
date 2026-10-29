@@ -51,7 +51,7 @@ class HeroCard extends StatelessWidget {
           Text(
             'Total Stack',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Colors.white.withAlpha(180),
+              color: AppColors.onBitcoinOrange.withAlpha(180),
               letterSpacing: 0.5,
             ),
           ),
@@ -60,7 +60,9 @@ class HeroCard extends StatelessWidget {
             totalStackSats == 0
                 ? '0 sats'
                 : '${SatConverter.formatSats(totalStackSats)} sats',
-            style: AppTextStyles.heroSats.copyWith(color: Colors.white),
+            style: AppTextStyles.heroSats.copyWith(
+              color: AppColors.onBitcoinOrange,
+            ),
           ),
           const SizedBox(height: 4),
           Row(
@@ -69,25 +71,27 @@ class HeroCard extends StatelessWidget {
                 Text(
                   '≈ ${CurrencyUtils.format(fiatValue, currency)}',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.white.withAlpha(200),
+                    color: AppColors.onBitcoinOrange.withAlpha(200),
                   ),
                 ),
               if (fiatValue != null && monthChangeSats != 0)
                 Text(
                   '  ·  ',
-                  style: TextStyle(color: Colors.white.withAlpha(120)),
+                  style: TextStyle(
+                    color: AppColors.onBitcoinOrange.withAlpha(120),
+                  ),
                 ),
               if (monthChangeSats != 0) ...[
                 Icon(
                   isPositiveChange ? Icons.arrow_upward : Icons.arrow_downward,
                   size: 12,
-                  color: Colors.white.withAlpha(200),
+                  color: AppColors.onBitcoinOrange.withAlpha(200),
                 ),
                 const SizedBox(width: 2),
                 Text(
                   '${SatConverter.formatSats(monthChangeSats.abs())} sats this month',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Colors.white.withAlpha(200),
+                    color: AppColors.onBitcoinOrange.withAlpha(200),
                   ),
                 ),
               ],
@@ -98,13 +102,13 @@ class HeroCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: Colors.white.withAlpha(30),
+                color: AppColors.onBitcoinOrange.withAlpha(30),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
                 'Import a Bitcoin wallet to track your stack',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Colors.white.withAlpha(220),
+                  color: AppColors.onBitcoinOrange.withAlpha(220),
                 ),
               ),
             ),

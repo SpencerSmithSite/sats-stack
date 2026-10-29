@@ -62,8 +62,10 @@ class AiPrivacyDisclosure extends StatelessWidget {
               children: [
                 Text(
                   'Your financial data leaves this device',
+                  // The one banner that must be read: as raw orange on its
+                  // own tint it was about 2.1:1 in light mode.
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: accent,
+                    color: context.legibleAccent(accent),
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -142,7 +144,7 @@ class ApiKeyHelpLink extends StatelessWidget {
         style: TextButton.styleFrom(
           padding: const EdgeInsets.symmetric(horizontal: 4),
           visualDensity: VisualDensity.compact,
-          foregroundColor: AppColors.bitcoinOrange,
+          foregroundColor: context.bitcoinOrangeText,
         ),
       ),
     );

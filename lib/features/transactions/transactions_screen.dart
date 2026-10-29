@@ -156,8 +156,9 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
           alignment: Alignment.centerLeft,
           child: Text('Transactions'),
         ),
+        // The default spacing, as on every other tab: 0 put the title flush
+        // against the screen edge.
         centerTitle: false,
-        titleSpacing: 0,
         actions: [
           BtcPriceChip(service: app.btcPriceService),
           const SizedBox(width: 4),
@@ -310,7 +311,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
       floatingActionButton: FloatingActionButton(
         onPressed: _openAddSheet,
         backgroundColor: AppColors.bitcoinOrange,
-        foregroundColor: Colors.white,
+        foregroundColor: AppColors.onBitcoinOrange,
         child: const Icon(Icons.add),
       ),
     );

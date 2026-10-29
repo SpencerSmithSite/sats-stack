@@ -114,10 +114,12 @@ class BottomBar extends StatelessWidget {
                 width: i == page ? 20 : 6,
                 height: 6,
                 decoration: BoxDecoration(
+                  // The inactive dots were a quarter-strength orange, close to
+                  // invisible on the light background.
                   color:
                       i == page
                           ? AppColors.bitcoinOrange
-                          : AppColors.bitcoinOrange.withAlpha(64),
+                          : context.textSecondary,
                   borderRadius: BorderRadius.circular(3),
                 ),
               );
