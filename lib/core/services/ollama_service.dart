@@ -598,6 +598,9 @@ class OllamaService {
     }
     await _keyStore.delete(_mapleKeyId);
     _mapleApiKey = '';
+    // Nothing else is written, so nothing else would tell the screens that
+    // read the keys.
+    configChanges.value++;
   }
 
   /// Save the model for whichever provider is currently active.

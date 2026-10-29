@@ -172,9 +172,34 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   @override
   void initState() {
     super.initState();
-    _esploraCtrl = TextEditingController();
-    _aiUrlCtrl = TextEditingController(text: AppConstants.defaultOllamaUrl);
+    // Starts from what is in force, not from defaults. Settings → About can
+    // send the user back through here, and every field is written back at the
+    // end: starting from defaults quietly switched a self-hosted Esplora
+    // server back to mempool.space — so the next sync sent the wallet's
+    // addresses to a public server — and reset the theme, the currency and
+    // the AI server's URL.
+    final ai = app.ollamaService;
+    _currency = app.currencyNotifier.value;
+    _themeMode = app.themeModeNotifier.value;
+    final esplora = app.xpubService.esploraBaseUrl;
+    _esploraCtrl = TextEditingController(
+      text: esplora == AppConstants.mempoolBaseUrl ? '' : esplora,
+    );
     _mapleApiKeyCtrl = TextEditingController();
+    if (app.onboardingCompleteNotifier.value) {
+      // A revisit: the provider in use is the user's choice, so the
+      // availability check must not replace it with a suggestion.
+      _aiProvider = ai.activeProvider;
+      _aiProviderTouched = true;
+    }
+    _aiUrlCtrl = TextEditingController(
+      text: switch (_aiProvider) {
+        AiProvider.ollama => ai.baseUrl,
+        AiProvider.lmStudio => ai.lmStudioBaseUrl,
+        AiProvider.maple => ai.mapleBaseUrl,
+        _ => _aiProvider.defaultUrl ?? '',
+      },
+    );
     _loadPlatformAvailability();
   }
 

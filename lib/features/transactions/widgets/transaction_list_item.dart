@@ -26,8 +26,12 @@ class TransactionListItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isExpense = transaction.amountFiat < 0;
     final isBtc = transaction.isBitcoin;
+    // A Bitcoin row's sats are the record; its fiat is derived, and is 0 when
+    // no historical price was found — which read an outgoing payment as a
+    // green "+" receipt. The edit sheet already decided this way.
+    final isExpense =
+        isBtc ? transaction.amountSats < 0 : transaction.amountFiat < 0;
 
     final catColor =
         _parseColor(category?.color) ??

@@ -826,6 +826,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
     // Leaving a user's credentials behind after "delete everything" would be a
     // genuine surprise — and on a shared or resold device, a real leak.
     await app.ollamaService.clearAllApiKeys();
+    // Every service and notifier holds what it read at launch, and the table
+    // they read it from is now empty. Only the theme and onboarding flag used
+    // to be reset, so a turned-off price chip or a custom inflation rate, a
+    // custom Esplora server and the old AI provider and URLs stayed in force
+    // until the next launch — then silently flipped to the defaults.
+    await app.ollamaService.loadSettings();
+    await app.xpubService.loadSettings();
+    await app.btcPriceService.loadSettings();
+    app.currencyNotifier.value = 'USD';
+    app.btcPriceService.switchCurrency('USD');
+    app.showBtcPriceNotifier.value = true;
+    app.inflationRateNotifier.value = AppConstants.defaultInflationRate;
+    app.aiEnabledNotifier.value = app.ollamaService.aiEnabled;
     app.themeModeNotifier.value = ThemeMode.dark;
     // resetAndReseed empties app_settings, so the flag is gone from the
     // database; the notifier has to follow or the router will not let the user
@@ -915,9 +928,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
               SwitchListTile(
                 secondary: const Icon(Icons.currency_bitcoin),
                 title: const Text('Show BTC price'),
+                // It hides the chip, and that is all: every sats figure in the
+                // app is worked out from the live price, so it is fetched
+                // either way. This used to promise that turning it off made
+                // no price requests to any server.
                 subtitle: const Text(
-                  'Displays live price in the app bar. '
-                  'When off, no price requests are made to any server.',
+                  'Shows the live price in the top bar. Sats figures still '
+                  'need it, so the price is fetched either way.',
                 ),
                 value: _showBtcPrice,
                 onChanged: _saveShowBtcPrice,
