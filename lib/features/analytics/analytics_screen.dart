@@ -132,6 +132,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         centerTitle: false,
       ),
       body: StreamBuilder<AnalyticsData>(
+        // Keyed by month, so the previous month's figures are not shown
+        // under the new month's name while the new ones load.
+        key: ValueKey(_selectedMonth),
         stream: _analytics,
         builder: (context, snapshot) {
           return ValueListenableBuilder<String>(
@@ -142,7 +145,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   child: Text('Failed to load analytics: ${snapshot.error}'),
                 );
               }
-              final data = snapshot.data ?? AnalyticsData.empty;
+              if (!snapshot.hasData) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              final data = snapshot.data!;
               final hasData =
                   data.spendingByCategory.isNotEmpty ||
                   data.monthlyTotals.any((m) => m.spending > 0);

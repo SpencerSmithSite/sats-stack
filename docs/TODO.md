@@ -128,13 +128,6 @@ the order to do it; the first group can lose or misstate the user's data.
   goes, and what is kept".
 
 **UI**
-- The hero's "Import a Bitcoin wallet" pill looks tappable and is not; a
-  dead gap between "Add notes" and "Repeat"; copy still says "xpub address"
-  and "bank CSV" (PDF and photo exist); the 33 px icon-grid targets; icon
-  buttons without tooltips; error snackbars behind sheets; a stream built in
-  `CategoriesSheet.build`; a month change briefly shows the previous month.
-- The splash adds ~2.5 s to every cold start, ignores reduced motion, and its
-  `initFuture` is never passed.
 
 **Native, build, CI**
 - CI builds debug only, where the debug manifest declares INTERNET whatever

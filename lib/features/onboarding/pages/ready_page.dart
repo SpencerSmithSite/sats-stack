@@ -29,7 +29,8 @@ class ReadyPage extends StatelessWidget {
         ),
         const SizedBox(height: 16),
         Text(
-          'Start by adding a transaction manually, importing a bank CSV, or syncing a Bitcoin wallet via xpub.',
+          'Start by adding a transaction, importing a statement (CSV, PDF or a '
+          'photo), or following a Bitcoin wallet from its extended public key.',
           style: theme.textTheme.bodyLarge?.copyWith(
             color: context.textSecondary,
             height: 1.6,
