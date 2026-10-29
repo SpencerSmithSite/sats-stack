@@ -111,7 +111,9 @@ class _SetBudgetSheetState extends State<SetBudgetSheet> {
         ),
         child: SafeArea(
           top: false,
-          child: Padding(
+          // Scrolls: with the keyboard up on a small phone the category grid,
+          // field and button are taller than what is left of the screen.
+          child: SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
             child: Column(
               mainAxisSize: MainAxisSize.min,

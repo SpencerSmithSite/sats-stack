@@ -296,6 +296,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
     };
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder:

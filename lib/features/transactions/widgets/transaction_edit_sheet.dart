@@ -242,17 +242,19 @@ class _TransactionEditSheetState extends State<TransactionEditSheet> {
   Future<void> _delete() async {
     final confirmed = await showDialog<bool>(
       context: context,
+      // The dialog's own context: `context` is this sheet's, so popping it
+      // closed the sheet and left the dialog open with nothing deleted.
       builder:
-          (_) => AlertDialog(
+          (ctx) => AlertDialog(
             title: const Text('Delete transaction?'),
             content: const Text('This cannot be undone.'),
             actions: [
               TextButton(
-                onPressed: () => Navigator.pop(context, false),
+                onPressed: () => Navigator.pop(ctx, false),
                 child: const Text('Cancel'),
               ),
               TextButton(
-                onPressed: () => Navigator.pop(context, true),
+                onPressed: () => Navigator.pop(ctx, true),
                 style: TextButton.styleFrom(foregroundColor: AppColors.danger),
                 child: const Text('Delete'),
               ),

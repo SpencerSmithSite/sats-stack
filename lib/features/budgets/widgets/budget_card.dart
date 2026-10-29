@@ -168,15 +168,19 @@ class BudgetCard extends StatelessWidget {
   void _showOptions(BuildContext context) {
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       backgroundColor: Colors.transparent,
+      // The sheet is on the root navigator; pop it with its own context,
+      // not this card's, which would pop the Budgets tab instead.
       builder:
-          (_) => Container(
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface,
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(20),
-              ),
+          // A Material, not a coloured Container: ListTile paints its ink on
+          // the nearest Material, which a decorated box would cover.
+          (ctx) => Material(
+            color: Theme.of(ctx).colorScheme.surface,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
             ),
+            clipBehavior: Clip.antiAlias,
             child: SafeArea(
               top: false,
               child: Column(
@@ -188,7 +192,7 @@ class BudgetCard extends StatelessWidget {
                       height: 4,
                       margin: const EdgeInsets.symmetric(vertical: 12),
                       decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.outline,
+                        color: Theme.of(ctx).colorScheme.outline,
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
@@ -197,7 +201,7 @@ class BudgetCard extends StatelessWidget {
                     leading: const Icon(Icons.edit_outlined),
                     title: Text('Edit ${progress.category.name} budget'),
                     onTap: () {
-                      Navigator.pop(context);
+                      Navigator.pop(ctx);
                       onEdit();
                     },
                   ),
@@ -211,7 +215,7 @@ class BudgetCard extends StatelessWidget {
                       style: const TextStyle(color: AppColors.danger),
                     ),
                     onTap: () {
-                      Navigator.pop(context);
+                      Navigator.pop(ctx);
                       onDelete();
                     },
                   ),
