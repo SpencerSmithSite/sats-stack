@@ -42,11 +42,29 @@ class XpubSyncResult {
     required this.skipped,
     required this.addressesScanned,
     this.removed = 0,
+    this.unpriced = 0,
   });
 
   final int imported;
   final int skipped;
   final int addressesScanned;
+
+  /// Rows left with no fiat value because no price could be had for their
+  /// day. The next sync tries them again.
+  final int unpriced;
+
+  /// What to tell the user about [unpriced], or null when there is nothing to
+  /// say. A self-hosted Esplora server has no price endpoint, so with one
+  /// configured this is every row — which used to happen without a word.
+  String? get unpricedNote {
+    if (unpriced == 0) return null;
+    final rows =
+        unpriced == 1 ? '1 transaction has' : '$unpriced transactions have';
+    return '$rows no fiat value yet: no BTC price could be found for '
+        '${unpriced == 1 ? 'its' : 'their'} date. If Settings → Bitcoin server '
+        'points at your own Esplora server, it may not provide prices. Rescan '
+        'later to try again.';
+  }
 
   /// Rows deleted because the chain no longer backs them — see [XpubService].
   final int removed;
@@ -214,6 +232,55 @@ class XpubService {
   XpubFormat detectFormat(String extKey) => _parseExtKey(extKey).format;
 
   XpubNetwork detectNetwork(String extKey) => _parseExtKey(extKey).network;
+
+  /// [extKey] re-encoded under [format]'s version bytes, same network.
+  ///
+  /// How a wallet records its script type: the type is the version, so an
+  /// `xpub` found to hold native SegWit addresses is stored as the matching
+  /// `zpub` and every later sync derives the right addresses from it.
+  static String withFormat(String extKey, XpubFormat format) {
+    final payload = Uint8List.fromList(bs58check.decode(extKey.trim()));
+    final network = _parseExtKey(extKey).network;
+    final version =
+        _extKeyVersions.entries
+            .firstWhere(
+              (e) => e.value.format == format && e.value.network == network,
+            )
+            .key;
+    payload.setRange(0, 4, _intTo4BytesBE(version));
+    return bs58check.encode(payload);
+  }
+
+  /// Whether [extKey] is a mainnet `xpub`, whose prefix does not say which
+  /// addresses the wallet uses.
+  ///
+  /// BIP44 reserves `xpub` for legacy addresses, but many wallets (Ledger,
+  /// Trezor, Electrum's exports among them) hand out an `xpub` for a native or
+  /// nested SegWit account. Scanned as legacy, such a wallet looked empty.
+  bool isAmbiguous(String extKey) {
+    final key = _parseExtKey(extKey);
+    return key.format == XpubFormat.p2pkh && key.network == XpubNetwork.mainnet;
+  }
+
+  /// Which script type [extKey]'s first receive addresses have history under,
+  /// trying native SegWit, then nested, then legacy. Null if none has any.
+  Future<XpubFormat?> detectUsedFormat(String extKey) async {
+    for (final format in const [
+      XpubFormat.p2wpkh,
+      XpubFormat.p2shP2wpkh,
+      XpubFormat.p2pkh,
+    ]) {
+      final addresses = await _deriveWindow(
+        withFormat(extKey, format),
+        0,
+        0,
+        _gapLimit,
+      );
+      final history = await _fetchWindow(addresses);
+      if (history.any((txs) => txs.isNotEmpty)) return format;
+    }
+    return null;
+  }
 
   // ── Key parsing ─────────────────────────────────────────────────────────────
 
@@ -612,7 +679,14 @@ class XpubService {
     // Validates the key before any network work happens — an unusable xpub
     // should fail immediately, not after twenty requests. The derivation
     // itself now happens inside the isolate, which parses it again there.
-    _parseExtKey(extKey);
+    //
+    // A testnet key derives testnet addresses, which a mainnet server knows
+    // nothing about, and whatever it did find would be priced as real BTC.
+    if (_parseExtKey(extKey).network == XpubNetwork.testnet) {
+      throw const XpubSyncException(
+        'This is a testnet key. Sats Stack tracks mainnet bitcoin only.',
+      );
+    }
 
     final currency = btcPriceService.currency;
 
@@ -802,9 +876,21 @@ class XpubService {
             )
             .toList();
 
+    // Kept rows with no fiat value: a price that could not be had when they
+    // were written. They used to stay at 0 forever, because only new rows were
+    // ever priced — and 0 is what every total then counted them as.
+    final unpricedKept = [
+      for (final row in stored)
+        if (claimed.contains(row.id) &&
+            row.amountFiat == 0 &&
+            row.amountSats != 0)
+          (id: row.id, date: rekey[row.id]?.date ?? row.date),
+    ];
+
     // ── Pass 3: historical prices, once per date ────────────────────────────
     final datesToPrice = <String, DateTime>{
       for (final r in newRows) _dayKey(r.date): r.date,
+      for (final r in unpricedKept) _dayKey(r.date): r.date,
     };
     final priceByDay = <String, double?>{};
     var fetched = 0;
@@ -826,6 +912,7 @@ class XpubService {
     var imported = 0;
     final skipped = rows.length - newRows.length;
     var removed = 0;
+    var unpriced = 0;
 
     await _db.transaction(() async {
       for (final row in stored) {
@@ -845,12 +932,26 @@ class XpubService {
         }
       }
 
+      final storedById = {for (final row in stored) row.id: row};
+      for (final kept in unpricedKept) {
+        final price = priceByDay[_dayKey(kept.date)];
+        if (price == null || price <= 0) {
+          unpriced++;
+          continue;
+        }
+        await (_db.update(_db.transactions)
+          ..where((t) => t.id.equals(kept.id))).write(
+          TransactionsCompanion(
+            amountFiat: Value(storedById[kept.id]!.amountSats / 1e8 * price),
+            fiatCurrency: Value(currency),
+          ),
+        );
+      }
+
       for (final raw in newRows) {
         final price = priceByDay[_dayKey(raw.date)];
-        final amountFiat =
-            (price != null && price > 0)
-                ? raw.netSats / 100000000 * price
-                : 0.0;
+        final priced = price != null && price > 0;
+        final amountFiat = priced ? raw.netSats / 100000000 * price : 0.0;
 
         // Counted only if written: insertOrIgnore returns a rowid either way.
         final written = await _db
@@ -870,7 +971,10 @@ class XpubService {
               ),
               mode: InsertMode.insertOrIgnore,
             );
-        if (written != null) imported++;
+        if (written != null) {
+          imported++;
+          if (!priced) unpriced++;
+        }
       }
     });
 
@@ -879,6 +983,7 @@ class XpubService {
       skipped: skipped,
       addressesScanned: addressesScanned,
       removed: removed,
+      unpriced: unpriced,
     );
   }
 
