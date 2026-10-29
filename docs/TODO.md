@@ -115,8 +115,6 @@ Everything below was checked against the code and is still open. Roughly in
 the order to do it; the first group can lose or misstate the user's data.
 
 **Data and money**
-- **The dashboard's "unconverted" count spans all history**, not the month;
-  the spending breakdown still rounds per figure (£12.50 shows as £13).
 - **Product decision:** should fiat income/spending include Bitcoin
   movements? Today an xpub self-transfer counts as both.
 

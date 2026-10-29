@@ -204,6 +204,10 @@ class _PieSectionState extends State<_PieSection> {
         widget.data.spendingByCategory.entries.toList()
           ..sort((a, b) => b.value.compareTo(a.value));
     final total = sorted.fold(0.0, (s, e) => s + e.value);
+    // One precision for every legend figure, so £12.50 is not shown as £13.
+    final legendDecimals = CurrencyUtils.decimalsFor(
+      sorted.map((e) => e.value),
+    );
 
     final sections =
         sorted.asMap().entries.map((entry) {
@@ -296,7 +300,7 @@ class _PieSectionState extends State<_PieSection> {
                     CurrencyUtils.format(
                       e.value,
                       widget.currency,
-                      decimalDigits: 0,
+                      decimalDigits: legendDecimals,
                     ),
                     style: AppTextStyles.monoSmall.copyWith(
                       fontWeight:

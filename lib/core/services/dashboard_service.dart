@@ -34,14 +34,16 @@ class DashboardService {
   /// the stack total: sats need no conversion and must not be lost because a
   /// fiat rate is. The count lets the screen say a total is incomplete rather
   /// than quietly showing a smaller number.
-  ({List<Transaction> rows, int unconverted}) _restate(List<Transaction> txns) {
+  ({List<Transaction> rows, Set<int> unconverted}) _restate(
+    List<Transaction> txns,
+  ) {
     final fx = _rates();
-    var unconverted = 0;
+    final unconverted = <int>{};
     final rows = [
       for (final t in txns)
         switch (fx.convert(t.amountFiat, t.fiatCurrency)) {
           null => () {
-            unconverted++;
+            unconverted.add(t.id);
             return t.copyWith(amountFiat: 0);
           }(),
           final v when v == t.amountFiat => t,
@@ -371,7 +373,11 @@ class DashboardService {
       spendingByCategory: byCategory,
       recentTransactions: recent,
       stackGoalSats: goalSats,
-      unconvertedCount: restated.unconverted,
+      // This month's, which is what the totals beside it cover. It counted
+      // every row ever recorded, so one old foreign-currency import kept the
+      // note up on every month.
+      unconvertedCount:
+          monthTxns.where((t) => restated.unconverted.contains(t.id)).length,
     );
   }
 }
