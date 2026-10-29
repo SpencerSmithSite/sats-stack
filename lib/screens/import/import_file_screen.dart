@@ -232,6 +232,10 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
                               onImportImage:
                                   () => _pickImageForSource(sources[i]),
                               onDelete: () => _deleteSource(sources[i]),
+                              onForgetLayout:
+                                  sources[i].columnMapping == null
+                                      ? null
+                                      : () => _forgetLayout(sources[i]),
                             ),
                       ),
                     ),
@@ -265,6 +269,18 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
       MaterialPageRoute(builder: (_) => const ImportSourceSetupScreen()),
     );
     // Stream auto-updates the list
+  }
+
+  Future<void> _forgetLayout(ImportSource source) async {
+    await app.importService.clearColumnMapping(source.id);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '${source.name}: the next import will work out the columns again',
+        ),
+      ),
+    );
   }
 
   Future<void> _deleteSource(ImportSource source) async {
@@ -1056,12 +1072,16 @@ class _SourceCard extends StatelessWidget {
     required this.onImport,
     required this.onImportImage,
     required this.onDelete,
+    this.onForgetLayout,
   });
 
   final ImportSource source;
   final VoidCallback onImport;
   final VoidCallback onImportImage;
   final VoidCallback onDelete;
+
+  /// Null when the source has no saved column layout to forget.
+  final VoidCallback? onForgetLayout;
 
   @override
   Widget build(BuildContext context) {
@@ -1146,10 +1166,16 @@ class _SourceCard extends StatelessWidget {
         offset.dy + 1,
       ),
       items: [
+        if (onForgetLayout != null)
+          const PopupMenuItem(
+            value: 'forget',
+            child: Text('Forget saved column layout'),
+          ),
         const PopupMenuItem(value: 'delete', child: Text('Delete source')),
       ],
     ).then((v) {
       if (v == 'delete') onDelete();
+      if (v == 'forget') onForgetLayout?.call();
     });
   }
 

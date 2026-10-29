@@ -1289,6 +1289,27 @@ Item 15's open list, fixed one PR at a time, in the order `TODO.md` gave.
   accept `/`, `-` and `.`; DD/MM/YY is offered; and a column with a first part
   over 12 is detected as day-first.
 
+### Import: which tier reads it, and what is remembered
+- On-device AI was never used for an import: readiness required a selected
+  model, and Apple Intelligence and Gemini Nano have none by design.
+- A PDF the AI could not read came back empty without trying the heuristic
+  reader, which is what runs when there is no AI at all. It is tried now.
+- A file over 100,000 characters was cut for the AI without a word, so a long
+  statement lost its later rows silently. `ImportResult.aiInputTruncatedAt`
+  says how much was sent, and the preview says so.
+- The column mapper saved its layout before parsing, so a layout that read
+  nothing was tried first on every later import, with no way to remove it. It
+  is saved only after it reads something, and a source's menu has "Forget
+  saved column layout". The mapper's parse also skipped the learned
+  categories; `prepareForReview` applies them on every path.
+- Learned categories were keyed on the description as edited in the preview,
+  which no later file contains. They are keyed on the file's own description
+  (old mappings still match).
+- The keyword categoriser uses the seeded category names, so renaming "Food &
+  Dining" to "Food" filed matches under a name that no longer existed.
+  `CategoryService` records each rename of a built-in category
+  (`system_category_name:<seeded name>`), and imports use the current name.
+
 ---
 
 ## Verified correct (no action)
