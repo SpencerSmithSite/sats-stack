@@ -79,7 +79,11 @@ void main() {
       final food = (await app.categoryService.getAll()).firstWhere(
         (c) => c.name == 'Food & Dining',
       );
-      await app.budgetService.upsert(categoryId: food.id, amountFiat: 300);
+      await app.budgetService.upsert(
+        categoryId: food.id,
+        amountFiat: 300,
+        currency: 'USD',
+      );
     });
     tester.view.physicalSize = const Size(430, 900);
     tester.view.devicePixelRatio = 1;

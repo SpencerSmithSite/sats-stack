@@ -126,7 +126,9 @@ void main() async {
   inflationRateNotifier = ValueNotifier(savedInflation);
 
   // Initialise local notifications (owned by NotificationService).
-  notificationService = NotificationService();
+  notificationService = NotificationService(
+    claim: NotificationLedger(db).claim,
+  );
   await notificationService.initialize();
 
   // Load cached BTC price before first frame; fetches fresh in background if stale

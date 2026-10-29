@@ -292,6 +292,7 @@ void main() {
       await v8.customStatement(
         'ALTER TABLE transactions DROP COLUMN recurring_series_id',
       );
+      await v8.customStatement('ALTER TABLE budgets DROP COLUMN currency');
       await v8.customStatement(
         'INSERT INTO transactions (wallet_id, date, description, '
         'amount_sats, amount_fiat, fiat_currency, source, is_bitcoin, '

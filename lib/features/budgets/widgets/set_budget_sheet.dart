@@ -44,8 +44,11 @@ class _SetBudgetSheetState extends State<SetBudgetSheet> {
     super.initState();
     if (widget.existing != null) {
       _selectedCategory = widget.existing!.category;
-      _amountController.text = widget.existing!.budget.amountFiat
-          .toStringAsFixed(2);
+      // In the display currency, which is what it is saved in — unless there
+      // is no rate to show it in that, when it stays in its own.
+      final existing = widget.existing!;
+      _amountController.text =
+          (existing.limitFiat ?? existing.budget.amountFiat).toStringAsFixed(2);
     }
     _load();
   }
@@ -80,7 +83,15 @@ class _SetBudgetSheetState extends State<SetBudgetSheet> {
       _error = null;
     });
     try {
-      await widget.budgetService.upsert(categoryId: cat.id, amountFiat: amount);
+      final existing = widget.existing;
+      await widget.budgetService.upsert(
+        categoryId: cat.id,
+        amountFiat: amount,
+        currency:
+            (existing != null && existing.limitFiat == null)
+                ? existing.budget.currency
+                : app.currencyNotifier.value,
+      );
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
       if (mounted) {

@@ -44,7 +44,7 @@ void main() {
             dedupHash: 'groceries',
           ),
         );
-    await budgets.upsert(categoryId: foodId, amountFiat: 500);
+    await budgets.upsert(categoryId: foodId, amountFiat: 500, currency: 'USD');
   });
 
   tearDown(() => db.close());
@@ -140,7 +140,11 @@ void main() {
 
   group('one budget per category', () {
     test('a second upsert updates rather than inserting', () async {
-      await budgets.upsert(categoryId: foodId, amountFiat: 650);
+      await budgets.upsert(
+        categoryId: foodId,
+        amountFiat: 650,
+        currency: 'USD',
+      );
 
       final rows = await db.select(db.budgets).get();
       expect(rows, hasLength(1));
@@ -196,8 +200,8 @@ void main() {
               .id;
 
       await Future.wait([
-        budgets.upsert(categoryId: other, amountFiat: 200),
-        budgets.upsert(categoryId: other, amountFiat: 300),
+        budgets.upsert(categoryId: other, amountFiat: 200, currency: 'USD'),
+        budgets.upsert(categoryId: other, amountFiat: 300, currency: 'USD'),
       ]);
 
       final rows =
@@ -206,7 +210,7 @@ void main() {
       expect(rows, hasLength(1));
 
       // And it is still editable.
-      await budgets.upsert(categoryId: other, amountFiat: 450);
+      await budgets.upsert(categoryId: other, amountFiat: 450, currency: 'USD');
       expect(
         (await (db.select(db.budgets)
               ..where((b) => b.categoryId.equals(other))).getSingle())

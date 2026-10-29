@@ -1225,6 +1225,20 @@ Item 15's open list, fixed one PR at a time, in the order `TODO.md` gave.
   grouped them, and also by wallet, so two identical series in two accounts are
   no longer one (TODO item 10). Each keeps its cursor.
 
+### Budgets have a currency, and alerts are sent once per occasion
+- A budget was a bare number, read in whatever the display currency was, so
+  switching GBP → USD turned £500 into $500 and could fire an overspend
+  alert. `budgets.currency` (schema v10; existing budgets stamped with the
+  display currency) and `BudgetProgress.limitFiat`, the budget converted into
+  the display currency, which progress, "left", the totals, the alerts and
+  the exported summary all read. With no rate to convert it, the card shows it
+  in its own currency and it is never reported as overspent.
+- Alert dedupe was a per-session set of ids: every cold start re-sent every
+  alert (the stack goal on every launch once reached), and a new month could
+  not alert until a restart, because the id had no month in it. Alerts are
+  now claimed in `AppSettings` by `NotificationLedger`, keyed per category per
+  month and per goal amount; budget keys from other months are pruned.
+
 ---
 
 ## Verified correct (no action)

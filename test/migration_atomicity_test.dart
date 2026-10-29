@@ -37,10 +37,11 @@ void main() {
     final fresh = AppDatabase.forTesting(NativeDatabase(file));
     await fresh.customSelect('SELECT 1').get();
     await fresh.customStatement('DROP INDEX idx_categories_name');
-    // …and without v9's column.
+    // …and without the columns v9 and v10 add.
     await fresh.customStatement(
       'ALTER TABLE transactions DROP COLUMN recurring_series_id',
     );
+    await fresh.customStatement('ALTER TABLE budgets DROP COLUMN currency');
     await fresh.customStatement('PRAGMA user_version = 7');
     await fresh.close();
 
@@ -55,7 +56,7 @@ void main() {
     final relaunched = AppDatabase.forTesting(NativeDatabase(file));
     final version =
         await relaunched.customSelect('PRAGMA user_version').getSingle();
-    expect(version.data.values.single, 9);
+    expect(version.data.values.single, 10);
     final index =
         await relaunched
             .customSelect(
