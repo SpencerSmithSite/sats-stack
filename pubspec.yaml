@@ -77,11 +77,15 @@ flutter:
   uses-material-design: true
   assets:
     - assets/icons/
+    # Roboto Mono's licence. The OFL requires it to travel with the font; it
+    # is shown under Settings → About → Licences.
+    - assets/fonts/OFL.txt
   fonts:
     - family: RobotoMono
       fonts:
         - asset: assets/fonts/RobotoMono-Regular.ttf
         - asset: assets/fonts/RobotoMono-Medium.ttf
+          weight: 500
 
 dev_dependencies:
   flutter_test:

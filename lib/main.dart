@@ -1,6 +1,8 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'app.dart';
 import 'core/database/database.dart';
@@ -52,6 +54,15 @@ FxRates _currentRates() => FxRates(
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // The bundled Roboto Mono is under the SIL Open Font License, which has to
+  // travel with it. Registered so the licence page lists it beside the
+  // packages' own.
+  LicenseRegistry.addLicense(() async* {
+    yield LicenseEntryWithLineBreaks(const [
+      'Roboto Mono',
+    ], await rootBundle.loadString('assets/fonts/OFL.txt'));
+  });
 
   // Gigabytes of model weights from the removed downloadable-model backend,
   // which nothing else can now delete. In the background: it touches only

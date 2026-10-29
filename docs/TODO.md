@@ -150,10 +150,6 @@ the order to do it; the first group can lose or misstate the user's data.
   warning.
 
 **UI**
-- `assets/fonts/RobotoMono-*.ttf` are GitHub HTML pages, not fonts (since
-  the initial commit): every monospaced figure falls back to the system font,
-  and ~600 KB of HTML ships in the bundle. Needs the real files (Apache 2.0);
-  then declare the Medium face with `weight: 500`.
 - Remaining overflows at large text: the transaction row's category line, the
   hero's fiat row, the budget card's amounts, `StackGoalTile`, Settings' button
   rows.
