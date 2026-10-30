@@ -160,18 +160,6 @@
       "appearances": [
         {
           "appearance": "luminosity",
-          "value": "light"
-        }
-      ],
-      "filename": "satsstack_icon_light.png",
-      "idiom": "universal",
-      "platform": "ios",
-      "size": "1024x1024"
-    },
-    {
-      "appearances": [
-        {
-          "appearance": "luminosity",
           "value": "dark"
         }
       ],

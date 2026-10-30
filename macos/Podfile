@@ -52,17 +52,5 @@ post_install do |installer|
         config.build_settings['MACOSX_DEPLOYMENT_TARGET'] = '12.0'
       end
     end
-
-    # Prevent sqlite3.framework from being embedded twice.
-    # drift_flutter pulls in sqlite3_flutter_libs which bundles the framework;
-    # marking SKIP_INSTALL stops it from being re-copied into the app bundle a
-    # second time, eliminating the "Class PodsDummy_sqlite3 implemented in both"
-    # dyld warning at runtime.
-    if target.name == 'sqlite3' || target.name == 'sqlite3-api'
-      target.build_configurations.each do |config|
-        config.build_settings['SKIP_INSTALL'] = 'YES'
-        config.build_settings['DEFINES_MODULE'] = 'YES'
-      end
-    end
   end
 end

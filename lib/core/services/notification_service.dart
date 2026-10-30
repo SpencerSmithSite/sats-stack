@@ -68,7 +68,10 @@ class NotificationService {
             requestBadgePermission: false,
             requestSoundPermission: false,
           ),
-          android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+          // A white-on-transparent silhouette: Android draws the small icon
+          // from its alpha alone, so the full-colour launcher icon was a
+          // white square. Kept from resource shrinking by res/raw/keep.xml.
+          android: AndroidInitializationSettings('ic_stat_notification'),
         ),
       );
       _initialized = true;

@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.satsstack" "\0"
-            VALUE "FileDescription", "sats_stack" "\0"
+            VALUE "CompanyName", "Sats Stack" "\0"
+            VALUE "FileDescription", "Sats Stack" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "sats_stack" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.satsstack. All rights reserved." "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 Sats Stack. All rights reserved." "\0"
             VALUE "OriginalFilename", "sats_stack.exe" "\0"
-            VALUE "ProductName", "sats_stack" "\0"
+            VALUE "ProductName", "Sats Stack" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

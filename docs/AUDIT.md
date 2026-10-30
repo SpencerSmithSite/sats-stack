@@ -1447,6 +1447,34 @@ Item 15's open list, fixed one PR at a time, in the order `TODO.md` gave.
 - `android.enableJetifier` is gone: nothing in the dependency tree uses the
   pre-AndroidX support library, and it slowed every build.
 
+### Native configuration
+- Android 12+ draws its own splash from `windowSplashScreenBackground`, which
+  was unset: white, then the dark app. Set to `#141414` in both `-v31` styles,
+  and in `flutter_native_splash`'s `android_12` so regenerating keeps it.
+- Notifications used the full-colour launcher icon as their small icon, which
+  Android renders from alpha alone — a white square. A white-on-transparent
+  coin-stack vector, kept from resource shrinking by `res/raw/keep.xml`.
+- No `NSLocalNetworkUsageDescription`, so iOS gave no reason when asking to
+  reach an Ollama or LM Studio server on the network.
+- Gemini Nano's download bar was always indeterminate, on the belief that ML
+  Kit gives no total. `DownloadStarted` carries `bytesToDownload`; the bridge
+  emits a real percentage and Settings shows it.
+- A transient AICore error was reported as "unavailable" and cached for the
+  session, hiding Nano until a restart. It is reported as an error and not
+  cached.
+- The iOS icon set had an entry with `luminosity: light`, which is not an
+  appearance; removed. The launch image was an iPhone-only full-screen picture
+  whose 1x was a 3x-sized file — an iPad showed a phone-shaped rectangle. It
+  is the coin stack alone, universal, at 110/220/330 px; `flutter_native_splash`
+  has `ios: false` so regenerating no longer overwrites it.
+- Dead configuration removed: the macOS Podfile's sqlite3 block and iOS's
+  `use_modular_headers!` (both for pods that now come through Swift Package
+  Manager), `ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS =
+  AppIcon` (a boolean; now `YES`), the PNG launcher mipmaps (`minSdk` 26 only
+  ever uses the adaptive icon), and the Windows/Linux template identity
+  (`com.satsstack.sats_stack`, "sats_stack" titles).
+- Verified by building iOS, macOS and an Android release APK locally.
+
 ---
 
 ## Verified correct (no action)
