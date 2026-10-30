@@ -49,6 +49,7 @@ class _TransactionEditSheetState extends State<TransactionEditSheet> {
   late DateTime _date;
   String? _selectedCategory;
   bool _showCustomCat = false;
+  String? _amountError;
   bool _saving = false;
 
   List<Category> _categories = [];
@@ -136,9 +137,8 @@ class _TransactionEditSheetState extends State<TransactionEditSheet> {
     // Zero is rejected, not just negatives: it was how the rounded-to-"0.00"
     // BTC amount got through.
     if (amount == null || amount <= 0) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Enter a valid amount')));
+      // On the field: a snackbar from a sheet shows behind it.
+      setState(() => _amountError = 'Enter a valid amount');
       return;
     }
 
@@ -373,7 +373,11 @@ class _TransactionEditSheetState extends State<TransactionEditSheet> {
               decoration: InputDecoration(
                 labelText: _unit.label,
                 border: const OutlineInputBorder(),
+                errorText: _amountError,
               ),
+              onChanged: (_) {
+                if (_amountError != null) setState(() => _amountError = null);
+              },
             ),
             const SizedBox(height: 12),
 

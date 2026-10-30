@@ -1028,6 +1028,7 @@ class _AiBanner extends StatelessWidget {
           ),
           IconButton(
             icon: const Icon(Icons.close, size: 16),
+            tooltip: 'Dismiss',
             onPressed: onDismiss,
             visualDensity: VisualDensity.compact,
           ),
@@ -1142,6 +1143,7 @@ class _SourceCard extends StatelessWidget {
             ),
             IconButton(
               icon: const Icon(Icons.more_vert),
+              tooltip: 'More options for ${source.name}',
               onPressed: () => _showMenu(context),
               visualDensity: VisualDensity.compact,
             ),

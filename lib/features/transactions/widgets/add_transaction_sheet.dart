@@ -14,6 +14,7 @@ import '../../../shared/utils/amount_input.dart';
 import '../../../shared/utils/currency_utils.dart';
 import '../../../shared/utils/hash_utils.dart';
 import '../../../shared/utils/sat_converter.dart';
+import '../../../shared/widgets/inline_error.dart';
 import '../../../shared/widgets/tappable.dart';
 
 class AddTransactionSheet extends StatefulWidget {
@@ -109,7 +110,10 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() => _saving = true);
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
 
     try {
       final rawAmount = parseUserAmount(_amountController.text)!;
@@ -202,11 +206,10 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     }
   }
 
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: AppColors.danger),
-    );
-  }
+  /// Shown above Save — see [InlineError].
+  String? _error;
+
+  void _showError(String message) => setState(() => _error = message);
 
   @override
   Widget build(BuildContext context) {
@@ -456,8 +459,11 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                       maxLines: 2,
                       textCapitalization: TextCapitalization.sentences,
                     ),
+                    const SizedBox(height: 8),
                   ],
-                  const SizedBox(height: 12),
+                  // No gap above: each toggle is already a 48 px target, and
+                  // a spacer between them was a strip that did nothing when
+                  // tapped.
 
                   // Repeat toggle
                   Tappable(
@@ -497,6 +503,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                   ],
                   const SizedBox(height: 24),
 
+                  InlineError(_error),
                   // Save button
                   FilledButton(
                     onPressed: _saving ? null : _save,

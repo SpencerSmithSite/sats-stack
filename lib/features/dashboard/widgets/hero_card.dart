@@ -3,6 +3,7 @@ import '../../../shared/theme/app_colors.dart';
 import '../../../shared/theme/app_text_styles.dart';
 import '../../../shared/utils/currency_utils.dart';
 import '../../../shared/utils/sat_converter.dart';
+import '../../../shared/widgets/tappable.dart';
 
 class HeroCard extends StatelessWidget {
   const HeroCard({
@@ -11,7 +12,12 @@ class HeroCard extends StatelessWidget {
     required this.monthChangeSats,
     required this.btcPrice,
     required this.currency,
+    this.onAddWallet,
   });
+
+  /// Opens the wallet sheet from the empty-stack prompt. It was styled like
+  /// a button and did nothing when tapped.
+  final VoidCallback? onAddWallet;
 
   final int totalStackSats;
   final int monthChangeSats;
@@ -111,16 +117,36 @@ class HeroCard extends StatelessWidget {
           ),
           if (totalStackSats == 0) ...[
             const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: AppColors.onBitcoinOrange.withAlpha(30),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                'Import a Bitcoin wallet to track your stack',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppColors.onBitcoinOrange.withAlpha(220),
+            Tappable(
+              label: 'Add a Bitcoin wallet',
+              onTap: onAddWallet ?? () {},
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.onBitcoinOrange.withAlpha(30),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        'Import a Bitcoin wallet to track your stack',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.onBitcoinOrange.withAlpha(220),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.chevron_right,
+                      size: 16,
+                      color: AppColors.onBitcoinOrange.withAlpha(220),
+                    ),
+                  ],
                 ),
               ),
             ),

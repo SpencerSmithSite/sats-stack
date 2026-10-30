@@ -5,6 +5,7 @@ import '../../../core/services/btc_price_service.dart';
 import '../../../core/services/wallet_service.dart';
 import '../../../core/services/xpub_service.dart';
 import '../../../shared/theme/app_colors.dart';
+import '../../../shared/widgets/inline_error.dart';
 import 'add_wallet_sheet.dart';
 
 /// Bottom sheet that lists existing xpub wallets — each can be rescanned or
@@ -36,6 +37,7 @@ class _ManageWalletsSheetState extends State<ManageWalletsSheet> {
   late final Stream<List<Wallet>> _wallets =
       widget.walletService.watchXpubWallets();
   _Step _step = _Step.list;
+  String? _rescanError;
   String _syncStatus = '';
   XpubSyncResult? _syncResult;
   String? _syncingWalletLabel;
@@ -64,12 +66,11 @@ class _ManageWalletsSheetState extends State<ManageWalletsSheet> {
       }
     } catch (e) {
       if (mounted) {
+        // In the sheet, not a snackbar: that showed behind it.
         setState(() {
           _step = _Step.list;
+          _rescanError = 'Rescan of ${wallet.label} failed: $e';
         });
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Rescan failed: $e')));
       }
     }
   }
@@ -169,6 +170,7 @@ class _ManageWalletsSheetState extends State<ManageWalletsSheet> {
               const Divider(height: 1),
               switch (_step) {
                 _Step.list => _ListBody(
+                  error: _rescanError,
                   wallets: _wallets,
                   onRescan: _rescan,
                   onRemove: _remove,
@@ -201,12 +203,14 @@ class _ManageWalletsSheetState extends State<ManageWalletsSheet> {
 
 class _ListBody extends StatelessWidget {
   const _ListBody({
+    required this.error,
     required this.wallets,
     required this.onRescan,
     required this.onRemove,
     required this.onAdd,
   });
 
+  final String? error;
   final Stream<List<Wallet>> wallets;
   final Future<void> Function(Wallet) onRescan;
   final Future<void> Function(Wallet) onRemove;
@@ -230,6 +234,11 @@ class _ListBody extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              if (error != null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+                  child: InlineError(error),
+                ),
               if (wallets.isEmpty)
                 Padding(
                   padding: const EdgeInsets.symmetric(

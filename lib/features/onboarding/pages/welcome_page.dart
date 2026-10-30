@@ -123,7 +123,8 @@ class TourPage extends StatelessWidget {
       icon: Icons.receipt_long_outlined,
       label: 'Transactions',
       description:
-          'Log expenses and income manually, import a bank CSV, or sync a Bitcoin xpub address.',
+          'Log expenses and income by hand, import a statement — CSV, PDF or a '
+          'photo — or follow a Bitcoin wallet from its extended public key.',
     ),
     (
       icon: Icons.pie_chart_outline,

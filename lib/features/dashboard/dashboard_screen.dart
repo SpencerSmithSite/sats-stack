@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/database/database.dart';
 import '../../core/models/dashboard_data.dart';
 import '../../core/models/wallet_summary.dart';
+import '../../features/transactions/widgets/manage_wallets_sheet.dart';
 import '../../features/transactions/widgets/transaction_list_item.dart';
 import '../../main.dart' as app;
 import '../../shared/theme/app_colors.dart';
@@ -230,12 +231,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
       // The StreamBuilder is outermost and its stream is not rebuilt here, so
       // a price or currency tick only repaints — it no longer re-subscribes.
       body: StreamBuilder<DashboardData>(
+        // Keyed by month. A StreamBuilder handed a new stream keeps the old
+        // stream's last value until the new one emits, so changing month
+        // briefly showed the previous month's figures under the new month's
+        // name.
+        key: ValueKey(_selectedMonth),
         stream: _dashboard,
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return _ErrorState(message: snapshot.error.toString());
           }
-          final data = snapshot.data ?? DashboardData.empty;
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final data = snapshot.data!;
           // No price or currency listener here: each section that shows a
           // price-derived figure listens for itself (`_Live`). Wrapping the
           // whole content rebuilt every section and every transaction row on
@@ -348,6 +357,21 @@ class _DashboardContent extends StatelessWidget {
   /// insight is generated without anything leaving the device.
   final String? insightRecipient;
 
+  void _openWallets(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder:
+          (_) => ManageWalletsSheet(
+            xpubService: app.xpubService,
+            walletService: app.walletService,
+            btcPriceService: app.btcPriceService,
+          ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -365,6 +389,7 @@ class _DashboardContent extends StatelessWidget {
                 monthChangeSats: data.monthStackChangeSats,
                 btcPrice: btcPrice,
                 currency: currency,
+                onAddWallet: () => _openWallets(context),
               ),
         ),
         const SizedBox(height: 16),

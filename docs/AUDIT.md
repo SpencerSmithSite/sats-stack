@@ -1408,6 +1408,30 @@ Item 15's open list, fixed one PR at a time, in the order `TODO.md` gave.
   (`AppConstants.seededCategoryColours`) with nine distinct colours, and the
   v11 migration recolours built-ins the user never recoloured.
 
+### UI polish, and the splash
+- The hero card's "Import a Bitcoin wallet" pill was styled like a button and
+  did nothing; it opens the wallet sheet.
+- A 12 px spacer between the "Add notes" and "Repeat" toggles — each already
+  a 48 px target — was a strip that did nothing when tapped. Removed.
+- Copy said "bank CSV" and "xpub address" though PDF and photo imports exist
+  and an extended public key is not an address.
+- The category icon grid had eight fixed columns, about 33 px each on a phone;
+  it fits as many 48 px cells as the width allows.
+- Five icon buttons had no tooltip, so no spoken name or hover label.
+- Errors raised inside a sheet — a failed save, an invalid amount, a failed
+  rescan — were snackbars, which show behind the sheet. They are shown in it
+  (`InlineError`, or on the field).
+- `CategoriesSheet` built its stream in `build`, re-querying on every rebuild.
+  Its body is now a `Material`: the coloured box between its `ListTile`s and
+  their Material hid their ink and tripped a debug assertion.
+- Changing month showed the previous month's figures under the new month's
+  name until the new ones arrived (a `StreamBuilder` keeps the old stream's
+  value). The dashboard and Analytics key theirs by month and show a spinner.
+- The splash took ~2.5 s on every cold start for decoration — the app is ready
+  before the first frame — ignored reduced motion, and took an `initFuture`
+  nothing passed. It is ~1.2 s, a tap skips it, reduced motion shows the stack
+  without animating, and the parameter is gone.
+
 ---
 
 ## Verified correct (no action)

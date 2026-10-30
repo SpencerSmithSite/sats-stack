@@ -203,6 +203,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                     _searchQuery.isNotEmpty
                         ? IconButton(
                           icon: const Icon(Icons.clear, size: 18),
+                          tooltip: 'Clear search',
                           onPressed: () {
                             _searchCtrl.clear();
                             setState(() => _searchQuery = '');
@@ -274,7 +275,8 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                     icon: Icons.receipt_long_outlined,
                     title: 'No transactions yet',
                     subtitle:
-                        'Add your first transaction manually or import a bank CSV.',
+                        'Add your first transaction manually, or import a '
+                        'statement (CSV, PDF or a photo).',
                     actionLabel: 'Add Transaction',
                     onAction: _openAddSheet,
                   );

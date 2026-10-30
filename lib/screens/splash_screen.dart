@@ -2,15 +2,18 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
+/// The coin-drop splash, played over the app on a cold start.
+///
+/// It is decoration, not a loading screen: `main` has finished starting the
+/// app before the first frame, so nothing is waited for behind it. It used to
+/// take ~2.5 s, on every launch, and accept an `initFuture` that nothing ever
+/// passed. It is ~1.2 s now, a tap skips it, and with reduced motion on it
+/// shows the stack and fades straight away.
 class SplashScreen extends StatefulWidget {
   /// Called after the animation completes and the screen has faded out.
   final VoidCallback? onComplete;
 
-  /// If provided, the splash will not transition until this future resolves
-  /// (holds for at least 600 ms regardless).
-  final Future<void>? initFuture;
-
-  const SplashScreen({super.key, this.onComplete, this.initFuture});
+  const SplashScreen({super.key, this.onComplete});
 
   @override
   State<SplashScreen> createState() => _SplashScreenState();
@@ -38,15 +41,15 @@ class _SplashScreenState extends State<SplashScreen>
 
     _coin1Ctrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 400),
+      duration: const Duration(milliseconds: 260),
     );
     _coin2Ctrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 400),
+      duration: const Duration(milliseconds: 260),
     );
     _coin3Ctrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 400),
+      duration: const Duration(milliseconds: 260),
     );
     _shakeCtrl = AnimationController(
       vsync: this,
@@ -54,7 +57,7 @@ class _SplashScreenState extends State<SplashScreen>
     );
     _fadeCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 350),
+      duration: const Duration(milliseconds: 220),
     );
 
     // Each coin drops from 400px above its resting position with bounceOut easing.
@@ -83,44 +86,57 @@ class _SplashScreenState extends State<SplashScreen>
       end: 0.0,
     ).animate(CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut));
 
-    _runSequence();
+    // After the first frame, so the reduced-motion setting can be read.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _runSequence());
+  }
+
+  bool _finishing = false;
+
+  /// Fades out now — on a tap, or at the end of the sequence. Once.
+  Future<void> _finish() async {
+    if (_finishing || !mounted) return;
+    _finishing = true;
+    await _fadeCtrl.forward();
+    widget.onComplete?.call();
   }
 
   Future<void> _runSequence() async {
-    // --- Bottom coin drops ---
     if (!mounted) return;
+    if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) {
+      // No falling, bouncing or shaking: the finished stack, briefly.
+      setState(() => _visibleCoins = 3);
+      for (final c in [_coin1Ctrl, _coin2Ctrl, _coin3Ctrl]) {
+        c.value = 1;
+      }
+      await Future.delayed(const Duration(milliseconds: 300));
+      _fadeCtrl.duration = Duration.zero;
+      await _finish();
+      return;
+    }
+
+    // --- Bottom coin drops ---
+    if (!mounted || _finishing) return;
     setState(() => _visibleCoins = 1);
     await _coin1Ctrl.forward();
     _shakeCtrl.forward(from: 0);
 
     // --- Middle coin drops ---
-    await Future.delayed(const Duration(milliseconds: 150));
-    if (!mounted) return;
+    await Future.delayed(const Duration(milliseconds: 40));
+    if (!mounted || _finishing) return;
     setState(() => _visibleCoins = 2);
     await _coin2Ctrl.forward();
     _shakeCtrl.forward(from: 0);
 
     // --- Top coin drops ---
-    await Future.delayed(const Duration(milliseconds: 150));
-    if (!mounted) return;
+    await Future.delayed(const Duration(milliseconds: 40));
+    if (!mounted || _finishing) return;
     setState(() => _visibleCoins = 3);
     await _coin3Ctrl.forward();
     _shakeCtrl.forward(from: 0);
 
-    // --- Hold, waiting for initFuture if provided ---
-    if (widget.initFuture != null) {
-      await Future.wait([
-        widget.initFuture!,
-        Future.delayed(const Duration(milliseconds: 600)),
-      ]);
-    } else {
-      await Future.delayed(const Duration(milliseconds: 600));
-    }
-
-    // --- Fade out ---
-    if (!mounted) return;
-    await _fadeCtrl.forward();
-    widget.onComplete?.call();
+    // --- Hold, then fade out ---
+    await Future.delayed(const Duration(milliseconds: 200));
+    await _finish();
   }
 
   @override
@@ -135,6 +151,15 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
+    // A tap anywhere skips it.
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: _finish,
+      child: _buildSplash(),
+    );
+  }
+
+  Widget _buildSplash() {
     return FadeTransition(
       opacity: _fadeOut,
       child: AnimatedBuilder(

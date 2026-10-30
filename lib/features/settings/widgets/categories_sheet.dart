@@ -4,6 +4,7 @@ import '../../../core/database/database.dart';
 import '../../../core/services/category_service.dart';
 import '../../../shared/theme/app_colors.dart';
 import '../../../shared/utils/colour_names.dart';
+import '../../../shared/widgets/inline_error.dart';
 import '../../../shared/widgets/tappable.dart';
 
 // ── Public entry point ─────────────────────────────────────────────────────────
@@ -16,11 +17,15 @@ class CategoriesSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Container(
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+    // A Material rather than a coloured Container: the list's ListTiles paint
+    // their ink on the nearest Material, and a coloured box between the two
+    // hid it (and tripped Flutter's debug assertion saying so).
+    return Material(
+      color: theme.colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
+      clipBehavior: Clip.antiAlias,
       child: SafeArea(
         top: false,
         child: Column(
@@ -64,15 +69,28 @@ class CategoriesSheet extends StatelessWidget {
 
 // ── Category list ──────────────────────────────────────────────────────────────
 
-class _CategoryList extends StatelessWidget {
+class _CategoryList extends StatefulWidget {
   const _CategoryList({required this.categoryService});
 
   final CategoryService categoryService;
 
   @override
+  State<_CategoryList> createState() => _CategoryListState();
+}
+
+class _CategoryListState extends State<_CategoryList> {
+  /// Built once. `watchAll()` returns a new Drift stream on every call, so in
+  /// `build` it re-subscribed — and re-queried — on every rebuild of the
+  /// sheet, flashing the list empty while it did.
+  late final Stream<List<Category>> _categories =
+      widget.categoryService.watchAll();
+
+  CategoryService get categoryService => widget.categoryService;
+
+  @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<Category>>(
-      stream: categoryService.watchAll(),
+      stream: _categories,
       builder: (context, snapshot) {
         final categories = snapshot.data ?? [];
         return ConstrainedBox(
@@ -141,6 +159,7 @@ class _CategoryTile extends StatelessWidget {
           // Edit — available for all categories
           IconButton(
             icon: const Icon(Icons.edit_outlined, size: 18),
+            tooltip: 'Edit ${category.name}',
             color: context.textSecondary,
             onPressed: () => _openEdit(context),
           ),
@@ -148,6 +167,7 @@ class _CategoryTile extends StatelessWidget {
           if (!category.isSystem)
             IconButton(
               icon: const Icon(Icons.delete_outline, size: 18),
+              tooltip: 'Delete ${category.name}',
               color: AppColors.danger,
               onPressed: () => _confirmDelete(context),
             ),
@@ -288,6 +308,9 @@ class _EditCategorySheetState extends State<_EditCategorySheet> {
   /// Set when the name is already taken — see [DuplicateCategoryNameException].
   String? _nameError;
 
+  /// A save that failed for any other reason — see [InlineError].
+  String? _saveError;
+
   bool get _isEditing => widget.existing != null;
 
   @override
@@ -330,14 +353,7 @@ class _EditCategorySheetState extends State<_EditCategorySheet> {
       // Shown on the field, where the fix is, rather than as a raw error.
       if (mounted) setState(() => _nameError = e.toString());
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to save: $e'),
-            backgroundColor: AppColors.danger,
-          ),
-        );
-      }
+      if (mounted) setState(() => _saveError = 'Could not save: $e');
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -471,6 +487,7 @@ class _EditCategorySheetState extends State<_EditCategorySheet> {
                   ),
                   const SizedBox(height: 24),
 
+                  InlineError(_saveError),
                   FilledButton(
                     onPressed: _saving ? null : _save,
                     style: FilledButton.styleFrom(
@@ -516,13 +533,33 @@ class _IconGrid extends StatelessWidget {
     final activeColor = Color(
       int.parse('FF${selectedColor.replaceFirst('#', '')}', radix: 16),
     );
+    // As many columns as fit at 48 px or more. Eight fixed columns made each
+    // cell about 33 px on a phone, under the 48 px touch floor.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const spacing = 8.0;
+        final columns = ((constraints.maxWidth + spacing) /
+                (kMinInteractiveDimension + spacing))
+            .floor()
+            .clamp(1, 10);
+        return _grid(context, activeColor, columns, spacing);
+      },
+    );
+  }
+
+  Widget _grid(
+    BuildContext context,
+    Color activeColor,
+    int columns,
+    double spacing,
+  ) {
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 8,
-        mainAxisSpacing: 8,
-        crossAxisSpacing: 8,
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: columns,
+        mainAxisSpacing: spacing,
+        crossAxisSpacing: spacing,
         childAspectRatio: 1,
       ),
       itemCount: _kIconOptions.length,
