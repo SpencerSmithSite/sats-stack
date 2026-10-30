@@ -1,9 +1,5 @@
 abstract final class AppConstants {
-  static const appName = 'Sats Stack';
-
   // API endpoints
-  static const coinGeckoPriceUrl =
-      'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd';
   static const mempoolBaseUrl = 'https://mempool.space/api';
 
   // Defaults

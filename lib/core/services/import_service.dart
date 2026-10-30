@@ -7,7 +7,7 @@ import 'dart:ui' as ui;
 import 'package:crypto/crypto.dart';
 import 'package:csv/csv.dart';
 import 'package:drift/drift.dart'
-    show DoUpdate, InsertMode, OrderingTerm, StringExpressionOperators, Value;
+    show DoUpdate, InsertMode, StringExpressionOperators, Value;
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:http/http.dart' as http;
 import 'package:syncfusion_flutter_pdf/pdf.dart';
@@ -76,9 +76,9 @@ class ImportCancelledException implements Exception {
 
 // ── Models ────────────────────────────────────────────────────────────────────
 
-enum ImportTier { ollama, rules, manual, pdfExtracted, pdfHeuristic, image }
+enum ImportTier { ollama, rules, manual, pdfHeuristic, image }
 
-enum ImportFileType { csv, pdf, image, unknown }
+enum ImportFileType { csv, pdf, image }
 
 class ParsedTransaction {
   ParsedTransaction({
@@ -530,12 +530,10 @@ class ImportService {
     ImportCancelToken? cancelToken,
   }) => _asNewRun(cancelToken, () async {
     final lname = fileName.toLowerCase();
+    // Anything that is not a PDF is read as delimited text: a .txt or .tsv
+    // export goes the same way as a .csv.
     final fileType =
-        lname.endsWith('.pdf')
-            ? ImportFileType.pdf
-            : lname.endsWith('.csv')
-            ? ImportFileType.csv
-            : ImportFileType.unknown;
+        lname.endsWith('.pdf') ? ImportFileType.pdf : ImportFileType.csv;
 
     ImportResult result;
     if (fileType == ImportFileType.pdf) {
@@ -2074,8 +2072,6 @@ FILE CONTENT:
 
   // ── Source CRUD ───────────────────────────────────────────────────────────
 
-  Future<List<ImportSource>> listSources() => db.select(db.importSources).get();
-
   Stream<List<ImportSource>> watchSources() =>
       db.select(db.importSources).watch();
 
@@ -2110,13 +2106,6 @@ FILE CONTENT:
       await (db.delete(db.importSources)..where((t) => t.id.equals(id))).go();
     });
   }
-
-  /// Returns imported transactions for [sourceId], newest first.
-  Future<List<ImportedTransaction>> getTransactionsForSource(int sourceId) =>
-      (db.select(db.importedTransactions)
-            ..where((t) => t.sourceId.equals(sourceId))
-            ..orderBy([(t) => OrderingTerm.desc(t.date)]))
-          .get();
 
   // ── Heuristic PDF parser (no-AI fallback) ────────────────────────────────
 

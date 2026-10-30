@@ -92,13 +92,6 @@ void main() {
       expect(AiProvider.fromKey(null), AiProvider.ollama);
     });
 
-    test('provider ids round-trip and fall back', () {
-      for (final p in CloudProvider.values) {
-        expect(CloudProvider.fromId(p.id), p);
-      }
-      expect(CloudProvider.fromId('nope'), CloudProvider.anthropic);
-    });
-
     test('cloud providers map to distinct AiProvider values', () {
       final mapped =
           AiProvider.values

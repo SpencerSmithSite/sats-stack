@@ -1475,6 +1475,25 @@ Item 15's open list, fixed one PR at a time, in the order `TODO.md` gave.
   (`com.satsstack.sats_stack`, "sats_stack" titles).
 - Verified by building iOS, macOS and an Android release APK locally.
 
+### No test reaches the internet, and the dead code is gone
+- `auto_category_test` reached live price endpoints on every save, so it
+  depended on the network and sent its requests to third parties.
+  `test/flutter_test_config.dart` refuses any connection to a non-loopback
+  host, for every test; `network_guard_test` proves the guard is in force (a
+  test that swallows the error would pass either way). Nothing else turned out
+  to need the network.
+- Removed, unused: `TransactionService.getAll`, `WalletService.getAll` and
+  `watchAll`, `BudgetService.watchAll`, `BtcPriceService.getCachedPrice`,
+  `ImportService.listSources` and `getTransactionsForSource`,
+  `OllamaService.ollamaConnected`/`lmStudioConnected`/`mapleConnected`,
+  `GeminiNanoState.needsDownload`, `CloudProvider.fromId`,
+  `AppConstants.appName` and `coinGeckoPriceUrl`, `ImportTier.pdfExtracted`,
+  `ImportFileType.unknown` (a non-PDF was read as CSV either way), and an
+  empty `widget_test.dart`. `AppConstants.defaultCurrency` was listed as dead
+  but the v10 migration uses it.
+- `clearAllApiKeys` — Reset all data — left the Bitcoin Core RPC password in
+  the keychain. It deletes it too.
+
 ---
 
 ## Verified correct (no action)

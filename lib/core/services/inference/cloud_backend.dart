@@ -124,11 +124,6 @@ enum CloudProvider {
 
   /// The host that receives the user's financial data, for the disclosure.
   String get host => Uri.parse(chatEndpoint).host;
-
-  static CloudProvider fromId(String? id) => CloudProvider.values.firstWhere(
-    (p) => p.id == id,
-    orElse: () => CloudProvider.anthropic,
-  );
 }
 
 /// Streams answers from a hosted model using the user's own API key.

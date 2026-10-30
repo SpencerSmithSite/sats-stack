@@ -423,7 +423,6 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen> {
     ImportTier.ollama => widget.result.aiLabel ?? 'AI',
     ImportTier.rules => 'Smart Rules',
     ImportTier.manual => 'Saved Mapping',
-    ImportTier.pdfExtracted => 'PDF + AI',
     ImportTier.pdfHeuristic => 'PDF Heuristics',
     ImportTier.image => '${widget.result.aiLabel ?? 'AI'} (image)',
   };

@@ -145,18 +145,8 @@ the order to do it; the first group can lose or misstate the user's data.
   `ai_enabled_test`'s seed case is always true on desktop; the privacy
   invariant cannot catch a forgotten hosted provider (assert the private set
   exactly); `tab_state_test` does not use the app's router.
-- `auto_category_test` makes real network calls — add a
-  `flutter_test_config.dart` that refuses non-loopback HTTP.
 - Untested: the xpub money maths beyond one receive, the keychain migration,
   export/import, budget thresholds, the DCA simulator.
-- Dead: `TransactionService.getAll`, `WalletService.getAll/watchAll`,
-  `BudgetService.watchAll`, `BtcPriceService.getCachedPrice`,
-  `ImportService.listSources/getTransactionsForSource`, the
-  `*Connected` getters, `GeminiNanoState.needsDownload`,
-  `CloudProvider.fromId`, `AppConstants.appName/coinGeckoPriceUrl/defaultCurrency`,
-  `ImportTier.pdfExtracted`, `ImportFileType.unknown`, an empty
-  `widget_test.dart`. `clearAllApiKeys` does not delete the RPC password
-  entry item 11 will use.
 
 ---
 

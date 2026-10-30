@@ -56,11 +56,6 @@ enum GeminiNanoState {
     GeminiNanoState.downloading => true,
     _ => false,
   };
-
-  /// Whether the user has something to do here.
-  bool get needsDownload =>
-      this == GeminiNanoState.downloadable ||
-      this == GeminiNanoState.downloading;
 }
 
 class GeminiNanoAvailability {

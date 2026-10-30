@@ -16,11 +16,6 @@ class TransactionService {
       ..orderBy([(t) => OrderingTerm.desc(t.date)])).watch();
   }
 
-  Future<List<Transaction>> getAll() {
-    return (_db.select(_db.transactions)
-      ..orderBy([(t) => OrderingTerm.desc(t.date)])).get();
-  }
-
   Future<void> add(TransactionsCompanion companion) {
     return _db.into(_db.transactions).insert(companion);
   }
