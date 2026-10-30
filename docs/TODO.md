@@ -135,10 +135,6 @@ the order to do it; the first group can lose or misstate the user's data.
   "left" text (after #26), selected chips' labels in the raw category colour.
 - Analytics ignores user category colours; `CategoryPalette` seeds disagree
   with the database seed (four system categories are the same grey).
-- The DCA simulator ignores typing (no listener) and its scenarios rank
-  backwards (valued at today's price); the stack goal's monthly average skips
-  idle months, so the projected date is optimistic; the live price is never
-  refreshed while the app is open.
 - The hero's "Import a Bitcoin wallet" pill looks tappable and is not; a
   dead gap between "Add notes" and "Repeat"; copy still says "xpub address"
   and "bank CSV" (PDF and photo exist); the 33 px icon-grid targets; icon

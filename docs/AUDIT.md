@@ -1375,6 +1375,22 @@ Item 15's open list, fixed one PR at a time, in the order `TODO.md` gave.
   local network still counts as the user's own hardware for consent — an open
   decision, now in TODO.
 
+### The Stack screen's maths, and the live price
+- The DCA simulator read its amount only when something else rebuilt the
+  screen, so typing changed nothing until a period was tapped. It listens to
+  the field now.
+- Its scenarios were all valued at today's price, so the one assuming the most
+  growth — which buys the fewest sats — showed the smallest figure, and
+  "Optimistic" read as the worst. Each is valued at its own end price
+  (`DcaSimulator.endValue`).
+- The stack goal's monthly average skipped idle months, so stacking in two
+  months of a year read as stacking every month and the projected date came
+  far too soon. Idle months count as zero, over the last 12 complete months
+  (or since the first activity).
+- The live price was fetched at launch and never again. It refreshes every 10
+  minutes while the app runs and on returning to the foreground
+  (`BtcPriceService.startAutoRefresh`, `refreshIfOlderThan`).
+
 ---
 
 ## Verified correct (no action)

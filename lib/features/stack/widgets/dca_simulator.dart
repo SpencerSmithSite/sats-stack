@@ -54,8 +54,31 @@ class DcaSimulator extends StatelessWidget {
     return total;
   }
 
+  /// What [sats] would be worth at the end of [months] at [annualRate].
+  ///
+  /// Each scenario's sats are valued at the price that scenario assumes. All
+  /// three used to be valued at *today's* price, so the scenario that assumed
+  /// the most growth — and so bought the fewest sats — showed the smallest
+  /// figure, and "Optimistic" read as the worst outcome.
+  static double endValue(
+    int sats,
+    double startPrice,
+    int months,
+    double annualRate,
+  ) => sats / 1e8 * startPrice * pow(1 + annualRate, months / 12);
+
   @override
   Widget build(BuildContext context) {
+    // Rebuilt as the amount is typed. It read the controller only when
+    // something else rebuilt the screen, so typing a new amount changed
+    // nothing until the period was tapped.
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (context, _) => _build(context),
+    );
+  }
+
+  Widget _build(BuildContext context) {
     final theme = Theme.of(context);
     final price = btcPrice ?? 0;
     final monthly = parseUserAmount(controller.text) ?? 0;
@@ -154,19 +177,24 @@ class DcaSimulator extends StatelessWidget {
 
                 // Scenario rows
                 for (final s in _scenarios) ...[
-                  ScenarioRow(
-                    label: s.label,
-                    rate: s.rate,
-                    color: s.color,
-                    sats: _simulate(monthly, price, months, s.rate),
-                    btcPrice: price,
-                    currency: currency,
+                  Builder(
+                    builder: (_) {
+                      final sats = _simulate(monthly, price, months, s.rate);
+                      return ScenarioRow(
+                        label: s.label,
+                        rate: s.rate,
+                        color: s.color,
+                        sats: sats,
+                        value: endValue(sats, price, months, s.rate),
+                        currency: currency,
+                      );
+                    },
                   ),
                   const SizedBox(height: 10),
                 ],
                 const SizedBox(height: 4),
                 Text(
-                  'Conservative = 0%/yr · Moderate = 20%/yr · Optimistic = 40%/yr BTC price appreciation. Values shown at today\'s price.',
+                  'Conservative = 0%/yr · Moderate = 20%/yr · Optimistic = 40%/yr BTC price appreciation. Each value is at that scenario\'s price at the end of the period.',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: context.textSecondary,
                     fontSize: 10,
@@ -189,7 +217,7 @@ class ScenarioRow extends StatelessWidget {
     required this.rate,
     required this.color,
     required this.sats,
-    required this.btcPrice,
+    required this.value,
     required this.currency,
   });
 
@@ -198,7 +226,9 @@ class ScenarioRow extends StatelessWidget {
   final double rate;
   final Color color;
   final int sats;
-  final double btcPrice;
+
+  /// What [sats] are worth at the end of the period, in [currency].
+  final double value;
 
   @override
   Widget build(BuildContext context) {
@@ -206,7 +236,7 @@ class ScenarioRow extends StatelessWidget {
       symbol: CurrencyUtils.symbolFor(currency),
       decimalDigits: 0,
     );
-    final fiatValue = fiatFmt.format(sats / 1e8 * btcPrice);
+    final fiatValue = fiatFmt.format(value);
     final satsStr = SatConverter.formatSats(sats);
 
     return Row(

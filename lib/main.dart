@@ -146,6 +146,15 @@ void main() async {
 
   // Load cached BTC price before first frame; fetches fresh in background if stale
   await btcPriceService.initialize();
+  btcPriceService.startAutoRefresh();
+  // Timers do not run while the app is suspended, so catch up on return.
+  AppLifecycleListener(
+    onResume:
+        () =>
+            btcPriceService
+                .refreshIfOlderThan(BtcPriceService.liveRefreshInterval)
+                .ignore(),
+  );
 
   // Generate any recurring transactions that came due since last launch,
   // each priced on its own date. After the price service is set up, since
