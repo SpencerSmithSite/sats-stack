@@ -75,14 +75,12 @@ abstract final class AppConstants {
   /// row the user just deleted (its hash is derived from the anchor and the
   /// due date, so it comes back identical). Deleting a middle instance never
   /// had that problem, which made the behaviour inconsistent as well as wrong.
-  /// [seriesFingerprint] comes from `TransactionService.seriesKey`, which
-  /// includes the description and amount as well as the period and anchor.
-  /// Keying on the period and anchor alone made two series collide: the date
-  /// picker returns midnight, so "Rent, monthly, from 1 Jan" and "Netflix,
-  /// monthly, from 1 Jan" shared one cursor and only one of them ever
-  /// generated.
-  static String recurringCursorKey(String seriesFingerprint) =>
-      'recurring_cursor_$seriesFingerprint';
+  /// [seriesId] is the row's `recurringSeriesId`. Before schema v9 it was a
+  /// fingerprint of the period, anchor, description and amount, which changed
+  /// whenever an instance was edited — see
+  /// `AppDatabase.adoptLegacyRecurringSeries`.
+  static String recurringCursorKey(String seriesId) =>
+      'recurring_cursor_$seriesId';
 
   /// Whether the user has agreed to let a named third party read their
   /// statements for the AI import tier.

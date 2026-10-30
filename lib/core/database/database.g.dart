@@ -595,6 +595,18 @@ class $TransactionsTable extends Transactions
         type: DriftSqlType.dateTime,
         requiredDuringInsert: false,
       );
+  static const VerificationMeta _recurringSeriesIdMeta = const VerificationMeta(
+    'recurringSeriesId',
+  );
+  @override
+  late final GeneratedColumn<String> recurringSeriesId =
+      GeneratedColumn<String>(
+        'recurring_series_id',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -612,6 +624,7 @@ class $TransactionsTable extends Transactions
     createdAt,
     recurringPeriod,
     recurringAnchorDate,
+    recurringSeriesId,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -740,6 +753,15 @@ class $TransactionsTable extends Transactions
         ),
       );
     }
+    if (data.containsKey('recurring_series_id')) {
+      context.handle(
+        _recurringSeriesIdMeta,
+        recurringSeriesId.isAcceptableOrUnknown(
+          data['recurring_series_id']!,
+          _recurringSeriesIdMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -820,6 +842,10 @@ class $TransactionsTable extends Transactions
         DriftSqlType.dateTime,
         data['${effectivePrefix}recurring_anchor_date'],
       ),
+      recurringSeriesId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}recurring_series_id'],
+      ),
     );
   }
 
@@ -845,6 +871,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
   final DateTime createdAt;
   final String? recurringPeriod;
   final DateTime? recurringAnchorDate;
+  final String? recurringSeriesId;
   const Transaction({
     required this.id,
     required this.walletId,
@@ -861,6 +888,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     required this.createdAt,
     this.recurringPeriod,
     this.recurringAnchorDate,
+    this.recurringSeriesId,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -887,6 +915,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     }
     if (!nullToAbsent || recurringAnchorDate != null) {
       map['recurring_anchor_date'] = Variable<DateTime>(recurringAnchorDate);
+    }
+    if (!nullToAbsent || recurringSeriesId != null) {
+      map['recurring_series_id'] = Variable<String>(recurringSeriesId);
     }
     return map;
   }
@@ -918,6 +949,10 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           recurringAnchorDate == null && nullToAbsent
               ? const Value.absent()
               : Value(recurringAnchorDate),
+      recurringSeriesId:
+          recurringSeriesId == null && nullToAbsent
+              ? const Value.absent()
+              : Value(recurringSeriesId),
     );
   }
 
@@ -944,6 +979,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       recurringAnchorDate: serializer.fromJson<DateTime?>(
         json['recurringAnchorDate'],
       ),
+      recurringSeriesId: serializer.fromJson<String?>(
+        json['recurringSeriesId'],
+      ),
     );
   }
   @override
@@ -965,6 +1003,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'recurringPeriod': serializer.toJson<String?>(recurringPeriod),
       'recurringAnchorDate': serializer.toJson<DateTime?>(recurringAnchorDate),
+      'recurringSeriesId': serializer.toJson<String?>(recurringSeriesId),
     };
   }
 
@@ -984,6 +1023,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     DateTime? createdAt,
     Value<String?> recurringPeriod = const Value.absent(),
     Value<DateTime?> recurringAnchorDate = const Value.absent(),
+    Value<String?> recurringSeriesId = const Value.absent(),
   }) => Transaction(
     id: id ?? this.id,
     walletId: walletId ?? this.walletId,
@@ -1004,6 +1044,10 @@ class Transaction extends DataClass implements Insertable<Transaction> {
         recurringAnchorDate.present
             ? recurringAnchorDate.value
             : this.recurringAnchorDate,
+    recurringSeriesId:
+        recurringSeriesId.present
+            ? recurringSeriesId.value
+            : this.recurringSeriesId,
   );
   Transaction copyWithCompanion(TransactionsCompanion data) {
     return Transaction(
@@ -1034,6 +1078,10 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           data.recurringAnchorDate.present
               ? data.recurringAnchorDate.value
               : this.recurringAnchorDate,
+      recurringSeriesId:
+          data.recurringSeriesId.present
+              ? data.recurringSeriesId.value
+              : this.recurringSeriesId,
     );
   }
 
@@ -1054,7 +1102,8 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           ..write('dedupHash: $dedupHash, ')
           ..write('createdAt: $createdAt, ')
           ..write('recurringPeriod: $recurringPeriod, ')
-          ..write('recurringAnchorDate: $recurringAnchorDate')
+          ..write('recurringAnchorDate: $recurringAnchorDate, ')
+          ..write('recurringSeriesId: $recurringSeriesId')
           ..write(')'))
         .toString();
   }
@@ -1076,6 +1125,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     createdAt,
     recurringPeriod,
     recurringAnchorDate,
+    recurringSeriesId,
   );
   @override
   bool operator ==(Object other) =>
@@ -1095,7 +1145,8 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           other.dedupHash == this.dedupHash &&
           other.createdAt == this.createdAt &&
           other.recurringPeriod == this.recurringPeriod &&
-          other.recurringAnchorDate == this.recurringAnchorDate);
+          other.recurringAnchorDate == this.recurringAnchorDate &&
+          other.recurringSeriesId == this.recurringSeriesId);
 }
 
 class TransactionsCompanion extends UpdateCompanion<Transaction> {
@@ -1114,6 +1165,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
   final Value<DateTime> createdAt;
   final Value<String?> recurringPeriod;
   final Value<DateTime?> recurringAnchorDate;
+  final Value<String?> recurringSeriesId;
   const TransactionsCompanion({
     this.id = const Value.absent(),
     this.walletId = const Value.absent(),
@@ -1130,6 +1182,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     this.createdAt = const Value.absent(),
     this.recurringPeriod = const Value.absent(),
     this.recurringAnchorDate = const Value.absent(),
+    this.recurringSeriesId = const Value.absent(),
   });
   TransactionsCompanion.insert({
     this.id = const Value.absent(),
@@ -1147,6 +1200,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     this.createdAt = const Value.absent(),
     this.recurringPeriod = const Value.absent(),
     this.recurringAnchorDate = const Value.absent(),
+    this.recurringSeriesId = const Value.absent(),
   }) : walletId = Value(walletId),
        date = Value(date),
        description = Value(description),
@@ -1171,6 +1225,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     Expression<DateTime>? createdAt,
     Expression<String>? recurringPeriod,
     Expression<DateTime>? recurringAnchorDate,
+    Expression<String>? recurringSeriesId,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -1189,6 +1244,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       if (recurringPeriod != null) 'recurring_period': recurringPeriod,
       if (recurringAnchorDate != null)
         'recurring_anchor_date': recurringAnchorDate,
+      if (recurringSeriesId != null) 'recurring_series_id': recurringSeriesId,
     });
   }
 
@@ -1208,6 +1264,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     Value<DateTime>? createdAt,
     Value<String?>? recurringPeriod,
     Value<DateTime?>? recurringAnchorDate,
+    Value<String?>? recurringSeriesId,
   }) {
     return TransactionsCompanion(
       id: id ?? this.id,
@@ -1225,6 +1282,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       createdAt: createdAt ?? this.createdAt,
       recurringPeriod: recurringPeriod ?? this.recurringPeriod,
       recurringAnchorDate: recurringAnchorDate ?? this.recurringAnchorDate,
+      recurringSeriesId: recurringSeriesId ?? this.recurringSeriesId,
     );
   }
 
@@ -1278,6 +1336,9 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
         recurringAnchorDate.value,
       );
     }
+    if (recurringSeriesId.present) {
+      map['recurring_series_id'] = Variable<String>(recurringSeriesId.value);
+    }
     return map;
   }
 
@@ -1298,7 +1359,8 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
           ..write('dedupHash: $dedupHash, ')
           ..write('createdAt: $createdAt, ')
           ..write('recurringPeriod: $recurringPeriod, ')
-          ..write('recurringAnchorDate: $recurringAnchorDate')
+          ..write('recurringAnchorDate: $recurringAnchorDate, ')
+          ..write('recurringSeriesId: $recurringSeriesId')
           ..write(')'))
         .toString();
   }
@@ -4945,6 +5007,7 @@ typedef $$TransactionsTableCreateCompanionBuilder =
       Value<DateTime> createdAt,
       Value<String?> recurringPeriod,
       Value<DateTime?> recurringAnchorDate,
+      Value<String?> recurringSeriesId,
     });
 typedef $$TransactionsTableUpdateCompanionBuilder =
     TransactionsCompanion Function({
@@ -4963,6 +5026,7 @@ typedef $$TransactionsTableUpdateCompanionBuilder =
       Value<DateTime> createdAt,
       Value<String?> recurringPeriod,
       Value<DateTime?> recurringAnchorDate,
+      Value<String?> recurringSeriesId,
     });
 
 final class $$TransactionsTableReferences
@@ -5065,6 +5129,11 @@ class $$TransactionsTableFilterComposer
 
   ColumnFilters<DateTime> get recurringAnchorDate => $composableBuilder(
     column: $table.recurringAnchorDate,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get recurringSeriesId => $composableBuilder(
+    column: $table.recurringSeriesId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -5171,6 +5240,11 @@ class $$TransactionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get recurringSeriesId => $composableBuilder(
+    column: $table.recurringSeriesId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$WalletsTableOrderingComposer get walletId {
     final $$WalletsTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -5258,6 +5332,11 @@ class $$TransactionsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get recurringSeriesId => $composableBuilder(
+    column: $table.recurringSeriesId,
+    builder: (column) => column,
+  );
+
   $$WalletsTableAnnotationComposer get walletId {
     final $$WalletsTableAnnotationComposer composer = $composerBuilder(
       composer: this,
@@ -5326,6 +5405,7 @@ class $$TransactionsTableTableManager
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<String?> recurringPeriod = const Value.absent(),
                 Value<DateTime?> recurringAnchorDate = const Value.absent(),
+                Value<String?> recurringSeriesId = const Value.absent(),
               }) => TransactionsCompanion(
                 id: id,
                 walletId: walletId,
@@ -5342,6 +5422,7 @@ class $$TransactionsTableTableManager
                 createdAt: createdAt,
                 recurringPeriod: recurringPeriod,
                 recurringAnchorDate: recurringAnchorDate,
+                recurringSeriesId: recurringSeriesId,
               ),
           createCompanionCallback:
               ({
@@ -5360,6 +5441,7 @@ class $$TransactionsTableTableManager
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<String?> recurringPeriod = const Value.absent(),
                 Value<DateTime?> recurringAnchorDate = const Value.absent(),
+                Value<String?> recurringSeriesId = const Value.absent(),
               }) => TransactionsCompanion.insert(
                 id: id,
                 walletId: walletId,
@@ -5376,6 +5458,7 @@ class $$TransactionsTableTableManager
                 createdAt: createdAt,
                 recurringPeriod: recurringPeriod,
                 recurringAnchorDate: recurringAnchorDate,
+                recurringSeriesId: recurringSeriesId,
               ),
           withReferenceMapper:
               (p0) =>

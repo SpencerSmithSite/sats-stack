@@ -1202,6 +1202,29 @@ Item 15's open list, fixed one PR at a time, in the order `TODO.md` gave.
   which the duplicate check would then have blocked a retry on. The sheet
   removes it again.
 
+### Recurring series have a stable id (schema v9)
+- A series was identified by its period, anchor, description and amount, so
+  editing an instance split it off and the original regenerated: duplicate
+  rows. Renaming the anchor recreated nearly every past instance. Rows now
+  carry `recurringSeriesId`, random when a series is started, and the
+  generation cursor is keyed on it.
+- The dedup hash of a generated instance is built from the series id and the
+  due date only (`TransactionService.recurringDedupHash`); it used to include
+  the description and amount, so an edit changed it.
+- With a stable id the cursor is authoritative. It used to be overridden for a
+  series that looked re-created, which made deleting every instance but the
+  anchor regenerate them all.
+- A series can be stopped: Stop repeating in the edit sheet turns its rows into
+  one-offs and drops the cursor. There was no way to do this.
+- Each instance is priced on its own date (`priceAt`, wired to
+  `getHistoricalPrice` at launch): a fiat series keeps its fiat and gets that
+  day's sats, a Bitcoin one the reverse, falling back to the newest instance's
+  figures when there is no price. Every instance used to copy the anchor's
+  sats. Generated rows also keep `isBitcoin`, which they used to lose.
+- Existing series are adopted by the v9 migration — grouped the way the old key
+  grouped them, and also by wallet, so two identical series in two accounts are
+  no longer one (TODO item 10). Each keeps its cursor.
+
 ---
 
 ## Verified correct (no action)

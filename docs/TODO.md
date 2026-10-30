@@ -50,10 +50,6 @@ History lives elsewhere and is not duplicated into this file:
   check every plugin builds.
 - **Typed JSON parsing** in place of the 43 `dynamic` calls
   `avoid_dynamic_calls` would flag, then enable the rule.
-- **Recurring series ignore the wallet.** The series key and the hash both
-  leave it out, so two identical series started the same day in two manual
-  accounts are treated as one. Rare; changing the key orphans every stored
-  cursor, so it needs a migration rather than a one-line fix.
 
 > Items 11–14 were already tracked before the second pass. They are still
 > open and still worth doing; they are simply less urgent than 1–10.
@@ -119,13 +115,6 @@ Everything below was checked against the code and is still open. Roughly in
 the order to do it; the first group can lose or misstate the user's data.
 
 **Data and money**
-- **Recurring series split on edit.** The series key includes the
-  description and amount, so editing an instance (or the anchor) starts a new
-  series and the old one regenerates — duplicate rows; renaming the anchor
-  recreates nearly every past instance. Needs a stable series id. Related:
-  there is no way to stop a series (deleting all but the anchor regenerates
-  them), and each instance copies the anchor's `amountSats` rather than
-  pricing its own date.
 - **Budgets have no currency**: switching currency reinterprets every budget
   (and can fire an overspend notification).
 - **Notification dedupe is per session**: a new month never alerts again

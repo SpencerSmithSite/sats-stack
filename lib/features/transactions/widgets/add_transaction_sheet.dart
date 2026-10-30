@@ -187,6 +187,10 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
           dedupHash: dedupHash,
           recurringPeriod: period,
           recurringAnchorDate: anchor,
+          recurringSeriesId:
+              _isRecurring
+                  ? Value(TransactionService.newSeriesId())
+                  : const Value(null),
         ),
       );
 

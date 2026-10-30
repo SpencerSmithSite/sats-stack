@@ -9,7 +9,7 @@
 /// |---|---|---|
 /// | statement import | `source_<id>`, plus `#n` for the n-th identical row in a file | re-importing into a source dedupes; two accounts, or two identical rows, do not |
 /// | manual entry | microsecond timestamp | an intentional duplicate must be kept |
-/// | recurring series | `recurring_<anchor>_<due>` | one row per due date, idempotent |
+/// | recurring series | `recurring_<seriesId>_<due>`, over a blank description and zero amount | one row per due date per series, however the series is edited |
 /// | xpub sync | `xpub_<txid>`, then `HashUtils.scopedToWallet` | one row per on-chain transaction, per wallet |
 ///
 /// Nothing asserted the distinctions, and getting one wrong is invisible until
@@ -99,39 +99,42 @@ void main() {
   });
 
   group('recurring: idempotent per due date', () {
-    String recurring(DateTime anchor, DateTime due) =>
-        HashUtils.transactionDedupHash(
-          date: due,
-          amount: -1200,
-          description: 'Rent',
-          salt:
-              'recurring_${anchor.millisecondsSinceEpoch}'
-              '_${due.millisecondsSinceEpoch}',
-        );
-
-    final anchor = DateTime(2026, 1, 15);
+    String recurring(String series, DateTime due) =>
+        TransactionService.recurringDedupHash(series, due);
 
     test('generating the same due date twice is one row', () {
       // generateDueRecurring runs on every launch; it must be safe to re-run.
       expect(
-        recurring(anchor, DateTime(2026, 3, 15)),
-        recurring(anchor, DateTime(2026, 3, 15)),
+        recurring('rent', DateTime(2026, 3, 15)),
+        recurring('rent', DateTime(2026, 3, 15)),
       );
     });
 
     test('each due date is its own row', () {
       expect(
-        recurring(anchor, DateTime(2026, 3, 15)),
-        isNot(recurring(anchor, DateTime(2026, 4, 15))),
+        recurring('rent', DateTime(2026, 3, 15)),
+        isNot(recurring('rent', DateTime(2026, 4, 15))),
       );
     });
 
     test('two series with the same figures stay separate', () {
-      // Two monthly £1,200 payments anchored on different dates are two
-      // series, not one.
+      // Two monthly £1,200 payments due the same day are two series.
       expect(
-        recurring(DateTime(2026, 1, 15), DateTime(2026, 3, 15)),
-        isNot(recurring(DateTime(2026, 1, 20), DateTime(2026, 3, 15))),
+        recurring('rent', DateTime(2026, 3, 15)),
+        isNot(recurring('loan', DateTime(2026, 3, 15))),
+      );
+    });
+
+    test('is the documented formula', () {
+      final due = DateTime(2026, 3, 15);
+      expect(
+        recurring('rent', due),
+        HashUtils.transactionDedupHash(
+          date: due,
+          amount: 0,
+          description: '',
+          salt: 'recurring_rent_${due.millisecondsSinceEpoch}',
+        ),
       );
     });
   });
@@ -338,7 +341,7 @@ void main() {
             ),
           );
 
-      test('a generated row carries the anchor-and-due-date salt', () async {
+      test('a generated row carries the series-and-due-date salt', () async {
         final anchor = DateTime(2026, 1, 15);
         await seed('Rent', anchor, 'seed');
         await TransactionService(
@@ -348,15 +351,12 @@ void main() {
         final feb =
             await (db.select(db.transactions)
               ..where((t) => t.date.equals(DateTime(2026, 2, 15)))).getSingle();
+        expect(feb.recurringSeriesId, isNotNull);
         expect(
           feb.dedupHash,
-          HashUtils.transactionDedupHash(
-            date: DateTime(2026, 2, 15),
-            amount: -1200,
-            description: 'Rent',
-            salt:
-                'recurring_${anchor.millisecondsSinceEpoch}'
-                '_${DateTime(2026, 2, 15).millisecondsSinceEpoch}',
+          TransactionService.recurringDedupHash(
+            feb.recurringSeriesId!,
+            DateTime(2026, 2, 15),
           ),
         );
       });

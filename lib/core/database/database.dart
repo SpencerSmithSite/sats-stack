@@ -1,4 +1,7 @@
+import 'dart:convert';
 import 'dart:io';
+
+import 'package:crypto/crypto.dart';
 
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
@@ -44,7 +47,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -84,6 +87,10 @@ class AppDatabase extends _$AppDatabase {
         }
         if (from < 8) {
           await migrateToV8(m);
+        }
+        if (from < 9) {
+          await m.addColumn(transactions, transactions.recurringSeriesId);
+          await adoptLegacyRecurringSeries();
         }
       });
     },
@@ -186,6 +193,74 @@ class AppDatabase extends _$AppDatabase {
         ),
       );
     }
+  }
+
+  /// v8 → v9, and any recurring row since written without a series id: give
+  /// each series a stable [Transactions.recurringSeriesId].
+  ///
+  /// Series used to be told apart by [legacySeriesKey] — the period, anchor,
+  /// description and amount — so editing an instance's description or amount
+  /// (or renaming the anchor) split it into a series of its own, the original
+  /// regenerated, and the user got duplicates. Rows are grouped here the way
+  /// that key grouped them, and additionally by wallet, which the old key left
+  /// out: two identical series in two accounts were one series.
+  ///
+  /// The id is derived from the old key and the wallet, so running this twice
+  /// gives the same answer, and each series keeps its generation cursor
+  /// (re-filed from the old key's setting to the new id's).
+  Future<void> adoptLegacyRecurringSeries() async {
+    final rows =
+        await (select(transactions)..where(
+          (t) =>
+              t.recurringPeriod.isNotNull() &
+              t.recurringAnchorDate.isNotNull() &
+              t.recurringSeriesId.isNull(),
+        )).get();
+    if (rows.isEmpty) return;
+
+    await transaction(() async {
+      final oldKeys = <String>{};
+      final adopted = <String>{};
+      for (final row in rows) {
+        final oldKey = legacySeriesKey(row);
+        final id = sha256
+            .convert(utf8.encode('$oldKey|${row.walletId}'))
+            .toString()
+            .substring(0, 16);
+        await (update(transactions)..where(
+          (t) => t.id.equals(row.id),
+        )).write(TransactionsCompanion(recurringSeriesId: Value(id)));
+        oldKeys.add(oldKey);
+        if (!adopted.add(id)) continue;
+
+        final cursor =
+            await (select(appSettings)..where(
+              (t) => t.key.equals(AppConstants.recurringCursorKey(oldKey)),
+            )).getSingleOrNull();
+        if (cursor != null) {
+          await into(appSettings).insert(
+            AppSettingsCompanion.insert(
+              key: AppConstants.recurringCursorKey(id),
+              value: cursor.value,
+            ),
+            mode: InsertMode.insertOrIgnore,
+          );
+        }
+      }
+      await (delete(appSettings)..where(
+        (t) => t.key.isIn(oldKeys.map(AppConstants.recurringCursorKey)),
+      )).go();
+    });
+  }
+
+  /// How a series was identified before v9 — kept only so
+  /// [adoptLegacyRecurringSeries] can group rows the way it did.
+  static String legacySeriesKey(Transaction tx) {
+    final raw =
+        '${tx.recurringPeriod}|'
+        '${tx.recurringAnchorDate!.millisecondsSinceEpoch}|'
+        '${tx.description}|${tx.amountFiat}';
+    return sha256.convert(utf8.encode(raw)).toString().substring(0, 16);
   }
 
   /// "Name (n)", trimmed so it still fits the 60-character name column.

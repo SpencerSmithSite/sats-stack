@@ -37,6 +37,11 @@ class Transactions extends Table {
   // Recurring transactions — both null for one-off entries
   // period: 'weekly' | 'monthly' | 'yearly'
   TextColumn get recurringPeriod => text().nullable()();
-  // The date of the very first entry in this series (series identity key)
+  // The date of the very first entry in this series — what every later
+  // occurrence's date is derived from.
   DateTimeColumn get recurringAnchorDate => dateTime().nullable()();
+  // Which series a row belongs to; shared by every instance of it. The
+  // identity used to be derived from the description and amount, so editing
+  // an instance split it off into a series of its own (schema v9).
+  TextColumn get recurringSeriesId => text().nullable()();
 }
