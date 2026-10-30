@@ -1549,6 +1549,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
               ListTile(
+                leading: const Icon(Icons.description_outlined),
+                title: const Text('Licences'),
+                subtitle: const Text('Open-source software and fonts used'),
+                onTap:
+                    () => showLicensePage(
+                      context: context,
+                      applicationName: 'Sats Stack',
+                      applicationVersion: _appVersion,
+                    ),
+              ),
+              ListTile(
                 leading: const Icon(Icons.replay_outlined),
                 title: const Text('Show onboarding'),
                 subtitle: const Text('Revisit the welcome screens'),

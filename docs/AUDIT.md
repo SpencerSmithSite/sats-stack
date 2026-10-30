@@ -1261,6 +1261,15 @@ Item 15's open list, fixed one PR at a time, in the order `TODO.md` gave.
   to whole units on its own: £12.50 read £13. Each list now uses one precision,
   with pence if any figure has them.
 
+### The monospaced font is a font
+- `assets/fonts/RobotoMono-*.ttf` had been GitHub HTML pages since the first
+  commit, so every figure set in `AppTextStyles.mono*` fell back to the system
+  font and ~600 KB of HTML shipped in the bundle. They are the static TTFs from
+  `googlefonts/RobotoMono` now, with the Medium face declared as weight 500.
+- Roboto Mono is under the SIL Open Font License (not Apache 2.0, as this file
+  used to say), which must accompany it: `assets/fonts/OFL.txt` is bundled,
+  registered with `LicenseRegistry`, and Settings → About → Licences shows it.
+
 ---
 
 ## Verified correct (no action)
