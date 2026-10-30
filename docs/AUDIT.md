@@ -1432,6 +1432,21 @@ Item 15's open list, fixed one PR at a time, in the order `TODO.md` gave.
   nothing passed. It is ~1.2 s, a tap skips it, reduced motion shows the stack
   without animating, and the parameter is gone.
 
+### CI checks what it says it checks
+- The Android job built debug, whose merged manifest declares INTERNET
+  whatever `src/main` says, so it could not catch the missing permission it was
+  added for, and R8 never ran. It builds an unsigned release APK through Gradle
+  and checks the merged release manifest for INTERNET.
+- `ndkVersion` was pinned to r27, a leftover; it follows Flutter's default
+  (28.2), and CI caches it rather than downloading it every run.
+- Hygiene: the runner image and Xcode are pinned (`macos-26`, 26.6 — they had
+  moved silently under `macos-latest`/`latest-stable`); actions are on their
+  Node 24 majors; Gradle and Pods are cached; the workflow token is read-only;
+  and a step fails if the committed Drift code is not what the generator
+  produces.
+- `android.enableJetifier` is gone: nothing in the dependency tree uses the
+  pre-AndroidX support library, and it slowed every build.
+
 ---
 
 ## Verified correct (no action)
