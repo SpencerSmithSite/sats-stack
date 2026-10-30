@@ -119,9 +119,6 @@ the order to do it; the first group can lose or misstate the user's data.
   movements? Today an xpub self-transfer counts as both.
 
 **Import flow**
-- Historical prices are fetched one per second, serially, with no progress.
-- Smaller: mapper back navigation, "Other…" currency, a no-op "Try again",
-  ISO codes and U+202F in amounts, trusting the model's per-row currency.
 
 **AI**
 - Markdown is shown raw in the chat.

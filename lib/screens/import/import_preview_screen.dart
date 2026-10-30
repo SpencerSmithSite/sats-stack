@@ -28,6 +28,10 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen> {
   final Set<ParsedTransaction> _editedTxns = {};
   bool _importing = false;
 
+  /// "Pricing 12 of 300 days" while historical prices are fetched — which
+  /// for a long statement is most of the wait.
+  String? _progress;
+
   @override
   void initState() {
     super.initState();
@@ -45,16 +49,29 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen> {
         sourceName: widget.sourceName,
         btcPriceService: app.btcPriceService,
         btcPrice: app.btcPriceService.priceNotifier.value,
+        onPricingProgress: (done, total) {
+          if (mounted && total > 1) {
+            setState(() => _progress = 'Pricing day ${done + 1} of $total…');
+          }
+        },
       );
       if (mounted) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
             builder: (_) => ImportSummaryScreen(summary: summary),
           ),
+          // Tells the column mapper, if it opened this, that the import is
+          // done.
+          result: true,
         );
       }
     } finally {
-      if (mounted) setState(() => _importing = false);
+      if (mounted) {
+        setState(() {
+          _importing = false;
+          _progress = null;
+        });
+      }
     }
   }
 
@@ -346,8 +363,9 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen> {
                                   )
                                   : const Icon(Icons.download_done),
                           label: Text(
-                            'Import $_includeCount transaction'
-                            '${_includeCount != 1 ? 's' : ''}',
+                            _progress ??
+                                'Import $_includeCount transaction'
+                                    '${_includeCount != 1 ? 's' : ''}',
                           ),
                         ),
                       ),

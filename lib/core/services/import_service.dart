@@ -484,6 +484,27 @@ class ImportService {
     return _normaliseCurrency(source?.currency);
   }
 
+  /// The currency a model gave a row — only if [sourceText] itself names it,
+  /// by code or by an unambiguous symbol; otherwise the account's.
+  ///
+  /// The model's answer used to be taken as given, so a model that labelled
+  /// every row `USD` out of habit redenominated a sterling account, and a
+  /// made-up code was stored as a currency.
+  static String _modelRowCurrency(
+    String? code,
+    String fallback,
+    String sourceText,
+  ) {
+    final claimed = code?.trim().toUpperCase() ?? '';
+    if (claimed.isEmpty || claimed == fallback) return fallback;
+    if (!RegExp(r'^[A-Z]{3,4}$').hasMatch(claimed)) return fallback;
+    const symbols = {'EUR': '€', 'GBP': '£', 'BTC': '₿', 'JPY': '¥'};
+    final named =
+        RegExp('(?<![A-Za-z])$claimed(?![A-Za-z])').hasMatch(sourceText) ||
+        (symbols[claimed] != null && sourceText.contains(symbols[claimed]!));
+    return named ? claimed : fallback;
+  }
+
   /// [code] if it is usable, else [fallback]. A model that omits the currency
   /// field, or reports one for a line it could not read, must not silently
   /// redenominate the account.
@@ -803,10 +824,9 @@ Rules:
                   final direction =
                       ((map['direction'] as String?) ?? 'debit').toLowerCase();
                   final description = (map['description'] as String?) ?? '';
-                  final rowCurrency = _normaliseCurrency(
-                    map['currency'] as String?,
-                    fallbackCurrency,
-                  );
+                  // A photo gives nothing to check the model's code against,
+                  // so the account's own currency stands.
+                  final rowCurrency = fallbackCurrency;
                   return _categorised(
                     date: date,
                     amount: amount.abs(),
@@ -1154,9 +1174,10 @@ FILE CONTENT:
                   final direction =
                       ((map['direction'] as String?) ?? 'debit').toLowerCase();
                   final description = (map['description'] as String?) ?? '';
-                  final rowCurrency = _normaliseCurrency(
+                  final rowCurrency = _modelRowCurrency(
                     map['currency'] as String?,
                     fallbackCurrency,
+                    content,
                   );
                   return _categorised(
                     date: date,
@@ -1668,6 +1689,7 @@ FILE CONTENT:
     required String sourceName,
     required BtcPriceService btcPriceService,
     double? btcPrice,
+    void Function(int done, int total)? onPricingProgress,
   }) async {
     // FK for the main transactions table. Prefer a manual wallet: `wallets`
     // comes back unordered, so `first` could be an xpub wallet, which would
@@ -1714,8 +1736,19 @@ FILE CONTENT:
           priceCurrency(tx),
         ),
     };
+    // One request per currency for the bulk of the days, where the server
+    // allows it; then the per-day lookups, now mostly cache hits.
+    final byCurrency = <String, List<DateTime>>{};
+    for (final (date, currency) in toPrice.values) {
+      (byCurrency[currency] ??= []).add(date);
+    }
+    for (final MapEntry(key: currency, value: dates) in byCurrency.entries) {
+      await btcPriceService.prefetchHistoricalPrices(dates, currency);
+    }
     final priceByDay = <String, double?>{};
+    var priced = 0;
     for (final MapEntry(:key, value: (date, currency)) in toPrice.entries) {
+      onPricingProgress?.call(priced++, toPrice.length);
       priceByDay[key] = await btcPriceService.getHistoricalPrice(
         date,
         currency,
@@ -2636,10 +2669,17 @@ FILE CONTENT:
       s = s.substring(0, drcr.start);
     }
 
+    // An ISO code before or after the figure — `GBP 12.50`, `12,50 EUR` —
+    // which used to make the whole amount unreadable.
+    s = s.replaceFirst(RegExp(r'^[A-Za-z]{3}\s*|\s*[A-Za-z]{3}$'), '');
+
     // Parenthetical negatives: (4.50) → -4.50
-    final paren = RegExp(r'^\(([0-9,.\s]+)\)$').firstMatch(s);
+    final paren = RegExp(r"^\(([0-9,.\s'’]+)\)$").firstMatch(s);
     if (paren != null) s = '-${paren.group(1)}';
-    s = s.replaceAll(' ', '').replaceAll('\u00a0', '');
+    // Every kind of space a locale groups thousands with — including the
+    // narrow no-break space (U+202F) French formatting uses, which `' '` and
+    // U+00A0 did not cover — and the Swiss apostrophe.
+    s = s.replaceAll(RegExp(r"[\s'’]"), '');
     s = _normalizeDecimalSeparator(s, dotGroupsThousands: dotGroupsThousands);
     // Trailing minus sign: 4.50- → -4.50
     if (s.endsWith('-')) s = '-${s.substring(0, s.length - 1)}';

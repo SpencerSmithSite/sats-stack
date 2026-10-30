@@ -15,7 +15,13 @@ class _ImportSourceSetupScreenState extends State<ImportSourceSetupScreen> {
   final _nameController = TextEditingController();
   String _type = 'bank';
   String _currency = 'USD';
-  final _currencyController = TextEditingController(text: 'USD');
+  final _currencyController = TextEditingController();
+
+  /// "Other…" is chosen. Tracked on its own: it used to be inferred from
+  /// [_currency] not being in the list, and choosing Other copied the current
+  /// (listed) code into it — so the dropdown snapped back and the code field
+  /// never appeared.
+  bool _custom = false;
   bool _saving = false;
 
   static const _types = <String, String>{
@@ -118,8 +124,7 @@ class _ImportSourceSetupScreenState extends State<ImportSourceSetupScreen> {
 
             // Currency — dropdown + manual entry
             DropdownButtonFormField<String>(
-              initialValue:
-                  _currencies.contains(_currency) ? _currency : 'other',
+              initialValue: _custom ? 'other' : _currency,
               decoration: const InputDecoration(labelText: 'Currency'),
               items: [
                 ..._currencies.map(
@@ -128,17 +133,16 @@ class _ImportSourceSetupScreenState extends State<ImportSourceSetupScreen> {
                 const DropdownMenuItem(value: 'other', child: Text('Other…')),
               ],
               onChanged: (v) {
-                if (v == 'other') {
-                  setState(() => _currency = _currencyController.text);
-                } else {
-                  setState(() {
-                    _currency = v!;
-                    _currencyController.text = v;
-                  });
-                }
+                setState(() {
+                  _custom = v == 'other';
+                  _currency =
+                      _custom
+                          ? _currencyController.text.trim().toUpperCase()
+                          : v!;
+                });
               },
             ),
-            if (!_currencies.contains(_currency)) ...[
+            if (_custom) ...[
               const SizedBox(height: 12),
               TextFormField(
                 controller: _currencyController,
@@ -147,9 +151,14 @@ class _ImportSourceSetupScreenState extends State<ImportSourceSetupScreen> {
                   hintText: 'e.g. CHF, JPY',
                 ),
                 textCapitalization: TextCapitalization.characters,
-                onChanged: (v) => setState(() => _currency = v.toUpperCase()),
+                onChanged:
+                    (v) => setState(() => _currency = v.trim().toUpperCase()),
+                maxLength: 3,
                 validator:
-                    (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                    (v) =>
+                        RegExp(r'^[A-Za-z]{3}$').hasMatch(v?.trim() ?? '')
+                            ? null
+                            : 'A three-letter code, like CHF',
               ),
             ],
 

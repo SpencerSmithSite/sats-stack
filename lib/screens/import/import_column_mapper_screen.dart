@@ -155,7 +155,10 @@ class _ImportColumnMapperScreenState extends State<ImportColumnMapperScreen> {
         fileName: widget.result.fileName,
         needsManualMapping: false,
       );
-      Navigator.of(context).pushReplacement(
+      // Pushed, not replaced, so backing out of the preview returns here to
+      // fix a column rather than to the start with every choice lost.
+      final route = ModalRoute.of(context);
+      final imported = await Navigator.of(context).push<bool>(
         MaterialPageRoute(
           builder:
               (_) => ImportPreviewScreen(
@@ -165,6 +168,11 @@ class _ImportColumnMapperScreenState extends State<ImportColumnMapperScreen> {
               ),
         ),
       );
+      // Once imported, the summary sits on top; take this screen out from
+      // under it, so its Done returns to the import screen.
+      if (imported == true && mounted && route != null) {
+        Navigator.of(context).removeRoute(route);
+      }
     } finally {
       if (mounted) setState(() => _parsing = false);
     }
