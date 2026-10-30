@@ -6,13 +6,13 @@
 /// selected month on Budgets — all gone on returning, with the table re-queried
 /// behind a full-screen spinner.
 ///
-/// These drive the real `AppShell` with stub tabs, so they test this app's
-/// shell and its index mapping rather than restating what go_router does.
+/// These drive the app's own router (`buildRouter`) with stub tabs, so they
+/// test its branches, their order and the redirect — not a copy of them, which
+/// is what this file used to build.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:go_router/go_router.dart';
 import 'package:sats_stack/app.dart';
 import 'package:sats_stack/main.dart' as app;
 
@@ -37,35 +37,12 @@ class _CounterTabState extends State<_CounterTab> {
   );
 }
 
-GoRouter _router() => GoRouter(
-  initialLocation: '/dashboard',
-  routes: [
-    StatefulShellRoute.indexedStack(
-      builder: (ctx, state, shell) => AppShell(navigationShell: shell),
-      branches: [
-        for (final name in const [
-          'dashboard',
-          'transactions',
-          'budgets',
-          'stack',
-          'ai',
-        ])
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: '/$name',
-                builder: (ctx, state) => _CounterTab(name),
-              ),
-            ],
-          ),
-      ],
-    ),
-  ],
-);
-
 Future<void> _pump(WidgetTester tester, {required bool aiEnabled}) async {
   app.aiEnabledNotifier = ValueNotifier(aiEnabled);
-  await tester.pumpWidget(MaterialApp.router(routerConfig: _router()));
+  app.onboardingCompleteNotifier = ValueNotifier(true);
+  await tester.pumpWidget(
+    MaterialApp.router(routerConfig: buildRouter(tab: _CounterTab.new)),
+  );
   await tester.pumpAndSettle();
 }
 
@@ -140,5 +117,21 @@ void main() {
     final bar = tester.widget<NavigationBar>(find.byType(NavigationBar));
     expect(bar.selectedIndex, 2);
     expect(find.textContaining('budgets'), findsOneWidget);
+  });
+
+  testWidgets('losing the AI tab while on it moves to the dashboard', (
+    tester,
+  ) async {
+    // The app's own redirect — a copied router could not test it.
+    await _pump(tester, aiEnabled: true);
+    await _tapTab(tester, 'AI');
+    expect(find.text('ai 0'), findsOneWidget);
+
+    app.aiEnabledNotifier.value = false;
+    await tester.pumpAndSettle();
+
+    expect(find.text('dashboard 0'), findsOneWidget);
+    final bar = tester.widget<NavigationBar>(find.byType(NavigationBar));
+    expect(bar.selectedIndex, 0);
   });
 }

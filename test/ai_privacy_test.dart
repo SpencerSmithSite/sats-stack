@@ -76,6 +76,19 @@ void main() {
         );
       }
     });
+
+    test('the private providers are exactly these', () {
+      // The invariant above holds just as well for a new hosted provider that
+      // forgot to name its recipient — both sides are wrong together. So the
+      // private set is written out: adding a provider to it has to be done
+      // here, on purpose.
+      expect(AiProvider.values.where((p) => p.isPrivate).toSet(), {
+        AiProvider.appleIntelligence,
+        AiProvider.geminiNano,
+        AiProvider.ollama,
+        AiProvider.lmStudio,
+      });
+    });
   });
 
   group('error messages do not echo secrets', () {

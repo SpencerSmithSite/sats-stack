@@ -554,14 +554,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       );
       if (savePath == null) return;
 
-      // VACUUM INTO rather than File.copy: the database is open and may be
-      // mid-write, and a byte copy of a live rollback-journal database can be
-      // torn — a backup that only fails when you need it. VACUUM INTO asks
-      // sqlite for a consistent snapshot, and compacts it on the way out.
-      // It refuses to overwrite, so clear whatever the save dialog created.
-      final dest = File(savePath);
-      if (dest.existsSync()) await dest.delete();
-      await app.db.customStatement('VACUUM INTO ?', [savePath]);
+      await exportDatabaseTo(app.db, savePath);
 
       if (!mounted) return;
       _showSnack('Database exported successfully');

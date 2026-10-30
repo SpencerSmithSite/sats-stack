@@ -6,7 +6,9 @@
 library;
 
 import 'dart:convert';
+import 'dart:typed_data';
 
+import 'package:bs58check/bs58check.dart' as bs58check;
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -69,10 +71,21 @@ void main() {
 
     test('an unknown prefix is rejected rather than treated as mainnet', () {
       // A valid base58check payload of the right length but a version the app
-      // does not know — must not silently derive mainnet addresses.
+      // does not know — must not silently derive mainnet addresses. This used
+      // to pass a truncated string, which failed on its checksum and never
+      // reached the version check at all.
+      final payload = Uint8List.fromList(bs58check.decode(bip84Zpub));
+      payload.setRange(0, 4, const [0x12, 0x34, 0x56, 0x78]);
+      final unknown = bs58check.encode(payload);
       expect(
-        () => service.deriveAddresses('xpub661MyMwAqRbcF', 0, 1),
-        throwsA(anything),
+        () => service.deriveAddresses(unknown, 0, 1),
+        throwsA(
+          isA<ArgumentError>().having(
+            (e) => e.message,
+            'message',
+            contains('Unsupported extended key'),
+          ),
+        ),
       );
     });
 

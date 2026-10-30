@@ -1494,6 +1494,37 @@ Item 15's open list, fixed one PR at a time, in the order `TODO.md` gave.
 - `clearAllApiKeys` — Reset all data — left the Bitcoin Core RPC password in
   the keychain. It deletes it too.
 
+### Tests that could not fail
+- `month_boundary_test`'s aggregates assumed a row could sit in the old
+  closed range's sub-second gap, but drift stores whole seconds, so they could
+  not fail. They now pin the real edges end to end — March's first and last
+  second counted in March, April's first second not — and that a stored date
+  keeps whole seconds only.
+- The DST test passed trivially on CI's UTC runner. CI runs the date-sensitive
+  test files again under `TZ=America/New_York`; the whole suite also passes
+  locally under New York and Auckland time.
+- The unknown-xpub-prefix test passed a truncated string that failed on its
+  checksum before the version was read. It re-encodes a real key under an
+  unknown version and expects "Unsupported extended key".
+- `scripthash_test` tested a helper defined inside itself — there is no
+  scripthash code in the app yet. Deleted; its vector is in TODO item 11.
+- `database_restore_test`'s failed copy used a missing source, which throws
+  before the target is touched, so it passed with the put-back step deleted.
+  `replaceDatabaseFile` takes a copy hook; the test tears the file partway.
+- `ai_enabled_test`'s seed case asserted `aiEnabled`, which is true on any
+  desktop. It asserts the phone rule, both ways.
+- The privacy invariant (`isPrivate == (dataRecipient == null)`) holds just as
+  well for a new hosted provider that forgot its recipient. The private set is
+  now written out exactly.
+- `tab_state_test` built its own copy of the router. `buildRouter(tab:)` is
+  the app's, with stub tabs; a new test covers its redirect off a hidden AI
+  tab.
+- Untested until now (`untested_paths_test`): the xpub sums for a spend with
+  change, a self-send and a split receive; budget alert thresholds at 79, 80,
+  100 and just over 100 %; the move of a Maple key out of the database; and
+  export (now `exportDatabaseTo`) followed by import. The DCA simulator got its
+  tests in #41.
+
 ---
 
 ## Verified correct (no action)

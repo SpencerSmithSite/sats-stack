@@ -425,6 +425,19 @@ Future<File> databaseFile() async {
   return File(p.join(dir.path, '${AppConstants.dbName}.sqlite'));
 }
 
+/// Writes a consistent copy of [db] to [path], replacing any file there.
+///
+/// VACUUM INTO rather than a file copy: the database is open and may be
+/// mid-write, and a byte copy of a live rollback-journal database can be torn
+/// — a backup that only fails when you need it. VACUUM INTO asks sqlite for a
+/// consistent snapshot, and compacts it on the way out. It refuses to
+/// overwrite, so whatever the save dialog created is cleared first.
+Future<void> exportDatabaseTo(AppDatabase db, String path) async {
+  final dest = File(path);
+  if (dest.existsSync()) await dest.delete();
+  await db.customStatement('VACUUM INTO ?', [path]);
+}
+
 /// How [replaceDatabaseFile] ended.
 enum RestoreOutcome {
   /// [replaceDatabaseFile]'s source is now the database.
@@ -444,14 +457,18 @@ enum RestoreOutcome {
 /// have stopped partway, so the original is copied back over the torn file
 /// before returning: a relaunch should open the user's own data, not half of
 /// a backup.
+///
+/// [copy] is for tests, which need a copy that fails partway.
 Future<({RestoreOutcome outcome, Object? error})> replaceDatabaseFile({
   required File source,
   required File target,
+  Future<void> Function(File from, String to)? copy,
 }) async {
+  final copyFile = copy ?? (from, to) => from.copy(to);
   final backup = File('${target.path}.bak');
   try {
     if (target.existsSync()) await target.copy(backup.path);
-    await source.copy(target.path);
+    await copyFile(source, target.path);
     return (outcome: RestoreOutcome.replaced, error: null);
   } catch (e) {
     try {

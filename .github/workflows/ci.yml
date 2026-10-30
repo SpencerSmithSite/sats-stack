@@ -61,6 +61,20 @@ jobs:
       - name: Test
         run: flutter test
 
+      # The runner is on UTC, which has no daylight saving, so the tests that
+      # guard recurring dates and month edges across a DST change passed there
+      # trivially. Run them again where the clocks change.
+      - name: Test date handling in a DST time zone
+        env:
+          TZ: America/New_York
+        run: >-
+          flutter test
+          test/data_layer_transaction_service_test.dart
+          test/recurring_series_test.dart
+          test/month_boundary_test.dart
+          test/dedup_hash_test.dart
+          test/stack_stats_test.dart
+
   # Analysis and tests compile no native code, so none of the platform
   # findings in docs/AUDIT.md could have been caught by the job above: no
   # manifest merge, no Podfile, no entitlements, neither native AI bridge.
