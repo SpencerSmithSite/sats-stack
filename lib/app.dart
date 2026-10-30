@@ -59,7 +59,13 @@ String? _appRedirect(BuildContext context, GoRouterState state) {
   return null;
 }
 
-final _router = GoRouter(
+final _router = buildRouter();
+
+/// The app's router. [tab] builds each tab's screen from its name — the
+/// default is the real screens; tests pass stubs, so they exercise this
+/// router's branches, order and redirect rather than a copy of them.
+@visibleForTesting
+GoRouter buildRouter({Widget Function(String tab)? tab}) => GoRouter(
   initialLocation: '/dashboard',
   redirect: _appRedirect,
   refreshListenable: Listenable.merge([
@@ -94,7 +100,9 @@ final _router = GoRouter(
           routes: [
             GoRoute(
               path: '/dashboard',
-              builder: (ctx, state) => const DashboardScreen(),
+              builder:
+                  (ctx, state) =>
+                      tab?.call('dashboard') ?? const DashboardScreen(),
             ),
           ],
         ),
@@ -102,7 +110,9 @@ final _router = GoRouter(
           routes: [
             GoRoute(
               path: '/transactions',
-              builder: (ctx, state) => const TransactionsScreen(),
+              builder:
+                  (ctx, state) =>
+                      tab?.call('transactions') ?? const TransactionsScreen(),
             ),
           ],
         ),
@@ -110,7 +120,8 @@ final _router = GoRouter(
           routes: [
             GoRoute(
               path: '/budgets',
-              builder: (ctx, state) => const BudgetsScreen(),
+              builder:
+                  (ctx, state) => tab?.call('budgets') ?? const BudgetsScreen(),
             ),
           ],
         ),
@@ -118,7 +129,8 @@ final _router = GoRouter(
           routes: [
             GoRoute(
               path: '/stack',
-              builder: (ctx, state) => const StackScreen(),
+              builder:
+                  (ctx, state) => tab?.call('stack') ?? const StackScreen(),
             ),
           ],
         ),
@@ -126,7 +138,10 @@ final _router = GoRouter(
         // it at the end means a branch index always equals its nav-bar index.
         StatefulShellBranch(
           routes: [
-            GoRoute(path: '/ai', builder: (ctx, state) => const AiChatScreen()),
+            GoRoute(
+              path: '/ai',
+              builder: (ctx, state) => tab?.call('ai') ?? const AiChatScreen(),
+            ),
           ],
         ),
       ],

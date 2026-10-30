@@ -34,14 +34,24 @@ void main() {
     expect(File('${target.path}.bak').readAsStringSync(), 'the user own data');
   });
 
-  test('a failed copy puts the original back', () async {
-    // A source that vanished between the picker and the copy.
-    final source = File('${dir.path}/gone.sqlite');
+  test('a copy that fails partway puts the original back', () async {
+    final source = File('${dir.path}/backup.sqlite')
+      ..writeAsStringSync('the backup');
 
-    final r = await replaceDatabaseFile(source: source, target: target);
+    // Half a file written over the database, then the disk fills. A source
+    // that is simply missing throws before the target is touched, which is
+    // what this used to test — and it passed with the restore step deleted.
+    final r = await replaceDatabaseFile(
+      source: source,
+      target: target,
+      copy: (from, to) async {
+        File(to).writeAsStringSync('the bac');
+        throw const FileSystemException('No space left on device');
+      },
+    );
 
     expect(r.outcome, RestoreOutcome.failedOriginalRestored);
-    expect(r.error, isNotNull);
+    expect(r.error, isA<FileSystemException>());
     expect(target.readAsStringSync(), 'the user own data');
   });
 

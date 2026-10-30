@@ -72,9 +72,16 @@ void main() {
     late int walletId;
     late int foodId;
 
-    // The instant that used to belong to no month at all. Reachable because
-    // the add-transaction sheet seeds the date with DateTime.now().
+    // The last instant of March and the first of April, end to end through
+    // the database. Drift stores whole seconds, so the sub-second gap the old
+    // closed range left (see the DateRange group) cannot reach a stored row —
+    // which the first version of these tests assumed it could, so they could
+    // not fail. What can go wrong at this precision is the edge itself: an
+    // inclusive end at the next month's midnight counts April's first row in
+    // March, and an exclusive start drops March's first. Both are here.
     final lastInstant = DateTime(2025, 3, 31, 23, 59, 59, 400);
+    final firstOfApril = DateTime(2025, 4, 1);
+    final firstOfMarch = DateTime(2025, 3, 1);
 
     setUp(() async {
       db = AppDatabase.forTesting(NativeDatabase.memory());
@@ -101,19 +108,47 @@ void main() {
               dedupHash: 'late-dinner',
             ),
           );
+      for (final (date, fiat, hash) in [
+        (firstOfApril, -11.0, 'april-first'),
+        (firstOfMarch, -5.0, 'march-first'),
+      ]) {
+        await db
+            .into(db.transactions)
+            .insert(
+              TransactionsCompanion.insert(
+                walletId: walletId,
+                date: date,
+                description: hash,
+                amountSats: 0,
+                amountFiat: fiat,
+                fiatCurrency: 'USD',
+                category: const Value('Food & Dining'),
+                source: 'manual',
+                dedupHash: hash,
+              ),
+            );
+      }
+    });
+
+    test('a stored date keeps whole seconds only', () async {
+      final row =
+          await (db.select(db.transactions)
+            ..where((t) => t.dedupHash.equals('late-dinner'))).getSingle();
+      expect(row.date, DateTime(2025, 3, 31, 23, 59, 59));
     });
 
     tearDown(() => db.close());
 
     test('the dashboard counts it in March', () async {
       final data = await dashboard.getDashboard(DateTime(2025, 3));
-      expect(data.monthlySpendingFiat, 47);
-      expect(data.spendingByCategory['Food & Dining'], 47);
+      // Its last second and its first, and not April's first.
+      expect(data.monthlySpendingFiat, 52);
+      expect(data.spendingByCategory['Food & Dining'], 52);
     });
 
-    test('and not in April', () async {
+    test('and April counts only its own first second', () async {
       final data = await dashboard.getDashboard(DateTime(2025, 4));
-      expect(data.monthlySpendingFiat, 0);
+      expect(data.monthlySpendingFiat, 11);
     });
 
     test('the budget counts it against March', () async {
@@ -123,7 +158,7 @@ void main() {
         currency: 'USD',
       );
       final progress = await budgets.getProgress(DateTime(2025, 3));
-      expect(progress.single.spentFiat, 47);
+      expect(progress.single.spentFiat, 52);
     });
 
     test('the exported summary counts it', () async {
@@ -131,19 +166,19 @@ void main() {
         month: DateTime(2025, 3),
         currency: 'USD',
       );
-      expect(csv, contains('Food & Dining,0.00,47.00'));
+      expect(csv, contains('Food & Dining,0.00,52.00'));
     });
 
     test('analytics counts it in the month and the year', () async {
       final data = await dashboard.watchAnalytics(DateTime(2025, 3)).first;
-      expect(data.spendingByCategory['Food & Dining'], 47);
-      expect(data.ytdSpending, 47);
-      expect(data.monthlyTotals.last.spending, 47);
+      expect(data.spendingByCategory['Food & Dining'], 52);
+      expect(data.ytdSpending, 63);
+      expect(data.monthlyTotals.last.spending, 52);
     });
 
     test('the per-wallet breakdown counts it', () async {
       final summaries = await dashboard.watchPerWallet(DateTime(2025, 3)).first;
-      expect(summaries.single.monthSpendFiat, 47);
+      expect(summaries.single.monthSpendFiat, 52);
     });
   });
 }

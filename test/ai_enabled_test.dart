@@ -122,7 +122,22 @@ void main() {
     await reloaded.loadSettings();
 
     expect(reloaded.activeProvider, AiProvider.appleIntelligence);
-    expect(reloaded.aiEnabled, ollama.aiEnabled);
-    expect(reloaded.aiEnabled, isTrue);
+    // The phone half of the rule. `aiEnabled` is true on any desktop, which is
+    // what these tests run on, so asserting it could never fail here.
+    expect(reloaded.isUsableWithoutDesktop(reloaded.activeProvider), isTrue);
   });
+
+  test(
+    'the startup seed does not invent a server that never answered',
+    () async {
+      final ollama = await serviceWith();
+      await ollama.setActiveProvider(AiProvider.ollama);
+
+      final reloaded = OllamaService(db, keyStore: const _FakeKeyStore(''));
+      await reloaded.loadSettings();
+
+      expect(reloaded.activeProvider, AiProvider.ollama);
+      expect(reloaded.isUsableWithoutDesktop(reloaded.activeProvider), isFalse);
+    },
+  );
 }

@@ -57,9 +57,11 @@ History lives elsewhere and is not duplicated into this file:
 ### 11. Wire up the Bitcoin data-source picker
 
 `ElectrumService`, `BitcoinNodeService` and `BitcoinDataSource` compile and
-are referenced by nothing; they exist for this feature.
-(`scripthash_test.dart` does not test `ElectrumService`: it tests a helper
-defined inside itself.)
+are referenced by nothing; they exist for this feature. `ElectrumService` has
+no address → scripthash function yet: write one, and test it against the
+genesis vector (`1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa` → scripthash
+`8b01df4e368ea28f8dc0423bcf7a4923e3a12d307c875e47a0cfbf90b5c39161`). The old
+`scripthash_test.dart` tested a copy defined inside itself, and was deleted.
 
 - Settings → Servers gains a picker: Mempool/Esplora (today's only path), the
   user's own Electrum server, or Bitcoin Core RPC.
@@ -108,45 +110,27 @@ connection test, so per-section files mean handing all of it back in as
 parameters and callbacks. That is a design change with real behavioural risk,
 worth doing on purpose rather than as a move.
 
-### 15. Third review pass, 2026-10-21 — still open
+### 15. Third review pass, 2026-10-21 — what is left
 
-Fixed items from this pass are in `AUDIT.md` ("Third pass"), in PRs #22–#28.
-Everything below was checked against the code and is still open. Roughly in
-the order to do it; the first group can lose or misstate the user's data.
+Everything else this pass found is fixed: PRs #22–#28, then #30–#47, each
+recorded in `AUDIT.md` ("Third pass" and "Working through item 15"). Left:
 
-**Data and money**
-- **Product decision:** should fiat income/spending include Bitcoin
-  movements? Today an xpub self-transfer counts as both.
+**Decisions for Spencer**
+- Should fiat income and spending include Bitcoin movements? Today an xpub
+  self-transfer counts as both.
+- Should a server on the local network still count as the user's own
+  hardware (no import consent prompt, no off-device banner)? A private
+  address on a shared network — a café, an office — is someone else's
+  machine. Kept as-is, with honest wording; see AUDIT "AI: where it goes, and
+  what is kept".
 
-**Import flow**
-
-**AI**
-- **Decision:** should a server on the local network still count as the
-  user's own hardware (no import consent prompt, no off-device banner)? A
-  private address on a shared network — a café, an office — is someone else's
-  machine. Kept as-is for now, with honest wording; see AUDIT "AI: where it
-  goes, and what is kept".
-
-**UI**
-
-**Native, build, CI**
+**Native**
 - `file_picker` 10 may still pull in DKCamera, CoreLocation and MediaPlayer
   through Swift Package Manager — check the built app's frameworks and
   privacy manifest, and drop the media picker if it is not needed.
 - `assets/icons/` is bundled into the app though nothing loads it; it is the
   icon generator's source. Moving it out of `flutter: assets:` needs the
   generator configs checked first.
-
-**Tests that cannot fail, and dead code**
-- `month_boundary_test`'s aggregate group (see AUDIT, seconds); the DST test
-  passes trivially in CI's UTC (set `TZ`); the unknown-xpub-prefix test fails
-  on its checksum, not the version; `scripthash_test` tests itself;
-  `database_restore_test`'s failed-copy case never tears the target;
-  `ai_enabled_test`'s seed case is always true on desktop; the privacy
-  invariant cannot catch a forgotten hosted provider (assert the private set
-  exactly); `tab_state_test` does not use the app's router.
-- Untested: the xpub money maths beyond one receive, the keychain migration,
-  export/import, budget thresholds, the DCA simulator.
 
 ---
 
@@ -176,8 +160,8 @@ the order to do it; the first group can lose or misstate the user's data.
 
 ## Known broken / unfinished
 
-See item 15 for what the 2026-10-21 pass found still open, starting with the
-data-loss items. The open decisions are in item 10.
+Nothing known to lose or misstate data is open. The decisions left are in
+items 10 and 15.
 
 ## Done, for reference
 
