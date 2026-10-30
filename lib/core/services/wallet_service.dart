@@ -6,12 +6,6 @@ class WalletService {
 
   final AppDatabase _db;
 
-  Stream<List<Wallet>> watchAll() => _db.select(_db.wallets).watch();
-
-  Future<List<Wallet>> getAll() {
-    return _db.select(_db.wallets).get();
-  }
-
   Future<List<Wallet>> getXpubWallets() {
     return (_db.select(_db.wallets)..where((w) => w.type.equals('xpub'))).get();
   }

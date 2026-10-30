@@ -9,6 +9,8 @@ library;
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:sats_stack/core/database/database.dart';
 import 'package:sats_stack/core/services/btc_price_service.dart';
 import 'package:sats_stack/core/services/import_service.dart';
@@ -23,7 +25,12 @@ void main() {
 
   setUp(() {
     db = AppDatabase.forTesting(NativeDatabase.memory());
-    prices = BtcPriceService(db);
+    // Prices answered from memory: these tests are about categories, and they
+    // used to reach live price endpoints on every save.
+    prices = BtcPriceService(
+      db,
+      client: MockClient((_) async => http.Response('', 404)),
+    );
     service = ImportService(db, OllamaService(db));
   });
 

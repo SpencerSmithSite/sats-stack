@@ -21,8 +21,6 @@ class BudgetService {
 
   // ── Watches ──────────────────────────────────────────────────────────────────
 
-  Stream<List<Budget>> watchAll() => _db.select(_db.budgets).watch();
-
   Future<List<Budget>> getAll() => _db.select(_db.budgets).get();
 
   // ── CRUD ─────────────────────────────────────────────────────────────────────

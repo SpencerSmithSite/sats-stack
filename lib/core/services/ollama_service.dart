@@ -416,10 +416,6 @@ class OllamaService {
     return _onDeviceReady;
   }
 
-  bool get ollamaConnected => _isConnected;
-  bool get lmStudioConnected => _lmStudioConnected;
-  bool get mapleConnected => _mapleConnected;
-
   // ── Config (persisted in AppSettings) ────────────────────────────────────
 
   Future<void> loadSettings() async {
@@ -643,6 +639,9 @@ class OllamaService {
     }
     await _keyStore.delete(_mapleKeyId);
     _mapleApiKey = '';
+    // The Bitcoin Core RPC password lives in the same keychain; a reset that
+    // left it behind would not be a reset.
+    await _keyStore.deleteEntry(AppConstants.settingBitcoinRpcPassword);
     // Nothing else is written, so nothing else would tell the screens that
     // read the keys.
     configChanges.value++;

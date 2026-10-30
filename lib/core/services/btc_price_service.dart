@@ -236,12 +236,6 @@ class BtcPriceService {
     }
   }
 
-  /// The last persisted price, in whichever currency was active when it was
-  /// written. Only safe where the currency does not matter.
-  Future<double?> getCachedPrice() async {
-    return (await _getLatestCached())?.priceUsd;
-  }
-
   // ── Private ────────────────────────────────────────────────────────────────
 
   Future<BtcPriceCacheData?> _getLatestCached() {
