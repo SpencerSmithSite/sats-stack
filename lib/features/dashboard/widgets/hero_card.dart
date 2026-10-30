@@ -65,7 +65,10 @@ class HeroCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 4),
-          Row(
+          // A Wrap, not a Row: the fiat value and the month's change do not
+          // fit on one line at a large text size, and a Row overflowed.
+          Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               if (fiatValue != null)
                 Text(
@@ -81,20 +84,29 @@ class HeroCard extends StatelessWidget {
                     color: AppColors.onBitcoinOrange.withAlpha(120),
                   ),
                 ),
-              if (monthChangeSats != 0) ...[
-                Icon(
-                  isPositiveChange ? Icons.arrow_upward : Icons.arrow_downward,
-                  size: 12,
-                  color: AppColors.onBitcoinOrange.withAlpha(200),
+              if (monthChangeSats != 0)
+                // Kept together, so the arrow never wraps away from its figure.
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      isPositiveChange
+                          ? Icons.arrow_upward
+                          : Icons.arrow_downward,
+                      size: 12,
+                      color: AppColors.onBitcoinOrange.withAlpha(200),
+                    ),
+                    const SizedBox(width: 2),
+                    Flexible(
+                      child: Text(
+                        '${SatConverter.formatSats(monthChangeSats.abs())} sats this month',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.onBitcoinOrange.withAlpha(200),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 2),
-                Text(
-                  '${SatConverter.formatSats(monthChangeSats.abs())} sats this month',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.onBitcoinOrange.withAlpha(200),
-                  ),
-                ),
-              ],
             ],
           ),
           if (totalStackSats == 0) ...[

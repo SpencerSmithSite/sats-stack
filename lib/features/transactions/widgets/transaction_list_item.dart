@@ -89,11 +89,17 @@ class TransactionListItem extends StatelessWidget {
                     const SizedBox(height: 2),
                     Row(
                       children: [
+                        // Flexible, or a long category name at a large text
+                        // size pushed the row past the screen edge.
                         if (category != null)
-                          Text(
-                            category!.name,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: context.textSecondary,
+                          Flexible(
+                            child: Text(
+                              category!.name,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: context.textSecondary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         if (transaction.recurringPeriod != null) ...[

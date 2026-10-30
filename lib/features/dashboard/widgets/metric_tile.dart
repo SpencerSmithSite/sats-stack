@@ -110,10 +110,14 @@ class StackGoalTile extends StatelessWidget {
                   color: context.textSecondary,
                 ),
                 const SizedBox(width: 4),
-                Text(
-                  'Stack Goal',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: context.textSecondary,
+                Expanded(
+                  child: Text(
+                    'Stack Goal',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: context.textSecondary,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],

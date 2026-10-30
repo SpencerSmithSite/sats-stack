@@ -79,6 +79,23 @@ abstract final class AppConstants {
   /// fingerprint of the period, anchor, description and amount, which changed
   /// whenever an instance was edited — see
   /// `AppDatabase.adoptLegacyRecurringSeries`.
+  /// The built-in categories' colours: what the database seeds and what
+  /// `CategoryPalette` draws them in. One table, because there were two and
+  /// they disagreed — the seed made Housing, Shopping, Subscriptions and Other
+  /// the same grey (and Transport the Bitcoin orange), while the palette had
+  /// them distinct, so the dashboard and Analytics drew them differently.
+  static const seededCategoryColours = <String, String>{
+    'Food & Dining': '#E24B4A',
+    'Transport': '#3498DB',
+    'Housing': '#B08A3E',
+    'Shopping': '#9B59B6',
+    'Subscriptions': '#4FA3A0',
+    'Entertainment': '#C06C9E',
+    'Bitcoin': '#F7931A',
+    'Income': '#1D9E75',
+    'Other': '#888780',
+  };
+
   /// Set once the API keys have been rewritten under the device-only keychain
   /// class — see `SecureKeyStore`.
   static const settingKeysDeviceOnly = 'keychain_keys_device_only';

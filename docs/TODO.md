@@ -128,13 +128,6 @@ the order to do it; the first group can lose or misstate the user's data.
   goes, and what is kept".
 
 **UI**
-- Remaining overflows at large text: the transaction row's category line, the
-  hero's fiat row, the budget card's amounts, `StackGoalTile`, Settings' button
-  rows.
-- Remaining contrast: the budget card's raw orange sats figure and green
-  "left" text (after #26), selected chips' labels in the raw category colour.
-- Analytics ignores user category colours; `CategoryPalette` seeds disagree
-  with the database seed (four system categories are the same grey).
 - The hero's "Import a Bitcoin wallet" pill looks tappable and is not; a
   dead gap between "Add notes" and "Repeat"; copy still says "xpub address"
   and "bank CSV" (PDF and photo exist); the 33 px icon-grid targets; icon
