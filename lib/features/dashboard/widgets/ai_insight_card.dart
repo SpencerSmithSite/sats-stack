@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../shared/theme/app_colors.dart';
+import '../../../shared/widgets/markdown_text.dart';
 import '../../../shared/widgets/tappable.dart';
 
 /// Shows the latest AI insight if available, otherwise a static Bitcoiner tip.
@@ -128,7 +129,7 @@ class AiInsightCard extends StatelessWidget {
                   fontStyle: FontStyle.italic,
                 ),
               )
-              : Text(
+              : MarkdownText(
                 _tip,
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: theme.colorScheme.onSurface,

@@ -1332,6 +1332,29 @@ Item 15's open list, fixed one PR at a time, in the order `TODO.md` gave.
   names that currency (by code, or by an unambiguous symbol); a photo, which
   gives nothing to check against, uses the account's.
 
+### AI answers, and the models offered
+- Answers were shown as raw Markdown, asterisks and all. `MarkdownText`
+  renders what models use in a chat answer (headings, lists, fenced code,
+  rules, bold, italic, inline code, links as text) in the chat and the insight
+  card; anything else, and a half-streamed marker, stays as typed. Written in
+  the app because `flutter_markdown` is discontinued.
+- Gemini's answer was read from `parts.first`, dropping the rest of a frame.
+  Every text part is read, skipping the model's own reasoning parts.
+- A refusal or safety stop ended the stream like any other, so the partial
+  answer was kept as complete. `CloudBackend.indicatesRefusal` recognises
+  Anthropic's `refusal`, OpenAI/xAI's `refusal` delta and `content_filter`,
+  and Gemini's safety finish reasons and `promptFeedback.blockReason`; the
+  stream fails with the reason.
+- xAI answers a bad key with a 400 whose `error` is a plain string echoing the
+  key; it came out as "request failed (HTTP 400)". It is reported as a
+  rejected key, and string `error` fields are read elsewhere.
+- Model lists offered embeddings, speech, transcription, image and moderation
+  models (and Ollama's embedding models). `CloudBackend.isChatModel` filters
+  them; Gemini's are filtered by `supportedGenerationMethods`.
+- A saved model missing from the fetched list made the chat's picker show the
+  first model as if it were answering, and Settings show none. `modelChoices`
+  keeps the model in use in the list.
+
 ---
 
 ## Verified correct (no action)

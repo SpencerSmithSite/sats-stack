@@ -121,11 +121,6 @@ the order to do it; the first group can lose or misstate the user's data.
 **Import flow**
 
 **AI**
-- Markdown is shown raw in the chat.
-- Live model lists are unfiltered (embeddings, TTS…), and the dropdown can
-  show a model other than the one in use.
-- Gemini reads only `parts.first`; refusals and safety stops are saved as
-  complete answers; xAI's 400 for a bad key gets a generic message.
 - Chat transcripts are written to `ai_conversations` and never read — every
   prompt and answer accumulates in the exported database for no feature.
   Stop writing them or build the history screen.

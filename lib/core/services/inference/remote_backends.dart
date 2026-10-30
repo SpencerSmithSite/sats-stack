@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import 'cloud_backend.dart';
 import 'inference_backend.dart';
 
 /// A model served by Ollama, on this machine or another one the user runs.
@@ -93,6 +94,9 @@ class OllamaBackend implements InferenceBackend {
           .whereType<Map<String, dynamic>>()
           .map((m) => m['name'])
           .whereType<String>()
+          // An embedding model pulled for another tool is listed alongside
+          // the chat ones, and fails on the first message.
+          .where(CloudBackend.isChatModel)
           .toList();
     } catch (_) {
       return [];
@@ -237,6 +241,7 @@ class OpenAiCompatBackend implements InferenceBackend {
           .whereType<Map<String, dynamic>>()
           .map((m) => m['id'])
           .whereType<String>()
+          .where(CloudBackend.isChatModel)
           .toList();
     } catch (_) {
       return [];

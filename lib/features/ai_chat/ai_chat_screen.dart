@@ -9,8 +9,10 @@ import '../../core/services/ollama_service.dart';
 import '../../main.dart' as app;
 import '../../shared/theme/app_colors.dart';
 import '../../shared/theme/app_text_styles.dart';
+import '../../shared/utils/model_choices.dart';
 import '../../shared/utils/platform_utils.dart';
 import '../../shared/widgets/ai_privacy_disclosure.dart';
+import '../../shared/widgets/markdown_text.dart';
 import '../../shared/widgets/tappable.dart';
 
 // ── Message model ─────────────────────────────────────────────────────────────
@@ -587,12 +589,20 @@ class _Bubble extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
                               Flexible(
-                                child: Text(
-                                  msg.content,
-                                  style: theme.textTheme.bodyMedium?.copyWith(
-                                    height: 1.5,
-                                  ),
-                                ),
+                                // The user's own words as typed; the model's
+                                // answer rendered, since it writes Markdown.
+                                child:
+                                    isUser
+                                        ? Text(
+                                          msg.content,
+                                          style: theme.textTheme.bodyMedium
+                                              ?.copyWith(height: 1.5),
+                                        )
+                                        : MarkdownText(
+                                          msg.content,
+                                          style: theme.textTheme.bodyMedium
+                                              ?.copyWith(height: 1.5),
+                                        ),
                               ),
                               if (streaming) ...[
                                 const SizedBox(width: 2),
@@ -952,10 +962,11 @@ class _ModelSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (models.isEmpty) return const Text('AI Analyst');
+    final choices = modelChoices(models, selected);
+    if (choices.isEmpty) return const Text('AI Analyst');
     return DropdownButtonHideUnderline(
       child: DropdownButton<String>(
-        value: models.contains(selected) ? selected : models.firstOrNull,
+        value: choices.contains(selected) ? selected : choices.first,
         isDense: true,
         icon: const Icon(Icons.expand_more, size: 18),
         style: Theme.of(
@@ -963,7 +974,7 @@ class _ModelSelector extends StatelessWidget {
         ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
         dropdownColor: Theme.of(context).colorScheme.surface,
         items: [
-          for (final m in models)
+          for (final m in choices)
             DropdownMenuItem(
               value: m,
               child: Text(m, style: const TextStyle(fontSize: 14)),
