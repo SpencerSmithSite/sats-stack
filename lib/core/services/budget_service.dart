@@ -34,19 +34,27 @@ class BudgetService {
   /// inserts through the gap, and from then on every upsert for that category
   /// threw `StateError` out of `getSingleOrNull` — the budget could not be
   /// edited again without clearing the data.
+  ///
+  /// [currency] is what [amountFiat] is in — the display currency at the time.
   Future<void> upsert({
     required int categoryId,
     required double amountFiat,
+    required String currency,
   }) async {
+    currency = currency.toUpperCase();
     await _db.transaction(() async {
       final existing =
           await (_db.select(_db.budgets)
             ..where((b) => b.categoryId.equals(categoryId))).getSingleOrNull();
 
       if (existing != null) {
-        await (_db.update(_db.budgets)..where(
-          (b) => b.id.equals(existing.id),
-        )).write(BudgetsCompanion(amountFiat: Value(amountFiat)));
+        await (_db.update(_db.budgets)
+          ..where((b) => b.id.equals(existing.id))).write(
+          BudgetsCompanion(
+            amountFiat: Value(amountFiat),
+            currency: Value(currency),
+          ),
+        );
       } else {
         await _db
             .into(_db.budgets)
@@ -54,6 +62,7 @@ class BudgetService {
               BudgetsCompanion.insert(
                 categoryId: categoryId,
                 amountFiat: amountFiat,
+                currency: Value(currency),
                 period: 'monthly',
               ),
             );
@@ -168,6 +177,7 @@ class BudgetService {
           budget: budget,
           category: cat,
           spentFiat: monthSpend[cat.id] ?? 0,
+          limitFiat: fx.convert(budget.amountFiat, budget.currency),
         ),
       );
     }
@@ -186,13 +196,16 @@ class BudgetService {
 
   /// Checks the current month's budget progress and fires a local notification
   /// for any category that is ≥ 80 % spent (warning) or > 100 % spent
-  /// (overspend). The [NotificationService] deduplicates within a session so
-  /// this can be called repeatedly without spamming the user.
+  /// (overspend). The [NotificationService] sends each once per category per
+  /// month, so this can be called on every change without spamming the user.
+  ///
+  /// [now] exists for tests.
   Future<void> checkAndNotify({
     required NotificationService notifications,
     required String currency,
+    DateTime? now,
   }) async {
-    final month = DateTime.now();
+    final month = now ?? DateTime.now();
     final progress = await getProgress(month);
 
     for (final p in progress) {
@@ -200,17 +213,19 @@ class BudgetService {
         await notifications.showBudgetOverspend(
           categoryId: p.category.id,
           categoryName: p.category.name,
-          overBy: p.spentFiat - p.budget.amountFiat,
-          budgetAmount: p.budget.amountFiat,
+          overBy: -p.remainingFiat!,
+          budgetAmount: p.limitFiat!,
           currency: currency,
+          month: month,
         );
       } else if (p.progress >= 0.8) {
         await notifications.showBudgetWarning(
           categoryId: p.category.id,
           categoryName: p.category.name,
           percentUsed: (p.progress * 100).round(),
-          budgetAmount: p.budget.amountFiat,
+          budgetAmount: p.limitFiat!,
           currency: currency,
+          month: month,
         );
       }
     }

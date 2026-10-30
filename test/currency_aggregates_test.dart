@@ -135,6 +135,7 @@ void main() {
           BudgetsCompanion.insert(
             categoryId: foodId,
             amountFiat: 500,
+            currency: const Value('GBP'),
             period: 'monthly',
           ),
         );

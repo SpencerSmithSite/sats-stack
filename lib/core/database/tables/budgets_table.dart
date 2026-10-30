@@ -16,6 +16,10 @@ class Budgets extends Table {
   IntColumn get id => integer().autoIncrement()();
   IntColumn get categoryId => integer().references(Categories, #id)();
   RealColumn get amountFiat => real()();
+  // ISO 4217 code [amountFiat] is in (schema v10). Without it, switching the
+  // display currency reinterpreted every budget: £500 became $500.
+  TextColumn get currency =>
+      text().withLength(min: 3, max: 3).withDefault(const Constant('USD'))();
   // 'monthly' | 'weekly' | 'yearly'
   TextColumn get period => text().withLength(min: 1, max: 10)();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();

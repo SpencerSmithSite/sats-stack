@@ -1767,6 +1767,22 @@ class $BudgetsTable extends Budgets with TableInfo<$BudgetsTable, Budget> {
     type: DriftSqlType.double,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _currencyMeta = const VerificationMeta(
+    'currency',
+  );
+  @override
+  late final GeneratedColumn<String> currency = GeneratedColumn<String>(
+    'currency',
+    aliasedName,
+    false,
+    additionalChecks: GeneratedColumn.checkTextLength(
+      minTextLength: 3,
+      maxTextLength: 3,
+    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('USD'),
+  );
   static const VerificationMeta _periodMeta = const VerificationMeta('period');
   @override
   late final GeneratedColumn<String> period = GeneratedColumn<String>(
@@ -1797,6 +1813,7 @@ class $BudgetsTable extends Budgets with TableInfo<$BudgetsTable, Budget> {
     id,
     categoryId,
     amountFiat,
+    currency,
     period,
     createdAt,
   ];
@@ -1830,6 +1847,12 @@ class $BudgetsTable extends Budgets with TableInfo<$BudgetsTable, Budget> {
       );
     } else if (isInserting) {
       context.missing(_amountFiatMeta);
+    }
+    if (data.containsKey('currency')) {
+      context.handle(
+        _currencyMeta,
+        currency.isAcceptableOrUnknown(data['currency']!, _currencyMeta),
+      );
     }
     if (data.containsKey('period')) {
       context.handle(
@@ -1869,6 +1892,11 @@ class $BudgetsTable extends Budgets with TableInfo<$BudgetsTable, Budget> {
             DriftSqlType.double,
             data['${effectivePrefix}amount_fiat'],
           )!,
+      currency:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}currency'],
+          )!,
       period:
           attachedDatabase.typeMapping.read(
             DriftSqlType.string,
@@ -1892,12 +1920,14 @@ class Budget extends DataClass implements Insertable<Budget> {
   final int id;
   final int categoryId;
   final double amountFiat;
+  final String currency;
   final String period;
   final DateTime createdAt;
   const Budget({
     required this.id,
     required this.categoryId,
     required this.amountFiat,
+    required this.currency,
     required this.period,
     required this.createdAt,
   });
@@ -1907,6 +1937,7 @@ class Budget extends DataClass implements Insertable<Budget> {
     map['id'] = Variable<int>(id);
     map['category_id'] = Variable<int>(categoryId);
     map['amount_fiat'] = Variable<double>(amountFiat);
+    map['currency'] = Variable<String>(currency);
     map['period'] = Variable<String>(period);
     map['created_at'] = Variable<DateTime>(createdAt);
     return map;
@@ -1917,6 +1948,7 @@ class Budget extends DataClass implements Insertable<Budget> {
       id: Value(id),
       categoryId: Value(categoryId),
       amountFiat: Value(amountFiat),
+      currency: Value(currency),
       period: Value(period),
       createdAt: Value(createdAt),
     );
@@ -1931,6 +1963,7 @@ class Budget extends DataClass implements Insertable<Budget> {
       id: serializer.fromJson<int>(json['id']),
       categoryId: serializer.fromJson<int>(json['categoryId']),
       amountFiat: serializer.fromJson<double>(json['amountFiat']),
+      currency: serializer.fromJson<String>(json['currency']),
       period: serializer.fromJson<String>(json['period']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
@@ -1942,6 +1975,7 @@ class Budget extends DataClass implements Insertable<Budget> {
       'id': serializer.toJson<int>(id),
       'categoryId': serializer.toJson<int>(categoryId),
       'amountFiat': serializer.toJson<double>(amountFiat),
+      'currency': serializer.toJson<String>(currency),
       'period': serializer.toJson<String>(period),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
@@ -1951,12 +1985,14 @@ class Budget extends DataClass implements Insertable<Budget> {
     int? id,
     int? categoryId,
     double? amountFiat,
+    String? currency,
     String? period,
     DateTime? createdAt,
   }) => Budget(
     id: id ?? this.id,
     categoryId: categoryId ?? this.categoryId,
     amountFiat: amountFiat ?? this.amountFiat,
+    currency: currency ?? this.currency,
     period: period ?? this.period,
     createdAt: createdAt ?? this.createdAt,
   );
@@ -1967,6 +2003,7 @@ class Budget extends DataClass implements Insertable<Budget> {
           data.categoryId.present ? data.categoryId.value : this.categoryId,
       amountFiat:
           data.amountFiat.present ? data.amountFiat.value : this.amountFiat,
+      currency: data.currency.present ? data.currency.value : this.currency,
       period: data.period.present ? data.period.value : this.period,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
@@ -1978,6 +2015,7 @@ class Budget extends DataClass implements Insertable<Budget> {
           ..write('id: $id, ')
           ..write('categoryId: $categoryId, ')
           ..write('amountFiat: $amountFiat, ')
+          ..write('currency: $currency, ')
           ..write('period: $period, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
@@ -1986,7 +2024,7 @@ class Budget extends DataClass implements Insertable<Budget> {
 
   @override
   int get hashCode =>
-      Object.hash(id, categoryId, amountFiat, period, createdAt);
+      Object.hash(id, categoryId, amountFiat, currency, period, createdAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1994,6 +2032,7 @@ class Budget extends DataClass implements Insertable<Budget> {
           other.id == this.id &&
           other.categoryId == this.categoryId &&
           other.amountFiat == this.amountFiat &&
+          other.currency == this.currency &&
           other.period == this.period &&
           other.createdAt == this.createdAt);
 }
@@ -2002,12 +2041,14 @@ class BudgetsCompanion extends UpdateCompanion<Budget> {
   final Value<int> id;
   final Value<int> categoryId;
   final Value<double> amountFiat;
+  final Value<String> currency;
   final Value<String> period;
   final Value<DateTime> createdAt;
   const BudgetsCompanion({
     this.id = const Value.absent(),
     this.categoryId = const Value.absent(),
     this.amountFiat = const Value.absent(),
+    this.currency = const Value.absent(),
     this.period = const Value.absent(),
     this.createdAt = const Value.absent(),
   });
@@ -2015,6 +2056,7 @@ class BudgetsCompanion extends UpdateCompanion<Budget> {
     this.id = const Value.absent(),
     required int categoryId,
     required double amountFiat,
+    this.currency = const Value.absent(),
     required String period,
     this.createdAt = const Value.absent(),
   }) : categoryId = Value(categoryId),
@@ -2024,6 +2066,7 @@ class BudgetsCompanion extends UpdateCompanion<Budget> {
     Expression<int>? id,
     Expression<int>? categoryId,
     Expression<double>? amountFiat,
+    Expression<String>? currency,
     Expression<String>? period,
     Expression<DateTime>? createdAt,
   }) {
@@ -2031,6 +2074,7 @@ class BudgetsCompanion extends UpdateCompanion<Budget> {
       if (id != null) 'id': id,
       if (categoryId != null) 'category_id': categoryId,
       if (amountFiat != null) 'amount_fiat': amountFiat,
+      if (currency != null) 'currency': currency,
       if (period != null) 'period': period,
       if (createdAt != null) 'created_at': createdAt,
     });
@@ -2040,6 +2084,7 @@ class BudgetsCompanion extends UpdateCompanion<Budget> {
     Value<int>? id,
     Value<int>? categoryId,
     Value<double>? amountFiat,
+    Value<String>? currency,
     Value<String>? period,
     Value<DateTime>? createdAt,
   }) {
@@ -2047,6 +2092,7 @@ class BudgetsCompanion extends UpdateCompanion<Budget> {
       id: id ?? this.id,
       categoryId: categoryId ?? this.categoryId,
       amountFiat: amountFiat ?? this.amountFiat,
+      currency: currency ?? this.currency,
       period: period ?? this.period,
       createdAt: createdAt ?? this.createdAt,
     );
@@ -2064,6 +2110,9 @@ class BudgetsCompanion extends UpdateCompanion<Budget> {
     if (amountFiat.present) {
       map['amount_fiat'] = Variable<double>(amountFiat.value);
     }
+    if (currency.present) {
+      map['currency'] = Variable<String>(currency.value);
+    }
     if (period.present) {
       map['period'] = Variable<String>(period.value);
     }
@@ -2079,6 +2128,7 @@ class BudgetsCompanion extends UpdateCompanion<Budget> {
           ..write('id: $id, ')
           ..write('categoryId: $categoryId, ')
           ..write('amountFiat: $amountFiat, ')
+          ..write('currency: $currency, ')
           ..write('period: $period, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
@@ -5835,6 +5885,7 @@ typedef $$BudgetsTableCreateCompanionBuilder =
       Value<int> id,
       required int categoryId,
       required double amountFiat,
+      Value<String> currency,
       required String period,
       Value<DateTime> createdAt,
     });
@@ -5843,6 +5894,7 @@ typedef $$BudgetsTableUpdateCompanionBuilder =
       Value<int> id,
       Value<int> categoryId,
       Value<double> amountFiat,
+      Value<String> currency,
       Value<String> period,
       Value<DateTime> createdAt,
     });
@@ -5887,6 +5939,11 @@ class $$BudgetsTableFilterComposer
 
   ColumnFilters<double> get amountFiat => $composableBuilder(
     column: $table.amountFiat,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get currency => $composableBuilder(
+    column: $table.currency,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -5943,6 +6000,11 @@ class $$BudgetsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get currency => $composableBuilder(
+    column: $table.currency,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get period => $composableBuilder(
     column: $table.period,
     builder: (column) => ColumnOrderings(column),
@@ -5993,6 +6055,9 @@ class $$BudgetsTableAnnotationComposer
     column: $table.amountFiat,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get currency =>
+      $composableBuilder(column: $table.currency, builder: (column) => column);
 
   GeneratedColumn<String> get period =>
       $composableBuilder(column: $table.period, builder: (column) => column);
@@ -6055,12 +6120,14 @@ class $$BudgetsTableTableManager
                 Value<int> id = const Value.absent(),
                 Value<int> categoryId = const Value.absent(),
                 Value<double> amountFiat = const Value.absent(),
+                Value<String> currency = const Value.absent(),
                 Value<String> period = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
               }) => BudgetsCompanion(
                 id: id,
                 categoryId: categoryId,
                 amountFiat: amountFiat,
+                currency: currency,
                 period: period,
                 createdAt: createdAt,
               ),
@@ -6069,12 +6136,14 @@ class $$BudgetsTableTableManager
                 Value<int> id = const Value.absent(),
                 required int categoryId,
                 required double amountFiat,
+                Value<String> currency = const Value.absent(),
                 required String period,
                 Value<DateTime> createdAt = const Value.absent(),
               }) => BudgetsCompanion.insert(
                 id: id,
                 categoryId: categoryId,
                 amountFiat: amountFiat,
+                currency: currency,
                 period: period,
                 createdAt: createdAt,
               ),

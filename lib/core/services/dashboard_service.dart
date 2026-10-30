@@ -228,7 +228,8 @@ class DashboardService {
     final budgetByCat = <String, double>{};
     for (final b in budgets) {
       final cat = catById[b.categoryId];
-      if (cat != null) budgetByCat[cat.name] = b.amountFiat;
+      final limit = _rates().convert(b.amountFiat, b.currency);
+      if (cat != null && limit != null) budgetByCat[cat.name] = limit;
     }
 
     // Spending per category for the selected month

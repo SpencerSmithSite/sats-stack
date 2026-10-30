@@ -30,7 +30,11 @@ void main() {
       final food = (await categories.getAll()).firstWhere(
         (c) => c.name == 'Food & Dining',
       );
-      await budgets.upsert(categoryId: food.id, amountFiat: 300);
+      await budgets.upsert(
+        categoryId: food.id,
+        amountFiat: 300,
+        currency: 'USD',
+      );
     });
     tester.view.physicalSize = const Size(430, 1200);
     tester.view.devicePixelRatio = 1;

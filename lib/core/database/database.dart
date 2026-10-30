@@ -47,7 +47,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 10;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -91,6 +91,9 @@ class AppDatabase extends _$AppDatabase {
         if (from < 9) {
           await m.addColumn(transactions, transactions.recurringSeriesId);
           await adoptLegacyRecurringSeries();
+        }
+        if (from < 10) {
+          await migrateToV10(m);
         }
       });
     },
@@ -261,6 +264,19 @@ class AppDatabase extends _$AppDatabase {
         '${tx.recurringAnchorDate!.millisecondsSinceEpoch}|'
         '${tx.description}|${tx.amountFiat}';
     return sha256.convert(utf8.encode(raw)).toString().substring(0, 16);
+  }
+
+  /// v9 → v10: budgets record their currency.
+  ///
+  /// Every existing budget was entered in — and has only ever been shown in —
+  /// the display currency, so that is what it is stamped with.
+  Future<void> migrateToV10(Migrator m) async {
+    await m.addColumn(budgets, budgets.currency);
+    await customStatement(
+      'UPDATE budgets SET currency = UPPER(COALESCE(NULLIF('
+      '(SELECT value FROM app_settings WHERE key = ?), \'\'), ?))',
+      [AppConstants.settingCurrency, AppConstants.defaultCurrency],
+    );
   }
 
   /// "Name (n)", trimmed so it still fits the 60-character name column.

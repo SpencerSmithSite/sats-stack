@@ -117,7 +117,11 @@ void main() {
     });
 
     test('the budget counts it against March', () async {
-      await budgets.upsert(categoryId: foodId, amountFiat: 500);
+      await budgets.upsert(
+        categoryId: foodId,
+        amountFiat: 500,
+        currency: 'USD',
+      );
       final progress = await budgets.getProgress(DateTime(2025, 3));
       expect(progress.single.spentFiat, 47);
     });

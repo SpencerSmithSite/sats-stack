@@ -115,11 +115,6 @@ Everything below was checked against the code and is still open. Roughly in
 the order to do it; the first group can lose or misstate the user's data.
 
 **Data and money**
-- **Budgets have no currency**: switching currency reinterprets every budget
-  (and can fire an overspend notification).
-- **Notification dedupe is per session**: a new month never alerts again
-  within a session, every cold start re-fires, and the stack-goal
-  notification fires on each launch.
 - **A failed historical price is cached as 0 forever** (xpub sync), and a
   custom plain-Esplora server gives no prices at all, with no warning.
 - **xpub key handling**: an `xpub`-prefixed BIP84/49 key is scanned as

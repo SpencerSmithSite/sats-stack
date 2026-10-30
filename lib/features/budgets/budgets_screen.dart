@@ -251,7 +251,7 @@ class _BudgetList extends StatelessWidget {
   Widget build(BuildContext context) {
     final totalBudgeted = items.fold<double>(
       0,
-      (s, p) => s + p.budget.amountFiat,
+      (s, p) => s + (p.limitFiat ?? 0),
     );
     final totalSpent = items.fold<double>(0, (s, p) => s + p.spentFiat);
     final overCount = items.where((p) => p.isOverBudget).length;

@@ -27,11 +27,23 @@ class BudgetCard extends StatelessWidget {
     final color =
         _parseColor(progress.category.color) ?? AppColors.bitcoinOrange;
 
+    final limit = progress.limitFiat;
+    final remaining = progress.remainingFiat;
     final decimals = CurrencyUtils.decimalsFor([
       progress.spentFiat,
-      progress.budget.amountFiat,
-      progress.remainingFiat,
+      limit ?? progress.budget.amountFiat,
+      if (remaining != null) remaining,
     ]);
+    // Shown in its own currency when there is no rate to convert it with,
+    // rather than under the display currency's symbol.
+    final limitLabel =
+        limit != null
+            ? CurrencyUtils.format(limit, currency, decimalDigits: decimals)
+            : CurrencyUtils.format(
+              progress.budget.amountFiat,
+              progress.budget.currency,
+              decimalDigits: decimals,
+            );
     final clampedProgress = progress.progress.clamp(0.0, 1.0);
     final progressColor =
         progress.isOverBudget
@@ -104,8 +116,8 @@ class BudgetCard extends StatelessWidget {
                     )
                   else
                     Text(
-                      progress.remainingFiat >= 0
-                          ? '${CurrencyUtils.format(progress.remainingFiat, currency, decimalDigits: decimals)} left'
+                      remaining != null && remaining >= 0
+                          ? '${CurrencyUtils.format(remaining, currency, decimalDigits: decimals)} left'
                           : '',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: progressColor,
@@ -150,7 +162,7 @@ class BudgetCard extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    ' / ${CurrencyUtils.format(progress.budget.amountFiat, currency, decimalDigits: decimals)}',
+                    ' / $limitLabel',
                     style: AppTextStyles.monoSmall.copyWith(
                       color: context.textSecondary,
                     ),
