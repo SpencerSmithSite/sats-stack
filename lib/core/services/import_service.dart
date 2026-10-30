@@ -7,7 +7,7 @@ import 'dart:ui' as ui;
 import 'package:crypto/crypto.dart';
 import 'package:csv/csv.dart';
 import 'package:drift/drift.dart'
-    show DoUpdate, InsertMode, OrderingTerm, Value;
+    show DoUpdate, InsertMode, OrderingTerm, StringExpressionOperators, Value;
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:http/http.dart' as http;
 import 'package:syncfusion_flutter_pdf/pdf.dart';
@@ -64,6 +64,9 @@ class _ImportRun {
 
   /// An off-device AI tier ran, so the file was uploaded.
   bool sent = false;
+
+  /// How much of the file an AI tier was given, when that was not all of it.
+  int? truncatedAt;
 }
 
 /// Thrown when an import's [ImportCancelToken] is cancelled during it.
@@ -174,6 +177,7 @@ class ImportResult {
     this.aiConsentDeclined = false,
     this.sentTo,
     this.aiLabel,
+    this.aiInputTruncatedAt,
     this.errorMessage,
     this.rawCsvContent,
     this.csvRows,
@@ -213,6 +217,12 @@ class ImportResult {
   /// provider it was.
   final String? aiLabel;
 
+  /// Set when the file was longer than an AI request carries, to the number
+  /// of characters that were sent: rows after that point were never read. It
+  /// used to be cut without a word, so a long statement silently lost its
+  /// last months.
+  final int? aiInputTruncatedAt;
+
   /// Why nothing could be read, in words the user can act on, when the cause
   /// is known — for instance that the selected backend cannot read images.
   final String? errorMessage;
@@ -223,24 +233,28 @@ class ImportResult {
   final List<String>? csvHeaders;
 
   /// This result with who read it attached — see [sentTo] and [aiLabel].
-  ImportResult withProvenance({String? sentTo, String? aiLabel}) =>
-      ImportResult(
-        transactions: transactions,
-        fileType: fileType,
-        fileName: fileName,
-        tierUsed: tierUsed,
-        needsManualMapping: needsManualMapping,
-        isPdfNoAi: isPdfNoAi,
-        pdfAiNotReady: pdfAiNotReady,
-        pdfScanned: pdfScanned,
-        aiConsentDeclined: aiConsentDeclined,
-        sentTo: sentTo,
-        aiLabel: aiLabel,
-        errorMessage: errorMessage,
-        rawCsvContent: rawCsvContent,
-        csvRows: csvRows,
-        csvHeaders: csvHeaders,
-      );
+  ImportResult withProvenance({
+    String? sentTo,
+    String? aiLabel,
+    int? aiInputTruncatedAt,
+  }) => ImportResult(
+    transactions: transactions,
+    fileType: fileType,
+    fileName: fileName,
+    tierUsed: tierUsed,
+    needsManualMapping: needsManualMapping,
+    isPdfNoAi: isPdfNoAi,
+    pdfAiNotReady: pdfAiNotReady,
+    pdfScanned: pdfScanned,
+    aiConsentDeclined: aiConsentDeclined,
+    sentTo: sentTo,
+    aiLabel: aiLabel,
+    aiInputTruncatedAt: aiInputTruncatedAt,
+    errorMessage: errorMessage,
+    rawCsvContent: rawCsvContent,
+    csvRows: csvRows,
+    csvHeaders: csvHeaders,
+  );
 }
 
 class ImportSummary {
@@ -425,6 +439,16 @@ class ImportService {
     return run.consent = granted;
   }
 
+  /// Whether the active backend can read a statement now.
+  ///
+  /// The on-device backends have no model to choose — `selectedModel` is null
+  /// for them by design — so requiring one meant Apple Intelligence and Gemini
+  /// Nano were never used for an import at all.
+  Future<bool> _aiReady() async =>
+      await ollama.isAvailable() &&
+      (ollama.activeProvider.isOnDevice ||
+          (ollama.selectedModel?.isNotEmpty ?? false));
+
   /// Called immediately before an AI tier hands the file to the backend.
   void _markSending() {
     _checkCancelled();
@@ -440,6 +464,7 @@ class ImportService {
         result.tierUsed == ImportTier.image;
     return result.withProvenance(
       sentTo: _run.sent ? ollama.activeDataRecipient : null,
+      aiInputTruncatedAt: aiTier ? _run.truncatedAt : null,
       aiLabel: aiTier ? ollama.activeProvider.label : null,
     );
   }
@@ -510,10 +535,7 @@ class ImportService {
       );
     }
 
-    // Apply user-defined category mappings from previous imports
-    if (result.transactions.isNotEmpty) {
-      await _applyDescriptionMappings(result.transactions, sourceId);
-    }
+    await prepareForReview(result.transactions, sourceId);
     return _finishImport(result);
   });
 
@@ -538,9 +560,7 @@ class ImportService {
       onStageChange: onStageChange,
       onOffDeviceConsent: onOffDeviceConsent,
     );
-    if (result.transactions.isNotEmpty) {
-      await _applyDescriptionMappings(result.transactions, sourceId);
-    }
+    await prepareForReview(result.transactions, sourceId);
     return _finishImport(result);
   });
 
@@ -599,9 +619,7 @@ class ImportService {
     }
 
     final currency = await _sourceCurrency(sourceId);
-    final ollamaReady =
-        await ollama.isAvailable() &&
-        (ollama.selectedModel?.isNotEmpty ?? false);
+    final ollamaReady = await _aiReady();
     _checkCancelled();
 
     // Declining falls through to the same heuristic path as "no AI configured",
@@ -639,9 +657,25 @@ class ImportService {
     );
     _checkCancelled();
 
+    // The AI found nothing — or failed. The heuristic reader is what runs with
+    // no AI at all; it used to be skipped here, so a PDF it could have read
+    // came back empty just because an AI had been tried first.
+    if (txns == null || txns.isEmpty) {
+      onStageChange?.call('Attempting heuristic detection…');
+      final heuristicTxns = _parseTransactionsFromPdfText(text, currency);
+      if (heuristicTxns.length >= 3) {
+        return ImportResult(
+          transactions: heuristicTxns,
+          tierUsed: ImportTier.pdfHeuristic,
+          fileType: ImportFileType.pdf,
+          fileName: fileName,
+        );
+      }
+    }
+
     return ImportResult(
       transactions: txns ?? [],
-      tierUsed: txns != null ? ImportTier.ollama : null,
+      tierUsed: txns != null && txns.isNotEmpty ? ImportTier.ollama : null,
       isPdfNoAi: txns == null || txns.isEmpty,
       fileType: ImportFileType.pdf,
       fileName: fileName,
@@ -720,7 +754,9 @@ Rules:
     _run.token._attach(client);
 
     try {
-      onStageChange?.call('Sending to ${ollama.selectedModel ?? 'AI'}…');
+      onStageChange?.call(
+        'Sending to ${ollama.selectedModel ?? ollama.activeProvider.label}…',
+      );
       await Future.delayed(const Duration(milliseconds: 60));
       onStageChange?.call('AI is reading your statement…');
 
@@ -891,9 +927,7 @@ Rules:
     // Asked before the file is read by anyone else. A CSV has the rule-based
     // tier to fall back on, so declining costs the user nothing but a slightly
     // worse parse.
-    final ollamaReady =
-        await ollama.isAvailable() &&
-        (ollama.selectedModel?.isNotEmpty ?? false);
+    final ollamaReady = await _aiReady();
     _checkCancelled();
 
     if (ollamaReady && await _aiTierPermitted(onOffDeviceConsent)) {
@@ -1053,6 +1087,7 @@ Rules:
       const maxLen = 100000;
       final truncated =
           content.length > maxLen ? content.substring(0, maxLen) : content;
+      if (truncated.length < content.length) _run.truncatedAt = maxLen;
 
       const prefix =
           '''You are a financial data parser. Extract every transaction from this bank/exchange statement and return them as a JSON array.
@@ -1079,7 +1114,7 @@ FILE CONTENT:
       ];
 
       onStageChange?.call(
-        'Sending to ${ollama.selectedModel ?? 'AI'} for analysis…',
+        'Sending to ${ollama.selectedModel ?? ollama.activeProvider.label} for analysis…',
       );
       await Future.delayed(const Duration(milliseconds: 60));
       onStageChange?.call('AI is thinking…');
@@ -1865,8 +1900,51 @@ FILE CONTENT:
 
   // ── Description → Category mappings ─────────────────────────────────────
 
+  /// Gets parsed rows ready for the preview, whichever tier read them: the
+  /// keyword categories under the names the user has given them, then the
+  /// categories learned from earlier imports of [sourceId].
+  ///
+  /// The column mapper's parse used to skip both.
+  Future<void> prepareForReview(
+    List<ParsedTransaction> transactions,
+    int sourceId,
+  ) async {
+    if (transactions.isEmpty) return;
+    await _applySystemCategoryNames(transactions);
+    await _applyDescriptionMappings(transactions, sourceId);
+  }
+
+  /// The keyword categoriser names the built-in categories as they were
+  /// seeded. A user who renamed "Food & Dining" to "Food" got imports filed
+  /// under a name that no longer existed — invisible to the budget, the
+  /// charts and the category list. `CategoryService.updateCategory` records
+  /// each rename of a built-in category; this applies them.
+  Future<void> _applySystemCategoryNames(
+    List<ParsedTransaction> transactions,
+  ) async {
+    final renames =
+        await (db.select(db.appSettings)..where(
+          (t) => t.key.like('${AppConstants.systemCategoryNamePrefix}%'),
+        )).get();
+    if (renames.isEmpty) return;
+    final current = {
+      for (final r in renames)
+        r.key.substring(AppConstants.systemCategoryNamePrefix.length): r.value,
+    };
+    for (final tx in transactions) {
+      if (tx.categoryIsUserChosen) continue;
+      final renamed = current[tx.category];
+      if (renamed != null) tx.category = renamed;
+    }
+  }
+
   /// Pre-fills [transactions] categories from previously saved mappings for
   /// [sourceId].  Only overwrites the auto-category if a saved mapping exists.
+  ///
+  /// Keyed on the description as the file gives it. It was the description as
+  /// the user had edited it in the preview, which the next file never
+  /// contains, so tidying a merchant's name stopped its category being learned.
+  /// Mappings stored under an edited description still match one.
   Future<void> _applyDescriptionMappings(
     List<ParsedTransaction> transactions,
     int sourceId,
@@ -1877,8 +1955,9 @@ FILE CONTENT:
     if (rows.isEmpty) return;
     final map = {for (final r in rows) r.description: r.category};
     for (final tx in transactions) {
-      final key = tx.description.toLowerCase().trim();
-      final saved = map[key];
+      final saved =
+          map[tx.rawDescription.toLowerCase().trim()] ??
+          map[tx.description.toLowerCase().trim()];
       if (saved != null) tx.setUserCategory(saved);
     }
   }
@@ -1910,7 +1989,7 @@ FILE CONTENT:
       if (!tx.categoryIsUserChosen) continue;
       final cat = tx.category;
       if (cat == null || cat.isEmpty) continue;
-      final key = tx.description.toLowerCase().trim();
+      final key = tx.rawDescription.toLowerCase().trim();
       if (key.isEmpty) continue;
       // Last one wins, matching the previous row-by-row behaviour.
       byDescription[key] = cat;
@@ -1941,6 +2020,15 @@ FILE CONTENT:
   }
 
   // ── Save / update column mapping on a source ─────────────────────────────
+
+  /// Forgets [sourceId]'s saved column layout, so its next import is read
+  /// from scratch. A wrong saved layout was otherwise permanent: it is tried
+  /// first on every import of the source.
+  Future<void> clearColumnMapping(int sourceId) async {
+    await (db.update(db.importSources)..where(
+      (t) => t.id.equals(sourceId),
+    )).write(const ImportSourcesCompanion(columnMapping: Value(null)));
+  }
 
   Future<void> saveColumnMapping(int sourceId, ColumnMapping mapping) async {
     await (db.update(db.importSources)

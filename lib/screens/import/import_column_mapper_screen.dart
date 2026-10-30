@@ -135,14 +135,18 @@ class _ImportColumnMapperScreenState extends State<ImportColumnMapperScreen> {
     if (!_canParse || widget.result.rawCsvContent == null) return;
     setState(() => _parsing = true);
     try {
-      if (_saveMapping) {
-        await app.importService.saveColumnMapping(widget.sourceId, _mapping);
-      }
       final txns = await app.importService.parseWithMapping(
         widget.result.rawCsvContent!,
         _mapping,
         sourceId: widget.sourceId,
       );
+      // Saved only once it has read something. It was saved before parsing,
+      // so a layout that read nothing was still tried first on every later
+      // import of the source.
+      if (_saveMapping && txns != null && txns.isNotEmpty) {
+        await app.importService.saveColumnMapping(widget.sourceId, _mapping);
+      }
+      await app.importService.prepareForReview(txns ?? [], widget.sourceId);
       if (!mounted) return;
       final newResult = ImportResult(
         transactions: txns ?? [],

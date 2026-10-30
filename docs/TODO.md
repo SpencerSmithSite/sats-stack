@@ -119,11 +119,6 @@ the order to do it; the first group can lose or misstate the user's data.
   movements? Today an xpub self-transfer counts as both.
 
 **Import flow**
-- On-device AI is never ready for import (no selected model); a PDF gets no
-  heuristic fallback when the AI fails; AI input is cut at 100k characters
-  without saying so; the saved column mapping is written before parsing and
-  cannot be cleared; learned category mappings key on the edited
-  description; renaming a system category breaks keyword categorisation.
 - Historical prices are fetched one per second, serially, with no progress.
 - Smaller: mapper back navigation, "Other…" currency, a no-op "Try again",
   ISO codes and U+202F in amounts, trusting the model's per-row currency.

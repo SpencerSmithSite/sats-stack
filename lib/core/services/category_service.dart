@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart';
+import '../../shared/constants/app_constants.dart';
 import '../database/database.dart';
 
 /// A category with this name already exists.
@@ -92,6 +93,8 @@ class CategoryService {
       final oldName = existing?.name;
       if (oldName == null || oldName == name) return;
 
+      if (existing!.isSystem) await _recordSystemRename(oldName, name);
+
       await (_db.update(_db.transactions)..where(
         (t) => t.category.equals(oldName),
       )).write(TransactionsCompanion(category: Value(name)));
@@ -102,6 +105,30 @@ class CategoryService {
         (t) => t.category.equals(oldName),
       )).write(DescriptionCategoryMappingsCompanion(category: Value(name)));
     });
+  }
+
+  /// Records that a built-in category called [oldName] is now [newName], so
+  /// imports file keyword matches under the name it has now.
+  ///
+  /// Keyed on the seeded name: either an earlier rename already maps that to
+  /// [oldName], or [oldName] is the seeded name itself.
+  Future<void> _recordSystemRename(String oldName, String newName) async {
+    const prefix = AppConstants.systemCategoryNamePrefix;
+    final earlier =
+        await (_db.select(_db.appSettings)..where(
+          (t) => t.key.like('$prefix%') & t.value.equals(oldName),
+        )).getSingleOrNull();
+    final seeded = earlier?.key.substring(prefix.length) ?? oldName;
+    if (seeded == newName) {
+      await (_db.delete(_db.appSettings)
+        ..where((t) => t.key.equals('$prefix$seeded'))).go();
+      return;
+    }
+    await _db
+        .into(_db.appSettings)
+        .insertOnConflictUpdate(
+          AppSettingsCompanion.insert(key: '$prefix$seeded', value: newName),
+        );
   }
 
   /// Returns the number of transactions and budgets referencing this category.

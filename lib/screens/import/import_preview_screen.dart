@@ -148,6 +148,17 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen> {
                           const SizedBox(height: 4),
                           _SentToNote(recipient: widget.result.sentTo!),
                         ],
+                        if (widget.result.aiInputTruncatedAt
+                            case final chars?) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            'This file was too long to read in one go: only '
+                            'its first ${NumberFormat.decimalPattern().format(chars)} '
+                            'characters were sent, so later rows may be '
+                            'missing. Import it in parts, or as a CSV.',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
                         if (widget.result.tierUsed ==
                             ImportTier.pdfHeuristic) ...[
                           const SizedBox(height: 8),

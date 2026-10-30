@@ -79,6 +79,12 @@ abstract final class AppConstants {
   /// fingerprint of the period, anchor, description and amount, which changed
   /// whenever an instance was edited — see
   /// `AppDatabase.adoptLegacyRecurringSeries`.
+  /// `AppSettings` key prefix recording what a built-in category is called
+  /// now: `<prefix><seeded name>` → current name. Written by
+  /// `CategoryService.updateCategory`, read by the import categoriser, whose
+  /// keyword table uses the seeded names.
+  static const systemCategoryNamePrefix = 'system_category_name:';
+
   static String recurringCursorKey(String seriesId) =>
       'recurring_cursor_$seriesId';
 
