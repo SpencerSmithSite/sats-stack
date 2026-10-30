@@ -115,11 +115,6 @@ Everything below was checked against the code and is still open. Roughly in
 the order to do it; the first group can lose or misstate the user's data.
 
 **Data and money**
-- **A failed historical price is cached as 0 forever** (xpub sync), and a
-  custom plain-Esplora server gives no prices at all, with no warning.
-- **xpub key handling**: an `xpub`-prefixed BIP84/49 key is scanned as
-  legacy; testnet keys are accepted, scanned on mainnet, and priced as real
-  BTC.
 - **The dashboard's "unconverted" count spans all history**, not the month;
   the spending breakdown still rounds per figure (£12.50 shows as £13).
 - **Product decision:** should fiat income/spending include Bitcoin

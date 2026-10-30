@@ -1239,6 +1239,20 @@ Item 15's open list, fixed one PR at a time, in the order `TODO.md` gave.
   now claimed in `AppSettings` by `NotificationLedger`, keyed per category per
   month and per goal amount; budget keys from other months are pruned.
 
+### xpub keys are scanned for the right addresses, and unpriced rows heal
+- An `xpub` exported for a SegWit account (Ledger, Trezor and others do this)
+  was scanned as legacy and looked empty. Adding a mainnet `xpub` now probes
+  its first 20 receive addresses as native SegWit, nested SegWit and legacy,
+  and stores the key re-encoded for the type that has history
+  (`XpubService.withFormat`), so every later sync derives the right ones.
+- Testnet keys were accepted, scanned against a mainnet server and priced as
+  real BTC. The form and `syncWallet` refuse them.
+- A row whose day had no price was stored with a fiat value of 0 and never
+  priced again. Each sync now re-prices kept rows at 0, and reports how many
+  are still unpriced (`XpubSyncResult.unpricedNote`), naming a self-hosted
+  Esplora server — which has no price endpoint — as the likely cause. That
+  used to give no prices at all without a word.
+
 ---
 
 ## Verified correct (no action)

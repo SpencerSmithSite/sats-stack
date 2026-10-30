@@ -60,9 +60,19 @@ class _AddWalletSheetState extends State<AddWalletSheet> {
 
     Wallet? wallet;
     try {
+      // An `xpub` does not say which addresses it is for, and many wallets
+      // export one for a SegWit account. Look before storing it: the script
+      // type is recorded by re-encoding the key (`xpub` → `zpub`).
+      var key = extKey;
+      if (widget.xpubService.isAmbiguous(key)) {
+        setState(() => _syncStatus = 'Checking which address type it uses…');
+        final used = await widget.xpubService.detectUsedFormat(key);
+        if (used != null) key = XpubService.withFormat(key, used);
+      }
+
       wallet = await widget.walletService.addXpubWallet(
         label: label,
-        xpub: extKey,
+        xpub: key,
         color: _selectedColor,
       );
 
@@ -235,9 +245,14 @@ class _FormBody extends StatelessWidget {
                 }
                 // No prefix allow-list here: deriveAddresses decides, from the
                 // key's own version bytes, whether this is something the app
-                // can actually derive from — including the testnet prefixes.
+                // can actually derive from; the network comes from them too.
                 try {
                   xpubService.deriveAddresses(v.trim(), 0, 1);
+                  if (xpubService.detectNetwork(v.trim()) ==
+                      XpubNetwork.testnet) {
+                    return 'Testnet keys are not supported — Sats Stack '
+                        'tracks mainnet bitcoin';
+                  }
                 } on ArgumentError catch (e) {
                   return e.message?.toString() ?? 'Invalid extended key';
                 } catch (_) {
@@ -494,6 +509,14 @@ class _DoneBody extends StatelessWidget {
             ),
             textAlign: TextAlign.center,
           ),
+          if (result.unpricedNote case final note?) ...[
+            const SizedBox(height: 12),
+            Text(
+              note,
+              style: theme.textTheme.bodySmall,
+              textAlign: TextAlign.center,
+            ),
+          ],
           const SizedBox(height: 32),
           FilledButton(
             onPressed: onClose,
