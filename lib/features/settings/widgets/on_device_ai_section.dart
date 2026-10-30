@@ -104,15 +104,18 @@ class _GeminiNanoDownloadSectionState extends State<GeminiNanoDownloadSection> {
   bool _downloading = false;
   String? _error;
 
+  /// 0–100, or null while the size is unknown (an indeterminate bar).
+  int? _percent;
+
   Future<void> _start() async {
     setState(() {
       _downloading = true;
       _error = null;
+      _percent = null;
     });
     try {
-      await for (final _ in GeminiNanoBackend.download()) {
-        // Progress is not expressible as a percentage; the bar is
-        // indeterminate and only completion matters here.
+      await for (final p in GeminiNanoBackend.download()) {
+        if (mounted) setState(() => _percent = p < 0 ? null : p);
       }
       await app.ollamaService.refreshOnDeviceReadiness();
       if (mounted) widget.onFinished();
@@ -132,7 +135,11 @@ class _GeminiNanoDownloadSectionState extends State<GeminiNanoDownloadSection> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (_downloading) ...[
-            const LinearProgressIndicator(),
+            LinearProgressIndicator(
+              value: _percent == null ? null : _percent! / 100,
+              semanticsLabel: 'Gemini Nano download',
+              semanticsValue: _percent == null ? null : '$_percent%',
+            ),
             const SizedBox(height: 8),
             Text(
               'Android is downloading Gemini Nano. You can leave this screen — '

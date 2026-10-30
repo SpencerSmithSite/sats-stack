@@ -105,4 +105,9 @@ flutter_native_splash:
   color: "#141414"
   image: assets/icons/satsstack_icon_dark.png
   android: true
-  ios: true
+  # The iOS launch image in LaunchImage.imageset is drawn by hand; running the
+  # generator with this on would overwrite it.
+  ios: false
+  # Android 12+ uses the system splash, set in values-v31/styles.xml to match.
+  android_12:
+    color: "#141414"

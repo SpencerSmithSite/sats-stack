@@ -32,7 +32,8 @@ enum GeminiNanoState {
   /// Not Android, or a build without the bridge.
   unsupportedPlatform,
 
-  /// The bridge answered with something this version does not recognise.
+  /// The bridge answered with something this version does not recognise,
+  /// or could not get an answer this time.
   unknown;
 
   static GeminiNanoState fromReason(String? reason) => switch (reason) {
@@ -143,17 +144,23 @@ class GeminiNanoBackend implements InferenceBackend {
       final raw = await _methods.invokeMapMethod<String, dynamic>(
         'availability',
       );
-      return _cached = GeminiNanoAvailability(
+      final answer = GeminiNanoAvailability(
         GeminiNanoState.fromReason(raw?['reason'] as String?),
         raw?['detail'] as String? ?? 'Unavailable.',
       );
+      // An answer that may change by the next ask — AICore busy, or still
+      // starting — is not kept. Caching it hid Nano for the whole session.
+      return answer.state == GeminiNanoState.unknown
+          ? answer
+          : _cached = answer;
     } on MissingPluginException {
       return _cached = const GeminiNanoAvailability(
         GeminiNanoState.unsupportedPlatform,
         'This build of Sats Stack has no Gemini Nano support.',
       );
     } catch (e) {
-      return _cached = GeminiNanoAvailability(
+      // Not cached, for the same reason.
+      return GeminiNanoAvailability(
         GeminiNanoState.unknown,
         'Could not ask the system about Gemini Nano: $e',
       );
@@ -162,10 +169,10 @@ class GeminiNanoBackend implements InferenceBackend {
 
   /// Ask AICore to fetch the weights, reporting progress 0-100.
   ///
-  /// ML Kit reports bytes downloaded without a reliable total, so the native
-  /// side converts to a percentage where it can and emits -1 where it cannot.
-  /// The UI treats -1 as indeterminate rather than as zero progress, which is
-  /// the difference between a spinner and a bar that looks stuck.
+  /// The native side works out a percentage from the download's size, which
+  /// ML Kit reports when it starts, and emits -1 if no size was given. The UI
+  /// treats -1 as indeterminate rather than as zero progress, which is the
+  /// difference between a spinner and a bar that looks stuck.
   static Stream<int> download() {
     if (!bridgedHere) {
       return Stream.error(

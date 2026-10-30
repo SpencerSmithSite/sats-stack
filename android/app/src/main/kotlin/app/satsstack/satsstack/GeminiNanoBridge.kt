@@ -101,11 +101,13 @@ object GeminiNanoBridge {
                 }
             } catch (e: Throwable) {
                 // Thrown on devices with no AICore at all, and on those with an
-                // unlocked bootloader, where the API refuses outright. Neither
-                // is an error worth surfacing as a crash — the backend simply is
-                // not on offer.
-                "unavailable" to
-                    "Gemini Nano is not available on this device: ${e.message}"
+                // unlocked bootloader, where the API refuses outright — but
+                // also when AICore is busy or still starting. Reported as an
+                // error rather than "unavailable", which the Dart side keeps for
+                // the session: a transient failure used to hide Nano until the
+                // app was restarted.
+                "error" to
+                    "Could not reach Gemini Nano just now: ${e.message}"
             }
             main.post { result.success(mapOf("reason" to reason, "detail" to detail)) }
         }
@@ -200,10 +202,11 @@ object GeminiNanoBridge {
      * Streams the AICore download as a percentage, or -1 when it cannot be
      * expressed as one.
      *
-     * `DownloadProgress` reports bytes downloaded with no total, so there is
-     * genuinely no percentage to compute mid-flight. Emitting -1 lets the UI
-     * show an indeterminate spinner; emitting 0 instead would render as a bar
-     * that sits at zero for the whole download and looks broken.
+     * `DownloadStarted` carries the size of the download and each
+     * `DownloadProgress` the bytes so far, so this is a real percentage. It
+     * used to emit -1 for every progress event, on the belief that there was
+     * no total — the bar was indeterminate for the whole download. -1 remains
+     * for a start that reports no size.
      */
     private class DownloadStreamHandler : EventChannel.StreamHandler {
         private var job: Job? = null
@@ -212,12 +215,26 @@ object GeminiNanoBridge {
             val sink = events ?: return
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
             job = scope.launch {
+                var total = 0L
                 try {
                     model.download().collect { status ->
                         if (!isActive) return@collect
                         when (status) {
-                            is DownloadStatus.DownloadStarted -> main.post { sink.success(0) }
-                            is DownloadStatus.DownloadProgress -> main.post { sink.success(-1) }
+                            is DownloadStatus.DownloadStarted -> {
+                                total = status.bytesToDownload
+                                main.post { sink.success(0) }
+                            }
+                            is DownloadStatus.DownloadProgress -> {
+                                val percent =
+                                    if (total > 0) {
+                                        (status.totalBytesDownloaded * 100 / total)
+                                            .coerceIn(0L, 99L)
+                                            .toInt()
+                                    } else {
+                                        -1
+                                    }
+                                main.post { sink.success(percent) }
+                            }
                             is DownloadStatus.DownloadCompleted -> main.post { sink.success(100) }
                             is DownloadStatus.DownloadFailed -> main.post {
                                 sink.error(

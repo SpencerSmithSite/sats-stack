@@ -130,19 +130,12 @@ the order to do it; the first group can lose or misstate the user's data.
 **UI**
 
 **Native, build, CI**
-- No Android 12+ splash config (white flash); notifications use the
-  full-colour launcher icon; no `NSLocalNetworkUsageDescription` for a LAN
-  Ollama; Gemini Nano download progress is always indeterminate though the API
-  gives a total; a transient AICore error hides Nano for the session.
-- The iOS icon set mixes legacy and universal entries (one with a bogus
-  `luminosity: light`); the launch image is iPhone-only and its 1x is the
-  wrong size, and `flutter_native_splash` would overwrite it.
-- `assets/icons/` is bundled but never loaded; `file_picker` 10 pulls in
-  DKCamera, CoreLocation and MediaPlayer.
-- Dead native config: the macOS Podfile's sqlite3 block, the iOS
-  `use_modular_headers!` rationale, a mangled
-  `ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS`,
-  legacy mipmaps, Windows/Linux template identity.
+- `file_picker` 10 may still pull in DKCamera, CoreLocation and MediaPlayer
+  through Swift Package Manager — check the built app's frameworks and
+  privacy manifest, and drop the media picker if it is not needed.
+- `assets/icons/` is bundled into the app though nothing loads it; it is the
+  icon generator's source. Moving it out of `flutter: assets:` needs the
+  generator configs checked first.
 
 **Tests that cannot fail, and dead code**
 - `month_boundary_test`'s aggregate group (see AUDIT, seconds); the DST test
