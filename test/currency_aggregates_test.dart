@@ -43,12 +43,13 @@ void main() {
     String category = 'Food & Dining',
     int sats = 0,
     bool isBitcoin = false,
+    DateTime? date,
   }) => db
       .into(db.transactions)
       .insert(
         TransactionsCompanion.insert(
           walletId: walletId,
-          date: DateTime(2026, 3, 10),
+          date: date ?? DateTime(2026, 3, 10),
           description: 'row ${hashSeq++}',
           amountSats: sats,
           amountFiat: fiat,
@@ -158,5 +159,15 @@ void main() {
 
     final data = await DashboardService(db).getDashboard(DateTime(2026, 3));
     expect(data.monthlySpendingFiat, closeTo(150, 1e-9));
+  });
+
+  test('the unconverted note counts only the month on screen', () async {
+    // No rate for EUR. One January row used to put the note on every month.
+    await add(fiat: -20, currency: 'EUR', date: DateTime(2026, 1, 10));
+    await add(fiat: -50, currency: 'USD');
+
+    final service = DashboardService(db, rates: gbp);
+    expect((await service.getDashboard(DateTime(2026, 3))).unconvertedCount, 0);
+    expect((await service.getDashboard(DateTime(2026, 1))).unconvertedCount, 1);
   });
 }

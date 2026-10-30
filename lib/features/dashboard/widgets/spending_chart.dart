@@ -48,6 +48,9 @@ class SpendingChart extends StatelessWidget {
           ..sort((a, b) => b.value.compareTo(a.value));
     final entries = sorted.take(6).toList();
     final maxAmount = entries.first.value;
+    // One precision for the whole list: £12.50 used to show as £13 because
+    // every figure was rounded to whole units on its own.
+    final decimals = CurrencyUtils.decimalsFor(entries.map((e) => e.value));
 
     return Column(
       children: [
@@ -56,6 +59,7 @@ class SpendingChart extends StatelessWidget {
             category: entry.key,
             amount: entry.value,
             maxAmount: maxAmount,
+            decimals: decimals,
             btcPrice: btcPrice,
             currency: currency,
             categoryColorHex: categoryColorHex[entry.key],
@@ -70,6 +74,7 @@ class _CategoryBar extends StatelessWidget {
     required this.category,
     required this.amount,
     required this.maxAmount,
+    required this.decimals,
     this.categoryColorHex,
     this.btcPrice,
     required this.currency,
@@ -79,6 +84,7 @@ class _CategoryBar extends StatelessWidget {
   final String? categoryColorHex;
   final double amount;
   final double maxAmount;
+  final int decimals;
   final double? btcPrice;
   final String currency;
 
@@ -88,7 +94,11 @@ class _CategoryBar extends StatelessWidget {
     // One palette for the whole app; this widget used to keep its own,
     // which disagreed with Analytics on Shopping and Subscriptions.
     final color = CategoryPalette.of(category, userHex: categoryColorHex);
-    final fiatStr = CurrencyUtils.format(amount, currency, decimalDigits: 0);
+    final fiatStr = CurrencyUtils.format(
+      amount,
+      currency,
+      decimalDigits: decimals,
+    );
     final sats =
         btcPrice != null && btcPrice! > 0
             ? SatConverter.fiatToSats(amount, btcPrice!)

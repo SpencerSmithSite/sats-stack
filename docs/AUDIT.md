@@ -1253,6 +1253,14 @@ Item 15's open list, fixed one PR at a time, in the order `TODO.md` gave.
   Esplora server — which has no price endpoint — as the likely cause. That
   used to give no prices at all without a word.
 
+### The dashboard's figures
+- The "not yet in these totals" note counted unconverted rows across all
+  history, so one old foreign-currency import kept it on every month. It counts
+  the month on screen.
+- The spending breakdown (dashboard bars, Analytics legend) rounded each figure
+  to whole units on its own: £12.50 read £13. Each list now uses one precision,
+  with pence if any figure has them.
+
 ---
 
 ## Verified correct (no action)
