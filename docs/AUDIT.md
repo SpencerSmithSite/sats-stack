@@ -1094,8 +1094,7 @@ finding against the code before it was fixed. About 180 findings; the ones
 below are fixed, each with a test that fails on the old code unless noted.
 What is still open is in [`TODO.md`](TODO.md) item 15.
 
-**Status:** these landed as PRs #22–#28, each cut from `main`. Until they
-merge, `main` does not have them.
+**Status:** merged as PRs #22–#28 (docs #29).
 
 ### Screens that broke outright — #22
 - Both ways of deleting a transaction were broken: the confirmation dialogs
@@ -1185,6 +1184,23 @@ merge, `main` does not have them.
 - **"The only dead code is item 11's"**, and **`scripthash_test` covers
   `ElectrumService`** — it tests a helper defined inside itself.
 - **The Wells Fargo `skipHeaderRow` fix** was never applied to the profile.
+
+## Working through item 15 — from 2026-10-29
+
+Item 15's open list, fixed one PR at a time, in the order `TODO.md` gave.
+
+### xpub wallets can be re-synced and removed
+- `ManageWalletsSheet` was the app's only re-sync UI and nothing opened it, so
+  a wallet was never refreshed after it was added. The Transactions tab's
+  wallet button now opens it (adding a wallet is one tap further, from the
+  sheet). Each wallet can be removed, which deletes its rows after a
+  confirmation that names how many.
+- Re-adding a tracked key doubled the stack, because rows are hashed per
+  wallet. `addXpubWallet` refuses a key already tracked and points at Rescan;
+  the key is stored trimmed so the check can match.
+- A failed first sync left an empty wallet (it is created before the sync),
+  which the duplicate check would then have blocked a retry on. The sheet
+  removes it again.
 
 ---
 

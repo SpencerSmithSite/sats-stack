@@ -10,7 +10,7 @@ import '../../shared/theme/app_colors.dart';
 import '../../shared/widgets/btc_price_chip.dart';
 import '../../shared/widgets/empty_state.dart';
 import 'widgets/add_transaction_sheet.dart';
-import 'widgets/add_wallet_sheet.dart';
+import 'widgets/manage_wallets_sheet.dart';
 import 'widgets/transaction_edit_sheet.dart';
 import 'widgets/transaction_list_item.dart';
 
@@ -109,14 +109,14 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     );
   }
 
-  void _openAddWallet() {
+  void _openWallets() {
     showModalBottomSheet(
       context: context,
       useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder:
-          (_) => AddWalletSheet(
+          (_) => ManageWalletsSheet(
             xpubService: app.xpubService,
             walletService: app.walletService,
             btcPriceService: app.btcPriceService,
@@ -175,8 +175,8 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.account_balance_wallet_outlined),
-            onPressed: _openAddWallet,
-            tooltip: 'Add Bitcoin wallet (xpub, ypub or zpub)',
+            onPressed: _openWallets,
+            tooltip: 'Bitcoin wallets',
             padding: const EdgeInsets.all(8),
             visualDensity: VisualDensity.compact,
           ),

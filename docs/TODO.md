@@ -61,10 +61,9 @@ History lives elsewhere and is not duplicated into this file:
 ### 11. Wire up the Bitcoin data-source picker
 
 `ElectrumService`, `BitcoinNodeService` and `BitcoinDataSource` compile and
-are referenced by nothing; they exist for this feature. (`ManageWalletsSheet`
-used to be listed here too, but it is the app's only re-sync UI and should be
-wired up now — see item 15. `scripthash_test.dart` does not test
-`ElectrumService`: it tests a helper defined inside itself.)
+are referenced by nothing; they exist for this feature.
+(`scripthash_test.dart` does not test `ElectrumService`: it tests a helper
+defined inside itself.)
 
 - Settings → Servers gains a picker: Mempool/Esplora (today's only path), the
   user's own Electrum server, or Bitcoin Core RPC.
@@ -127,11 +126,6 @@ the order to do it; the first group can lose or misstate the user's data.
   there is no way to stop a series (deleting all but the anchor regenerates
   them), and each instance copies the anchor's `amountSats` rather than
   pricing its own date.
-- **xpub wallets cannot be re-synced or removed.** `ManageWalletsSheet` is
-  the only re-sync UI and nothing opens it, so a wallet is never refreshed
-  after it is added; re-adding the xpub doubles the stack, and a failed first
-  sync leaves an empty wallet (it is created before the sync). Item 11 lists
-  the sheet as dead code; it should be wired up first, on its own.
 - **Budgets have no currency**: switching currency reinterprets every budget
   (and can fire an overspend notification).
 - **Notification dedupe is per session**: a new month never alerts again

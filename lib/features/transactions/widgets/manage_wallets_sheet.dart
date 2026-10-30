@@ -7,8 +7,11 @@ import '../../../core/services/xpub_service.dart';
 import '../../../shared/theme/app_colors.dart';
 import 'add_wallet_sheet.dart';
 
-/// Bottom sheet that lists existing xpub wallets (with per-wallet Rescan
-/// buttons) and provides a shortcut to add a new xpub / zpub wallet.
+/// Bottom sheet that lists existing xpub wallets — each can be rescanned or
+/// removed — and provides a shortcut to add a new one.
+///
+/// This is the only place a wallet is ever refreshed after it is added, so it
+/// is what the Transactions tab's wallet button opens.
 class ManageWalletsSheet extends StatefulWidget {
   const ManageWalletsSheet({
     super.key,
@@ -28,6 +31,10 @@ class ManageWalletsSheet extends StatefulWidget {
 enum _Step { list, syncing, done }
 
 class _ManageWalletsSheetState extends State<ManageWalletsSheet> {
+  /// Built once: a stream created in `build` resubscribes on every rebuild,
+  /// and the list rebuilds on each progress line.
+  late final Stream<List<Wallet>> _wallets =
+      widget.walletService.watchXpubWallets();
   _Step _step = _Step.list;
   String _syncStatus = '';
   XpubSyncResult? _syncResult;
@@ -65,6 +72,38 @@ class _ManageWalletsSheetState extends State<ManageWalletsSheet> {
         ).showSnackBar(SnackBar(content: Text('Rescan failed: $e')));
       }
     }
+  }
+
+  Future<void> _remove(Wallet wallet) async {
+    final count = await widget.walletService.transactionCount(wallet.id);
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder:
+          (dialogContext) => AlertDialog(
+            title: Text('Remove ${wallet.label}?'),
+            content: Text(
+              '${count == 0 ? 'It has no transactions in Sats Stack.' : 'Its $count transaction${count == 1 ? '' : 's'} will be deleted from Sats Stack, including any categories or notes you set on them.'}'
+              ' Nothing changes on the blockchain, and you can add the key '
+              'again later.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                style: TextButton.styleFrom(
+                  foregroundColor: Theme.of(dialogContext).colorScheme.error,
+                ),
+                child: const Text('Remove'),
+              ),
+            ],
+          ),
+    );
+    if (confirmed != true) return;
+    await widget.walletService.deleteXpubWallet(wallet.id);
   }
 
   void _openAddWallet() {
@@ -130,8 +169,9 @@ class _ManageWalletsSheetState extends State<ManageWalletsSheet> {
               const Divider(height: 1),
               switch (_step) {
                 _Step.list => _ListBody(
-                  walletService: widget.walletService,
+                  wallets: _wallets,
                   onRescan: _rescan,
+                  onRemove: _remove,
                   onAdd: _openAddWallet,
                 ),
                 _Step.syncing => _SyncingBody(
@@ -161,13 +201,15 @@ class _ManageWalletsSheetState extends State<ManageWalletsSheet> {
 
 class _ListBody extends StatelessWidget {
   const _ListBody({
-    required this.walletService,
+    required this.wallets,
     required this.onRescan,
+    required this.onRemove,
     required this.onAdd,
   });
 
-  final WalletService walletService;
+  final Stream<List<Wallet>> wallets;
   final Future<void> Function(Wallet) onRescan;
+  final Future<void> Function(Wallet) onRemove;
   final VoidCallback onAdd;
 
   Color _parseColor(String hex) {
@@ -178,8 +220,8 @@ class _ListBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return FutureBuilder<List<Wallet>>(
-      future: walletService.getXpubWallets(),
+    return StreamBuilder<List<Wallet>>(
+      stream: wallets,
       builder: (context, snapshot) {
         final wallets = snapshot.data ?? [];
         return Padding(
@@ -227,17 +269,27 @@ class _ListBody extends StatelessWidget {
                         fontSize: 11,
                       ),
                     ),
-                    trailing: OutlinedButton.icon(
-                      onPressed: () => onRescan(wallet),
-                      icon: const Icon(Icons.sync, size: 16),
-                      label: const Text('Rescan'),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: () => onRescan(wallet),
+                          icon: const Icon(Icons.sync, size: 16),
+                          label: const Text('Rescan'),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            visualDensity: VisualDensity.compact,
+                          ),
                         ),
-                        visualDensity: VisualDensity.compact,
-                      ),
+                        IconButton(
+                          onPressed: () => onRemove(wallet),
+                          icon: const Icon(Icons.delete_outline, size: 20),
+                          tooltip: 'Remove ${wallet.label}',
+                        ),
+                      ],
                     ),
                   ),
                 const SizedBox(height: 8),
