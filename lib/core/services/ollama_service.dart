@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:drift/drift.dart' show OrderingTerm;
 import 'package:flutter/foundation.dart' show ValueNotifier;
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart' show DateFormat;
@@ -208,6 +207,51 @@ class OllamaService {
       default:
         return provider.dataRecipient;
     }
+  }
+
+  /// What the user should know about how [url] is reached, or null when
+  /// there is nothing to say.
+  ///
+  /// [recipientFor] treats a server on the local network as the user's own
+  /// hardware, so no off-device banner shows for it — but the old copy then
+  /// said "nothing leaves", which is not what happens: the figures cross the
+  /// network to another machine, and on a shared network that address could
+  /// be anyone's. And a remote server over plain `http://` got no warning at
+  /// all, though everything sent to it travels readable.
+  static String? transportNoteFor(AiProvider provider, String url) {
+    if (provider != AiProvider.ollama &&
+        provider != AiProvider.lmStudio &&
+        provider != AiProvider.maple) {
+      return null;
+    }
+    final normalized =
+        normalizeServerUrl(url, defaultScheme: 'http') ?? url.trim();
+    if (normalized.isEmpty || isLoopbackEndpoint(normalized)) return null;
+    final uri = Uri.tryParse(normalized);
+    final host = uri?.host ?? '';
+    if (host.isEmpty) return null;
+    if (isLocalEndpoint(normalized)) {
+      return 'Sent over your local network to $host, and no further. On a '
+          'shared network — a café, an office — make sure that address is '
+          'your own machine.';
+    }
+    if (uri!.scheme == 'http') {
+      return 'Sent unencrypted (http://), so anything between here and $host '
+          'can read it. Use https:// for a server outside your network.';
+    }
+    return null;
+  }
+
+  /// Whether [url] is this device itself — the only case where nothing
+  /// crosses a network at all.
+  static bool isLoopbackEndpoint(String url) {
+    if (url.trim().isEmpty) return true;
+    final host = Uri.tryParse(url.trim())?.host ?? '';
+    return host == 'localhost' ||
+        host == '::1' ||
+        host == '0.0.0.0' ||
+        host.endsWith('.localhost') ||
+        RegExp(r'^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$').hasMatch(host);
   }
 
   /// The URL the active provider sends to, for the providers whose endpoint
@@ -419,6 +463,7 @@ class OllamaService {
     }
 
     await _migrateMapleKeyToKeychain(map);
+    await _refileKeysUnderDeviceOnlyClass(map);
 
     // Active provider
     var providerKey = map[AppConstants.settingAiProvider];
@@ -674,6 +719,23 @@ class OllamaService {
         // launches without the app doing anything.
         _onDeviceReady = value;
     }
+  }
+
+  /// Rewrites each stored key once, so it moves to the keychain class
+  /// `SecureKeyStore` now asks for — see the comment there. Recorded in
+  /// settings, so it runs once per install.
+  Future<void> _refileKeysUnderDeviceOnlyClass(Map<String, String> map) async {
+    if (map[AppConstants.settingKeysDeviceOnly] == 'true') return;
+    var ok = true;
+    for (final p in CloudProvider.values) {
+      final key = _cloudKeys[p.id] ?? '';
+      if (key.isNotEmpty) ok &= await _keyStore.write(p.id, key);
+    }
+    if (_mapleApiKey.isNotEmpty) {
+      ok &= await _keyStore.write(_mapleKeyId, _mapleApiKey);
+    }
+    // Tried again next launch if the keychain refused a write.
+    if (ok) await _upsertSetting(AppConstants.settingKeysDeviceOnly, 'true');
   }
 
   Future<void> _upsertSetting(String key, String value) async {
@@ -1185,26 +1247,11 @@ Top spending categories:
 
   // ── Persistence ───────────────────────────────────────────────────────────
 
-  Future<void> saveConversation({
-    required String prompt,
-    required String response,
-  }) async {
-    final model = selectedModel ?? 'unknown';
-    await _db
-        .into(_db.aiConversations)
-        .insert(
-          AiConversationsCompanion.insert(
-            prompt: prompt,
-            response: response,
-            model: model,
-          ),
-        );
-  }
-
-  Future<List<AiConversation>> getHistory({int limit = 20}) {
-    return (_db.select(_db.aiConversations)
-          ..orderBy([(t) => OrderingTerm.desc(t.createdAt)])
-          ..limit(limit))
-        .get();
-  }
+  /// Deletes every stored chat transcript.
+  ///
+  /// Each question and answer used to be written to `ai_conversations` and
+  /// never read back — no screen shows them — so they only accumulated in the
+  /// database, and so in every export of it. Nothing writes there now; this
+  /// clears what earlier builds left, and is cheap once the table is empty.
+  Future<void> clearStoredTranscripts() => _db.delete(_db.aiConversations).go();
 }

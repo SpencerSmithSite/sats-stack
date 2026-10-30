@@ -232,12 +232,6 @@ class _AiChatScreenState extends State<AiChatScreen> {
           },
           onDone: () async {
             final response = buffer.toString();
-            if (response.isNotEmpty) {
-              await app.ollamaService.saveConversation(
-                prompt: text,
-                response: response,
-              );
-            }
             if (mounted) {
               setState(() {
                 _messages = [
@@ -1123,14 +1117,24 @@ class _AiSettingsSheetState extends State<_AiSettingsSheet> {
                         widget.provider,
                         value.text,
                       );
-                      if (recipient == null) return const SizedBox.shrink();
-                      return Padding(
-                        padding: const EdgeInsets.only(top: 12),
-                        child: AiPrivacyDisclosure(
-                          provider: widget.provider,
-                          recipient: recipient,
-                          compact: true,
-                        ),
+                      final note = OllamaService.transportNoteFor(
+                        widget.provider,
+                        value.text,
+                      );
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (recipient != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 12),
+                              child: AiPrivacyDisclosure(
+                                provider: widget.provider,
+                                recipient: recipient,
+                                compact: true,
+                              ),
+                            ),
+                          TransportNote(note),
+                        ],
                       );
                     },
                   ),

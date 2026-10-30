@@ -58,9 +58,10 @@ anything depends on them.
   key is already random.
 - Checked immediately with `SELECT count(*) FROM sqlite_master`: a wrong key
   does not fail at `PRAGMA key`, only at the first read.
-- Keychain access is already `first_unlock` on iOS and macOS **[verified:
-  `secure_key_store.dart`]**, so anything that opens the database after the
-  first unlock since boot works. Nothing in the app runs before that today.
+- Keychain access is `first_unlock_this_device` on iOS and `first_unlock` on
+  macOS (iOS changed 2026-10-29; see `secure_key_store.dart`), so anything
+  that opens the database after the first unlock since boot works. Nothing in
+  the app runs before that today.
 
 **The rule that matters most: never create a key when an encrypted database
 already exists.** If the key cannot be read but the file is encrypted, writing
@@ -206,8 +207,10 @@ the two below are still on hold.
   database — contrary to "What encrypted will mean". `first_unlock_this_device`
   makes a backup useless without an export; the current class makes it
   portable but unprotected. Either way it should be chosen and written down,
-  and the restore paths tested. (The comment justifying `first_unlock` cites a
-  background refresh; the app has no background execution at all.)
+  and the restore paths tested. (The comment justifying `first_unlock` cited a
+  background refresh; the app has no background execution at all. The API
+  keys moved to `first_unlock_this_device` on iOS on 2026-10-29 for that
+  reason; the database key still needs its own decision.)
 - **Export compliance (section 8):** the annual self-classification report
   was removed for most mass-market items by the March 2021 BIS rule. Check
   current guidance rather than relying on that sentence.

@@ -501,14 +501,21 @@ class ProviderConfigSection extends StatelessWidget {
                 provider,
                 value.text,
               );
-              if (recipient == null) return const SizedBox.shrink();
-              return Padding(
-                padding: const EdgeInsets.only(top: 14),
-                child: AiPrivacyDisclosure(
-                  provider: provider,
-                  recipient: recipient,
-                  compact: true,
-                ),
+              final note = OllamaService.transportNoteFor(provider, value.text);
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (recipient != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 14),
+                      child: AiPrivacyDisclosure(
+                        provider: provider,
+                        recipient: recipient,
+                        compact: true,
+                      ),
+                    ),
+                  TransportNote(note),
+                ],
               );
             },
           ),
