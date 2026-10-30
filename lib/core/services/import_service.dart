@@ -21,7 +21,52 @@ import 'btc_price_service.dart';
 import 'inference/inference_backend.dart';
 import 'ollama_service.dart';
 
-/// Thrown when [ImportService.cancelImport] is called during an active import.
+/// Cancels one import. Create one per import, pass it to
+/// [ImportService.importFile] or [ImportService.importImage], and cancel it —
+/// including when the screen that started it goes away.
+class ImportCancelToken {
+  bool _cancelled = false;
+  http.Client? _client;
+
+  bool get isCancelled => _cancelled;
+
+  /// Stops the import at its next check, and aborts its in-flight request.
+  void cancel() {
+    _cancelled = true;
+    _client?.close();
+    _client = null;
+  }
+
+  /// The client the import's current AI request is using, so [cancel] can
+  /// abort it. Closed at once if the import was already cancelled.
+  void _attach(http.Client? client) {
+    _client = client;
+    if (_cancelled) client?.close();
+  }
+}
+
+/// The state that belongs to one import rather than to the service.
+class _ImportRun {
+  _ImportRun(this.token);
+
+  /// Outside any import: never cancelled, nothing consented to.
+  static final none = _ImportRun(ImportCancelToken());
+
+  final ImportCancelToken token;
+
+  /// Set once the user has answered the off-device prompt, so a multi-tier
+  /// import never asks twice.
+  bool? consent;
+
+  /// The user said yes, and it is to be remembered once the import completes —
+  /// see `_finishImport`.
+  bool rememberConsent = false;
+
+  /// An off-device AI tier ran, so the file was uploaded.
+  bool sent = false;
+}
+
+/// Thrown when an import's [ImportCancelToken] is cancelled during it.
 class ImportCancelledException implements Exception {
   const ImportCancelledException();
 }
@@ -245,30 +290,39 @@ class ImportService {
   // queued and delivered after the await-for loop exits, causing the entire
   // model output to appear at once instead of progressively.
   final _tokenController = StreamController<String>.broadcast(sync: true);
-  http.Client? _activeImportClient;
-  bool _importCancelled = false;
+
+  /// The most recently started import — what [cancelImport] cancels.
+  _ImportRun? _latest;
 
   /// Stream of raw AI response tokens emitted during Tier 1 Ollama parsing.
   /// Subscribe while an import is running to show live model output.
   Stream<String> get importTokenStream => _tokenController.stream;
 
-  /// Aborts the in-flight Ollama request and signals the import to stop.
-  void cancelImport() {
-    _importCancelled = true;
-    _activeImportClient?.close();
-    _activeImportClient = null;
-  }
+  /// Cancels the most recently started import. Prefer passing an
+  /// [ImportCancelToken] and cancelling that: it cannot reach the wrong one.
+  void cancelImport() => _latest?.token.cancel();
 
-  void _resetImportState() {
-    _importCancelled = false;
-    _activeImportClient = null;
-    _consentThisImport = null;
-    _consentToRemember = false;
-    _sentThisImport = false;
+  /// The import the current code is running for.
+  ///
+  /// Each import runs in a zone carrying its own [_ImportRun], so everything
+  /// it awaits sees its own cancel flag and consent answers. They used to be
+  /// fields on this singleton: starting a second import reset the first's
+  /// cancel flag, so a cancelled import could carry on and upload the file.
+  _ImportRun get _run =>
+      Zone.current[#_importRun] as _ImportRun? ?? _ImportRun.none;
+
+  /// Runs [body] as a new import.
+  Future<ImportResult> _asNewRun(
+    ImportCancelToken? token,
+    Future<ImportResult> Function() body,
+  ) {
+    final run = _ImportRun(token ?? ImportCancelToken());
+    _latest = run;
+    return runZoned(body, zoneValues: {#_importRun: run});
   }
 
   void _checkCancelled() {
-    if (_importCancelled) throw const ImportCancelledException();
+    if (_run.token.isCancelled) throw const ImportCancelledException();
   }
 
   // ── Off-device consent ───────────────────────────────────────────────────
@@ -280,17 +334,6 @@ class ImportService {
   // gate existed nothing on the import screens said it happened at all.
   //
   // A private backend needs no gate: nothing leaves the device.
-
-  /// Set for the duration of one import once the user has answered, so a
-  /// multi-tier import never asks twice.
-  bool? _consentThisImport;
-
-  /// The user said yes in this import's dialog, and it is to be remembered
-  /// once the import completes — see [_finishImport].
-  bool _consentToRemember = false;
-
-  /// An off-device AI tier ran during this import, so the file was uploaded.
-  bool _sentThisImport = false;
 
   /// Whether the user has already agreed to let the active provider's
   /// recipient read their statements. Always true for a private backend.
@@ -367,31 +410,36 @@ class ImportService {
     Future<bool> Function(String recipient)? onOffDeviceConsent,
   ) async {
     if (!ollama.sendsDataOffDevice) return true;
-    if (_consentThisImport != null) return _consentThisImport!;
-    if (await offDeviceImportAllowed()) return _consentThisImport = true;
+    final run = _run;
+    if (run.consent != null) return run.consent!;
+    if (await offDeviceImportAllowed()) return run.consent = true;
     final recipient = ollama.activeDataRecipient;
     if (onOffDeviceConsent == null || recipient == null) {
-      return _consentThisImport = false;
+      return run.consent = false;
     }
     final granted = await onOffDeviceConsent(recipient);
-    _consentToRemember = granted;
-    return _consentThisImport = granted;
+    // Answered after a cancel: the dialog may still have been up when the
+    // user left the screen, and a yes then must not start an upload.
+    _checkCancelled();
+    run.rememberConsent = granted;
+    return run.consent = granted;
   }
 
   /// Called immediately before an AI tier hands the file to the backend.
   void _markSending() {
-    if (ollama.sendsDataOffDevice) _sentThisImport = true;
+    _checkCancelled();
+    if (ollama.sendsDataOffDevice) _run.sent = true;
   }
 
   /// Completes an import that ran to the end without being cancelled:
   /// remembers a consent given during it, and records who read the file.
   Future<ImportResult> _finishImport(ImportResult result) async {
-    if (_consentToRemember) await setOffDeviceImportAllowed(true);
+    if (_run.rememberConsent) await setOffDeviceImportAllowed(true);
     final aiTier =
         result.tierUsed == ImportTier.ollama ||
         result.tierUsed == ImportTier.image;
     return result.withProvenance(
-      sentTo: _sentThisImport ? ollama.activeDataRecipient : null,
+      sentTo: _run.sent ? ollama.activeDataRecipient : null,
       aiLabel: aiTier ? ollama.activeProvider.label : null,
     );
   }
@@ -433,8 +481,8 @@ class ImportService {
     required int sourceId,
     void Function(String stage)? onStageChange,
     Future<bool> Function(String recipient)? onOffDeviceConsent,
-  }) async {
-    _resetImportState();
+    ImportCancelToken? cancelToken,
+  }) => _asNewRun(cancelToken, () async {
     final lname = fileName.toLowerCase();
     final fileType =
         lname.endsWith('.pdf')
@@ -467,7 +515,7 @@ class ImportService {
       await _applyDescriptionMappings(result.transactions, sourceId);
     }
     return _finishImport(result);
-  }
+  });
 
   /// Entry point for image import (camera or photo library).
   /// Sends the image to the active AI provider using the vision API and parses
@@ -477,8 +525,8 @@ class ImportService {
     required int sourceId,
     void Function(String stage)? onStageChange,
     Future<bool> Function(String recipient)? onOffDeviceConsent,
-  }) async {
-    _resetImportState();
+    ImportCancelToken? cancelToken,
+  }) => _asNewRun(cancelToken, () async {
     final fileName =
         imagePath.contains('/')
             ? imagePath.split('/').last
@@ -494,7 +542,7 @@ class ImportService {
       await _applyDescriptionMappings(result.transactions, sourceId);
     }
     return _finishImport(result);
-  }
+  });
 
   /// Reads a CSV file and returns an [ImportResult] ready for the manual
   /// column mapper screen. Used when falling back from a timeout.
@@ -504,7 +552,7 @@ class ImportService {
   ) async {
     try {
       final content = await File(filePath).readAsString();
-      final allRows = _parseCsvRows(content);
+      final allRows = _mappableRows(content);
       return ImportResult(
         transactions: [],
         needsManualMapping: true,
@@ -669,7 +717,7 @@ Rules:
 - Return ONLY the JSON array, no explanation, no markdown, no code fences''';
 
     final client = http.Client();
-    _activeImportClient = client;
+    _run.token._attach(client);
 
     try {
       onStageChange?.call('Sending to ${ollama.selectedModel ?? 'AI'}…');
@@ -685,7 +733,7 @@ Rules:
         mimeType: mimeType,
         client: client,
       )) {
-        if (_importCancelled) break;
+        if (_run.token.isCancelled) break;
         buffer.write(token);
         _tokenController.add(token);
         tokenCount++;
@@ -750,7 +798,7 @@ Rules:
       // The backend's own explanation — a rejected key, an image too large —
       // is worth more than the generic advice the preview would otherwise
       // show. It used to be swallowed by the catch-all below.
-      if (_importCancelled) throw const ImportCancelledException();
+      _checkCancelled();
       return ImportResult(
         transactions: [],
         fileType: ImportFileType.image,
@@ -759,7 +807,7 @@ Rules:
         errorMessage: e.message,
       );
     } catch (_) {
-      if (_importCancelled) throw const ImportCancelledException();
+      _checkCancelled();
       return ImportResult(
         transactions: [],
         fileType: ImportFileType.image,
@@ -767,7 +815,7 @@ Rules:
         isPdfNoAi: true,
       );
     } finally {
-      _activeImportClient = null;
+      _run.token._attach(null);
       client.close();
     }
   }
@@ -885,15 +933,15 @@ Rules:
     }
 
     // --- Tier 3 signal: manual column mapping needed ---
-    final rawHeaders = allRows[0];
+    final mappable = _mappableRows(content);
     return ImportResult(
       transactions: [],
       needsManualMapping: true,
       fileType: ImportFileType.csv,
       fileName: fileName,
       rawCsvContent: content,
-      csvRows: allRows,
-      csvHeaders: rawHeaders,
+      csvRows: mappable,
+      csvHeaders: mappable.isNotEmpty ? mappable[0] : const [],
     );
   }
 
@@ -999,7 +1047,7 @@ Rules:
     void Function(String)? onStageChange,
   }) async {
     final client = http.Client();
-    _activeImportClient = client;
+    _run.token._attach(client);
 
     try {
       const maxLen = 100000;
@@ -1039,7 +1087,7 @@ FILE CONTENT:
       final buffer = StringBuffer();
       var tokenCount = 0;
       await for (final token in ollama.chat(messages, client: client)) {
-        if (_importCancelled) break;
+        if (_run.token.isCancelled) break;
         buffer.write(token);
         _tokenController.add(token); // sync: true — delivered immediately to UI
         tokenCount++;
@@ -1093,10 +1141,10 @@ FILE CONTENT:
     } on ImportCancelledException {
       rethrow;
     } catch (_) {
-      if (_importCancelled) throw const ImportCancelledException();
+      _checkCancelled();
       return null;
     } finally {
-      _activeImportClient = null;
+      _run.token._attach(null);
       client.close();
     }
   }
@@ -1201,6 +1249,19 @@ FILE CONTENT:
   /// institution profile recognises, or that names a date column and an
   /// amount column. Row 0 when none does, which is what a file with no
   /// header at all (a positional profile) needs.
+  /// [csvContent]'s rows from the detected header row on — what the column
+  /// mapper shows and what a mapping's column numbers refer to.
+  ///
+  /// The mapper used to take row 0 as the header, which for an export opening
+  /// with a title or an account summary offered the title as the column names,
+  /// and every mapped column was then read against the wrong rows.
+  List<List<String>> _mappableRows(String csvContent) {
+    final rows = _parseCsvRows(csvContent);
+    if (rows.isEmpty) return rows;
+    final header = _findHeaderRow(rows);
+    return header == 0 ? rows : rows.sublist(header);
+  }
+
   static int _findHeaderRow(List<List<String>> rows) {
     final limit = rows.length < 15 ? rows.length : 15;
     for (var i = 0; i < limit; i++) {
@@ -1448,7 +1509,7 @@ FILE CONTENT:
       'parseWithMapping needs the account currency or the source to read it from',
     );
     final rowCurrency = currency ?? await _sourceCurrency(sourceId!);
-    final allRows = _parseCsvRows(csvContent);
+    final allRows = _mappableRows(csvContent);
     if (allRows.length < 2) return null;
 
     final dots = _inferDotGrouping([
@@ -2350,17 +2411,12 @@ FILE CONTENT:
     if (raw.isEmpty) return null;
 
     // YYYY-MM-DD or YYYY-MM-DDTHH:mm
-    final iso = RegExp(r'^(\d{4})-(\d{2})-(\d{2})').firstMatch(raw);
+    final iso = RegExp(r'^(\d{4})[-/](\d{2})[-/](\d{2})').firstMatch(raw);
     if (iso != null) {
-      return DateTime.tryParse(
-        '${iso.group(1)}-${iso.group(2)}-${iso.group(3)}',
-      );
-    }
-    // YYYY/MM/DD
-    final isoSlash = RegExp(r'^(\d{4})/(\d{2})/(\d{2})').firstMatch(raw);
-    if (isoSlash != null) {
-      return DateTime.tryParse(
-        '${isoSlash.group(1)}-${isoSlash.group(2)}-${isoSlash.group(3)}',
+      return _calendarDate(
+        int.parse(iso.group(1)!),
+        int.parse(iso.group(2)!),
+        int.parse(iso.group(3)!),
       );
     }
     // Two numbers then a year, separated by / - or . — the last covers
@@ -2381,9 +2437,8 @@ FILE CONTENT:
       final firstIsDay = first > 12 || (dayFirst && second <= 12);
       final dy = firstIsDay ? first : second;
       final mo = firstIsDay ? second : first;
-      if (mo >= 1 && mo <= 12 && dy >= 1 && dy <= 31) {
-        return DateTime(yr, mo, dy);
-      }
+      final date = _calendarDate(yr, mo, dy);
+      if (date != null) return date;
     }
     // DD MMM YYYY  or  MMM DD YYYY
     final months = {
@@ -2404,53 +2459,72 @@ FILE CONTENT:
     if (dmy != null) {
       final mo = months[dmy.group(2)!.toLowerCase()];
       if (mo != null) {
-        return DateTime(int.parse(dmy.group(3)!), mo, int.parse(dmy.group(1)!));
+        return _calendarDate(
+          int.parse(dmy.group(3)!),
+          mo,
+          int.parse(dmy.group(1)!),
+        );
       }
     }
     final mdy = RegExp(r'^([A-Za-z]{3})\s+(\d{1,2})\s+(\d{4})').firstMatch(raw);
     if (mdy != null) {
       final mo = months[mdy.group(1)!.toLowerCase()];
       if (mo != null) {
-        return DateTime(int.parse(mdy.group(3)!), mo, int.parse(mdy.group(2)!));
+        return _calendarDate(
+          int.parse(mdy.group(3)!),
+          mo,
+          int.parse(mdy.group(2)!),
+        );
       }
     }
     return null;
   }
 
+  /// The calendar date [year]-[month]-[day], or null if there is none.
+  ///
+  /// `DateTime(2025, 25, 12)` is not an error, it is December 2026 — and
+  /// `DateTime.tryParse` normalises the same way — so a day/month mix-up came
+  /// out as a date a year or two away rather than being rejected.
+  static DateTime? _calendarDate(int year, int month, int day) {
+    if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+    final date = DateTime(year, month, day);
+    return date.month == month && date.day == day ? date : null;
+  }
+
+  /// [raw] read in the column mapper's chosen [format].
+  ///
+  /// Any of `/`, `-` and `.` separates the parts: the format names the order,
+  /// and a DD/MM export written 25.12.2025 or 25-12-2025 used to fall through
+  /// to the guessing parser. A date that does not exist in the chosen order is
+  /// rejected, so a wrong choice shows as unparsed rows rather than as dates.
   DateTime? _parseDateWithFormat(String raw, String format) {
     raw = raw.trim().replaceAll('"', '');
     if (raw.isEmpty) return null;
-    if (format == 'YYYY-MM-DD') return DateTime.tryParse(raw);
-    if (format == 'MM/DD/YYYY') {
-      final m = RegExp(r'^(\d{1,2})/(\d{1,2})/(\d{4})').firstMatch(raw);
-      if (m != null) {
-        return DateTime.tryParse(
-          '${m.group(3)}-${m.group(1)!.padLeft(2, '0')}-${m.group(2)!.padLeft(2, '0')}',
-        );
-      }
-    }
-    if (format == 'DD/MM/YYYY') {
-      final m = RegExp(r'^(\d{1,2})/(\d{1,2})/(\d{4})').firstMatch(raw);
-      if (m != null) {
-        return DateTime.tryParse(
-          '${m.group(3)}-${m.group(2)!.padLeft(2, '0')}-${m.group(1)!.padLeft(2, '0')}',
-        );
-      }
-    }
-    if (format == 'MM-DD-YYYY') {
-      final m = RegExp(r'^(\d{1,2})-(\d{1,2})-(\d{4})').firstMatch(raw);
-      if (m != null) {
-        return DateTime.tryParse(
-          '${m.group(3)}-${m.group(1)!.padLeft(2, '0')}-${m.group(2)!.padLeft(2, '0')}',
-        );
-      }
-    }
-    if (format == 'MM/DD/YY') {
-      final m = RegExp(r'^(\d{1,2})/(\d{1,2})/(\d{2})(?!\d)').firstMatch(raw);
-      if (m != null) {
-        final yr = _expandYear(int.parse(m.group(3)!));
-        return DateTime(yr, int.parse(m.group(1)!), int.parse(m.group(2)!));
-      }
+    final ymd = RegExp(r'^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})(?!\d)');
+    final xyY = RegExp(r'^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})(?!\d)');
+    final xyy = RegExp(r'^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2})(?!\d)');
+    int g(RegExpMatch m, int i) => int.parse(m.group(i)!);
+
+    switch (format) {
+      case 'YYYY-MM-DD':
+        final m = ymd.firstMatch(raw);
+        return m == null ? null : _calendarDate(g(m, 1), g(m, 2), g(m, 3));
+      case 'MM/DD/YYYY' || 'MM-DD-YYYY':
+        final m = xyY.firstMatch(raw);
+        return m == null ? null : _calendarDate(g(m, 3), g(m, 1), g(m, 2));
+      case 'DD/MM/YYYY':
+        final m = xyY.firstMatch(raw);
+        return m == null ? null : _calendarDate(g(m, 3), g(m, 2), g(m, 1));
+      case 'MM/DD/YY':
+        final m = xyy.firstMatch(raw);
+        return m == null
+            ? null
+            : _calendarDate(_expandYear(g(m, 3)), g(m, 1), g(m, 2));
+      case 'DD/MM/YY':
+        final m = xyy.firstMatch(raw);
+        return m == null
+            ? null
+            : _calendarDate(_expandYear(g(m, 3)), g(m, 2), g(m, 1));
     }
     return _parseDate(raw);
   }

@@ -1270,6 +1270,25 @@ Item 15's open list, fixed one PR at a time, in the order `TODO.md` gave.
   used to say), which must accompany it: `assets/fonts/OFL.txt` is bundled,
   registered with `LicenseRegistry`, and Settings → About → Licences shows it.
 
+### Import: cancelling, and the column mapper
+- The cancel flag, the consent answers and the "was it uploaded" flag lived
+  on the `ImportService` singleton, so starting an import reset the previous
+  one's: an import cancelled while its consent dialog was up, answered yes a
+  moment later, carried on and uploaded. Each import now runs in a zone with
+  its own `_ImportRun`, cancelled through its own `ImportCancelToken`; a
+  consent answered after a cancel is refused before anything is sent.
+- Leaving the import screen did not cancel. It cancels its token on dispose.
+- The column mapper took row 0 as the header, so an export opening with a
+  title showed the title as column names and read the mapping against the
+  wrong rows. The mapper and `parseWithMapping` both start from the detected
+  header row.
+- Dates overflowed rather than being rejected: `DateTime` and
+  `DateTime.tryParse` normalise, so 25/12/2025 read as MM/DD became 2027 and
+  31 February became 3 March, in the mapper and the guessing parser alike.
+  `_calendarDate` rejects a date that does not exist. The mapper's formats
+  accept `/`, `-` and `.`; DD/MM/YY is offered; and a column with a first part
+  over 12 is detected as day-first.
+
 ---
 
 ## Verified correct (no action)
