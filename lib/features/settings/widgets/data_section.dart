@@ -44,25 +44,6 @@ class _DataSectionState extends State<DataSection> {
     }
   }
 
-  /// Every sqlite file starts with this, so a user who picks the wrong file in
-  /// the restore dialog is told instead of losing their data to it.
-  static const _sqliteMagic = 'SQLite format 3';
-
-  Future<bool> _looksLikeSqlite(File file) async {
-    try {
-      if (!file.existsSync()) return false;
-      final handle = await file.open();
-      try {
-        final header = await handle.read(_sqliteMagic.length);
-        return String.fromCharCodes(header) == _sqliteMagic;
-      } finally {
-        await handle.close();
-      }
-    } catch (_) {
-      return false;
-    }
-  }
-
   Future<void> _importDb() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -98,12 +79,15 @@ class _DataSectionState extends State<DataSection> {
       if (result == null || result.files.single.path == null) return;
 
       final srcFile = File(result.files.single.path!);
-      if (!await _looksLikeSqlite(srcFile)) {
-        if (mounted) {
-          _showSnack(
-            'That file is not a Sats Stack database — nothing changed',
-          );
-        }
+      // Opened as a copy and checked before anything is replaced: the
+      // header check alone let a damaged backup through, and the app then
+      // could not launch.
+      final problem = await backupProblem(
+        srcFile,
+        schemaVersion: app.db.schemaVersion,
+      );
+      if (problem != null) {
+        if (mounted) _showSnack('$problem — nothing changed');
         return;
       }
 
@@ -128,7 +112,8 @@ class _DataSectionState extends State<DataSection> {
         body: switch (restore.outcome) {
           RestoreOutcome.replaced =>
             'The database has been replaced. Quit '
-                'and reopen Sats Stack to load the imported data.',
+                'and reopen Sats Stack to load the imported data. Your '
+                'previous data is kept until it opens, then deleted.',
           RestoreOutcome.failedOriginalRestored =>
             'The backup could not be '
                 'copied in (${restore.error}). Your previous data has been put '

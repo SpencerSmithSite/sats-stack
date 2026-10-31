@@ -383,14 +383,14 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** Restoring a backup writes `<db>.sqlite.bak`, and nothing ever deletes it. Reset only runs `DELETE`s, with no `VACUUM` or `secure_delete`, so deleted rows also stay in free pages.
 - **Impact:** After any import followed by "Delete Everything", the earlier database stays beside the live one, including transactions, xpubs and server URLs. The dialog promises permanent deletion.
 - **Fix direction:** Remove the `.bak` once a restore succeeds and on reset, and `VACUUM` after reset.
-- **Status:** open
+- **Status:** fixed in #58. The `.bak` is deleted once the restored database has opened, and on reset, which also runs `VACUUM` so deleted rows don't survive in free pages (checked: a deleted payee's text was in the file before, and isn't after). Pinned by `backup_and_restore_test`.
 
 ### D-5 · Medium · reliability — Restore checks only the file header, and a database that won't open bricks launch
 - **Where:** `lib/features/settings/widgets/data_section.dart` (`_looksLikeSqlite`); `lib/main.dart:72-102`.
 - **What:** The only check is the `'SQLite format 3'` header. The first queries in `main()` are not guarded.
 - **Impact:** A truncated, corrupt or foreign SQLite file passes the check, then throws before `runApp`, and the app can't launch. The good data sits in `.bak` with no way back to it.
 - **Fix direction:** Open the candidate read-only first and check `integrity_check`, `user_version` and the expected tables. Catch open failures at startup and offer to restore the `.bak`.
-- **Status:** open
+- **Status:** fixed in #58. A backup is now checked before anything is replaced: version 0 (not ours) and newer versions are refused, and a copy is opened as the app would (migrations included) and integrity-checked. A database that won't open at launch shows a recovery screen that can put the previous data back, instead of the app failing to start. Pinned by `backup_and_restore_test`.
 
 ### D-6 · Low · correctness — Spending exactly equal to a budget is flagged as over
 - **Where:** `lib/core/models/budget_progress.dart:39` (`spentFiat > limit`); `budget_service.dart:166-168`.

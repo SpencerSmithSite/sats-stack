@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/database/database.dart';
 import '../../../main.dart' as app;
 import '../../../shared/constants/app_constants.dart';
 import '../../../shared/theme/app_colors.dart';
@@ -41,6 +42,13 @@ class _DangerZoneSectionState extends State<DangerZoneSection> {
     if (confirmed != true || !mounted) return;
 
     await app.db.resetAndReseed();
+    // Deleted rows stay in the file's free pages, and a restore leaves the
+    // previous database beside it as a `.bak`; the dialog promised both were
+    // gone. Best effort: a reset that has already emptied the tables carries
+    // on to the defaults below either way.
+    try {
+      await eraseDeletedData(app.db, await databaseFile());
+    } catch (_) {}
     // API keys live in the keychain, so `resetAndReseed` cannot reach them.
     // Leaving a user's credentials behind after "delete everything" would be a
     // genuine surprise — and on a shared or resold device, a real leak.
