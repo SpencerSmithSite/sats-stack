@@ -247,6 +247,20 @@ void main() {
     });
   });
 
+  // The screen used to hold every field's controller itself, so collapsing a
+  // section and opening it again kept what was typed and what a test said.
+  testWidgets('a section keeps what was typed when collapsed', (tester) async {
+    await open(tester, 'Servers');
+    final field = find.widgetWithText(TextField, 'Mempool / Esplora server');
+    await tester.enterText(field, 'half-typed.lan');
+    await tester.tap(find.text('Servers'));
+    await settle(tester);
+    await tester.tap(find.text('Servers'));
+    await settle(tester);
+    expect(find.text('half-typed.lan'), findsOneWidget);
+    await close(tester);
+  });
+
   testWidgets('Data offers export and import', (tester) async {
     await open(tester, 'Data');
     expect(find.text('Export database'), findsOneWidget);

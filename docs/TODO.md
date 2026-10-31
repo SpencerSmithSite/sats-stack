@@ -49,16 +49,8 @@ History lives elsewhere and is not duplicated into this file:
   release (built-in Kotlin, changed DSL defaults), so do it on its own and
   check every plugin builds.
 
-> Items 11–14 were already tracked before the second pass. They are still
-> open and still worth doing; they are simply less urgent than 1–10.
-
-### 14. Decompose Settings properly
-
-`settings_screen.dart` is still 1,575 lines and was deliberately left out of
-the file split. Its bulk is one state class holding every controller and every
-connection test, so per-section files mean handing all of it back in as
-parameters and callbacks. That is a design change with real behavioural risk,
-worth doing on purpose rather than as a move.
+> Items 11–14 — the Bitcoin data-source picker, xpub batching, the named
+> test gaps and the Settings split — are finished: PRs #51, #52 and #54.
 
 > Item 15 — what the third review pass, 2026-10-21, left — is finished:
 > PRs #22–#28 and #30–#50, recorded in `AUDIT.md`.

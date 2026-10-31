@@ -1624,6 +1624,27 @@ test feeds every provider those shapes and fails on the old code. The 33 in
 `cloud_backend_test` read through a checked `at(json, path)` helper, whose
 failure names the path. The rule is on, held at zero like the rest.
 
+### Settings is one widget per section (TODO item 14)
+
+`settings_screen.dart` was one 1,871-line state class holding every section's
+controllers and connection tests. It is now 90 lines composing six section
+widgets under `widgets/` — General, AI provider, Bitcoin servers, Data, About
+and Danger Zone — each owning its own state and talking to its service
+directly, as `WalletHistorySection` did first. The code was moved, not
+rewritten.
+
+- No test covered the screen, so `settings_screen_test` was written first,
+  against the old code, and pins each section: theme, currency, price chip,
+  inflation-rate validation, categories, an Ollama URL saved normalised with
+  its LAN note, a hosted provider's disclosure and key, the Mempool server and
+  its banner, onboarding, and a reset — cancelled, and carried out.
+- A collapsed `ExpansionTile` disposes its children, so the split alone lost
+  what was typed in a section, and re-probed the AI server, whenever one was
+  closed and opened. The tiles keep their state (`maintainState`), as the one
+  screen-wide state class did; a test fails without it.
+- The whole screen, every section open, renders pixel-for-pixel the same as
+  before in both themes (checked with a one-off golden comparison).
+
 ---
 
 ## Verified correct (no action)
