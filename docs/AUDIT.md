@@ -116,7 +116,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** On the AI tiers, `description` is the model's own rewording of the row. Both dedup hashes (`computeHash` and `HashUtils.transactionDedupHash`) are built from `tx.rawDescription`, which is set to that same text.
 - **Impact:** Model wording varies between runs and differs from the rules tier's raw bank text. So importing overlapping statements, or the same file once through AI and once through the rules tier, inserts the same transaction twice. Nothing in the preview flags it, and spending and budgets are silently inflated.
 - **Fix direction:** Build the dedup key from file-derived data only (date, amount, and the source row text or a normalised form of it). Flag near-duplicates (same source, date and amount) in the preview.
-- **Status:** open
+- **Status:** fixed in #56. Before the preview, rows that match ones the source already holds (same day, amount and direction, counted, with an exact description matched first) are unticked and labelled "Already imported?", with a note saying how many. The user can tick any back in, so two different same-day transactions are never dropped silently. Pinned by `ai_import_dedup_test`.
 
 ### A-2 · Medium · reliability, privacy — Hosted AI output is capped at 4,096 tokens
 - **Where:** `lib/core/services/inference/cloud_backend.dart:468` (sent at `:351`, `:407`); `import_service.dart:1105` (`maxLen = 100000`), `:2459-2483`.

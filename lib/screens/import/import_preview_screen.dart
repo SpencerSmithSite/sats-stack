@@ -32,10 +32,29 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen> {
   /// for a long statement is most of the wait.
   String? _progress;
 
+  /// Rows that look already imported from this source, unticked. Null until
+  /// the check has run, and Import waits for it: a quick tap must not import
+  /// them before they are unticked.
+  int? _likelyDuplicates;
+
   @override
   void initState() {
     super.initState();
     _txns = List.of(widget.result.transactions);
+    _checkDuplicates();
+  }
+
+  Future<void> _checkDuplicates() async {
+    var marked = 0;
+    try {
+      marked = await app.importService.markLikelyDuplicates(
+        _txns,
+        widget.sourceId,
+      );
+    } catch (_) {
+      // The save step's own hash still catches an exact re-import.
+    }
+    if (mounted) setState(() => _likelyDuplicates = marked);
   }
 
   int get _includeCount => _txns.where((t) => t.include).length;
@@ -161,6 +180,17 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen> {
                             ).textTheme.bodySmall?.copyWith(color: cs.primary),
                           ),
                         ],
+                        if (_likelyDuplicates case final n? when n > 0) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            n == 1
+                                ? '1 looks already imported, so it is '
+                                    'unticked. Tick it if it is new.'
+                                : '$n look already imported, so they are '
+                                    'unticked. Tick any that are new.',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
                         if (widget.result.sentTo != null) ...[
                           const SizedBox(height: 4),
                           _SentToNote(recipient: widget.result.sentTo!),
@@ -233,7 +263,8 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen> {
                             ),
                             subtitle: Text(
                               '${DateFormat('MMM d, yyyy').format(tx.date)}'
-                              '${tx.category != null ? '  ·  ${tx.category}' : ''}',
+                              '${tx.category != null ? '  ·  ${tx.category}' : ''}'
+                              '${tx.likelyDuplicate ? '  ·  Already imported?' : ''}',
                               style: Theme.of(context).textTheme.bodySmall
                                   ?.copyWith(color: cs.onSurfaceVariant),
                             ),
@@ -350,7 +381,11 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen> {
                       Expanded(
                         child: FilledButton.icon(
                           onPressed:
-                              _importing || _includeCount == 0 ? null : _import,
+                              _importing ||
+                                      _likelyDuplicates == null ||
+                                      _includeCount == 0
+                                  ? null
+                                  : _import,
                           icon:
                               _importing
                                   ? const SizedBox(
