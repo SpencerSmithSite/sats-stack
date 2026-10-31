@@ -16,7 +16,15 @@ import 'pages/ready_page.dart';
 import 'pages/welcome_page.dart';
 
 class OnboardingScreen extends StatefulWidget {
-  const OnboardingScreen({super.key});
+  const OnboardingScreen({super.key, this.revisit = false});
+
+  /// Opened from Settings → About rather than on first launch.
+  ///
+  /// Said by the route, because the onboarding flag cannot say it: About
+  /// clears that flag, so a revisit read it as a first run, and the provider
+  /// check replaced the user's AI provider and its URL with a suggestion,
+  /// which Get Started then saved (audit U-1).
+  final bool revisit;
 
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
@@ -186,7 +194,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       text: esplora == AppConstants.mempoolBaseUrl ? '' : esplora,
     );
     _mapleApiKeyCtrl = TextEditingController();
-    if (app.onboardingCompleteNotifier.value) {
+    if (widget.revisit || app.onboardingCompleteNotifier.value) {
       // A revisit: the provider in use is the user's choice, so the
       // availability check must not replace it with a suggestion.
       _aiProvider = ai.activeProvider;

@@ -38,8 +38,11 @@ class _AboutSectionState extends State<AboutSection> {
     await (app.db.delete(
       app.db.appSettings,
     )..where((t) => t.key.equals(AppConstants.settingOnboardingComplete))).go();
+    if (!mounted) return;
+    // Says it is a revisit, then clears the flag, which onboarding used to
+    // read for that and so always saw a first run (audit U-1).
+    context.go('/onboarding?revisit=1');
     app.onboardingCompleteNotifier.value = false;
-    if (mounted) context.go('/onboarding');
   }
 
   @override
