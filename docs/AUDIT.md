@@ -305,7 +305,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
   - "Your xpub is never sent" is true, but every derived address is, and that links the wallet just the same.
 - **Impact:** Users make privacy decisions on copy that is wrong.
 - **Fix direction:** Build it from the same inputs as `DataRoutingBanner`, and say that addresses are sent.
-- **Status:** open
+- **Status:** fixed in #66. The Add Wallet notice is built by `walletPrivacyNotice` from the data source, the Electrum host and the Mempool server: it names where the addresses are looked up and where prices come from, says another public instance is "the server you set" rather than private, and says the xpub stays on the device while its addresses do not. Pinned by `honest_server_notices_test`.
 
 ### B-7 · Medium · correctness — An ambiguous `xpub` with no history yet is stored as legacy for good
 - **Where:** `add_wallet_sheet.dart:67-70`; `xpub_service.dart:349-365`, `:836-841`.
@@ -335,7 +335,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** Each place decides differently. `BtcPriceService.loadSettings` also reads the URL without normalising it.
 - **Impact:** The same URL counts as default on one screen and custom on another. That decides whether CoinGecko is contacted, and which privacy copy shows.
 - **Fix direction:** One normalised `isDefaultEsplora` predicate, used everywhere.
-- **Status:** open
+- **Status:** fixed in #66. One predicate, `isDefaultMempoolServer` (normalised host is mempool.space), now used by the price service, the Add Wallet notice and Settings (`XpubService.usingDefaultServer`); the price service also normalises the stored URL. Pinned by `honest_server_notices_test`.
 
 ### B-10 · Low · maintainability — Unused, incorrect Electrum helpers
 - **Where:** `electrum_service.dart:190-225`.
@@ -463,14 +463,14 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** The banner reads the text field on every keystroke. Typing any URL flips it to "All data routed through your server… mempool.space and CoinGecko are never contacted" before Save, including for a URL that Save will reject.
 - **Impact:** The user is told lookups are private while syncs still go to mempool.space.
 - **Fix direction:** Drive it from the saved `esploraBaseUrl`, or label the live preview "after saving". See also B-9.
-- **Status:** open
+- **Status:** fixed in #66. The banner follows the saved server; while the field differs from it, "Not saved yet. The banner shows the server in use." Pinned by `settings_screen_test`.
 
 ### U-3 · Medium · privacy — Onboarding accepts an unusable Esplora URL without saying so
 - **Where:** `lib/features/onboarding/onboarding_screen.dart:104`.
 - **What:** `saveSettings`' null return ("unusable, using mempool.space") is ignored. Settings warns about the same case (`bitcoin_servers_section.dart:56-59`).
 - **Impact:** Someone who mistypes their own node's URL during onboarding has every wallet address sent to mempool.space, and is never told.
 - **Fix direction:** Check the result and warn, or stay on the page, as Settings does.
-- **Status:** open
+- **Status:** fixed in #66. Next on the server page, and Get Started, refuse an unusable address with an error under the field (jumping back to the page if it was swiped past). Pinned by `honest_server_notices_test`.
 
 ### U-4 · Medium · privacy — Stored API keys are preloaded into Settings and shown with one tap
 - **Where:** `lib/features/settings/widgets/ai_provider_section.dart:101-104`, `:444`, `:457-467`.

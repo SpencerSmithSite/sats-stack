@@ -9,6 +9,7 @@ import '../../core/services/inference/gemini_nano_backend.dart';
 import '../../core/services/inference/platform_llm_backend.dart';
 import '../../main.dart' as app;
 import '../../shared/constants/app_constants.dart';
+import '../../shared/utils/url_utils.dart';
 import 'pages/ai_provider_page.dart';
 import 'pages/bitcoin_server_page.dart';
 import 'pages/currency_page.dart';
@@ -60,8 +61,37 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   bool _aiProviderTouched = false;
 
   static const _pageCount = 8;
+  static const _serverPage = 5;
+
+  /// Shown under the server field when what is typed cannot be used.
+  String? _esploraError;
+
+  /// Whether the server field holds something Save would reject. Save falls
+  /// back to mempool.space for it, and onboarding ignored that, so a mistyped
+  /// node address sent every wallet address to mempool.space without a word
+  /// (audit U-3). Checked on leaving the page, and again at Get Started,
+  /// since the pages can be swiped past.
+  bool _serverOk() {
+    final typed = _esploraCtrl.text.trim();
+    if (typed.isEmpty || normalizeServerUrl(typed) != null) return true;
+    setState(
+      () =>
+          _esploraError =
+              "That isn't a usable server address. Correct it, or clear it "
+              'to use mempool.space.',
+    );
+    if (_page != _serverPage) {
+      _controller.animateToPage(
+        _serverPage,
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeInOut,
+      );
+    }
+    return false;
+  }
 
   void _next() {
+    if (_page == _serverPage && !_serverOk()) return;
     if (_page < _pageCount - 1) {
       _controller.nextPage(
         duration: const Duration(milliseconds: 350),
@@ -80,6 +110,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   Future<void> _finish() async {
+    if (!_serverOk()) return;
     // Save currency
     app.currencyNotifier.value = _currency;
     await app.db
@@ -193,6 +224,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     _esploraCtrl = TextEditingController(
       text: esplora == AppConstants.mempoolBaseUrl ? '' : esplora,
     );
+    _esploraCtrl.addListener(() {
+      if (_esploraError != null) setState(() => _esploraError = null);
+    });
     _mapleApiKeyCtrl = TextEditingController();
     if (widget.revisit || app.onboardingCompleteNotifier.value) {
       // A revisit: the provider in use is the user's choice, so the
@@ -276,7 +310,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       app.themeModeNotifier.value = m;
                     },
                   ),
-                  BitcoinServerPage(controller: _esploraCtrl),
+                  BitcoinServerPage(
+                    controller: _esploraCtrl,
+                    errorText: _esploraError,
+                  ),
                   AiProviderPage(
                     catalogue: _catalogue,
                     selected: _aiProvider,

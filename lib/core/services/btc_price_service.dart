@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../../shared/constants/app_constants.dart';
+import '../../shared/utils/url_utils.dart';
 import '../database/database.dart';
 
 class BtcPriceService {
@@ -57,7 +58,9 @@ class BtcPriceService {
     for (final row in rows) {
       switch (row.key) {
         case AppConstants.settingElectrumUrl:
-          _esploraBaseUrl = row.value.isNotEmpty ? row.value : null;
+          // Normalised as Save does it, so it is compared and used as the
+          // other services see it.
+          _esploraBaseUrl = normalizeServerUrl(row.value);
         case AppConstants.settingCurrency:
           _currency = row.value.isNotEmpty ? row.value : 'USD';
         case AppConstants.settingBtcAllPrices:
@@ -251,9 +254,7 @@ class BtcPriceService {
   Future<Map<String, double>?> _fetchFromApi() async {
     final customBase = _esploraBaseUrl;
     final hasCustomServer =
-        customBase != null &&
-        customBase.isNotEmpty &&
-        !customBase.contains('mempool.space');
+        customBase != null && !isDefaultMempoolServer(customBase);
 
     // When a custom server is configured, use it exclusively — no public fallback.
     if (hasCustomServer) {
@@ -498,9 +499,7 @@ class BtcPriceService {
   }) async {
     final customBase = _esploraBaseUrl;
     final hasCustomServer =
-        customBase != null &&
-        customBase.isNotEmpty &&
-        !customBase.contains('mempool.space');
+        customBase != null && !isDefaultMempoolServer(customBase);
 
     Map<String, double>? prices;
     if (hasCustomServer) {

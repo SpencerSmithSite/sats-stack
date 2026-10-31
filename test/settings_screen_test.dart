@@ -229,11 +229,15 @@ void main() {
 
       await tester.enterText(field, 'myserver.lan:3006/api');
       await tester.pump();
-      expect(find.text('All data routed through your server'), findsOneWidget);
+      // The banner tells what is in use, not what is typed (audit U-2).
+      expect(find.text('Using public servers'), findsOneWidget);
+      expect(find.textContaining('Not saved yet'), findsOneWidget);
       await tester.tap(find.widgetWithText(FilledButton, 'Save').last);
       await settle(tester);
       expect(app.xpubService.esploraBaseUrl, 'https://myserver.lan:3006/api');
       expect(find.text('Bitcoin server settings saved'), findsOneWidget);
+      expect(find.text('All data routed through your server'), findsOneWidget);
+      expect(find.textContaining('Not saved yet'), findsNothing);
       // Snackbars queue: let this one go before looking for the next.
       await tester.pump(const Duration(seconds: 5));
       await tester.pumpAndSettle();

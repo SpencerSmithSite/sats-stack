@@ -6,8 +6,15 @@ import '../../../shared/theme/app_colors.dart';
 import 'page_frame.dart';
 
 class BitcoinServerPage extends StatelessWidget {
-  const BitcoinServerPage({super.key, required this.controller});
+  const BitcoinServerPage({
+    super.key,
+    required this.controller,
+    this.errorText,
+  });
   final TextEditingController controller;
+
+  /// Why what is typed cannot be used, or null.
+  final String? errorText;
 
   @override
   Widget build(BuildContext context) {
@@ -66,10 +73,12 @@ class BitcoinServerPage extends StatelessWidget {
           controller: controller,
           autocorrect: false,
           keyboardType: TextInputType.url,
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             labelText: 'Mempool / Esplora URL',
             hintText: 'https://mempool.space/api',
             helperText: 'Leave blank to use mempool.space (default)',
+            errorText: errorText,
+            errorMaxLines: 3,
           ),
         ),
         const SizedBox(height: 20),

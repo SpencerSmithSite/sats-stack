@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/database/database.dart';
+import '../../../core/models/bitcoin_data_source.dart';
 import '../../../core/services/btc_price_service.dart';
 import '../../../core/services/wallet_service.dart';
 import '../../../core/services/xpub_service.dart';
-import '../../../shared/constants/app_constants.dart';
 import '../../../shared/theme/app_colors.dart';
 import '../../../shared/utils/colour_names.dart';
 import '../../../shared/widgets/tappable.dart';
@@ -335,51 +335,18 @@ class _FormBody extends StatelessWidget {
             ),
             const SizedBox(height: 8),
 
-            // Privacy notice — content depends on whether a custom server is set
+            // Who sees what — from the same inputs as Settings' routing
+            // banner. It keyed on the Esplora URL alone, so with Electrum
+            // chosen it named mempool.space, and with any other URL it
+            // promised nothing went to public servers (audit B-6).
             Builder(
               builder: (context) {
-                final esploraUrl = xpubService.esploraBaseUrl;
-                final usingCustom = esploraUrl != AppConstants.mempoolBaseUrl;
-
+                final notice = walletPrivacyNotice(xpubService);
                 final isDark = Theme.of(context).brightness == Brightness.dark;
-                if (usingCustom) {
-                  const accent = Color(0xFF6AC86A);
-                  // Custom server: show which server is being used, no warning
-                  return Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: accent.withValues(alpha: isDark ? 0.12 : 0.08),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: accent.withValues(alpha: isDark ? 0.35 : 0.20),
-                        width: 0.5,
-                      ),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Icon(
-                          Icons.check_circle_outline,
-                          size: 14,
-                          color: accent,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Transactions will be fetched exclusively from your custom server ($esploraUrl). No data is sent to public servers.',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: context.legibleAccent(accent),
-                              height: 1.5,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-
-                // Default mempool.space: show the original privacy warning
-                const accent = Color(0xFF6AB0E8);
+                final accent =
+                    notice.addressesStayHome
+                        ? const Color(0xFF6AC86A)
+                        : const Color(0xFF6AB0E8);
                 return Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
@@ -393,11 +360,17 @@ class _FormBody extends StatelessWidget {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.info_outline, size: 14, color: accent),
+                      Icon(
+                        notice.addressesStayHome
+                            ? Icons.check_circle_outline
+                            : Icons.info_outline,
+                        size: 14,
+                        color: accent,
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'Transactions are fetched from mempool.space. Your xpub is stored locally only — never sent to any server.',
+                          notice.text,
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: context.legibleAccent(accent),
                             height: 1.5,
@@ -583,4 +556,43 @@ class _ColorDot extends StatelessWidget {
       ),
     );
   }
+}
+
+/// What the Add Wallet sheet says about who sees the wallet.
+///
+/// The xpub never leaves the device, but every address derived from it is
+/// looked up on a server, and together they identify the wallet just as
+/// well — so the notice names that server, and where prices come from.
+/// [addressesStayHome] is whether the addresses go to a server the user set
+/// rather than mempool.space.
+({String text, bool addressesStayHome}) walletPrivacyNotice(XpubService xpub) {
+  const xpubLine = 'Your xpub itself stays on this device.';
+  final priceHost = Uri.tryParse(xpub.esploraBaseUrl)?.host ?? '';
+  final prices =
+      xpub.usingDefaultServer
+          ? 'Prices for their dates come from mempool.space, with CoinGecko '
+              'as a fallback.'
+          : 'Prices come from $priceHost.';
+  if (xpub.dataSource == BitcoinDataSource.electrum) {
+    return (
+      text:
+          "Your wallet's addresses are looked up on your Electrum server "
+          '(${xpub.electrum.host}). $prices $xpubLine',
+      addressesStayHome: true,
+    );
+  }
+  if (xpub.usingDefaultServer) {
+    return (
+      text:
+          "Your wallet's addresses are looked up on mempool.space, which can "
+          'tell they belong together. $prices $xpubLine',
+      addressesStayHome: false,
+    );
+  }
+  return (
+    text:
+        "Your wallet's addresses are looked up on the server you set "
+        '($priceHost), and prices come from there too. $xpubLine',
+    addressesStayHome: true,
+  );
 }
