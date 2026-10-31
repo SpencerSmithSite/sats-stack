@@ -456,7 +456,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** `_resetOnboarding` sets `onboardingCompleteNotifier` to false and *then* navigates. `OnboardingScreen` uses that same flag to tell a revisit from a first run, so it always sees a first run, and the availability check replaces the provider with `suggestedDefault` and its default URL. `_finish` then saves them. The comment at `:175-180` says this is exactly what must not happen.
 - **Impact:** Settings → About → Show onboarding, then Next through the pages, quietly switches a Claude, ChatGPT or remote-Ollama user to Apple Intelligence or `localhost` Ollama. On a phone the AI tab can disappear.
 - **Fix direction:** Decide "revisit" from something not cleared before navigating, such as a route parameter or the flag read before it is reset.
-- **Status:** open
+- **Status:** fixed in #59. About now opens `/onboarding?revisit=1` and only then clears the flag, and the onboarding screen takes `revisit` from the route, so the provider and URL in force are kept. A reset of all data still gives a first run. Pinned by `onboarding_revisit_test` and `settings_screen_test`.
 
 ### U-2 · Medium · privacy — The Bitcoin routing banner describes unsaved text, not the saved server
 - **Where:** `lib/features/settings/widgets/bitcoin_servers_section.dart:141-144`, `:188-198`.

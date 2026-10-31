@@ -95,7 +95,13 @@ void main() {
       initialLocation: '/settings',
       routes: [
         GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen()),
-        GoRoute(path: '/onboarding', builder: (_, _) => const Text('ONBOARD')),
+        GoRoute(
+          path: '/onboarding',
+          builder:
+              (_, state) => Text(
+                'ONBOARD ${state.uri.queryParameters['revisit'] ?? 'first'}',
+              ),
+        ),
       ],
     );
     await tester.pumpWidget(
@@ -281,7 +287,8 @@ void main() {
       await tester.tap(find.text('Show onboarding'));
       await settle(tester);
       expect(app.onboardingCompleteNotifier.value, isFalse);
-      expect(find.text('ONBOARD'), findsOneWidget);
+      // As a revisit, so the setup in force is kept (audit U-1).
+      expect(find.text('ONBOARD 1'), findsOneWidget);
       await close(tester);
     });
   });
@@ -343,7 +350,8 @@ void main() {
       expect(app.showBtcPriceNotifier.value, isTrue);
       expect(app.onboardingCompleteNotifier.value, isFalse);
       expect(keys.keys['anthropic'] ?? '', isEmpty);
-      expect(find.text('ONBOARD'), findsOneWidget);
+      // A genuine first run: everything was deleted.
+      expect(find.text('ONBOARD first'), findsOneWidget);
       await close(tester);
     });
   });

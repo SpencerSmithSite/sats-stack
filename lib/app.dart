@@ -75,7 +75,15 @@ GoRouter buildRouter({Widget Function(String tab)? tab}) => GoRouter(
   routes: [
     GoRoute(
       path: '/onboarding',
-      pageBuilder: (ctx, state) => _fadePage(state, const OnboardingScreen()),
+      // `?revisit=1` from Settings → About: the setup in force is the user's,
+      // and must not be replaced by suggestions (audit U-1).
+      pageBuilder:
+          (ctx, state) => _fadePage(
+            state,
+            OnboardingScreen(
+              revisit: state.uri.queryParameters['revisit'] == '1',
+            ),
+          ),
     ),
     // One branch per tab, each with its own Navigator, kept alive in an
     // IndexedStack.
