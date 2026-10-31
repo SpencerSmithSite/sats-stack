@@ -613,7 +613,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **Where:** `android/app/src/main/kotlin/app/satsstack/satsstack/MainActivity.kt:6`; `ios/Runner/AppDelegate.swift:6`. Nothing anywhere uses `FLAG_SECURE` or a lifecycle-driven privacy screen (checked).
 - **Impact:** The Recents thumbnail and the iOS app-switcher snapshot capture balances, the stack, transactions and AI chat. Screen recording and screenshots capture everything.
 - **Fix direction:** `FLAG_SECURE` on Android, at least as a setting, and a cover view on iOS `sceneWillResignActive` or Flutter `inactive`.
-- **Status:** open
+- **Status:** fixed in #64. iOS covers the window with the launch artwork when the scene deactivates, so the switcher snapshot shows no figures. Android 13+ turns off the Recents screenshot; Android 8–12 marks the window secure only while paused. Screenshots inside the app still work. Both platforms compile; not yet seen on a device.
 
 ### P-2 · Medium · privacy — iOS database goes into iCloud and device backups; Android deliberately excludes it
 - **Where:** `lib/core/database/database.dart:483` (Documents directory). There is no iOS entitlements file, and nothing sets `NSURLIsExcludedFromBackupKey` (checked). Compare `android/app/src/main/res/xml/data_extraction_rules.xml:16-25`.
