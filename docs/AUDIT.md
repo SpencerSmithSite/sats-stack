@@ -376,7 +376,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** The resume listener refreshes only the price.
 - **Impact:** A phone app resumed for days without a cold start, or a desktop window left open, misses rent and salary entries. Budgets and the dashboard under-count, and alerts come late.
 - **Fix direction:** Also run on resume and on a day-change timer. The cursor and hash already make repeat calls safe.
-- **Status:** open
+- **Status:** fixed in #61. `RecurringCatchUp` generates due instances at launch, on every return to the app, and just after each local midnight while it stays open (by the calendar, so a 25-hour DST night is handled); overlapping runs share one. Pinned by `recurring_catch_up_test`.
 
 ### D-4 · Medium · privacy — "Reset all data" leaves a full copy of the old database on disk
 - **Where:** `lib/core/database/database.dart:544-547` (the `.bak`), `:381-397`; `danger_zone_section.dart:43`.
