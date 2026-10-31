@@ -22,3 +22,19 @@ String? normalizeServerUrl(String raw, {String defaultScheme = 'https'}) {
   if (uri.host.isEmpty) return null;
   return text;
 }
+
+/// Whether [url] — saved or typed — leaves mempool.space's public server in
+/// use: blank, unusable (Save falls back to the default for it), or a
+/// mempool.space address.
+///
+/// The one test for it. There were three — `contains('mempool.space')` on
+/// raw text, "any custom value", and exact equality with the default URL —
+/// so one URL was "custom" on one screen and "default" on another, which
+/// decided both whether CoinGecko was also contacted and which privacy copy
+/// was shown (audit B-9).
+bool isDefaultMempoolServer(String? url) {
+  final normalized = url == null ? null : normalizeServerUrl(url);
+  if (normalized == null) return true;
+  final host = Uri.parse(normalized).host.toLowerCase();
+  return host == 'mempool.space' || host.endsWith('.mempool.space');
+}

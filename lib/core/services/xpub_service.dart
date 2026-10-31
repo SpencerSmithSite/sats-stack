@@ -209,6 +209,10 @@ class XpubService {
 
   String get esploraBaseUrl => _esploraBaseUrl;
 
+  /// Whether mempool.space's public server is the one in use — see
+  /// [isDefaultMempoolServer].
+  bool get usingDefaultServer => isDefaultMempoolServer(_esploraBaseUrl);
+
   /// Pause between address requests. mempool.space rate-limits the public API,
   /// and a 429 now aborts the scan with an error rather than looking like an
   /// empty wallet, so the spacing matters.

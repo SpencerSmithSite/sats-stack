@@ -138,10 +138,15 @@ class _BitcoinServersSectionState extends State<BitcoinServersSection> {
 
   String _fmtInt(int n) => SatConverter.formatSats(n);
 
-  bool get _usingDefaultServer {
-    final text = _esploraUrlCtrl.text.trim();
-    return text.isEmpty || text.contains('mempool.space');
-  }
+  /// From the saved server, not the text being typed: the banner flipped to
+  /// "never contacted" on the first keystroke, before Save, and for a URL
+  /// Save would reject (audit U-2).
+  bool get _usingDefaultServer => app.xpubService.usingDefaultServer;
+
+  /// Whether the field holds something other than the server in use.
+  bool _unsaved(String typed) =>
+      (normalizeServerUrl(typed) ?? AppConstants.mempoolBaseUrl) !=
+      app.xpubService.esploraBaseUrl;
 
   void _showSnack(String msg) {
     if (!mounted) return;
@@ -185,17 +190,27 @@ class _BitcoinServersSectionState extends State<BitcoinServersSection> {
               // a setState rebuilt the whole 1,700-line Settings tree —
               // five ExpansionTiles, ten provider cards, four dropdowns
               // — on every keystroke.
+              DataRoutingBanner(
+                usingDefault: _usingDefaultServer,
+                electrumHost:
+                    app.xpubService.dataSource == BitcoinDataSource.electrum
+                        ? app.xpubService.electrum.host
+                        : null,
+              ),
               ValueListenableBuilder<TextEditingValue>(
                 valueListenable: _esploraUrlCtrl,
                 builder:
-                    (_, _, _) => DataRoutingBanner(
-                      usingDefault: _usingDefaultServer,
-                      electrumHost:
-                          app.xpubService.dataSource ==
-                                  BitcoinDataSource.electrum
-                              ? app.xpubService.electrum.host
-                              : null,
-                    ),
+                    (_, value, _) =>
+                        _unsaved(value.text)
+                            ? Padding(
+                              padding: const EdgeInsets.only(top: 6),
+                              child: Text(
+                                'Not saved yet. The banner shows the server '
+                                'in use.',
+                                style: theme.textTheme.bodySmall,
+                              ),
+                            )
+                            : const SizedBox.shrink(),
               ),
               const SizedBox(height: 12),
               if (_esploraStatus != null)
