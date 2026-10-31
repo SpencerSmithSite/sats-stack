@@ -393,6 +393,11 @@ class _AiChatScreenState extends State<AiChatScreen> {
                       message: _error!,
                       onDismiss: () => setState(() => _error = null),
                     ),
+                  AiRecipientNote(
+                    app.ollamaService.sendsDataOffDevice
+                        ? app.ollamaService.activeDataRecipient
+                        : null,
+                  ),
                   _InputBar(
                     controller: _inputCtrl,
                     isStreaming: _isStreaming,
@@ -454,7 +459,10 @@ class _ChatList extends StatelessWidget {
           const SizedBox(height: 4),
           Center(
             child: Text(
-              'Your financial data is injected as context.',
+              app.ollamaService.sendsDataOffDevice
+                  ? 'Your financial figures go with each question, as context.'
+                  : 'Your financial figures go with each question, as '
+                      'context, and stay on hardware you control.',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: context.textSecondary,
               ),

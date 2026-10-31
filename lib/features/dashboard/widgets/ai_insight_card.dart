@@ -9,7 +9,9 @@ import '../../../shared/widgets/tappable.dart';
 ///
 /// When the active backend would send the month's figures to a third party,
 /// the insight is never generated on its own: the card offers a button that
-/// names the recipient, and nothing is sent until it is pressed.
+/// names the recipient, and nothing is sent until it is pressed. The
+/// recipient stays named while an insight is showing, because refreshing it
+/// sends the figures again — to whichever provider is selected now.
 class AiInsightCard extends StatelessWidget {
   const AiInsightCard({
     super.key,
@@ -58,6 +60,13 @@ class AiInsightCard extends StatelessWidget {
   bool get _needsConsentToGenerate =>
       aiEnabled && offDeviceRecipient != null && !_hasInsight && !isGenerating;
 
+  /// Whether generating or refreshing would send the figures off the device.
+  /// The line naming the recipient used to show only before the first
+  /// insight, so with one cached — perhaps made earlier by a local model —
+  /// the bare refresh icon sent the month to a hosted provider without
+  /// saying where (audit A-5).
+  bool get _sendsOffDevice => aiEnabled && offDeviceRecipient != null;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -101,7 +110,12 @@ class AiInsightCard extends StatelessWidget {
               if (aiEnabled && onRefresh != null && !_needsConsentToGenerate)
                 Tappable(
                   label:
-                      isGenerating ? 'Generating insight' : 'Refresh insight',
+                      isGenerating
+                          ? 'Generating insight'
+                          : _sendsOffDevice
+                          ? 'Refresh insight, sending figures to '
+                              '$offDeviceRecipient'
+                          : 'Refresh insight',
                   onTap: isGenerating ? null : onRefresh,
                   child:
                       isGenerating
@@ -136,27 +150,30 @@ class AiInsightCard extends StatelessWidget {
                   height: 1.5,
                 ),
               ),
-          if (_needsConsentToGenerate) ...[
-            const SizedBox(height: 12),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: OutlinedButton.icon(
-                onPressed: onRefresh,
-                icon: const Icon(Icons.auto_awesome, size: 15),
-                label: const Text('Generate an insight'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: accentText,
-                  side: BorderSide(color: accent.withValues(alpha: 0.5)),
-                  visualDensity: VisualDensity.compact,
+          if (_sendsOffDevice) ...[
+            if (_needsConsentToGenerate) ...[
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton.icon(
+                  onPressed: onRefresh,
+                  icon: const Icon(Icons.auto_awesome, size: 15),
+                  label: const Text('Generate an insight'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: accentText,
+                    side: BorderSide(color: accent.withValues(alpha: 0.5)),
+                    visualDensity: VisualDensity.compact,
+                  ),
                 ),
               ),
-            ),
+            ],
             const SizedBox(height: 6),
             Text(
               // What generateMonthlyInsight sends: last month's figures (it
               // said "this month's"), and the stack, which it did not mention.
-              'Sends last month\'s totals, category breakdown and stack size '
-              'to $offDeviceRecipient.',
+              '${_hasInsight ? 'Refreshing sends' : 'Sends'} last month\'s '
+              'totals, category breakdown and stack size to '
+              '$offDeviceRecipient.',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
                 height: 1.4,

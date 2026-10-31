@@ -146,14 +146,14 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** The "Sends last month's totals… to *recipient*" line shows only when `_needsConsentToGenerate`, which requires `!_hasInsight`. With an insight already cached, for example one made earlier with a local Ollama, only a refresh icon shows, and tapping it uploads the month to whichever provider is now selected.
 - **Impact:** After switching to Claude or ChatGPT, a user can send a financial snapshot to a third party from a control that doesn't say where it goes.
 - **Fix direction:** Show the recipient line, or confirm, whenever `offDeviceRecipient != null`.
-- **Status:** open
+- **Status:** fixed in #60. The "Refreshing sends last month's totals… to *recipient*" line now shows whenever generating would go off the device, cached insight or not, and the refresh control's accessibility label names the recipient. Pinned by `ai_recipient_named_test`.
 
 ### A-6 · Medium · privacy — The chat screen never names who receives the figures
 - **Where:** `lib/features/ai_chat/ai_chat_screen.dart:455-461`; the claim that it does is at `cloud_backend.dart:158-161`.
 - **What:** The empty state says only "Your financial data is injected as context." `AiPrivacyDisclosure` appears only in the chat's settings sheet, and only for providers with a server URL. The screen never reads `sendsDataOffDevice`.
 - **Impact:** The most-used sending path, every question carrying the full snapshot, gives no reminder that Anthropic, OpenAI, Google or xAI receives it. The documented guarantee is false.
 - **Fix direction:** Show a compact recipient line in the chat whenever `sendsDataOffDevice`, or correct the comment.
-- **Status:** open
+- **Status:** fixed in #60. A line above the chat's input, "Each question sends your income, spending by category and stack size to *recipient*", shows whenever the backend sends data off the device; the empty state no longer implies the data stays local; the `isPrivate` comment is corrected. Pinned by `ai_recipient_named_test`.
 
 ### A-7 · Medium · privacy — Picked statements and photos are left in app caches
 - **Where:** `lib/screens/import/import_file_screen.dart:325-329`, `:661-666`. Nothing in `lib` calls `clearTemporaryFiles()` (checked).

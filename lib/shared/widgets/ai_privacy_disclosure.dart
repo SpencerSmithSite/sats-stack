@@ -117,6 +117,49 @@ class AiPrivacyDisclosure extends StatelessWidget {
   }
 }
 
+/// Who receives the figures each chat question carries, shown above the
+/// chat's input whenever that is someone off the device.
+///
+/// Every question sends the system prompt's financial snapshot, and the chat
+/// said only "your financial data is injected as context", with no word of
+/// where it went (audit A-6). Renders nothing for a null [recipient].
+class AiRecipientNote extends StatelessWidget {
+  const AiRecipientNote(this.recipient, {super.key});
+
+  final String? recipient;
+
+  @override
+  Widget build(BuildContext context) {
+    final to = recipient;
+    if (to == null) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.cloud_upload_outlined,
+            size: 14,
+            color: context.textSecondary,
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              'Each question sends your income, spending by category and '
+              'stack size to $to.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: context.textSecondary,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// A line about how the user's server is reached — see
 /// `OllamaService.transportNoteFor`. Renders nothing for a null [note].
 class TransportNote extends StatelessWidget {

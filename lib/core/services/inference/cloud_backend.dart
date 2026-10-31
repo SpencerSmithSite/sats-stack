@@ -157,8 +157,10 @@ class CloudBackend implements InferenceBackend {
   ///
   /// This is the one claim in Sats Stack that must never be wrong. Everything
   /// else the app says about privacy is a default that a hosted backend breaks,
-  /// so the picker, the onboarding step and the chat screen all read this flag
-  /// to decide whether the local-first promise can stand unqualified.
+  /// so the picker, the onboarding step, the dashboard insight and the chat
+  /// screen all read it — through `OllamaService.sendsDataOffDevice` — to
+  /// decide whether the local-first promise can stand unqualified. (The chat
+  /// screen did not, until audit A-6.)
   @override
   bool get isPrivate => false;
 
