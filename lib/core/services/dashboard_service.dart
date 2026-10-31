@@ -34,6 +34,10 @@ class DashboardService {
   /// the stack total: sats need no conversion and must not be lost because a
   /// fiat rate is. The count lets the screen say a total is incomplete rather
   /// than quietly showing a smaller number.
+  ///
+  /// A row the user marked as a transfer between their own wallets is zeroed
+  /// the same way, on purpose rather than for want of a rate, so it is not
+  /// counted as unconverted.
   ({List<Transaction> rows, Set<int> unconverted}) _restate(
     List<Transaction> txns,
   ) {
@@ -41,14 +45,17 @@ class DashboardService {
     final unconverted = <int>{};
     final rows = [
       for (final t in txns)
-        switch (fx.convert(t.amountFiat, t.fiatCurrency)) {
-          null => () {
-            unconverted.add(t.id);
-            return t.copyWith(amountFiat: 0);
-          }(),
-          final v when v == t.amountFiat => t,
-          final v => t.copyWith(amountFiat: v),
-        },
+        if (t.isOwnTransfer)
+          t.copyWith(amountFiat: 0)
+        else
+          switch (fx.convert(t.amountFiat, t.fiatCurrency)) {
+            null => () {
+              unconverted.add(t.id);
+              return t.copyWith(amountFiat: 0);
+            }(),
+            final v when v == t.amountFiat => t,
+            final v => t.copyWith(amountFiat: v),
+          },
     ];
     return (rows: rows, unconverted: unconverted);
   }

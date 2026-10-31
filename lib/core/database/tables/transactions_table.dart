@@ -44,4 +44,11 @@ class Transactions extends Table {
   // identity used to be derived from the description and amount, so editing
   // an instance split it off into a series of its own (schema v9).
   TextColumn get recurringSeriesId => text().nullable()();
+
+  // Set by the user on a Bitcoin movement between their own wallets (schema
+  // v12). Its sats still count — the stack is where the coins are — but its
+  // fiat does not: a self-send is not income or spending, and without this an
+  // xpub transfer counted as both.
+  BoolColumn get isOwnTransfer =>
+      boolean().withDefault(const Constant(false))();
 }

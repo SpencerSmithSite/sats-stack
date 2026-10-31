@@ -183,6 +183,7 @@ void main() {
       fiatCurrency: 'USD',
       source: 'manual',
       isBitcoin: false,
+      isOwnTransfer: false,
       dedupHash: 'h',
       createdAt: DateTime(2026, 3, 4),
     );

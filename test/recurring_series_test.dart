@@ -294,6 +294,9 @@ void main() {
       );
       await v8.customStatement('ALTER TABLE budgets DROP COLUMN currency');
       await v8.customStatement(
+        'ALTER TABLE transactions DROP COLUMN is_own_transfer',
+      );
+      await v8.customStatement(
         'INSERT INTO transactions (wallet_id, date, description, '
         'amount_sats, amount_fiat, fiat_currency, source, is_bitcoin, '
         'dedup_hash, created_at, recurring_period, recurring_anchor_date) '

@@ -1525,6 +1525,27 @@ Item 15's open list, fixed one PR at a time, in the order `TODO.md` gave.
   export (now `exportDatabaseTo`) followed by import. The DCA simulator got its
   tests in #41.
 
+### Transfers between your own wallets (schema v12)
+
+Decided 2026-10-31: a Bitcoin movement counts in fiat income and spending
+unless the user says it is a move between their own wallets. A self-send is a
+spend in one xpub wallet and a receipt in another, so it counted as both, but
+only the user knows which movements are their own.
+
+- `transactions.isOwnTransfer`, off by default, set from a checkbox on a
+  Bitcoin row's edit sheet. Such a row keeps its sats — the stack is where the
+  coins are — and is zeroed in `DashboardService._restate`, which every
+  dashboard, analytics, per-wallet, export and AI-context figure reads, without
+  being counted as unconverted. `BudgetService.getProgress` leaves it out of
+  spending in SQL. The list shows a ⇄ beside it.
+- **Found while adding it:** the v8 and v9 upgrade steps read whole rows, and a
+  whole-row read maps every column the *current* schema has. A database being
+  upgraded does not have the later ones yet, so a non-null column added after
+  v8 threw: anyone upgrading from v7 or v8 with an xpub or a recurring row
+  could not open the app. Both steps now select only the columns they use.
+  `own_transfers_test` upgrades a v7 database holding both kinds of row; it
+  fails on the old steps.
+
 ---
 
 ## Verified correct (no action)

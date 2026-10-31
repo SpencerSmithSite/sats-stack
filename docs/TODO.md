@@ -116,8 +116,6 @@ Everything else this pass found is fixed: PRs #22–#28, then #30–#47, each
 recorded in `AUDIT.md` ("Third pass" and "Working through item 15"). Left:
 
 **Decisions for Spencer**
-- Should fiat income and spending include Bitcoin movements? Today an xpub
-  self-transfer counts as both.
 - Should a server on the local network still count as the user's own
   hardware (no import consent prompt, no off-device banner)? A private
   address on a shared network — a café, an office — is someone else's

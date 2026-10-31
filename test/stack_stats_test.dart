@@ -18,6 +18,7 @@ void main() {
     fiatCurrency: 'USD',
     source: 'manual',
     isBitcoin: btc,
+    isOwnTransfer: false,
     dedupHash: 'h$id',
     createdAt: date,
   );

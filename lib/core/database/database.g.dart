@@ -607,6 +607,21 @@ class $TransactionsTable extends Transactions
         type: DriftSqlType.string,
         requiredDuringInsert: false,
       );
+  static const VerificationMeta _isOwnTransferMeta = const VerificationMeta(
+    'isOwnTransfer',
+  );
+  @override
+  late final GeneratedColumn<bool> isOwnTransfer = GeneratedColumn<bool>(
+    'is_own_transfer',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_own_transfer" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -625,6 +640,7 @@ class $TransactionsTable extends Transactions
     recurringPeriod,
     recurringAnchorDate,
     recurringSeriesId,
+    isOwnTransfer,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -762,6 +778,15 @@ class $TransactionsTable extends Transactions
         ),
       );
     }
+    if (data.containsKey('is_own_transfer')) {
+      context.handle(
+        _isOwnTransferMeta,
+        isOwnTransfer.isAcceptableOrUnknown(
+          data['is_own_transfer']!,
+          _isOwnTransferMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -846,6 +871,11 @@ class $TransactionsTable extends Transactions
         DriftSqlType.string,
         data['${effectivePrefix}recurring_series_id'],
       ),
+      isOwnTransfer:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.bool,
+            data['${effectivePrefix}is_own_transfer'],
+          )!,
     );
   }
 
@@ -872,6 +902,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
   final String? recurringPeriod;
   final DateTime? recurringAnchorDate;
   final String? recurringSeriesId;
+  final bool isOwnTransfer;
   const Transaction({
     required this.id,
     required this.walletId,
@@ -889,6 +920,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     this.recurringPeriod,
     this.recurringAnchorDate,
     this.recurringSeriesId,
+    required this.isOwnTransfer,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -919,6 +951,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     if (!nullToAbsent || recurringSeriesId != null) {
       map['recurring_series_id'] = Variable<String>(recurringSeriesId);
     }
+    map['is_own_transfer'] = Variable<bool>(isOwnTransfer);
     return map;
   }
 
@@ -953,6 +986,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           recurringSeriesId == null && nullToAbsent
               ? const Value.absent()
               : Value(recurringSeriesId),
+      isOwnTransfer: Value(isOwnTransfer),
     );
   }
 
@@ -982,6 +1016,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       recurringSeriesId: serializer.fromJson<String?>(
         json['recurringSeriesId'],
       ),
+      isOwnTransfer: serializer.fromJson<bool>(json['isOwnTransfer']),
     );
   }
   @override
@@ -1004,6 +1039,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       'recurringPeriod': serializer.toJson<String?>(recurringPeriod),
       'recurringAnchorDate': serializer.toJson<DateTime?>(recurringAnchorDate),
       'recurringSeriesId': serializer.toJson<String?>(recurringSeriesId),
+      'isOwnTransfer': serializer.toJson<bool>(isOwnTransfer),
     };
   }
 
@@ -1024,6 +1060,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     Value<String?> recurringPeriod = const Value.absent(),
     Value<DateTime?> recurringAnchorDate = const Value.absent(),
     Value<String?> recurringSeriesId = const Value.absent(),
+    bool? isOwnTransfer,
   }) => Transaction(
     id: id ?? this.id,
     walletId: walletId ?? this.walletId,
@@ -1048,6 +1085,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
         recurringSeriesId.present
             ? recurringSeriesId.value
             : this.recurringSeriesId,
+    isOwnTransfer: isOwnTransfer ?? this.isOwnTransfer,
   );
   Transaction copyWithCompanion(TransactionsCompanion data) {
     return Transaction(
@@ -1082,6 +1120,10 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           data.recurringSeriesId.present
               ? data.recurringSeriesId.value
               : this.recurringSeriesId,
+      isOwnTransfer:
+          data.isOwnTransfer.present
+              ? data.isOwnTransfer.value
+              : this.isOwnTransfer,
     );
   }
 
@@ -1103,7 +1145,8 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           ..write('createdAt: $createdAt, ')
           ..write('recurringPeriod: $recurringPeriod, ')
           ..write('recurringAnchorDate: $recurringAnchorDate, ')
-          ..write('recurringSeriesId: $recurringSeriesId')
+          ..write('recurringSeriesId: $recurringSeriesId, ')
+          ..write('isOwnTransfer: $isOwnTransfer')
           ..write(')'))
         .toString();
   }
@@ -1126,6 +1169,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     recurringPeriod,
     recurringAnchorDate,
     recurringSeriesId,
+    isOwnTransfer,
   );
   @override
   bool operator ==(Object other) =>
@@ -1146,7 +1190,8 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           other.createdAt == this.createdAt &&
           other.recurringPeriod == this.recurringPeriod &&
           other.recurringAnchorDate == this.recurringAnchorDate &&
-          other.recurringSeriesId == this.recurringSeriesId);
+          other.recurringSeriesId == this.recurringSeriesId &&
+          other.isOwnTransfer == this.isOwnTransfer);
 }
 
 class TransactionsCompanion extends UpdateCompanion<Transaction> {
@@ -1166,6 +1211,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
   final Value<String?> recurringPeriod;
   final Value<DateTime?> recurringAnchorDate;
   final Value<String?> recurringSeriesId;
+  final Value<bool> isOwnTransfer;
   const TransactionsCompanion({
     this.id = const Value.absent(),
     this.walletId = const Value.absent(),
@@ -1183,6 +1229,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     this.recurringPeriod = const Value.absent(),
     this.recurringAnchorDate = const Value.absent(),
     this.recurringSeriesId = const Value.absent(),
+    this.isOwnTransfer = const Value.absent(),
   });
   TransactionsCompanion.insert({
     this.id = const Value.absent(),
@@ -1201,6 +1248,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     this.recurringPeriod = const Value.absent(),
     this.recurringAnchorDate = const Value.absent(),
     this.recurringSeriesId = const Value.absent(),
+    this.isOwnTransfer = const Value.absent(),
   }) : walletId = Value(walletId),
        date = Value(date),
        description = Value(description),
@@ -1226,6 +1274,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     Expression<String>? recurringPeriod,
     Expression<DateTime>? recurringAnchorDate,
     Expression<String>? recurringSeriesId,
+    Expression<bool>? isOwnTransfer,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -1245,6 +1294,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       if (recurringAnchorDate != null)
         'recurring_anchor_date': recurringAnchorDate,
       if (recurringSeriesId != null) 'recurring_series_id': recurringSeriesId,
+      if (isOwnTransfer != null) 'is_own_transfer': isOwnTransfer,
     });
   }
 
@@ -1265,6 +1315,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     Value<String?>? recurringPeriod,
     Value<DateTime?>? recurringAnchorDate,
     Value<String?>? recurringSeriesId,
+    Value<bool>? isOwnTransfer,
   }) {
     return TransactionsCompanion(
       id: id ?? this.id,
@@ -1283,6 +1334,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       recurringPeriod: recurringPeriod ?? this.recurringPeriod,
       recurringAnchorDate: recurringAnchorDate ?? this.recurringAnchorDate,
       recurringSeriesId: recurringSeriesId ?? this.recurringSeriesId,
+      isOwnTransfer: isOwnTransfer ?? this.isOwnTransfer,
     );
   }
 
@@ -1339,6 +1391,9 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     if (recurringSeriesId.present) {
       map['recurring_series_id'] = Variable<String>(recurringSeriesId.value);
     }
+    if (isOwnTransfer.present) {
+      map['is_own_transfer'] = Variable<bool>(isOwnTransfer.value);
+    }
     return map;
   }
 
@@ -1360,7 +1415,8 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
           ..write('createdAt: $createdAt, ')
           ..write('recurringPeriod: $recurringPeriod, ')
           ..write('recurringAnchorDate: $recurringAnchorDate, ')
-          ..write('recurringSeriesId: $recurringSeriesId')
+          ..write('recurringSeriesId: $recurringSeriesId, ')
+          ..write('isOwnTransfer: $isOwnTransfer')
           ..write(')'))
         .toString();
   }
@@ -5058,6 +5114,7 @@ typedef $$TransactionsTableCreateCompanionBuilder =
       Value<String?> recurringPeriod,
       Value<DateTime?> recurringAnchorDate,
       Value<String?> recurringSeriesId,
+      Value<bool> isOwnTransfer,
     });
 typedef $$TransactionsTableUpdateCompanionBuilder =
     TransactionsCompanion Function({
@@ -5077,6 +5134,7 @@ typedef $$TransactionsTableUpdateCompanionBuilder =
       Value<String?> recurringPeriod,
       Value<DateTime?> recurringAnchorDate,
       Value<String?> recurringSeriesId,
+      Value<bool> isOwnTransfer,
     });
 
 final class $$TransactionsTableReferences
@@ -5184,6 +5242,11 @@ class $$TransactionsTableFilterComposer
 
   ColumnFilters<String> get recurringSeriesId => $composableBuilder(
     column: $table.recurringSeriesId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isOwnTransfer => $composableBuilder(
+    column: $table.isOwnTransfer,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -5295,6 +5358,11 @@ class $$TransactionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get isOwnTransfer => $composableBuilder(
+    column: $table.isOwnTransfer,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$WalletsTableOrderingComposer get walletId {
     final $$WalletsTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -5387,6 +5455,11 @@ class $$TransactionsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<bool> get isOwnTransfer => $composableBuilder(
+    column: $table.isOwnTransfer,
+    builder: (column) => column,
+  );
+
   $$WalletsTableAnnotationComposer get walletId {
     final $$WalletsTableAnnotationComposer composer = $composerBuilder(
       composer: this,
@@ -5456,6 +5529,7 @@ class $$TransactionsTableTableManager
                 Value<String?> recurringPeriod = const Value.absent(),
                 Value<DateTime?> recurringAnchorDate = const Value.absent(),
                 Value<String?> recurringSeriesId = const Value.absent(),
+                Value<bool> isOwnTransfer = const Value.absent(),
               }) => TransactionsCompanion(
                 id: id,
                 walletId: walletId,
@@ -5473,6 +5547,7 @@ class $$TransactionsTableTableManager
                 recurringPeriod: recurringPeriod,
                 recurringAnchorDate: recurringAnchorDate,
                 recurringSeriesId: recurringSeriesId,
+                isOwnTransfer: isOwnTransfer,
               ),
           createCompanionCallback:
               ({
@@ -5492,6 +5567,7 @@ class $$TransactionsTableTableManager
                 Value<String?> recurringPeriod = const Value.absent(),
                 Value<DateTime?> recurringAnchorDate = const Value.absent(),
                 Value<String?> recurringSeriesId = const Value.absent(),
+                Value<bool> isOwnTransfer = const Value.absent(),
               }) => TransactionsCompanion.insert(
                 id: id,
                 walletId: walletId,
@@ -5509,6 +5585,7 @@ class $$TransactionsTableTableManager
                 recurringPeriod: recurringPeriod,
                 recurringAnchorDate: recurringAnchorDate,
                 recurringSeriesId: recurringSeriesId,
+                isOwnTransfer: isOwnTransfer,
               ),
           withReferenceMapper:
               (p0) =>

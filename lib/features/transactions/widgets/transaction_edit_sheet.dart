@@ -51,6 +51,7 @@ class _TransactionEditSheetState extends State<TransactionEditSheet> {
   bool _showCustomCat = false;
   String? _amountError;
   bool _saving = false;
+  bool _ownTransfer = false;
 
   List<Category> _categories = [];
 
@@ -93,6 +94,7 @@ class _TransactionEditSheetState extends State<TransactionEditSheet> {
               : 'debit';
       _date = tx.date;
       _selectedCategory = tx.category;
+      _ownTransfer = tx.isOwnTransfer;
     }
 
     _customCatCtrl = TextEditingController();
@@ -225,6 +227,7 @@ class _TransactionEditSheetState extends State<TransactionEditSheet> {
             dedupHash: Value(tx.dedupHash),
             recurringPeriod: Value(tx.recurringPeriod),
             recurringAnchorDate: Value(tx.recurringAnchorDate),
+            isOwnTransfer: Value(_ownTransfer),
           ),
         );
 
@@ -432,6 +435,28 @@ class _TransactionEditSheetState extends State<TransactionEditSheet> {
                     child: const Text('Stop repeating'),
                   ),
                 ],
+              ),
+              const SizedBox(height: 12),
+            ],
+
+            // Own transfer — Bitcoin rows only: that is where a self-send
+            // shows up as a spend in one wallet and a receipt in another.
+            if (widget.existingTx?.isBitcoin ?? false) ...[
+              // Its own Material: the sheet paints its background, which
+              // would hide the tile's ripple.
+              Material(
+                type: MaterialType.transparency,
+                child: CheckboxListTile(
+                  value: _ownTransfer,
+                  onChanged: (v) => setState(() => _ownTransfer = v ?? false),
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  title: const Text('Transfer between my own wallets'),
+                  subtitle: const Text(
+                    'Left out of income and spending. Still counted in your '
+                    'stack.',
+                  ),
+                ),
               ),
               const SizedBox(height: 12),
             ],

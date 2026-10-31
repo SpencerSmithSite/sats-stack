@@ -47,7 +47,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 11;
+  int get schemaVersion => 12;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -97,6 +97,9 @@ class AppDatabase extends _$AppDatabase {
         }
         if (from < 11) {
           await migrateToV11();
+        }
+        if (from < 12) {
+          await m.addColumn(transactions, transactions.isOwnTransfer);
         }
       });
     },
@@ -168,9 +171,21 @@ class AppDatabase extends _$AppDatabase {
   /// next sync recognises them rather than deleting and re-adding them — which
   /// would have dropped every category and note the user had set.
   Future<void> migrateToV8(Migrator m) async {
+    // Only the columns this step uses, here and below. A whole-row `select`
+    // maps every column the *current* schema has, and an older database being
+    // upgraded does not have them yet: a non-null column added after v8 made
+    // this throw for anyone upgrading with an xpub row.
     final all =
-        await (select(categories)
-          ..orderBy([(c) => OrderingTerm.asc(c.id)])).get();
+        await (selectOnly(categories)
+              ..addColumns([categories.id, categories.name])
+              ..orderBy([OrderingTerm.asc(categories.id)]))
+            .map(
+              (r) => (
+                id: r.read(categories.id)!,
+                name: r.read(categories.name)!,
+              ),
+            )
+            .get();
     final taken = {for (final c in all) c.name};
     final seen = <String>{};
     for (final c in all) {
@@ -187,9 +202,19 @@ class AppDatabase extends _$AppDatabase {
     }
     await m.createIndex(idxCategoriesName);
 
+    final t = transactions;
     final xpubRows =
-        await (select(transactions)
-          ..where((t) => t.source.equals('xpub'))).get();
+        await (selectOnly(t)
+              ..addColumns([t.id, t.walletId, t.dedupHash])
+              ..where(t.source.equals('xpub')))
+            .map(
+              (r) => (
+                id: r.read(t.id)!,
+                walletId: r.read(t.walletId)!,
+                dedupHash: r.read(t.dedupHash)!,
+              ),
+            )
+            .get();
     for (final row in xpubRows) {
       await (update(transactions)..where((t) => t.id.equals(row.id))).write(
         TransactionsCompanion(
@@ -215,20 +240,44 @@ class AppDatabase extends _$AppDatabase {
   /// gives the same answer, and each series keeps its generation cursor
   /// (re-filed from the old key's setting to the new id's).
   Future<void> adoptLegacyRecurringSeries() async {
+    // Only the columns it uses: this runs as the v9 step, against a database
+    // that has none of the columns added since — see [migrateToV8].
+    final t = transactions;
     final rows =
-        await (select(transactions)..where(
-          (t) =>
-              t.recurringPeriod.isNotNull() &
-              t.recurringAnchorDate.isNotNull() &
-              t.recurringSeriesId.isNull(),
-        )).get();
+        await (selectOnly(t)
+              ..addColumns([
+                t.id,
+                t.walletId,
+                t.recurringPeriod,
+                t.recurringAnchorDate,
+                t.description,
+                t.amountFiat,
+              ])
+              ..where(
+                t.recurringPeriod.isNotNull() &
+                    t.recurringAnchorDate.isNotNull() &
+                    t.recurringSeriesId.isNull(),
+              ))
+            .map(
+              (r) => (
+                id: r.read(t.id)!,
+                walletId: r.read(t.walletId)!,
+                oldKey: _legacySeriesKey(
+                  period: r.read(t.recurringPeriod)!,
+                  anchor: r.read(t.recurringAnchorDate)!,
+                  description: r.read(t.description)!,
+                  amountFiat: r.read(t.amountFiat)!,
+                ),
+              ),
+            )
+            .get();
     if (rows.isEmpty) return;
 
     await transaction(() async {
       final oldKeys = <String>{};
       final adopted = <String>{};
       for (final row in rows) {
-        final oldKey = legacySeriesKey(row);
+        final oldKey = row.oldKey;
         final id = sha256
             .convert(utf8.encode('$oldKey|${row.walletId}'))
             .toString()
@@ -261,11 +310,21 @@ class AppDatabase extends _$AppDatabase {
 
   /// How a series was identified before v9 — kept only so
   /// [adoptLegacyRecurringSeries] can group rows the way it did.
-  static String legacySeriesKey(Transaction tx) {
+  static String legacySeriesKey(Transaction tx) => _legacySeriesKey(
+    period: tx.recurringPeriod!,
+    anchor: tx.recurringAnchorDate!,
+    description: tx.description,
+    amountFiat: tx.amountFiat,
+  );
+
+  static String _legacySeriesKey({
+    required String period,
+    required DateTime anchor,
+    required String description,
+    required double amountFiat,
+  }) {
     final raw =
-        '${tx.recurringPeriod}|'
-        '${tx.recurringAnchorDate!.millisecondsSinceEpoch}|'
-        '${tx.description}|${tx.amountFiat}';
+        '$period|${anchor.millisecondsSinceEpoch}|$description|$amountFiat';
     return sha256.convert(utf8.encode(raw)).toString().substring(0, 16);
   }
 

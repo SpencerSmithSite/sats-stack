@@ -49,6 +49,9 @@ void main() {
       )).write(CategoriesCompanion(color: Value(hex)));
     await colour('Housing', '#888780'); // as seeded before v11
     await colour('Shopping', '#123456'); // the user's own choice
+    await v10.customStatement(
+      'ALTER TABLE transactions DROP COLUMN is_own_transfer',
+    );
     await v10.customStatement('PRAGMA user_version = 10');
     await v10.close();
 
