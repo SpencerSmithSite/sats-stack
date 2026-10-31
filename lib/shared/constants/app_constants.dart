@@ -133,9 +133,11 @@ abstract final class AppConstants {
   /// addresses a wallet scan asks about.
   static const settingElectrumCertPin = 'electrum_cert_pin';
 
-  /// Electrum's standard plaintext TCP port. The SSL port is 50002, which the
-  /// user has to enter themselves when they turn SSL on.
+  /// Electrum's standard plaintext TCP port.
   static const defaultElectrumPort = 50001;
+
+  /// Electrum's standard TLS port — the default, since TLS is (audit B-2).
+  static const defaultElectrumTlsPort = 50002;
 
   // Bitcoin Core / Knots JSON-RPC
   //

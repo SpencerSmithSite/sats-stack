@@ -268,7 +268,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** Plain TCP is the default. The copy warns only that addresses "cross the network readable".
 - **Impact:** On a shared network, someone in the path sees every scripthash. They can also return forged or empty history, which B-1's delete path then turns into lost rows.
 - **Fix direction:** Default to TLS on 50002, or confirm before using plain TCP to a non-private host. Say in the copy that history can be forged as well as read.
-- **Status:** open
+- **Status:** fixed in #63. TLS on port 50002 is now the default (a saved plain-TCP server is kept as it was); turning TLS off or on moves the port between 50001 and 50002 while it's on one of them; plain TCP to a host outside the user's network asks first; the copy says history can be altered as well as read. Pinned by `wallet_history_section_test`.
 
 ### B-3 · Medium · reliability — A dropped Electrum connection takes minutes to fail
 - **Where:** `electrum_service.dart:427-455`, `:301-313`.

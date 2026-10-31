@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../../../core/models/bitcoin_data_source.dart';
+import '../../../core/services/ollama_service.dart';
 import '../../../core/services/xpub_service.dart';
 import '../../../shared/constants/app_constants.dart';
 import '../../../shared/theme/app_colors.dart';
@@ -75,6 +76,13 @@ class _WalletHistorySectionState extends State<WalletHistorySection> {
     if (port == null || port < 1 || port > 65535) {
       return _say('Enter a port from 1 to 65535', error: true);
     }
+    // Plain TCP beyond the user's own network is readable and forgeable by
+    // anyone on the way, so it is a choice made on purpose (audit B-2).
+    if (!_ssl &&
+        !OllamaService.isLocalEndpoint('http://$host') &&
+        !await _confirmPlainTcp(host)) {
+      return;
+    }
     setState(() {
       _busy = true;
       _status = null;
@@ -118,6 +126,49 @@ class _WalletHistorySectionState extends State<WalletHistorySection> {
     } catch (e) {
       _say('Could not connect — $e', error: true);
     }
+  }
+
+  Future<bool> _confirmPlainTcp(String host) async {
+    final yes = await showDialog<bool>(
+      context: context,
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Connect without TLS?'),
+            content: Text(
+              '$host is outside your own network. Without TLS, anyone on the '
+              'way can read every address your wallets use, and can answer '
+              'with false history.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Connect anyway'),
+              ),
+            ],
+          ),
+    );
+    return yes ?? false;
+  }
+
+  /// Turns TLS on or off, moving the port between the standard two when it
+  /// is still on one of them.
+  void _setTls(bool on) {
+    setState(() {
+      _ssl = on;
+      final port = _port.text.trim();
+      final from =
+          on
+              ? AppConstants.defaultElectrumPort
+              : AppConstants.defaultElectrumTlsPort;
+      if (port.isEmpty || port == '$from') {
+        _port.text =
+            '${on ? AppConstants.defaultElectrumTlsPort : AppConstants.defaultElectrumPort}';
+      }
+    });
   }
 
   Future<void> _connected() async {
@@ -217,17 +268,18 @@ class _WalletHistorySectionState extends State<WalletHistorySection> {
             keyboardType: TextInputType.number,
             decoration: InputDecoration(
               labelText: 'Port',
-              hintText: '${AppConstants.defaultElectrumPort}',
+              hintText:
+                  '${_ssl ? AppConstants.defaultElectrumTlsPort : AppConstants.defaultElectrumPort}',
             ),
           ),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             value: _ssl,
-            onChanged: (v) => setState(() => _ssl = v),
+            onChanged: _setTls,
             title: const Text('Use TLS'),
             subtitle: const Text(
               'Usually port 50002. Without it, your addresses cross the '
-              'network readable.',
+              'network readable, and the history could be altered on the way.',
             ),
           ),
           if (_status != null)
