@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 
 import '../../shared/constants/app_constants.dart';
+import '../../shared/utils/bitcoin_script.dart';
 import '../database/database.dart';
 
 /// Lightweight Electrum JSON-RPC client (electrs / Fulcrum).
@@ -245,6 +246,133 @@ class ElectrumService {
       return null;
     }
   }
+}
+
+/// Address history read from an Electrum server, in the shape Esplora returns
+/// it — `txid`, `status.confirmed`/`block_time`, `vout[].scriptpubkey_address`
+/// and `value`, `vin[].prevout` — so the xpub scan nets, dedupes and prices it
+/// with the same code whichever server it came from.
+///
+/// One per scan, over one session. Electrum answers in raw transactions, so
+/// each is parsed here, and each input's spent output is read from its parent
+/// transaction: a wallet's change can be paid to an address the scan has not
+/// reached yet, so the spent output cannot be looked up among the wallet's own
+/// history as it arrives. Transactions and block times are cached for the
+/// scan, so a parent shared by several inputs is fetched once.
+///
+/// Requests are pipelined on the one connection — what Esplora needed one HTTP
+/// request and a rate-limit pause for, an Electrum server answers in a batch
+/// (TODO item 12) — with at most [maxInFlight] outstanding.
+class ElectrumHistory {
+  ElectrumHistory(this._electrum, this._session, {this.maxInFlight = 16});
+
+  final ElectrumService _electrum;
+  final ElectrumSession _session;
+  final int maxInFlight;
+
+  final _txs = <String, Future<RawTransaction>>{};
+  final _blockTimes = <int, Future<int>>{};
+  var _inFlight = 0;
+  final _waiting = <Completer<void>>[];
+
+  Future<T> _limited<T>(Future<T> Function() request) async {
+    if (_inFlight >= maxInFlight) {
+      final turn = Completer<void>();
+      _waiting.add(turn);
+      await turn.future;
+    }
+    _inFlight++;
+    try {
+      return await request();
+    } finally {
+      _inFlight--;
+      if (_waiting.isNotEmpty) _waiting.removeAt(0).complete();
+    }
+  }
+
+  Future<dynamic> _call(String method, List<dynamic> params) =>
+      _limited(() => _session.call(method, params));
+
+  /// Every transaction each of [addresses] appears in, in order. Unconfirmed
+  /// ones are included as unconfirmed — they mark an address as used — but
+  /// carry nothing else, as Esplora's would be skipped by the scan anyway.
+  ///
+  /// Throws if any of it cannot be read: an address that could not be checked
+  /// must not be reported as unused.
+  Future<List<List<Map<String, dynamic>>>> fetchWindow(
+    List<String> addresses,
+  ) async {
+    final histories = await Future.wait([
+      for (final a in addresses)
+        _call('blockchain.scripthash.get_history', [
+          BitcoinScript.electrumScripthash(a),
+        ]),
+    ]);
+    return Future.wait([
+      for (final history in histories)
+        Future.wait([
+          for (final item in (history as List<dynamic>? ?? const []))
+            _esploraShaped(item as Map<String, dynamic>),
+        ]),
+    ]);
+  }
+
+  Future<Map<String, dynamic>> _esploraShaped(Map<String, dynamic> item) async {
+    final txid = item['tx_hash'] as String;
+    final height = item['height'] as int;
+    // 0 is in the mempool, -1 in the mempool with an unconfirmed parent.
+    if (height <= 0) {
+      return {
+        'txid': txid,
+        'status': {'confirmed': false},
+      };
+    }
+    final (tx, time) = await (_tx(txid), _blockTime(height)).wait;
+    final vin = await Future.wait([
+      for (final input in tx.inputs) _prevout(input),
+    ]);
+    return {
+      'txid': txid,
+      'status': {'confirmed': true, 'block_time': time},
+      'vin': [
+        for (final prevout in vin) {'prevout': prevout},
+      ],
+      'vout': [
+        for (final o in tx.outputs)
+          {
+            'scriptpubkey_address': BitcoinScript.addressFor(o.script),
+            'value': o.value,
+          },
+      ],
+    };
+  }
+
+  Future<Map<String, dynamic>> _prevout(({String txid, int vout}) input) async {
+    final parent = await _tx(input.txid);
+    if (input.vout >= parent.outputs.length) {
+      throw FormatException('${input.txid} has no output ${input.vout}');
+    }
+    final spent = parent.outputs[input.vout];
+    return {
+      'scriptpubkey_address': BitcoinScript.addressFor(spent.script),
+      'value': spent.value,
+    };
+  }
+
+  Future<RawTransaction> _tx(String txid) =>
+      _txs[txid] ??= _call('blockchain.transaction.get', [txid]).then(
+        (hex) =>
+            hex is String
+                ? RawTransaction.parse(hex)
+                : throw FormatException('No transaction $txid'),
+      );
+
+  Future<int> _blockTime(int height) =>
+      _blockTimes[height] ??= _limited(
+        () => _electrum.getBlockTimestamp(_session, height),
+      ).then(
+        (t) => t ?? (throw FormatException('No header for block $height')),
+      );
 }
 
 List<int> _hexDecode(String hex) {

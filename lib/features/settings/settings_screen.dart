@@ -10,6 +10,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import '../../core/database/database.dart';
 import '../../core/models/ai_backend_group.dart';
 import '../../core/models/ai_provider.dart';
+import '../../core/models/bitcoin_data_source.dart';
 import '../../core/services/inference/cloud_backend.dart';
 import '../../core/services/inference/gemini_nano_backend.dart';
 import '../../core/services/inference/inference_backend.dart';
@@ -28,6 +29,7 @@ import 'widgets/categories_sheet.dart';
 import 'widgets/import_consent_section.dart';
 import 'widgets/on_device_ai_section.dart';
 import 'widgets/settings_widgets.dart';
+import 'widgets/wallet_history_section.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -1447,14 +1449,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    WalletHistorySection(
+                      xpub: app.xpubService,
+                      onChanged: () => setState(() {}),
+                    ),
+                    const SizedBox(height: 16),
                     TextField(
                       controller: _esploraUrlCtrl,
                       decoration: const InputDecoration(
                         labelText: 'Mempool / Esplora server',
                         hintText: 'http://server:3006/api',
                         helperText:
-                            'Used for wallet sync and BTC price. '
-                            'Leave blank to use mempool.space.',
+                            'Used for BTC prices, and for wallet sync when it '
+                            'is chosen above. Leave blank to use '
+                            'mempool.space.',
                         // It was cut off at one line: "Leave blank to us…".
                         helperMaxLines: 3,
                       ),
@@ -1470,6 +1478,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       builder:
                           (_, _, _) => DataRoutingBanner(
                             usingDefault: _usingDefaultServer,
+                            electrumHost:
+                                app.xpubService.dataSource ==
+                                        BitcoinDataSource.electrum
+                                    ? app.xpubService.electrum.host
+                                    : null,
                           ),
                     ),
                     const SizedBox(height: 12),

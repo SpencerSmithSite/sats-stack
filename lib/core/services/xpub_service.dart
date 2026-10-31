@@ -13,7 +13,9 @@ import '../../shared/constants/app_constants.dart';
 import '../../shared/utils/hash_utils.dart';
 import '../../shared/utils/url_utils.dart';
 import '../database/database.dart';
+import '../models/bitcoin_data_source.dart';
 import '../services/btc_price_service.dart';
+import 'electrum_service.dart';
 
 // ── Public types ─────────────────────────────────────────────────────────────
 
@@ -150,10 +152,26 @@ List<String> deriveAddressWindow(List<Object> message) {
 
 class XpubService {
   /// [client] is for tests, which answer from memory instead of the network.
-  XpubService(this._db, {http.Client? client})
-    : _client = client ?? http.Client();
+  XpubService(this._db, {http.Client? client, ElectrumService? electrum})
+    : _client = client ?? http.Client(),
+      electrum = electrum ?? ElectrumService(_db);
 
   final AppDatabase _db;
+
+  /// The user's own Electrum server, used for history when [dataSource] says
+  /// so. Its settings (host, port, TLS, a pinned certificate) live there.
+  final ElectrumService electrum;
+
+  BitcoinDataSource _dataSource = BitcoinDataSource.mempool;
+
+  /// Where wallet history is read from. BTC prices come from the Esplora
+  /// server either way: Electrum has none.
+  BitcoinDataSource get dataSource => _dataSource;
+
+  /// The scan in progress against [electrum], shared by any running at once.
+  ElectrumHistory? _electrumScan;
+  ElectrumSession? _electrumSession;
+  var _electrumScans = 0;
 
   /// One client for the whole app rather than one per request: a scan makes
   /// dozens of calls to the same host and `http.get` would open a fresh
@@ -185,6 +203,67 @@ class XpubService {
     if (rows.isNotEmpty) {
       _esploraBaseUrl =
           normalizeBaseUrl(rows.first.value) ?? AppConstants.mempoolBaseUrl;
+    }
+    final source =
+        await (_db.select(_db.appSettings)..where(
+          (t) => t.key.equals(AppConstants.settingBitcoinDataSource),
+        )).getSingleOrNull();
+    _dataSource = BitcoinDataSource.values.firstWhere(
+      (s) => s.name == source?.value,
+      orElse: () => BitcoinDataSource.mempool,
+    );
+    await electrum.loadSettings();
+  }
+
+  /// Chooses where wallet history comes from. Electrum's own settings are
+  /// saved through [electrum].
+  Future<void> saveDataSource(BitcoinDataSource source) async {
+    _dataSource = source;
+    await _db
+        .into(_db.appSettings)
+        .insertOnConflictUpdate(
+          AppSettingsCompanion.insert(
+            key: AppConstants.settingBitcoinDataSource,
+            value: source.name,
+          ),
+        );
+  }
+
+  /// Runs [scan] with an Electrum session open when that is the source.
+  ///
+  /// One session per scan rather than per request — the handshake is a round
+  /// trip, and pipelining needs the connection to stay up. Scans that overlap
+  /// share it; the last one out closes it.
+  Future<T> _scanning<T>(Future<T> Function() scan) async {
+    if (_dataSource != BitcoinDataSource.electrum) return scan();
+    if (_electrumScans++ == 0) {
+      if (!electrum.isConfigured) {
+        _electrumScans--;
+        throw const XpubSyncException(
+          'Wallet history is set to come from your Electrum server, but no '
+          'server is set up. Add one in Settings → Servers.',
+        );
+      }
+      try {
+        final session = await electrum.openSession();
+        _electrumSession = session;
+        _electrumScan = ElectrumHistory(electrum, session);
+      } catch (e) {
+        _electrumScans--;
+        throw XpubSyncException(
+          'Could not reach your Electrum server '
+          '${electrum.host}:${electrum.port}: $e',
+        );
+      }
+    }
+    try {
+      return await scan();
+    } finally {
+      if (--_electrumScans == 0) {
+        _electrumSession?.close();
+        _electrumSession = null;
+        _electrumScan = null;
+      }
     }
   }
 
@@ -264,7 +343,10 @@ class XpubService {
 
   /// Which script type [extKey]'s first receive addresses have history under,
   /// trying native SegWit, then nested, then legacy. Null if none has any.
-  Future<XpubFormat?> detectUsedFormat(String extKey) async {
+  Future<XpubFormat?> detectUsedFormat(String extKey) =>
+      _scanning(() => _detectUsedFormat(extKey));
+
+  Future<XpubFormat?> _detectUsedFormat(String extKey) async {
     for (final format in const [
       XpubFormat.p2wpkh,
       XpubFormat.p2shP2wpkh,
@@ -587,6 +669,16 @@ class XpubService {
   Future<List<List<Map<String, dynamic>>>> _fetchWindow(
     List<String> addresses,
   ) async {
+    final scan = _electrumScan;
+    if (scan != null) {
+      try {
+        return await scan.fetchWindow(addresses);
+      } catch (e) {
+        throw XpubSyncException(
+          'Your Electrum server ${electrum.host} could not answer: $e',
+        );
+      }
+    }
     final results = List<List<Map<String, dynamic>>>.filled(
       addresses.length,
       const [],
@@ -667,6 +759,18 @@ class XpubService {
   /// Throws [XpubSyncException] if the server cannot be reached — never reports
   /// an empty wallet it did not actually verify.
   Future<XpubSyncResult> syncWallet({
+    required Wallet wallet,
+    required BtcPriceService btcPriceService,
+    void Function(String status)? onProgress,
+  }) => _scanning(
+    () => _syncWallet(
+      wallet: wallet,
+      btcPriceService: btcPriceService,
+      onProgress: onProgress,
+    ),
+  );
+
+  Future<XpubSyncResult> _syncWallet({
     required Wallet wallet,
     required BtcPriceService btcPriceService,
     void Function(String status)? onProgress,
