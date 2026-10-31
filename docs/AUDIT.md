@@ -1372,8 +1372,8 @@ Item 15's open list, fixed one PR at a time, in the order `TODO.md` gave.
   figures cross the network to another machine; a remote server over plain
   `http://` got no warning. `OllamaService.transportNoteFor` says which, under
   the URL field in Settings, onboarding and the chat's settings sheet. The
-  local network still counts as the user's own hardware for consent — an open
-  decision, now in TODO.
+  local network still counts as the user's own hardware for consent — decided
+  2026-10-31, below.
 
 ### The Stack screen's maths, and the live price
 - The DCA simulator read its amount only when something else rebuilt the
@@ -1545,6 +1545,16 @@ only the user knows which movements are their own.
   could not open the app. Both steps now select only the columns they use.
   `own_transfers_test` upgrades a v7 database holding both kinds of row; it
   fails on the old steps.
+
+### An AI server on your own network
+
+Decided 2026-10-31: someone who runs their own AI server knows where it is. A
+server on the local network keeps counting as the user's own hardware — no
+consent prompt on import, no off-device banner — and the note under its URL
+says only that the figures go "over your local network to *host*, and no
+further". The café-and-office caution is gone. Plain `http://` to a server
+*outside* the network is still called unencrypted. `ai_privacy_details_test`
+pins both halves.
 
 ---
 

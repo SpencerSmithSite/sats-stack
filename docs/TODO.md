@@ -115,13 +115,6 @@ worth doing on purpose rather than as a move.
 Everything else this pass found is fixed: PRs #22–#28, then #30–#47, each
 recorded in `AUDIT.md` ("Third pass" and "Working through item 15"). Left:
 
-**Decisions for Spencer**
-- Should a server on the local network still count as the user's own
-  hardware (no import consent prompt, no off-device banner)? A private
-  address on a shared network — a café, an office — is someone else's
-  machine. Kept as-is, with honest wording; see AUDIT "AI: where it goes, and
-  what is kept".
-
 **Native**
 - `file_picker` 10 may still pull in DKCamera, CoreLocation and MediaPlayer
   through Swift Package Manager — check the built app's frameworks and
@@ -159,7 +152,7 @@ recorded in `AUDIT.md` ("Third pass" and "Working through item 15"). Left:
 ## Known broken / unfinished
 
 Nothing known to lose or misstate data is open. The decisions left are in
-items 10 and 15.
+item 10.
 
 ## Done, for reference
 

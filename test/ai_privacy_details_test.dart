@@ -53,6 +53,26 @@ void main() {
       );
     });
 
+    // Decided 2026-10-31: someone running their own AI server knows where it
+    // is. A server on their network gets no consent prompt and no off-device
+    // banner — no recipient — and its note states the fact without a warning.
+    test('the local network is treated as the user own hardware', () {
+      for (final p in [AiProvider.ollama, AiProvider.lmStudio]) {
+        expect(
+          OllamaService.recipientFor(p, 'http://192.168.1.5:11434'),
+          isNull,
+        );
+        expect(
+          OllamaService.recipientFor(p, 'https://llm.example.com'),
+          isNotNull,
+        );
+      }
+      expect(
+        note(AiProvider.ollama, 'http://192.168.1.5:11434'),
+        'Sent over your local network to 192.168.1.5, and no further.',
+      );
+    });
+
     test('plain http to a remote server is called unencrypted', () {
       expect(
         note(AiProvider.ollama, 'http://ollama.example.com:11434'),
