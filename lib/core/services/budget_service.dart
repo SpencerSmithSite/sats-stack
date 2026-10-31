@@ -82,7 +82,7 @@ class BudgetService {
   /// ran the whole aggregate three times for one change, and a burst of
   /// inserts ran it once per row.
   Stream<List<BudgetProgress>> watchProgress(DateTime month) {
-    StreamSubscription<void>? budgetSub, txnSub;
+    StreamSubscription<void>? budgetSub;
     late StreamController<List<BudgetProgress>> controller;
 
     var queued = false; // a read is scheduled for the next microtask
@@ -120,12 +120,20 @@ class BudgetService {
 
     controller = StreamController<List<BudgetProgress>>(
       onListen: () {
-        budgetSub = _db.select(_db.budgets).watch().listen((_) => schedule());
-        txnSub = _db.select(_db.transactions).watch().listen((_) => schedule());
+        // A trigger, not a read: both tables were watched with full selects
+        // whose rows were thrown away, so every change re-read every
+        // transaction just to learn that something had changed (audit D-1).
+        // `SELECT 1` costs nothing, and still emits once on listen.
+        budgetSub = _db
+            .customSelect(
+              'SELECT 1',
+              readsFrom: {_db.budgets, _db.transactions},
+            )
+            .watch()
+            .listen((_) => schedule());
       },
       onCancel: () async {
         await budgetSub?.cancel();
-        await txnSub?.cancel();
         // Closing matters: `controller.isClosed` guards every add above, and
         // without this it was always false — a dead guard on a controller that
         // was never released.

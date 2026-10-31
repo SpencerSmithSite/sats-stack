@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:drift/drift.dart' show TableUpdateQuery;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -193,7 +194,10 @@ void main() async {
         currency: currencyNotifier.value,
       )
       .ignore();
-  transactionService.watchAll().listen((_) {
+  // On every change to the transactions table. Listening to `watchAll()` for
+  // this kept a full, ordered select of every row running for the life of the
+  // app, re-read on each change and thrown away (audit D-1).
+  db.tableUpdates(TableUpdateQuery.onTable(db.transactions)).listen((_) {
     budgetService
         .checkAndNotify(
           notifications: notificationService,
