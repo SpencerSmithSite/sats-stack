@@ -517,6 +517,14 @@ class _DoneBody extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
           ],
+          if (result.keptNote case final note?) ...[
+            const SizedBox(height: 12),
+            Text(
+              note,
+              style: theme.textTheme.bodySmall,
+              textAlign: TextAlign.center,
+            ),
+          ],
           const SizedBox(height: 32),
           FilledButton(
             onPressed: onClose,

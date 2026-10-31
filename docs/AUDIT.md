@@ -261,7 +261,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
   - Pass 4 then deletes every stored row the scan didn't return.
 - **Impact:** For an address with more than about 1,000 transactions, or a self-hosted Esplora still indexing, older rows are deleted along with their categories and notes. The only warning is a count.
 - **Fix direction:** Throw when the cap is hit. Refuse, or ask before, a sync that would remove a large share of a wallet's rows.
-- **Status:** open
+- **Status:** fixed in #57. A capped address is reported, and rows the scan did not return are kept, not deleted, when an address was capped or when the server returned fewer transactions than the wallet holds with most of it missing (an indexing server). The sync result says how many were kept and why. Short pages from a non-standard server still end paging; that case is now covered by the second rule. Pinned by `xpub_truncated_scan_test`.
 
 ### B-2 · Medium · security, privacy — Electrum defaults to plain TCP
 - **Where:** `lib/core/services/electrum_service.dart:23` (`_ssl = false`), `:147-153`; `AppConstants.defaultElectrumPort = 50001`; `wallet_history_section.dart:223-231`.
