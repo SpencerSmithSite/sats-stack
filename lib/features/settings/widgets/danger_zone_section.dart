@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -48,6 +49,10 @@ class _DangerZoneSectionState extends State<DangerZoneSection> {
     // on to the defaults below either way.
     try {
       await eraseDeletedData(app.db, await databaseFile());
+    } catch (_) {}
+    // And any statement or photo the pickers copied into the app's cache.
+    try {
+      await FilePicker.platform.clearTemporaryFiles();
     } catch (_) {}
     // API keys live in the keychain, so `resetAndReseed` cannot reach them.
     // Leaving a user's credentials behind after "delete everything" would be a
