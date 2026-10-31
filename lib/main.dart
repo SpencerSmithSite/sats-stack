@@ -18,6 +18,7 @@ import 'core/services/removed_model_cleanup.dart';
 import 'core/services/transaction_service.dart';
 import 'core/services/wallet_service.dart';
 import 'core/services/xpub_service.dart';
+import 'screens/database_recovery_screen.dart';
 import 'screens/splash_screen.dart';
 import 'shared/constants/app_constants.dart';
 
@@ -70,6 +71,24 @@ void main() async {
   unawaited(RemovedModelCleanup.runHere());
 
   db = AppDatabase();
+  // Opened — and upgraded — here, inside a guard. A database that would not
+  // open used to throw out of main() before anything was drawn, so the app
+  // could not launch and the previous data the last restore kept was out of
+  // reach (audit D-5).
+  try {
+    await db.customSelect('SELECT 1').get();
+  } catch (e) {
+    try {
+      await db.close();
+    } catch (_) {}
+    runApp(DatabaseRecoveryApp(database: await databaseFile(), error: e));
+    return;
+  }
+  // It opened, so the copy of whatever a restore replaced is no longer
+  // needed — and was never deleted (audit D-4).
+  unawaited(
+    databaseFile().then(discardRestoreBackup).catchError((Object _) {}),
+  );
   transactionService = TransactionService(db);
   categoryService = CategoryService(db);
   walletService = WalletService(db);

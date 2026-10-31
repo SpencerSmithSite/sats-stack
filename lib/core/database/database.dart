@@ -1,9 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 
 import 'package:drift/drift.dart';
+import 'package:drift/native.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -514,6 +516,94 @@ Future<Uint8List> databaseSnapshot(AppDatabase db) async {
   }
 }
 
+/// The copy of the previous database that [replaceDatabaseFile] keeps.
+File restoreBackupFor(File database) => File('${database.path}.bak');
+
+/// Deletes [restoreBackupFor] [database], if there is one.
+///
+/// Called once a restored database has opened, and on "Reset all data". The
+/// `.bak` was never deleted, so after an import and then "Delete Everything"
+/// the earlier database — transactions, xpubs, server URLs — stayed on disk
+/// beside the live one (audit D-4).
+Future<void> discardRestoreBackup(File database) async {
+  final backup = restoreBackupFor(database);
+  if (backup.existsSync()) await backup.delete();
+}
+
+/// Rewrites [db]'s file without its free pages, then discards the restore
+/// backup beside it.
+///
+/// "Reset all data" deletes rows, and sqlite keeps deleted rows' bytes in
+/// free pages until the file is rewritten — readable by anything that reads
+/// the file. Run after [AppDatabase.resetAndReseed], never inside a
+/// transaction.
+Future<void> eraseDeletedData(AppDatabase db, File database) async {
+  await db.customStatement('VACUUM');
+  await discardRestoreBackup(database);
+}
+
+/// Why [candidate] cannot be restored, or null when it can.
+///
+/// The restore used to check only the 16-byte header, so a truncated or
+/// damaged backup, another app's database, or one from a newer Sats Stack
+/// replaced the user's data and then failed to open — before the app had
+/// drawn anything, so it could not launch at all (audit D-5). The candidate
+/// is opened here, as a copy, exactly as the app would open it — migrations
+/// included — and checked for integrity.
+Future<String?> backupProblem(
+  File candidate, {
+  required int schemaVersion,
+}) async {
+  const notABackup = 'That file is not a Sats Stack backup';
+  final Uint8List header;
+  try {
+    final handle = await candidate.open();
+    try {
+      header = await handle.read(100);
+    } finally {
+      await handle.close();
+    }
+  } catch (_) {
+    return 'That file could not be read';
+  }
+  if (header.length < 100 ||
+      String.fromCharCodes(header.sublist(0, 15)) != 'SQLite format 3') {
+    return notABackup;
+  }
+  // The schema version drift writes, at a fixed offset in the header.
+  final version = ByteData.sublistView(header, 60, 64).getUint32(0);
+  // Every Sats Stack database has one; any other sqlite file has 0, and
+  // opening it would create a fresh, empty database in its place.
+  if (version == 0) return notABackup;
+  if (version > schemaVersion) {
+    return 'That backup was made by a newer version of Sats Stack. Update the '
+        'app, then restore it.';
+  }
+
+  final dir = await Directory.systemTemp.createTemp('sats_stack_restore');
+  try {
+    final copy = await candidate.copy(p.join(dir.path, 'candidate.sqlite'));
+    final check = AppDatabase.forTesting(NativeDatabase(copy));
+    try {
+      final integrity =
+          await check.customSelect('PRAGMA integrity_check').getSingle();
+      if (integrity.data.values.single != 'ok') {
+        return 'That backup is damaged, so nothing was changed';
+      }
+      await check.select(check.wallets).get();
+      await check.select(check.transactions).get();
+    } finally {
+      await check.close();
+    }
+    return null;
+  } catch (_) {
+    return 'That backup is damaged or is not a Sats Stack backup, so nothing '
+        'was changed';
+  } finally {
+    await dir.delete(recursive: true);
+  }
+}
+
 /// How [replaceDatabaseFile] ended.
 enum RestoreOutcome {
   /// [replaceDatabaseFile]'s source is now the database.
@@ -527,7 +617,8 @@ enum RestoreOutcome {
   failedOriginalLost,
 }
 
-/// Replaces [target] with [source], keeping the original as `<target>.bak`.
+/// Replaces [target] with [source], keeping the original as `<target>.bak`
+/// ([restoreBackupFor]) until the restored database has opened.
 ///
 /// The caller must already have closed the database. On failure the copy may
 /// have stopped partway, so the original is copied back over the torn file
@@ -541,7 +632,7 @@ Future<({RestoreOutcome outcome, Object? error})> replaceDatabaseFile({
   Future<void> Function(File from, String to)? copy,
 }) async {
   final copyFile = copy ?? (from, to) => from.copy(to);
-  final backup = File('${target.path}.bak');
+  final backup = restoreBackupFor(target);
   try {
     if (target.existsSync()) await target.copy(backup.path);
     await copyFile(source, target.path);
