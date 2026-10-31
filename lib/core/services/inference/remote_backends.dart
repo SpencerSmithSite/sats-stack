@@ -57,6 +57,10 @@ class OllamaBackend implements InferenceBackend {
   @override
   int get contextBudgetChars => 12000;
 
+  /// The context window asked of the server: [contextBudgetChars] (about
+  /// 3,000–4,000 tokens) with room left for an answer.
+  static const numCtx = 8192;
+
   @override
   Future<BackendStatus> checkStatus() async {
     if (model == null || model!.isEmpty) {
@@ -122,6 +126,10 @@ class OllamaBackend implements InferenceBackend {
         'model': m,
         'messages': messages,
         'stream': true,
+        // The server's default window is a few thousand tokens, smaller than
+        // [contextBudgetChars] plus an answer, and it truncates the prompt
+        // itself — silently — when the two don't fit (audit A-3).
+        'options': {'num_ctx': numCtx},
       });
 
       final streamedResponse = await c
