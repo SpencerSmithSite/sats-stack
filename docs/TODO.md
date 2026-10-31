@@ -5,9 +5,9 @@ or nobody has decided to do it.
 
 History lives elsewhere and is not duplicated into this file:
 
-- [`AUDIT.md`](AUDIT.md) — the 2026-10-17 codebase audit: every finding, what
-  was wrong, and what was fixed. Read it before re-investigating anything in
-  the data, import, AI or Bitcoin layers.
+- [`AUDIT.md`](AUDIT.md): the open findings of the full scan on 2026-10-31, each
+  with an ID and a status. Work through them from there. The earlier audits
+  and the record of PRs #22–#54 are in git: `git show ef5b956:docs/AUDIT.md`.
 - [`AGENT_ACCESS_PLAN.md`](AGENT_ACCESS_PLAN.md) — design doc for agent access
   over MCP.
 - `git log` — each commit says what was wrong rather than what changed, so the
@@ -23,8 +23,9 @@ History lives elsewhere and is not duplicated into this file:
 - **Zero analyzer issues** is the standing bar, infos included. CI runs a bare
   `flutter analyze`, which exits non-zero on anything, so a new deprecation
   cannot drift in unnoticed.
-- **When an item lands, move it to `AUDIT.md`'s "Fixed" section**, so this file
-  only ever shows open work.
+- **When a fix lands, set its finding's Status in `AUDIT.md` to the PR**; when
+  an item here lands, delete it. Open work is the open findings there plus
+  what is below.
 
 ---
 
@@ -34,7 +35,7 @@ History lives elsewhere and is not duplicated into this file:
 > code — data layer, AI/import, UI, and everything outside `lib/` — rather than
 > a re-read of `AUDIT.md`. They found ~70 items, including two that would have
 > shipped broken and three regressions introduced by the audit's own fixes.
-> Those are fixed (see `AUDIT.md`). Everything below is what they found and is
+> Those are fixed (in the earlier `AUDIT.md`, now in git). Everything below is what they found and is
 > still open, in the order I would do it.
 
 ### 10. Decisions and upgrades the CI pass surfaced
@@ -53,7 +54,7 @@ History lives elsewhere and is not duplicated into this file:
 > test gaps and the Settings split — are finished: PRs #51, #52 and #54.
 
 > Item 15 — what the third review pass, 2026-10-21, left — is finished:
-> PRs #22–#28 and #30–#50, recorded in `AUDIT.md`.
+> PRs #22–#28 and #30–#50, recorded in the earlier `AUDIT.md` (git history).
 
 ---
 

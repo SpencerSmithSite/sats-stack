@@ -1,1665 +1,758 @@
-# Codebase audit — 2026-10-17
+# Audit — full codebase scan, 2026-10-31
 
-Five parallel audits (data layer · Bitcoin/network · import pipeline ·
-AI/inference · UI/state) over ~25k lines. Every finding below was verified
-against the source; anything that could not be substantiated was dropped.
+**Findings only, nothing fixed yet.** Each one is open until a PR fixes it; when one lands, mark its **Status** with the PR number. The earlier audits (2026-10-17, the 2026-10-18 and 2026-10-21 passes, and the record of PRs #22–#54) were in this file until now. They are in git: `git show ef5b956:docs/AUDIT.md`.
 
-Everything here is fixed and on `main`. Forward-looking work lives in
-[`TODO.md`](TODO.md); this file is the record of what was wrong and why, kept
-so none of it has to be re-investigated.
+**77 findings: 1 High, 32 Medium, 44 Low.** Fix the High first: A-1, re-importing a statement through the AI tier double-counts spending.
 
----
+## How this scan was done
 
-## What is left
+- **Code review, five areas at once.** Each was read file by file by a separate read-only reviewer:
+  - **D:** data layer and core services
+  - **B:** Bitcoin and network
+  - **A:** AI and statement import
+  - **U:** UI screens and widgets
+  - **P:** native configuration, CI and dependencies
 
-Nothing from the 2026-10-17 audit is open. The third pass (2026-10-21, at the
-end of this file) left items open; they are in `TODO.md` item 15. The three P2
-items that were still listed here on 2026-10-18 — streaming idle timeouts, the on-device channel collision, and
-the per-navigation database read in the router redirect — are fixed below.
+  Every finding cites `file:line`. I re-checked the most serious ones against the code myself (A-1, A-2, A-5, B-1, B-2, D-3, D-4, D-6, P-1, P-2, U-1, U-3, U-5, U-6), merged six that two reviewers found separately, and dropped one claim that was wrong.
+- **Runtime.** I built the macOS app and ran a copy under a throwaway bundle id, so your real data was not touched, and sampled its sockets ten times a second.
+  - Result: a fresh install sitting at onboarding opens **no outbound connections at all**. The only socket is the debug-only Dart VM service on loopback.
+  - Not done: walking through the screens. Access to the app was declined, so everything after onboarding comes from the code review.
+- **Tools.**
+  - `flutter analyze`: clean.
+  - `flutter pub outdated`: see P-4.
+  - `flutter test --coverage`: 559 tests pass, 57 % line coverage. See T-1.
+- **Not covered:** a real electrs or Fulcrum server (macOS blocks Dart from the local network here), and a real phone or simulator.
 
-Forward-looking work lives in **[`TODO.md`](TODO.md)**, which is the single
-list. Two things this audit surfaced are tracked there rather than here,
-because they are features and judgement calls rather than defects:
+Severity: **High** loses or misstates money or data, or sends data somewhere the user wasn't told. **Medium** is a real bug, leak or slowdown a user will meet. **Low** is an edge case, hardening or upkeep.
 
-- Wiring up the Bitcoin data-source picker, which is what the dead
-  `ElectrumService` / `BitcoinNodeService` code exists for.
-- Reducing the xpub scan's request count. (Derivation is off the UI isolate
-  now; the scan cursor once proposed here is not safe — see TODO.md.)
-- Decomposing `settings_screen.dart`, which needs a design change rather than
-  the file move the other two screens got.
-- The remaining test gaps, and the fact that `CLAUDE.md` is gitignored so its
-  stale SDK and schema versions cannot be corrected by a commit.
+## Index
 
-### Two claims this report got wrong
-
-Recorded because a reader would otherwise go looking for work that should not
-be done:
-
-- **`_SectionHeader` is not a four-way duplicate** and the month selector is
-  not a three-way one. The four headers are *two* designs (title-case with an
-  action link, versus uppercase label with a trailing widget) at three
-  different paddings, and the Analytics month selector uses `IconButton` and
-  `titleMedium` where the shared one uses `GestureDetector` and `titleSmall`.
-  Merging either would change what is on screen. The genuinely duplicated part
-  was the month arithmetic, now `MonthCursor`.
-- **The `add-claude-github-actions` branch did not have 30 unmerged commits.**
-  It had an unrelated history — no common ancestor with `main` — so those
-  commits were this project's own history under different ids. The only unique
-  content was two workflow files, now on `main`.
-
----
-
-## Fixed
-
-### Build
-- **The working tree did not compile.** `electrum_service.dart` and
-  `bitcoin_node_service.dart` referenced eight `AppConstants` keys that were
-  never added (16 analyzer errors). Keys added; `settingBitcoinDataSource` too.
-- **`BitcoinNodeService` could not save its RPC password on macOS** — it built
-  its own `FlutterSecureStorage` without `useDataProtectionKeyChain: false`,
-  the exact config already documented as failing with
-  `errSecMissingEntitlement` on this ad-hoc-signed target. Now goes through
-  `SecureKeyStore`, which gained `readEntry/writeEntry/deleteEntry` so there is
-  one place that knows the platform quirks.
-- Removed `shared_preferences` (declared, never imported — a native plugin in
-  all six platform builds). Declared `path`, which `database.dart` now imports.
-
-### Bitcoin / xpub — `lib/core/services/xpub_service.dart` (rewritten)
-Two independent root causes of the reported *"0 transactions imported, scanned
-20 addresses"* for a wallet with known history:
-- **A blank server field stored `''` as the live base URL**, so every request
-  became a relative URL that threw, and every throw was swallowed into "this
-  address is unused" — 20 of those end the scan and report success. It only
-  looked intermittent because the next launch mapped `''` back to the default.
-  `saveSettings` now normalises (scheme, host, trailing slashes), never holds
-  an unusable value, and returns null so Settings can say it rejected a typo.
-- **Network failure was indistinguishable from an empty address.** `_fetchAddressTxs`
-  returned `[]` for timeouts, DNS failure, non-200 and bad JSON. It now throws
-  `XpubSyncException`, retries 429/5xx with backoff honouring `Retry-After`,
-  and both call sites already surface it.
-
-Also fixed in the same file:
-- **The change chain (`m/1/i`) was never derived.** Only chain 0 was scanned, so
-  every change output was invisible: any wallet that had ever spent showed the
-  whole input leaving and nothing coming back. Both chains are now scanned with
-  independent gap counters. Pinned by the BIP84 vector in
-  `test/xpub_service_test.dart`.
-- **Testnet keys produced mainnet addresses.** `upub`/`vpub` were recognised but
-  the address encoder hardcoded `0x00`/`0x05`/`bc`, and `tpub` fell through to
-  mainnet legacy. Format *and* network now come from the 4-byte version prefix,
-  unknown versions and extended private keys are rejected, and testnet encodes
-  `0x6F`/`0xC4`/`tb`.
-- **One on-chain transaction became N rows** (one per address it touched, salted
-  by address). Net effect is now computed per txid against the complete owned
-  address set — which also means a self-send correctly shows the fee instead of
-  being dropped as a zero. Stale rows from the old scheme are deleted on rescan,
-  so wallets heal themselves.
-- **History was silently truncated at 25 transactions per address** — no
-  pagination. Now follows `/txs/chain/:last_seen_txid`.
-- Historical prices were fetched twice for every date (two passes); now once.
-  The whole transactions table was loaded to build a hash set; now one
-  projected column. Inserts are wrapped in a single DB transaction, so listeners
-  see one change rather than one per row. One shared `http.Client`.
-
-### Backup & restore — `settings_screen.dart`, `database.dart`
-- **Export and import used a path the database never opens.** Settings built
-  it from `getApplicationSupportDirectory()`; `driftDatabase(name:)` resolves to
-  `getApplicationDocumentsDirectory()`. Export always said "Database file not
-  found", and **import copied the backup to a path nothing reads and then told
-  the user the restore had succeeded** — the worst case being a user who resets
-  their data expecting to restore it. One `databaseFile()` helper in
-  `database.dart` is now the only way to reach the file.
-- Export uses `VACUUM INTO` (a byte copy of a live rollback-journal database can
-  be torn — a backup that fails only when needed). Import verifies the SQLite
-  magic header and keeps a `.bak` of the database it replaces, so picking the
-  wrong file is survivable.
-
-### Import pipeline — `import_service.dart`
-- **European decimal commas were parsed as 100–1000× the real amount.**
-  `-12,50` became `-1250.00`. Separator is now inferred per value.
-- **A charge and its same-day refund collapsed into one row.** The main-table
-  dedup hash used `tx.amount`, which is always positive, so the refund hashed
-  identically and was dropped by `insertOrIgnore`. Now hashes the signed amount,
-  salted per wallet so the same rent figure in two accounts no longer collides.
-- **UK dates had month and day swapped for days 1–12 only** (`03/04/2025` → 3
-  March, from an April row). Order is now inferred once per file from the whole
-  date column. Dotted dates (`01.02.2025`) parse at all now.
-- **Wells Fargo lost its first transaction on every import** — `skipHeaderRow`
-  existed on the profile and was referenced nowhere. Wired through.
-- A UTF-8 BOM broke header detection for every bank that exports one;
-  Windows-1252 exports (`£`, `é`) threw and were reported as an unrecognised
-  layout; semicolon/tab-delimited files parsed as one unusable column. All three
-  fixed (BOM strip, Latin-1 fallback, delimiter sniffing).
-- A single amount column with no negative in it is no longer treated as signed,
-  which booked every credit-card charge as income. `DR`/`CR` suffixes parse.
-- Imported rows no longer land on an arbitrary wallet (`wallets.first` was
-  unordered and could be an xpub wallet).
-
-### Privacy — the disclosure now matches the code
-
-Addressed 2026-10-18. The audit found the enum labels all factually correct;
-what was wrong was the call sites, and one claim the code did not keep.
-
-- **The monthly insight no longer generates by itself for a provider that would
-  receive it.** `dashboard_screen.dart` auto-generated it from `initState`, so
-  selecting Claude in Settings and opening the Dashboard uploaded the month's
-  income, spending, surplus, stack total and full category breakdown to a third
-  party with no user action — and swallowed any error. It now generates
-  automatically only when the backend keeps the data on hardware the user
-  controls; otherwise `AiInsightCard` offers a button naming the recipient, and
-  nothing is sent until it is pressed.
-- **Statements are no longer handed to a third party without asking.** The AI
-  tier is tried *first* for every CSV and PDF, so with a hosted provider
-  selected the raw file went to it before anything local was attempted, and no
-  screen in the import flow said so. `ImportService` now gates that tier on
-  consent recorded per provider (`AppConstants.aiImportConsentKey`), the import
-  screen asks with the disclosure inside the dialog, and declining falls
-  through to the local tiers — rules for a CSV, heuristics for a PDF. A photo
-  of a statement has no local route, so declining ends the import with
-  "Nothing was sent" rather than a parse failure.
-- **"Nothing is sent until you ask" is now true**, and the disclosure says it
-  for all three paths — question, insight, statement — instead of mentioning
-  only questions and so implying the other two do not happen.
-- **LM Studio and Ollama no longer claim privacy they cannot deliver.**
-  `isPrivate` was hardcoded true for LM Studio next to the words "Nothing
-  leaves your device", while its base URL is free text the user can point
-  anywhere. Both backends now derive the claim from the configured host
-  (`OllamaService.isLocalEndpoint`: loopback, `.local`, link-local and the
-  RFC 1918 ranges), and a remote self-hosted server is disclosed by host name.
-  That flag is what now gates automatic insight generation and the AI import
-  tier, so its accuracy matters more than its wording.
-- **A 401 body no longer reaches the screen.** `describeError` preferred the
-  provider's own message for every status, and OpenAI's 401 contains
-  `Incorrect API key provided: sk-proj-ab****XYZ` — a partial copy of the
-  user's key, printed verbatim by the chat screen and into any screenshot.
-  Auth failures now use the canned string.
-
-Covered by `test/ai_privacy_test.dart`: the local/remote host classification,
-the enum invariant, and that consent defaults to no, is remembered, and does
-not carry from one provider to another.
-
-### The legacy import pipeline is gone
-
-`CsvImportService` and `CsvImportSheet` are deleted (~850 lines). Nothing
-constructed the sheet — `/import` routes to `ImportFileScreen` and
-`ImportService` — so the entire second pipeline was unreachable, and with it
-went the silent 100-row cap, the rejection of 2-digit years, a `_parseAmount`
-with no decimal-comma, DR/CR or parenthetical-negative handling, a third
-divergent category colour map, a duplicate `_autoCategory`, a hardcoded
-`fiatCurrency: 'USD'`, and seven missing `mounted` guards.
-
-### Notifications work on iOS
-
-`InitializationSettings` passed no `iOS:` block and only the macOS permission
-plugin was resolved, so on the TestFlight build no permission was ever asked
-for and no notification could appear. All three platforms are now asked
-(including Android 13+, where `POST_NOTIFICATIONS` became a runtime
-permission), once per session rather than per notification;
-`UNUserNotificationCenter.current().delegate` is set in `AppDelegate` so a
-notification raised while the app is in the foreground is not swallowed; budget
-IDs are offset so `categoryId * 2 + 1` can no longer collide with the
-stack-goal ID at category 4999; and `BudgetProgress.isOverBudget` guards a zero
-budget, which used to produce "you've exceeded your $0 Food budget by $47".
-Verified with `flutter build ios --no-codesign`.
+| ID | Sev | Category | Finding |
+|---|---|---|---|
+| A-1 | High | correctness | AI-tier imports are not deduplicated — re-importing double-counts spending |
+| A-2 | Medium | reliability, privacy | Hosted AI output capped at 4,096 tokens — long statements upload, then parse to nothing |
+| A-3 | Medium | reliability | AI import input ignores the backend's context window |
+| A-4 | Medium | correctness | Saved column mappings book card charges as income |
+| A-5 | Medium | privacy | Refreshing an insight sends figures to a hosted provider without naming it |
+| A-6 | Medium | privacy | The chat screen never names who receives the figures |
+| A-7 | Medium | privacy | Picked statements and photos are left in app caches |
+| A-8 | Medium | performance | PDF and CSV parsing run unbounded on the UI isolate |
+| A-10 | Medium | performance | Per-token full rebuilds and quadratic string growth while streaming |
+| B-1 | Medium | correctness | Pagination cap truncates an address's history, and the sync then deletes the rest |
+| B-2 | Medium | security, privacy | Electrum defaults to plain TCP — readable and forgeable |
+| B-3 | Medium | reliability | A dropped Electrum connection takes minutes to fail |
+| B-4 | Medium | reliability | Esplora rate-limit handling defeats itself on large wallets |
+| B-5 | Medium | performance, privacy | Sync prices one day a second, sending each transaction's exact timestamp |
+| B-6 | Medium | privacy | The Add Wallet privacy notice is wrong in both directions |
+| B-7 | Medium | correctness | An ambiguous `xpub` with no history yet is stored as legacy for good |
+| D-1 | Medium | performance | Change triggers read the whole transactions table on every change |
+| D-2 | Medium | performance | Dashboard, per-wallet and analytics recompute from every row ever recorded |
+| D-3 | Medium | correctness | Recurring transactions are only generated on a cold start |
+| D-4 | Medium | privacy | "Reset all data" leaves a full copy of the old database on disk |
+| D-5 | Medium | reliability | Restore checks only the file header, and a database that won't open bricks launch |
+| P-1 | Medium | security | No app-switcher or screenshot protection on any platform |
+| P-2 | Medium | privacy | iOS database goes into iCloud and device backups; Android deliberately excludes it |
+| P-3 | Medium | supply-chain | GitHub Actions pinned to mutable tags, including those holding secrets |
+| P-4 | Medium | supply-chain | End-of-life SQLite libs, a discontinued keychain backend, wide version lag |
+| P-5 | Medium | privacy | ML Kit GenAI may bring Google's telemetry transport into Android builds |
+| U-1 | Medium | correctness | Re-running onboarding resets the AI provider and its URL |
+| U-2 | Medium | privacy | The Bitcoin routing banner describes unsaved text, not the saved server |
+| U-3 | Medium | privacy | Onboarding accepts an unusable Esplora URL without saying so |
+| U-4 | Medium | privacy | Stored API keys are preloaded into Settings and shown with one tap |
+| U-5 | Medium | performance | The import screen creates its Drift stream in `build()` |
+| U-6 | Medium | reliability | Several saves and deletes fail without telling the user |
+| U-7 | Medium | accessibility | Rows overflow at large text sizes |
+| A-9 | Low | correctness | Chat system prompt goes stale for the whole session |
+| A-11 | Low | performance | Per-row regex compile against the whole file when checking currency |
+| A-12 | Low | reliability | Vision paths duplicate the backends and lose errors |
+| A-13 | Low | reliability | CloudBackend's error-body read has no timeout |
+| A-14 | Low | correctness | AI rows are validated loosely |
+| A-15 | Low | correctness | Monthly insight staleness ignores the month boundary |
+| A-16 | Low | maintainability | `AiProvider.isPrivate` is a trap |
+| A-17 | Low | security | Credentials outside the keychain: legacy Maple key, `user:pass@` URLs |
+| A-18 | Low | correctness | Smaller import and copy issues (vision warning, consent text, date sniffing, CSV quoting) |
+| B-8 | Low | reliability, security | No bounds on what a hostile server can send |
+| B-9 | Low | maintainability, privacy | Three different tests for "is the default server in use" |
+| B-10 | Low | maintainability | Unused, incorrect Electrum helpers |
+| B-11 | Low | correctness | Extended-key depth is never checked |
+| D-6 | Low | correctness | Spending exactly equal to a budget is flagged as over |
+| D-7 | Low | correctness | Uncategorised spending counts as "Other" everywhere but Budgets |
+| D-8 | Low | correctness | Deleting a category leaves learned import mappings pointing at it |
+| D-9 | Low | reliability | Alerts are marked sent before they are delivered |
+| D-10 | Low | performance | Much work is awaited before the first frame |
+| D-11 | Low | correctness | Calendar dates stored as instants and read back in local time |
+| D-12 | Low | correctness | Double-tapping Add Wallet can track the same xpub twice |
+| D-13 | Low | performance, maintainability | `usageCounts` loads rows to count them; a misplaced doc comment |
+| U-8 | Low | correctness | Switching currency briefly mislabels the price, or keeps it mislabelled if the write fails |
+| U-9 | Low | correctness | Budget edit field shows the wrong currency symbol when there is no rate |
+| U-10 | Low | correctness, performance | The stack chart misrepresents time and redraws on every price tick |
+| U-11 | Low | correctness | The date picker asserts on imported dates outside its range |
+| U-12 | Low | accessibility | Sheets that don't scroll |
+| U-13 | Low | accessibility | Low-contrast text the `legibleAccent` pass missed |
+| U-14 | Low | accessibility | Tap targets under 48 px |
+| U-15 | Low | performance, privacy | Opening Settings calls the AI provider even if Servers is never opened |
+| U-16 | Low | privacy | Copied chat answers stay on the clipboard |
+| U-17 | Low | performance | Search reruns the whole filter and grouping on every keystroke |
+| U-18 | Low | correctness | The price chip's age label can stay at "just now" |
+| U-19 | Low | reliability | Electrum "Save and test" replaces a working server before testing the new one |
+| U-20 | Low | reliability | Onboarding's finish has no double-tap guard or error handling |
+| U-21 | Low | reliability | `setState` can run after dispose in the insight flow |
+| U-22 | Low | maintainability, reliability | Duplicated colour parsers that throw on bad data |
+| P-6 | Low | reliability | The test network guard misses raw sockets |
+| P-7 | Low | privacy | No privacy manifest for the app itself |
+| P-8 | Low | privacy | Amounts in notifications, including on the lock screen |
+| P-9 | Low | reliability | CI never builds Apple release configs; no job timeouts; Linux/Windows unbuilt |
+| P-10 | Low | security | macOS: no hardened runtime, and no local-network purpose string |
+| P-11 | Low | maintainability | Stale configuration comments; strict analyzer modes off |
+| P-12 | Low | security | Committed test TLS key (acceptable, but flagged by scanners) |
+| T-1 | Low | maintainability | Large screens have no tests at all |
 
 ---
 
-### Currency is the one the user chose
+## A — AI and statement import
 
-Addressed 2026-10-18.
+### A-1 · High · correctness — AI-tier imports are not deduplicated
+- **Where:** `lib/core/services/import_service.dart:2955` (`rawDescription: description`), the description at `:1174`, and the hashes at `:1789-1796` and `:1876-1882`.
+- **What:** On the AI tiers, `description` is the model's own rewording of the row. Both dedup hashes (`computeHash` and `HashUtils.transactionDedupHash`) are built from `tx.rawDescription`, which is set to that same text.
+- **Impact:** Model wording varies between runs and differs from the rules tier's raw bank text. So importing overlapping statements, or the same file once through AI and once through the rules tier, inserts the same transaction twice. Nothing in the preview flags it, and spending and budgets are silently inflated.
+- **Fix direction:** Build the dedup key from file-derived data only (date, amount, and the source row text or a normalised form of it). Flag near-duplicates (same source, date and amount) in the preview.
+- **Status:** open
 
-- **A manual entry stored `fiatCurrency: 'USD'`** whatever the active currency
-  was, while the list renders using the stored value — a GBP user's £40 expense
-  displayed as "-$40.00", and its sats had been derived from the GBP price, so
-  the two halves of the same row disagreed. The sats→fiat hint hardcoded `$`
-  the same way. An edit now rewrites `fiatCurrency` as well, because it
-  recomputes the amount at the current rate.
-- **The per-source currency was collected and then discarded.** Every parse
-  path in `import_service.dart` hardcoded `'USD'`, so the choice made in
-  `ImportSourceSetupScreen` reached nothing. It now threads through the rules,
-  profile, manual-mapping, PDF-heuristic and both AI tiers, where it is also
-  the fallback for a row whose currency the model omitted.
-  `InstitutionProfile.defaultCurrency` is gone: a profile identifies a column
-  layout, and the user is the authority on what the account holds.
-- **A BTC-denominated import wrote BTC units into `amountFiat`**, which
-  `DashboardService` sums as money, so a 0.05 BTC deposit read as "$0.05".
-  `amountFiat` is now derived from the sats via the historical price for that
-  date — the same shape as the xpub path — with spot as the fallback and 0 when
-  neither resolves, so the column never carries a BTC figure.
+### A-2 · Medium · reliability, privacy — Hosted AI output is capped at 4,096 tokens
+- **Where:** `lib/core/services/inference/cloud_backend.dart:468` (sent at `:351`, `:407`); `import_service.dart:1105` (`maxLen = 100000`), `:2459-2483`.
+- **What:** Up to 100,000 characters go in, but the answer is cut off at about 90 JSON rows. The truncated array has no closing `]`, so `_extractJsonArray` fails and the AI parse returns null.
+- **Impact:** A statement with more than about 90 rows is uploaded in full to the provider, then yields nothing. The app falls back to the rules tier or the heuristic, or shows "could not extract", and never says why. The user paid for the call and their data left the device for no result.
+- **Fix direction:** Size the input to what the output can carry, or chunk it. Raise the import's output cap, or recover the complete objects from a truncated array and say so.
+- **Status:** open
 
-Covered by `test/import_service_test.dart`.
+### A-3 · Medium · reliability — AI import input ignores the backend's context window
+- **Where:** `import_service.dart:1105-1108`; `lib/core/services/inference/remote_backends.dart:121-125`.
+- **What:** The fixed 100,000-character cap applies to every backend, though `contextBudgetChars` is 4,000 for Apple Intelligence and Gemini Nano. Ollama requests send no `options.num_ctx`.
+- **Impact:**
+  - On-device: overflow errors are swallowed and the user waits for nothing.
+  - Ollama: the server truncates the prompt itself, so rows are lost with no notice. Whether it drops the leading instructions is unverified.
+- **Fix direction:** Size the input from `contextBudgetChars`, pass `num_ctx` to Ollama, and set the truncation notice from the real limit. Skip the AI tier when the file cannot fit.
+- **Status:** open
 
-### Months tile the timeline
+### A-4 · Medium · correctness — Saved column mappings book card charges as income
+- **Where:** `import_service.dart:1624-1625`, called from `:924`.
+- **What:** `direction = mappingAmountIsSigned ? (raw < 0 ? 'debit' : 'credit') : 'debit'`. `parseWithMapping` never gets the source type, so it lacks the rules tier's `chargesMaySignPositive` / `positiveIsDebit` handling. An unsigned column becomes all-debit.
+- **Impact:** For a card that exports purchases as positive amounts, a saved mapping, which is the first tier tried on every later import, files every purchase as income.
+- **Fix direction:** Pass the source type into `parseWithMapping` and share the direction rules with `_parseRowsGeneric`.
+- **Status:** open
 
-Addressed 2026-10-18. Seven aggregates built a closed range ending at
-`23:59:59` and tested it with `!isAfter(end)`. `DateTime` carries milliseconds,
-so the last 999 ms of every month belonged to no month at all: absent from the
-dashboard, from analytics, from the budget it should have counted against, from
-the per-wallet breakdown and from the exported summary. Reachable without
-trying, because the add-transaction sheet seeds the date with `DateTime.now()`.
+### A-5 · Medium · privacy — Refreshing an insight sends figures to a hosted provider without naming it
+- **Where:** `lib/features/dashboard/widgets/ai_insight_card.dart:58-59`, `:101`, `:139`.
+- **What:** The "Sends last month's totals… to *recipient*" line shows only when `_needsConsentToGenerate`, which requires `!_hasInsight`. With an insight already cached, for example one made earlier with a local Ollama, only a refresh icon shows, and tapping it uploads the month to whichever provider is now selected.
+- **Impact:** After switching to Claude or ChatGPT, a user can send a financial snapshot to a third party from a control that doesn't say where it goes.
+- **Fix direction:** Show the recipient line, or confirm, whenever `offDeviceRecipient != null`.
+- **Status:** open
 
-A half-open `DateRange` (`lib/shared/utils/date_range.dart`) is now the only
-place that knows the rule, so consecutive months tile the timeline exactly.
-`test/month_boundary_test.dart` pins a transaction at 23:59:59.400 on the last
-day of a month through all six aggregates, and sweeps every millisecond either
-side of a boundary asserting exactly one month claims it.
+### A-6 · Medium · privacy — The chat screen never names who receives the figures
+- **Where:** `lib/features/ai_chat/ai_chat_screen.dart:455-461`; the claim that it does is at `cloud_backend.dart:158-161`.
+- **What:** The empty state says only "Your financial data is injected as context." `AiPrivacyDisclosure` appears only in the chat's settings sheet, and only for providers with a server URL. The screen never reads `sendsDataOffDevice`.
+- **Impact:** The most-used sending path, every question carrying the full snapshot, gives no reminder that Anthropic, OpenAI, Google or xAI receives it. The documented guarantee is false.
+- **Fix direction:** Show a compact recipient line in the chat whenever `sendsDataOffDevice`, or correct the comment.
+- **Status:** open
 
-### A category rename takes its transactions with it
+### A-7 · Medium · privacy — Picked statements and photos are left in app caches
+- **Where:** `lib/screens/import/import_file_screen.dart:325-329`, `:661-666`. Nothing in `lib` calls `clearTemporaryFiles()` (checked).
+- **What:** On mobile, `file_picker` and `image_picker` copy the chosen file into the app's cache. Nothing deletes the copy.
+- **Impact:** Whole bank statements and statement photos stay on disk after the import, outside the database that "Reset all data" clears. The per-platform behaviour is from the plugins' documentation, not verified here.
+- **Fix direction:** Delete the picked copy when an import finishes or is cancelled, and in reset.
+- **Status:** open
 
-Addressed 2026-10-18. `Transactions.category` is free text and
-`BudgetService.getProgress` joins on the name, not the id, so renaming a
-category orphaned every transaction in it: the budget card dropped to "$0 of
-$500", no overspend alert could fire, and the pie chart kept a phantom slice
-under the old name. `updateCategory` now rewrites `transactions`,
-`importedTransactions` and `descriptionCategoryMappings` in the same
-transaction as the rename — the mapping table too, or the next import
-re-learns a name that no longer exists. `test/category_rename_test.dart`.
+### A-8 · Medium · performance — PDF and CSV parsing run unbounded on the UI isolate
+- **Where:** `import_service.dart:1661-1667`, `:2386-2393`, `:2402-2406`.
+- **What:** `readAsBytes()` has no size check. `PdfTextExtractor.extractText()` and `CsvToListConverter().convert()` run synchronously on the main isolate, and the CSV is parsed up to three times on the fall-through path.
+- **Impact:** A large statement freezes the UI for seconds, during which Cancel can't respond. A very large one can exhaust a phone's memory.
+- **Fix direction:** Limit size at pick time, parse in `Isolate.run`, and parse once per import.
+- **Status:** open
 
-### A budget cannot be broken by a double tap
+### A-9 · Low · correctness — Chat system prompt goes stale for the whole session
+- **Where:** `ai_chat_screen.dart:86-90`, `:138-150`.
+- **What:** The prompt is built once, and rebuilt only when the provider configuration changes. The tab stays alive.
+- **Impact:** After an import, an edit or a new month, the AI answers from old figures. Both the AI and the UI reviewer found this; the comment at `:141` claiming the tab is disposed when you switch away is no longer true.
+- **Fix direction:** Rebuild per send, or when transactions change.
+- **Status:** open
 
-Addressed 2026-10-18. `BudgetService.upsert` was a read-then-write with no
-transaction over a table with no unique index, so double-tapping Save inserted
-twice and every later upsert for that category threw `StateError` out of
-`getSingleOrNull` — the budget could not be edited again without clearing the
-data. The write is one transaction now and `budgets.categoryId` carries a
-unique index, added in a **v6 migration** that collapses any duplicates an
-older install accumulated before creating it (the index cannot be created over
-them). `migrateToV6` is a named method so the test runs the real statements;
-there is no generated schema history to migrate against.
+### A-10 · Medium · performance — Per-token full rebuilds and quadratic string growth while streaming
+- **Where:** `ai_chat_screen.dart:217-221`; `import_file_screen.dart:402-415`.
+- **What:** Both the AI and the UI reviewer found this.
+  - Chat: a `setState` per token rebuilds a non-lazy list of every bubble, each re-parsing Markdown, and starts a scroll animation.
+  - Import: `_aiOutput += token` plus a whole-screen `setState`, per token.
+- **Impact:** Jank on long answers and large imports.
+- **Fix direction:** Throttle to once a frame, rebuild only the streaming bubble, and use a `StringBuffer`.
+- **Status:** open
 
-### Streams are built once, not once per frame
+### A-11 · Low · performance — Per-row regex compile against the whole file when checking currency
+- **Where:** `import_service.dart:503`, called per row at `:1175-1179`.
+- **What:** A new `RegExp` is compiled for each row and run over the whole untruncated file, whenever the model's currency differs from the account's.
+- **Impact:** Cost grows with rows times file size.
+- **Fix direction:** Cache the answer per claimed code for the import.
+- **Status:** open
 
-Addressed 2026-10-18. Every `watch*()` returns a new Drift stream, so a
-`StreamBuilder` fed from inside `build()` re-subscribed and reset to `waiting`
-on each rebuild. Every keystroke in the transactions search box replaced the
-list with a spinner and re-queried the table; the dashboard's Wallets section
-vanished and came back on every BTC price tick. Each stream is now built in
-`initState` and rebuilt only when its month — or, for the dashboard, the
-inflation rate baked into the aggregate — actually changes, with the
-`ValueListenableBuilder`s moved inside the `StreamBuilder` so a price or
-currency tick only repaints.
+### A-12 · Low · reliability — Vision paths duplicate the backends and lose errors
+- **Where:** `lib/core/services/ollama_service.dart:1040-1170`.
+- **What:** `_ollamaChatWithImage` and `_openAiChatWithImage` re-implement streaming. They throw a plain `Exception` and swallow every frame with `catch (_) {}`, `error` frames included.
+- **Impact:** A rejected key or an out-of-memory error mid-stream ends as a generic failure, or as a partial result that looks complete.
+- **Fix direction:** Move image chat into the backends, reusing their error and idle-timeout handling.
+- **Status:** open
 
-Two per-row futures went with them: the transactions screen ran
-`categoryService.getAll()` in a `FutureBuilder` per visible row, and the
-dashboard did the same for its recent-transaction list on every price tick.
-Both now read a name → category map the screen watches once, so a rename or a
-colour change still reaches the list.
+### A-13 · Low · reliability — CloudBackend's error-body read has no timeout
+- **Where:** `cloud_backend.dart:703`.
+- **What:** `response.stream.bytesToString()` on a non-200 response is unbounded, while `remote_backends.dart:364-367` caps the same job at 5 s.
+- **Impact:** A stalled proxy leaves the spinner spinning, and the dashboard insight has no cancel.
+- **Fix direction:** Use the same short timeout, and cap the body size.
+- **Status:** open
 
-`watchDashboard` watched only `transactions` while `_compute` reads the stack
-goal from `AppSettings` — harmless only for as long as the widget tree rebuilt
-the stream constantly. It watches both now, and `watchPerWallet` watches
-`wallets` as well.
+### A-14 · Low · correctness — AI rows are validated loosely
+- **Where:** `import_service.dart:816-823`, `:1166-1174`.
+- **What:**
+  - An amount given as a string (`"12.50"`) makes the row drop silently.
+  - `DateTime.tryParse` accepts out-of-range dates, and `…Z` UTC timestamps can move a row across a day or month boundary.
+  - A missing `direction` defaults to debit.
+- **Impact:** Rows go missing or land in the wrong month, with no notice.
+- **Fix direction:** Parse with `_parseAmount` and `_calendarDate`, and count dropped rows.
+- **Status:** open
 
-### Bulk imports commit once
+### A-15 · Low · correctness — Monthly insight staleness ignores the month boundary
+- **Where:** `ollama_service.dart:1182-1191`.
+- **What:** An insight is stale only 30 days after it was made, but it is about "last month".
+- **Impact:** A September insight made on 2 October still shows on 1 November.
+- **Fix direction:** Store the month it covers, and compare that.
+- **Status:** open
 
-Addressed 2026-10-18. The save loop in `import_service.dart` now runs in one
-`db.transaction`. Each commit used to fire `transactions.watchAll()`, which
-main.dart turns into a budget re-check plus three full table selects, and woke
-every mounted `StreamBuilder`: a 300-row import meant hundreds of full scans
-and a multi-second freeze, and a kill mid-loop left the two tables
-inconsistent. A test asserts 25 rows wake listeners once.
+### A-16 · Low · maintainability — `AiProvider.isPrivate` is a trap
+- **Where:** `lib/core/models/ai_provider.dart:140`.
+- **What:** It is true for Ollama and LM Studio whatever their URL. No runtime code reads it any more, only tests and comments. The test `isPrivate == (dataRecipient == null)` holds because both are wrong in the same way for a remote URL.
+- **Impact:** A future caller would bring back the false "nothing leaves" claim.
+- **Fix direction:** Rename it (for example `isPrivateByConstruction`), or remove it in favour of `OllamaService.recipientFor`.
+- **Status:** open
 
-### One rule for the AI tab
+### A-17 · Low · security — Credentials outside the keychain
+- **Where:** `ollama_service.dart:503-514`; `remote_backends.dart:72`, `:77`.
+- **What:**
+  - If the keychain refuses, a legacy Maple key stays in plaintext in `AppSettings`.
+  - Server URLs are stored and shown verbatim, so a `user:pass@` URL sits in the exported database and on screen.
+- **Impact:** Credentials can leak through an export or a screenshot.
+- **Fix direction:** Strip `userInfo` before storing or showing a URL, and warn when a plaintext key remains.
+- **Status:** open
 
-Addressed 2026-10-18. CLAUDE.md claimed Settings and onboarding could not
-drift; they had. Settings omitted the "hosted provider with a key" term
-onboarding had, so a mobile user with a saved Anthropic key lost the AI tab by
-switching provider and back — and saving a key, which is all a hosted provider
-needs, did not update the flag at all. `main.dart` seeded it from
-`isDesktop || isConnected`, where an on-device provider's `isConnected` is a
-readiness probe `loadSettings` only kicks off, so on-device providers lost the
-tab after every restart.
-
-`OllamaService.aiShouldBeEnabled` is now the one rule and all three read it
-(Settings had eleven inline copies). `isUsableWithoutDesktop` holds the part
-that is not about the host platform, so `test/ai_enabled_test.dart` can pin it
-without pretending to be a phone.
-
-`/ai` also redirects to `/dashboard` when the tab is gone. The path was only
-dropped from the shell's tab list, so `_indexForLocation` fell back to 0 and
-the AI screen stayed rendered with Dashboard highlighted and no tab matching
-it. The router takes `aiEnabledNotifier` as its `refreshListenable`, so this
-re-runs on the toggle rather than at the next navigation.
-
-### A failed answer is no longer saved as a complete one
-
-Addressed 2026-10-18. A provider error frame arriving after 200 tokens was
-invisible: `extractDelta` returns null for it, so the stream ended cleanly and
-the truncated answer was persisted as complete. `CloudBackend` now recognises
-each provider's error frame and throws, and recognises the stop reason that
-means the answer hit the output cap — `maxOutputTokens`, a named constant
-rather than a literal 4096 in two places — which the answer now says.
-Covered in `test/cloud_backend_test.dart`.
-
-### Editing an imported Bitcoin row keeps its value
-
-Addressed 2026-10-18. The edit sheet's amount field was always formatted with
-`toStringAsFixed(2)`, so an 0.00047 BTC row opened as "0.00" and saving wrote
-0.0 straight past the `< 0` guard. The field is now denominated in whatever the
-row is — sats for a Bitcoin row, with the fiat value derived from the price
-rather than typed, and eight decimals for a BTC-denominated parsed row — and
-zero is rejected rather than only negatives.
-
-### Light mode reaches the Stack screen
-
-Addressed 2026-10-18. The hero card's fixed `0xFF1A1200`/`0xFF2A1F00` gradient
-under white text and the chart's 5 %-opacity white gridlines were survivors of
-the light-mode pass recorded as complete in CLAUDE.md: in light mode the card
-stayed a dark brown slab and the gridlines were invisible. Both are derived
-from the theme now.
-
-### Notifications come from one place
-
-Addressed 2026-10-18. `budgets_screen.dart` fired an over-budget notification
-from inside `build()`, through a bare `FlutterLocalNotificationsPlugin()` that
-was never initialised — so on iOS no permission had been asked for and nothing
-appeared, bypassing the whole iOS notification fix above — keyed on
-`budget.id`, which can collide with the stack-goal id, and deduplicated by a
-module-level `Set` that was never cleared, so re-exceeding a budget in the same
-month never alerted again. The screen holds its progress stream in state and
-hands the check to `BudgetService.checkAndNotify`, the path main.dart already
-uses.
-
-### Guards after an await
-
-Addressed 2026-10-18. The seven `setState()`-after-dispose paths the audit
-named: three connection-test failure branches in `settings_screen.dart` (where
-the `!mounted` check happened before the awaits that follow), its export,
-import and Esplora non-200 branches, plus `add_transaction_sheet`,
-`set_budget_sheet` and `stack_screen._saveGoal`.
+### A-18 · Low · correctness — Smaller import and copy issues
+- **Where:** `import_file_screen.dart:602`, `:104`; `import_column_mapper_screen.dart:86`; `dashboard_service.dart:278`.
+- **What:**
+  - `looksLikeVisionModel` warns "may not support image analysis" for every hosted model, and all of them read images.
+  - The consent text reads "…the server you configured (host)'s servers".
+  - The column mapper picks DD/MM or MM/DD from only the first 3 rows, so a UK file whose first days are all 12 or under is read month-first and later rows are rejected.
+  - The summary CSV writes category names unquoted, so a comma shifts columns and a leading `=` becomes a formula.
+- **Fix direction:** Skip the vision warning for hosted providers, fix the copy, sample the whole column, and quote CSV fields with a formula-prefix guard.
+- **Status:** open
 
 ---
 
-### The schema can be trusted (v7)
-
-Addressed 2026-10-18.
-
-- **Indexes exist.** The schema had almost none, so every month range,
-  per-wallet total, budget grouping and launch-time recurring scan was a full
-  table scan. `transactions.(date, walletId, category, recurringPeriod)`,
-  `importedTransactions.sourceId` and a unique
-  `descriptionCategoryMappings.(sourceId, description)` are indexed by
-  `migrateToV7`, which collapses pre-existing duplicate mappings first, as v6
-  did for budgets. `schema_integrity_test.dart` asserts each index exists and
-  that a month-range query plans against `idx_transactions_date` rather than
-  scanning.
-- **Foreign keys are enforced.** sqlite ignores them unless asked, per
-  connection, so every `.references(...)` was decorative: a transaction could
-  point at a deleted wallet and nothing would complain until something read it
-  back. `beforeOpen` now issues `PRAGMA foreign_keys = ON` — after the migrator,
-  since a migration that rebuilds a table legitimately breaks references while
-  it runs. Tested, including that the seed and `resetAndReseed` both satisfy it.
-- **Learned categories are written once per import, not four times per row.**
-  `_saveDescriptionMappings` deleted and inserted per row, awaited; it now
-  collapses in memory and writes one batch of upserts against the new unique
-  index.
-
-### Aggregates read once, and a deleted instance stays deleted
-
-Addressed 2026-10-18.
-
-- `BudgetService.watchProgress` ran its whole aggregate three times on first
-  listen (two watches that each emit immediately, plus an explicit call) and
-  once per row during a burst of inserts. Reads are now coalesced into a
-  microtask and serialised, and `onCancel` closes the controller — without
-  which `controller.isClosed` was always false, so every guard on it was dead
-  and the controller itself was never released. `getProgress` filters the month
-  in SQL against the v7 `date` index instead of reading every transaction ever
-  recorded, and resolves categories through two maps rather than a linear scan
-  per row.
-- `_computePerWallet` grouped transactions by wallet with a `where` inside the
-  wallet loop, making it O(wallets × transactions) on the UI isolate; it now
-  groups in one pass.
-- `generateDueRecurring` no longer resurrects a deleted instance. The resume
-  point was the latest *surviving* row, so deleting the newest one lowered it
-  and the next launch recreated that row identically — while deleting a middle
-  instance did not, which made it inconsistent too. A per-series high-water
-  mark in `AppSettings` (`AppConstants.recurringCursorKey`) only moves forward.
-  Both cases are tested.
-
-### The price map cannot be half-destroyed
-
-Addressed 2026-10-18. Every fiat figure in the app is one conversion away from
-this number, so each of these was wrong money on every screen at once.
-
-- The two fetchers cleared `_allPrices` *before* knowing whether the response
-  held anything, so a partial reply — or a mempool failure followed by a
-  CoinGecko failure — left the map stripped of currencies it already had, and
-  that stripped map was then persisted. They now build and return their own
-  map, and the caller swaps it in only on success.
-- `switchCurrency` cleared the in-flight guard with the comment "in case a
-  stale lock is held", which let two fetches run at once and interleave their
-  writes. The guard is left alone now.
-- Switching to a currency with no data left `priceNotifier` holding the
-  previous currency's number while the getter already reported the new one —
-  every figure relabelled rather than reconverted, out by the exchange rate,
-  with nothing shown to the user. It is now set to null, which the UI renders
-  as loading. Tested.
-- `initialize` fell back to the `priceUsd` column, which holds whatever
-  currency was active when it was written and records no currency of its own,
-  so a EUR user could be shown a USD figure. It is read for its timestamp
-  only; the all-prices map is the real cache.
-- mempool's `/v1/prices` returns a `time` field beside the currencies, which
-  was stored as a price of "TIME" — a Unix timestamp — and persisted.
-  `currencyEntries` keeps 3-letter codes with numeric values and drops the
-  rest. Tested.
-
-### Imported rows stop landing in Other and staying there
-
-Addressed 2026-10-18. This is the complaint in `SatsStackNotes.md`, and the
-categoriser was not the only cause.
-
-- **Keywords matched inside words.** A bare `contains` made `PASSPORT OFFICE`
-  Entertainment (`sport`), `BARBERSHOP` Shopping (`shop`) and
-  `CURRENT ACCOUNT FEE` Housing (`rent`). Matching is now bounded by
-  lookarounds rather than `\b`, because several keywords end in punctuation —
-  `disney+`, `at&t`, `chick-fil` — where `\b` asserts the opposite.
-- **The first match won, not the best.** Categories live in a map, so the order
-  was arbitrary: `MONTHLY FEE REFUND` was Income because Income's `refund`
-  came before Subscriptions' `monthly fee`. The longest match now wins, which
-  also lets a specific phrase override a general one — `rent a car` beats
-  Housing's `rent`.
-- **The fallback was learned.** Every included row wrote a description →
-  category mapping, `'Other'` included, and that mapping was re-applied to
-  every later import of the same source — so one unrecognised merchant was
-  pinned to Other permanently, and improving the keyword list changed nothing
-  for it. `ParsedTransaction.categoryIsFallback` marks a guess, guesses are not
-  learned, and `setUserCategory` clears the mark when the user picks one.
-
-`METRO BANK CHARGE` → Transport is the one case left: `metro` genuinely is a
-whole word there, and no amount of scoring fixes it. It needs either a
-negative-keyword list or the user's own correction, which is now learned.
-
-Tested in `auto_category_test.dart`, with every misclassification above as a
-case.
-
-### The Bitcoin plumbing is honest about failure
-
-Addressed 2026-10-18. None of this is wired into a screen yet, but it compiles
-and is the next feature up, so it is better fixed before it ships.
-
-- **Electrum verified no certificates at all** —
-  `onBadCertificate: (_) => true`, for the convenience of self-signed servers.
-  On a hostile network that lets anyone sit in the middle of the connection and
-  harvest the full set of addresses a wallet scan asks about, which
-  deanonymises the whole wallet, while returning empty history so nothing looks
-  wrong. Certificates are verified; a self-signed server is used by pinning its
-  fingerprint first (`fetchCertificateFingerprint` probes without proceeding),
-  and only that certificate is accepted afterwards.
-- `ElectrumSession.call` applied its timeout to the returned future, leaving
-  the completer in `_pending` for the life of the socket — one leak per
-  timed-out request. The timeout removes its own entry now.
-- `rpcCall` decoded the body before looking at the status, and Bitcoin Core
-  answers a bad credential with 401 and a non-JSON body, so "wrong password"
-  surfaced as `FormatException: Unexpected character` and a 403 from
-  `rpcallowip` was indistinguishable from it.
-
-### The AI paths stop wasting and leaking
-
-Addressed 2026-10-18.
-
-- **A receipt photo is downscaled before it is sent.** It was base64-encoded
-  whole: a 3–5 MB camera photo becomes ~6 MB encoded, and every hosted provider
-  rejects that (Anthropic caps an image at 5 MB and ~1,568 px on the long
-  edge), so the user waited through the upload to get a raw provider 400.
-  Resized through `dart:ui`, so no image package is needed, stepping the edge
-  down until it fits, with the original as a fallback. The MIME type comes from
-  the file's magic bytes rather than its extension, which is often wrong for a
-  gallery photo.
-- **The chat transcript is trimmed to the backend's budget.** The whole history
-  was re-sent every turn with no limit while the budget was applied to the
-  system prompt alone — so on Apple Intelligence (4,000 characters) or a 0.6B
-  Qwen the answers quietly degraded after a few exchanges, and on a hosted
-  provider every turn cost more than the last. Newest turns are kept, whole.
-- **Leaving the chat actually stops the request.** A bare `await for` with no
-  client meant switching tabs disposed the screen while the stream ran to
-  completion: tokens kept arriving, a hosted provider kept billing, and the
-  answer was still written to the history of a chat the user had walked away
-  from. The subscription and an owned `http.Client` are now cancelled and
-  closed in `dispose`.
-- **SSE terminators are parsed, not string-matched.** `line == 'data: [DONE]'`
-  missed `data:[DONE]` and any trailing whitespace — the space after the colon
-  is optional in SSE — and the frame then fell through the prefix filter too,
-  so the stream ended with no explicit terminator. Both copies now take
-  `substring(5).trim()`, as `cloud_backend` already did.
-- **One malformed entry no longer discards a whole model list.** `models.map((m)
-  => m['name'] as String)` threw inside the `try` and returned `[]`, which the
-  picker reports as "no models loaded — test the connection first".
-
-### One formatter, one palette
-
-Addressed 2026-10-18.
-
-- **Sats formatting** was the same regex hand-rolled in a dozen places, and
-  they disagreed: some kept the minus sign, some dropped it, so one number
-  could appear two ways on two screens. All of them now call
-  `SatConverter`, which gained `formatSatsSigned` (for deltas, where direction
-  is the point) and `abbreviateSats` (for axis labels). One copy of the regex
-  remains, in `SatConverter`.
-- **Category colours** existed in three maps that disagreed — Shopping was
-  purple in Analytics, blue-grey on the dashboard chart and grey in the CSV
-  sheet — and none consulted the colour the user picked in Settings →
-  Categories, which the `Categories` table has stored all along. One
-  `CategoryPalette` now decides: the user's colour first, then the shipped
-  colour for a seeded category, then a stable pick from a fallback set, so two
-  custom categories are no longer both the same grey. The dashboard chart
-  passes the user's colours through.
-- `sat_amount_display.dart` (95 lines, never referenced) is deleted.
-
-Both are covered by `formatting_test.dart`.
-
-### The three oversized screens are split
-
-Addressed 2026-10-18, as its own PR — pure moves, no behaviour change, so the
-review question is only "is this the same code".
-
-| file | was | now |
-|---|---|---|
-| `stack_screen.dart` | 1,157 | 327 + 5 files under `widgets/` |
-| `onboarding_screen.dart` | 1,738 | 290 + 5 files under `pages/` |
-| `settings_screen.dart` | 1,784 | 1,575 + `widgets/settings_widgets.dart` |
-
-The moved classes were file-private, so each is public now with `super.key`
-added. Two names had to change: `_LineChart` → `StackLineChart`, because
-`fl_chart` exports a `LineChart` that the same file uses, and `_Period` →
-`StackPeriod`, which had to move because the chart and the chips both need it.
-
-Three real fixes went in alongside, each a few lines once the file was small
-enough to see:
-
-- The onboarding **Bitcoin server page now scrolls**. It was a fixed-height
-  `Column` containing a text field, whose only slack was two `Spacer`s that
-  clamp at zero, so on a small phone the keyboard overflowed it and could sit
-  on top of the field.
-- Settings **no longer rebuilds its whole tree per keystroke**. Two fields had
-  `onChanged: (_) => setState(() {})`; each now drives a
-  `ValueListenableBuilder` on its own controller, since the text decides
-  exactly one widget in each case.
-- `MonthCursor` replaces the triplicated month arithmetic.
-
-Verified with `flutter build macos --debug` as well as the suite, since the
-analyzer alone does not prove 2,900 moved lines still link.
-
-### The last three P2 items
-
-Addressed 2026-10-18.
-
-- **Streaming bodies have an idle timeout.** Every backend applied its timeout
-  to `client.send(...)`, which completes as soon as the response *headers*
-  arrive — so a body that stalled afterwards stalled forever. A dropped mobile
-  connection mid-answer left the chat spinner turning with no error, and the
-  import's cancel flag is only checked when a token arrives, so that hung too.
-  The new `Stream.idleTimeout` extension measures the gap between events
-  rather than a total budget, because a long answer is not a broken one: 45s
-  for a hosted provider, 120s for a self-hosted or on-device model.
-- **On-device generation is serialised per channel.**
-  `EventChannel.receiveBroadcastStream` installs one handler per channel name,
-  so a second concurrent listen *replaces* the first — which then receives
-  nothing and never completes. Reachable without trying: the dashboard's
-  monthly insight generating on Apple Intelligence while the user opens the AI
-  tab and asks a question. Multiplexing would need request ids on both native
-  sides; `serialisedOnChannel` queues instead, and a queued answer beats a hung
-  one. Both on-device backends also gained a 90s idle timeout, since nothing
-  else would ever end a stream the native side had abandoned.
-
-  **Narrowed 2026-10-18.** This fixes the *Dart* side only, and the claim that
-  `stream_resilience_test.dart` proves it is too strong: that test runs under
-  `flutter test`, which has no engine, so it exercises the queue and nothing
-  else. The queue slot is released when the Dart subscription is cancelled, not
-  when the native side actually stops — and neither bridge stops on cancel
-  (`GeminiNanoBridge.kt:132`, `FoundationModelsBridge.swift:184`), so an
-  abandoned generation's trailing deltas can still land in the next answer's
-  stream. See `TODO.md` item 2.
-- **The router's redirect no longer reads the database.** It queried
-  `app_settings` for the onboarding flag on every navigation — each bottom-nav
-  tap, each `context.push`, and again on each of GoRouter's
-  redirect-resolution passes — so a tab switch waited on a round-trip. It is
-  synchronous now against `onboardingCompleteNotifier`, read once at startup,
-  kept current by the three places that change it (finishing onboarding,
-  resetting onboarding, resetting all data) and included in
-  `refreshListenable` so a change still re-runs the redirect immediately.
-
-Covered by `stream_resilience_test.dart`: that a quiet stream fails, that a
-slow-but-alive one does not, that a second generation waits rather than
-clobbering the first, that a failure does not block the next, and that
-different channels do not queue behind each other.
-
-### Currency is converted, not mixed
-
-Addressed 2026-10-19, after the second review pass found the first fix only
-covered the write side.
-
-- **Every aggregate summed `amountFiat` across currencies.** `fiatCurrency` was
-  written by four paths and read in exactly one place — a row label — so the
-  dashboard, budget progress, analytics, year-to-date and the exported summary
-  all added dollars to pounds under a `£` label, while the transactions list
-  showed each row correctly. `FxRates` now converts each row into the display
-  currency first, using BTC as the bridge because it is the one rate table the
-  app already holds for every currency. Same-currency rows — nearly all of them
-  — are returned exact and need no rate at all, so this works offline.
-  **It applies today's cross rate to every row**, so a March USD charge is
-  converted at October's rate: a deliberate trade, since major cross rates move
-  a few percent a year against the 20–30% error of adding them, and it stays
-  synchronous. A row with no rate is excluded from the fiat totals but keeps
-  its sats in the stack, and the dashboard says how many rather than showing a
-  quietly smaller number. Recent rows are taken from the originals, since they
-  are rendered with their own currency label.
-- **The live edit path rewrote historical values.** An earlier entry here said
-  "an edit now rewrites `fiatCurrency`", crediting `AddTransactionSheet`'s
-  editing branch — but that branch was **unreachable**: its only call site is
-  the add path. The real edit path, `TransactionEditSheet`, derived both columns
-  from `priceNotifier` — the price *now*, in the *active* currency — and stored
-  the row's *old* code. So editing only the category of a March purchase
-  rewrote its sats at October's price, and a USD row edited in GBP got a
-  GBP-derived figure labelled `$`. It now keeps the row's currency (the field is
-  pre-filled in it) and preserves the rate the transaction actually happened
-  at; changing the amount scales both columns at that rate. The dead branch is
-  deleted.
-
-Covered by `fx_rates_test.dart` and `currency_aggregates_test.dart`, end to end
-through the real services.
-
-### Light mode is legible
-
-Addressed 2026-10-19. Not hardcoded dark colours — the earlier light-mode pass
-found all of those. These were colours tuned for dark and reused on light, so
-nothing looked wrong in the code.
-
-- **Secondary text was one grey for both themes**: `#888780`, 5.39:1 on the
-  dark background but **3.37:1** on the light one, at 10–11px, across 125 call
-  sites — every caption, metric label, date header and category name. No single
-  grey can serve both: the luminance a colour needs to clear 4.5:1 against
-  near-black and near-white do not overlap. It is two values now, resolved from
-  the theme through `context.textSecondary`; the light one, `#67665F`, is the
-  lightest warm grey that clears AA on the background, on white cards *and* on
-  the tinted `surfaceContainerHighest` (`#6F6E67` clears the first two and fails
-  the third).
-- **Bitcoin orange as text was 2.30:1** on a light card — the sats figure on
-  every transaction row and spending bar, the app-bar price. Text now uses
-  `context.bitcoinOrangeText` (`#9A5600` on light, 5.67:1); fills, borders and
-  icons keep the brand colour, since only small text needed it.
-- **Banner copy was set in its own accent over a tint of that accent**, measured
-  at 1.97–2.20:1 — the least readable text in the app was the Settings banner
-  explaining which third parties can see your Bitcoin addresses. Body copy and
-  route rows move to theme text; headings and one-line banners keep their
-  semantic colour through `context.legibleAccent`, which darkens an accent just
-  enough to clear AA on its own tint. It is computed rather than hand-picked,
-  because each accent needs a different amount.
-
-  **The first version of that helper was wrong**, and only measuring caught it:
-  it checked against an 8% tint over pure white, and the colours it produced
-  then failed at 4.19–4.44:1 on the off-white scaffold the banners actually sit
-  on. It now measures against the darkest real case (12% over the scaffold),
-  which clears all eight real combinations at ≥4.65:1.
-
-Also fixed in passing: the add-transaction amount toggle was labelled **"USD"**
-whatever the user's currency was. `contrast_test.dart` pins all of the above
-against the real theme through a widget, including that each raw colour does
-fail — so the tests show the bug as well as the fix.
-
-### Tabs keep their state
-
-Addressed 2026-10-19.
-
-- **Every tab switch destroyed the screen.** The shell was a plain
-  `ShellRoute`, which builds a different child *type* per tab, so the element
-  tree could not reconcile and each switch discarded the screen's State. Set a
-  filter and a search on Transactions, tap Dashboard, tap back: both were gone,
-  the scroll position was lost, and the whole table was re-queried behind a
-  full-screen spinner. The same happened to the Stack period and DCA input and
-  the selected month on Budgets, and the Dashboard re-ran its insight reads on
-  every visit. It is a `StatefulShellRoute.indexedStack` now — one branch per
-  tab, kept alive, built lazily on first visit. The AI branch is last so a
-  branch index always equals its nav-bar index even while AI is hidden.
-- **Keeping tabs alive exposed one screen that depended on dying.** The AI chat
-  loaded its configuration once in `initState`, and tab-switching had been
-  quietly re-running it on each visit — so with tabs kept alive, fixing an
-  Ollama URL in Settings and returning would leave the chat reporting the old
-  URL as unreachable. `OllamaService.configChanges` is bumped on every AI
-  configuration write, and the chat re-initialises when its
-  `configFingerprint` changes — which deliberately excludes the selected model,
-  so picking a model from the chat's own dropdown does not reload the chat. The
-  other four tabs are stream-driven and stay correct while alive.
-
-`tab_state_test.dart` drives the real `AppShell` with tabs that hold state.
-Before relying on it, the same scenario was run against the old `ShellRoute`
-in a throwaway test: the counter came back as **0**, so the new test does
-distinguish the two designs. Verified with `flutter build macos`; not yet
-exercised by hand in the running app.
-
-### The import consent gate has a way out
-
-Addressed 2026-10-19.
-
-- **Consent was permanent, silent and unrevocable.** One "Send to Anthropic"
-  tap was written to settings at the tap and never asked about again; there
-  was no revoke control anywhere, and nothing afterwards said an upload had
-  happened. Settings → Servers now has a **Statement imports** row that names
-  every provider allowed to read imports and withdraws them in one tap, and is
-  shown even when none is, so the answer is visible somewhere other than the
-  dialog that asked. The preview says **"This file was sent to … to be read"**
-  whenever an off-device tier ran — including when it found nothing and the
-  local rules took over, since the upload happened either way.
-- **The preview said "Parsed via Ollama AI" for every provider.** It names the
-  provider that actually read the file.
-- **A yes was remembered even if the import was then cancelled.** It is now
-  held for the length of the import and stored only once the import completes.
-- **The dialog promised a local fallback to photos**, which have none. The copy
-  is now per flow, and both say that a yes covers later imports and where to
-  withdraw it. `AiPrivacyDisclosure` names statement imports among the things
-  that send data, instead of implying everything is per-request.
-- **The five-minute timeout kept running behind the dialog**, so it could fire
-  and stack a second dialog over the first. It is paused while the question is
-  up and restarted afterwards.
-- **`isLocalEndpoint` failed open.** `Uri.parse('ollama.example.com:11434')`
-  reads the host as a *scheme* and yields no host at all, which the check
-  called local: no consent prompt, auto-insight on, and a false privacy claim
-  for a remote server. It now fails **closed** for anything non-blank without a
-  host, and the Ollama, LM Studio and Maple URLs are normalised on save and on
-  load through `normalizeServerUrl` — the same rules `XpubService` already
-  used, now shared — so a bare `host:port` gains its scheme (http for the two
-  self-hosted servers) and Settings shows the URL actually saved.
-- **Photo import asked for consent before checking the backend could see**,
-  and swallowed the `InferenceException` saying why it could not. The
-  capability is checked before a photo is even picked, and again in the
-  service before consent; a backend error reaches the preview in its own words.
-
-Covered by `import_consent_test.dart`, end to end through `importFile` and
-`importImage` with a fake hosted backend, and by `ai_privacy_test.dart`.
-
-### Parsing conventions are decided per file
-
-Addressed 2026-10-19.
-
-- **Dot-grouped thousands.** The comma had a three-digit grouping rule and the
-  dot had none, so a German `2.500` became **2.5** — a 1000× understatement
-  with nothing to show for it — and `1.234.567` dropped the row. A blanket
-  mirror rule would turn a BTC export's `0.125` into 125, so this is inferred
-  the way `_inferDayFirst` is: `_inferDotGrouping` votes over the file's own
-  amounts (`12,50` and `1.234,56` for, `12.50` and `0.12345678` against), and
-  a file with no decisive value keeps the decimal reading. Two or more dot
-  groups can only be grouping and are always read so.
-- **`_inferDayFirst` took the first decisive date**, so one US row at the top of
-  a merged UK export decided the file. It is a vote now; each row's own
-  decisive component still overrides the file's answer for that row.
-- **The PDF heuristic tier had none of the date work** — the tier a user lands
-  on after declining off-device consent. It read every date month-first, had
-  no dotted pattern (a German `01.02.2025` line matched nothing), and its
-  amount pattern knew only `1,234.56`, and matched `2.500` as `2.50`. It now
-  infers day order and amount convention from the whole text, and matches
-  `/`, `-` and `.` dates and both amount conventions.
-- **The delimiter was sniffed from the first line**, which in many exports is a
-  title or account summary. It is now the delimiter that splits the most of
-  the first twenty lines into the same number of fields. The rules tier also
-  looks for the header row among the first fifteen rows, instead of assuming
-  row 0, so those exports no longer fall through to manual mapping.
-- **Only `\r\n` was normalised**, so a classic `\r`-only export was one row.
-
-Covered by `parsing_conventions_test.dart`. Run against the previous parser,
-eight of its ten tests fail; the two that pass are the guards that a BTC-style
-decimal is *not* reinterpreted.
-
-### Accessibility
-
-Addressed 2026-10-19.
-
-- **There was no `Semantics` anywhere in the UI layer**, and most small controls
-  were a `GestureDetector` around a decoration: unlabelled or invisible to a
-  screen reader, unreachable from the keyboard on desktop, and 14–24px tall.
-  They now go through `Tappable`, which keeps the decoration and adds a
-  button node with a name and selected/toggled state, a 48×48 target
-  (Android's floor and Material's `kMinInteractiveDimension`; iOS asks for
-  44), keyboard focus with a visible ring, Enter/Space activation and a
-  pointer cursor. Swatches are named by colour (`colourName`), icon choices by
-  name, and the price chip reads "Bitcoin price $67,000, updated 2 minutes
-  ago" rather than "2m". Long-press-only actions (budget options, copying a
-  chat message) carry a spoken hint. The three charts expose a spoken summary.
-- **Three month selectors**, two of them bare 20–22px icons. One shared
-  `MonthSelector` of `IconButton`s with tooltips, a live-region month label,
-  and `FittedBox` so it scales down in a narrow app bar at large text sizes
-  rather than overflowing.
-- **Large text overflowed.** The trailing amount column in the transaction row,
-  the dashboard wallet row and the spending bar took whatever width its text
-  wanted, so at 2× the row overflowed — by 336px at 3× on a 360px screen.
-  `ShrinkToFit` caps it and scales it down; amounts shrink rather than being
-  ellipsised. The spending bar's 100px category label now follows the text
-  size, capped at a third of the row.
-
-Fixed in passing: more orange-as-text and category-colour-as-text sites the
-contrast pass missed (Repeat, the period chips, the wallet type badge, BTC
-transaction names), and `TransactionListItem`'s private currency-symbol table,
-which duplicated `CurrencyUtils` and printed amounts without grouping.
-
-`accessibility_test.dart` uses Flutter's own `androidTapTargetGuideline`,
-`iOSTapTargetGuideline` and `labeledTapTargetGuideline`. Its first version
-passed against the row that overflowed: it faked the screen width with a
-`MediaQuery`, which changes what widgets read but not the constraints they lay
-out in. It sets the test view now, and fails against the old row at 2× and
-3×. Not yet checked with VoiceOver or TalkBack on a device.
-
-### The smaller correctness items
-
-Addressed 2026-10-20 (`TODO.md` item 9).
-
-- **Two categories could share a name** (schema v8). Transactions, budget
-  progress, imports and learned mappings all key on the *name*, so a pair was
-  indistinguishable: a rename rewrote both, one read zero spend forever, and
-  neither could be deleted. `Categories.name` now has a unique index, and the
-  service rejects a clash — case-insensitively, which is stricter than the
-  index — with a message on the name field instead of a raw SQLite error.
-  `migrateToV8` **renames** existing duplicates ("Pets (2)") rather than
-  deleting them, unlike v6 and v7, because a category has budgets pointing at
-  its id; the transactions stay with the oldest, since they were matched by
-  name and there was never a way to tell whose they were.
-- **The same xpub in two wallets synced the second to nothing** while
-  reporting every row as skipped: the dedupe looked at every wallet's hashes,
-  and the hash was salted with the txid alone. The scan now dedupes against
-  its own wallet, and the hash is scoped with `HashUtils.scopedToWallet` —
-  derived from the stored hash rather than added to the salt, because a row
-  keeps only eight characters of its txid. That let `migrateToV8` rescope
-  every stored xpub row in place: a delete-and-resync would have dropped every
-  category and note the user had set on them. `XpubService` takes an optional
-  HTTP client, so the sync is now tested end to end against a fake chain.
-- **A failed restore left the database closed** for the rest of the session,
-  so every later query threw, and a copy that stopped partway left a torn file
-  for the next launch. `replaceDatabaseFile` copies the original back over a
-  failed copy, and every outcome now ends at a dialog that can only be left by
-  quitting — the database cannot be reopened under the running services.
-- **Today's BTC price was cached permanently** on first request, so anything
-  dated today kept that mid-day quote for good. Only a settled day — more than
-  two days old, since the key is a local date and the sources bucket by UTC —
-  goes into the permanent cache; an unsettled day is cached in memory for 15
-  minutes, so one import still fetches it once. A mid-day row an earlier build
-  wrote for an unsettled day is deleted rather than later served as final.
-  Rows such builds wrote for days that have since settled cannot be told
-  apart, and are left.
-- **"Imported" counted rows recorded against the source, not the ledger**, so
-  importing a statement under a second source reported every row while the
-  Transactions screen gained nothing. Both inserts use
-  `insertReturningOrNull`, which says whether a row was written (`insert`
-  with insertOrIgnore returns a rowid either way), and the summary reports
-  rows already in the ledger separately and says why.
-- **The Stack screen walked every transaction four times per BTC price
-  tick**, through getters on its content widget. `StackStats` does it in one
-  pass when the rows change, and recomputes when the calendar month turns.
-- **The Dashboard rebuilt every section and every row on each price poll**:
-  its price and currency listeners wrapped the whole content. Each section
-  that shows a price-derived figure now listens for itself, and a
-  transaction row with stored sats — almost all of them — does not listen at
-  all.
-- **Four Stack widgets read `app.currencyNotifier.value` in `build`** without
-  subscribing, kept correct only by a parent listener that discarded the value.
-  They take the currency as a parameter now, and no longer import `main.dart`.
-- **`setState` after an await without a `mounted` check**: two date pickers,
-  and the two import entry points, which are only ever called straight after
-  a picker returns and so ran `setState` first thing on a possibly closed
-  screen.
-- **Insight failures were silent.** A tap on Generate with an unreachable
-  server or a rejected key did nothing visible, dropping the readable message
-  `CloudBackend.describeError` builds. A tap now says why; the automatic
-  refresh stays quiet. An empty answer is an error rather than being cached as
-  the month's insight.
-- Tidied: `SetGoalSheetState` is private, and the constructors with
-  `super.key,required` crammed on one line are formatted.
-
-Found while testing: the Dashboard's section header ("Spending Breakdown …
-View Analytics") overflowed at large text sizes — the same bug as the
-transaction row, in a header the accessibility pass missed. Its title gives
-way now.
-
-`dashboard_rebuild_test.dart` is the first test to pump a whole screen against
-real services on an in-memory database. It measures rebuild scope by widget
-identity — a row whose parent did not rebuild keeps the same widget object —
-and fails against the old structure. The other fixes are covered in
-`schema_integrity_test.dart`, `xpub_service_test.dart`,
-`database_restore_test.dart`, `btc_price_service_test.dart`,
-`import_service_test.dart`, `stack_stats_test.dart` and `insight_test.dart`;
-the xpub test was also run against the old sync, which gives the second wallet
-0 rows. The restore dialog and the insight snackbar were not exercised by hand.
-
-### CI, lints and docs
-
-Addressed 2026-10-20 (`TODO.md` item 10), in two PRs: a format-only one, so
-nothing else had to be read through 7,000 lines of re-indentation, and this.
-
-- **Android did not build at all** on the pinned Flutter 3.47.2. It now
-  refuses Gradle below 8.14, AGP below 8.11.1 and Kotlin below 2.2.20, and the
-  project was on 8.11.1 / 8.9.1 / 2.1.0. Nothing noticed, because CI built
-  nothing native. Raised to exactly those floors; Flutter already warns that
-  Gradle 9.1, AGP 9.0.1 and Kotlin 2.3.20 are next (`TODO.md`).
-- **CI compiled nothing native.** It now also checks `dart format`, resolves
-  with `--enforce-lockfile`, builds a debug APK on ubuntu, and builds iOS
-  (unsigned) and macOS in parallel on a Mac runner — the cheapest checks that
-  reach the manifest merge, the Podfiles, the entitlements and both native AI
-  bridges. The Android build above is what it would have caught.
-- **`claude.yml` ran for anyone** who wrote "@claude" on this public repo. It
-  now requires an owner, member or collaborator, and queues per issue rather
-  than running in parallel. The review workflow cancels a superseded run, and
-  skips drafts and fork PRs (which run without the secret and could only
-  fail).
-- **No lint rules were enabled.** `flutter_lints` is on 6.0.0, and the rules
-  added are the ones that catch bug classes this code has had —
-  `unawaited_futures`, `cancel_subscriptions`, `close_sinks`,
-  `avoid_void_async`, `only_throw_errors` — plus conventions it already
-  follows. `close_sinks` found a real leak: a failed Electrum handshake never
-  closed its socket. `require_trailing_commas` is deliberately off: from
-  language 3.7 the formatter owns trailing commas. `avoid_dynamic_calls` (43
-  sites) and `discarded_futures` (47) are recorded as not enabled, with why.
-- **The onboarding screen's first privacy claim was false**: "an encrypted
-  SQLite database … Nothing leaves." The database is plain SQLite, and a
-  wallet sync sends addresses to a block explorer. It now says what is true;
-  the README's privacy section is rewritten the same way and lists what
-  leaves the device and when. Real encryption is a decision in `TODO.md`.
-- **Android declared CAMERA and READ_MEDIA_IMAGES.** The audit's version of
-  this was wrong — `image_picker` *does* request CAMERA at runtime when the
-  manifest declares it, so nothing crashed. But neither is needed: the capture
-  intent and the system photo picker work without them, declaring CAMERA only
-  added a prompt, and Google Play's photo-permission policy rejects
-  READ_MEDIA_IMAGES for occasional picking. Both removed; the merged manifest
-  of a real build confirms neither comes back from a plugin.
-- `ITSAppUsesNonExemptEncryption` is `false` in both Apple Info.plists, with
-  the reasoning beside it, so uploads stop asking.
-- `dedup_hash_test.dart` now also runs the real import and recurring call
-  sites and checks what they stored, including two series started the same
-  day; the xpub call site is covered in `xpub_service_test.dart`.
-- `SatsStackNotes.md` is deleted: four of its five items had shipped, and the
-  fifth (a tab roadmap) is now in `TODO.md`. The README's stale lines are
-  fixed, as is the "Add xpub wallet" tooltip. `CLAUDE.md` is gitignored, so its
-  corrections (SDK, pins, schema notes, Podfile, Info.plist rationale) are
-  local.
-
-`flutter build apk --debug`, `flutter build ios --debug --no-codesign` and
-`flutter build macos --debug` were run locally before the workflow was
-pushed; the workflow itself is proven only by its first run on the PR.
-
-### The macOS model build phase, and cancelling on-device answers
-
-Addressed 2026-10-20 (`TODO.md` items 1, in part, and 2).
-
-- **The LiteRT-LM build phase swallowed every failure.** Each
-  `install_name_tool` and `codesign` ended in `2>/dev/null || true`. With
-  those removed, the very first build failed: `libLiteRtTopKMetalSampler`
-  does not exist in this flutter_gemma version, and every earlier build had
-  printed a warning about it and carried on. It turns out to be optional —
-  LiteRT loads it if present and samples on the CPU without it — so it is now
-  skipped by name, while the two libraries LiteRT cannot run without fail the
-  build if missing.
-- **The copied frameworks were always signed ad hoc**, which library
-  validation refuses to load into a Developer ID-signed app and notarization
-  rejects. They are now signed with the identity Xcode is signing the app
-  with (`EXPANDED_CODE_SIGN_IDENTITY`), with the hardened runtime and a
-  timestamp when that is a real identity. No
-  `disable-library-validation` entitlement is needed: same-team code loads.
-- **Architecture.** LiteRT-LM ships arm64 only. The phase now skips an
-  arm64-less build instead of failing, and still installs for a universal
-  one. More importantly, `LocalModelChoice.runsHere` checked the OS rather
-  than the CPU — its comment said "Apple silicon (not Intel)" while the code
-  said any Mac — so an Intel Mac, or a 32-bit or x86 Android device, was
-  offered a multi-gigabyte download that could never load. It checks the ABI
-  now.
-- **The product name was the template's**, so the window title read
-  `sats_stack`. It is "Sats Stack"; the bundle id is a separate decision
-  (`TODO.md` item 1), because changing it moves the sandboxed data.
-- **Cancelling an on-device answer broke the next one.** Reproduced first, on
-  this Mac: an answer requested straight after a cancelled one arrived
-  **empty**. The cancelled Swift task unwound by throwing
-  `CancellationError`, which the catch reported as `generation_failed`, then
-  sent end-of-stream through a sink that by then belonged to the next request.
-  Both bridges now give each generation a token and drop any emission whose
-  token is no longer current — checked on the main thread, where `onCancel`
-  runs, so the two cannot race — treat cancellation as cancellation, and make
-  a new generation wait for the cancelled one to unwind. This also retires the
-  narrowed claim about `serialisedOnChannel`: its queue slot is released on
-  cancel, and the native side now waits for itself.
-
-  The TODO's account of the Kotlin side was partly wrong: `collect` does
-  suspend between chunks, so cancelling the job did stop it. The real faults
-  were the same two as Swift's — cancellation reported as failure, and no
-  wait before the next request.
-
-`integration_test/apple_intelligence_test.dart` gained the cancel-then-ask
-case; it fails against the old bridge and passes against the new one on macOS
-(three runs) and on the iOS 27 simulator. The Kotlin bridge compiles cleanly
-but is **not verified on a device** — Gemini Nano needs AICore on a physical
-phone. The renamed app also passes the native macOS `RunnerTests`, whose test
-host had the old name hardcoded.
-
-### The downloadable-model backend is removed, and macOS has its real id
-
-Decided 2026-10-20 (`TODO.md` item 1's two decisions).
-
-- **`flutter_gemma` is gone.** Both it and `flutter_gemma_litertlm` are
-  discontinued, and the backend they powered was the only one of six with an
-  unmaintained native dependency, a hand-written Xcode build phase and
-  multi-gigabyte downloads. Removed with it: the backend, its Settings
-  section and onboarding card, the memory and storage probes that existed only
-  to size its catalogue (and their native channels on iOS and Android), the
-  macOS LiteRT build phase, and a dozen transitive packages. Apple
-  Intelligence, Gemini Nano, the self-hosted and the hosted backends remain.
-  iOS goes back to a 15.0 minimum — the floor flutter_gemma had raised.
-- **Nobody who used it is stranded.** A stored choice of it moves to the
-  platform's built-in on-device model — Apple Intelligence or Gemini Nano —
-  rather than falling back to Ollama, which on a phone means no AI tab, and
-  never to anything hosted. Its model setting is deleted.
-- **Its weights are deleted.** They were 0.6–5 GB each, and with the backend
-  gone no screen could remove them. `RemovedModelCleanup` deletes them at
-  launch, by exact file name (and their partial downloads) in Documents, and
-  the package's own folder in Application Support on macOS. The database
-  lives in the same Documents folder, so a test pins that it, its backup and
-  an unrelated file with the same extension all survive.
-- **macOS uses `app.satsstack.SatsStack`**, matching iOS, instead of the
-  template's `com.satsstack.satsStack`. The app is sandboxed, so a new id is a
-  new, empty container; the old data is untouched where it was, and the
-  README gives the export/import steps and the one-line copy. API keys do not
-  come across and have to be re-entered.
-
-Covered by `removed_local_model_test.dart`. All three platforms build; the
-Apple Intelligence integration test passes on macOS under the new id, and the
-container appears where the README says it will.
-
-### Android no longer backs up the database or the API keys
-
-Addressed 2026-10-20; found while writing the encryption plan.
-
-The manifest set no backup rules, so Android Auto Backup was on with its
-defaults. **The plaintext database went to the user's Google Drive.** The API
-keys went with it, in `flutter_secure_storage`'s EncryptedSharedPreferences,
-but the Keystore master key that decrypts them never leaves the device, so on a
-restored phone they could not be read.
-
-`data_extraction_rules.xml` (Android 12+) now keeps both out of cloud backup,
-and keeps the keys out of device-to-device transfer, which cannot move a
-Keystore key either. `backup_rules.xml` (Android 8–11) cannot tell the two
-apart, so it excludes both everywhere. Moving to a new phone is Settings →
-Data → Export and Import.
-
-Checked by building the APK and dumping the compiled rule files and the merged
-manifest. **Not exercised with `bmgr` on a device** — that needs an emulator
-with a backup transport, and the rules are declarative.
-
-### Test gaps
-
-The suite went from 102 tests to 209 over this work. Month boundaries, category
-renames, the AI-tab rule, the migrations, the categoriser, the price map, the
-dedup hash's wallet scoping, the formatters and the stream guards are all
-covered. What is still missing is listed in [`TODO.md`](TODO.md) item 13.
+## B — Bitcoin and network
+
+### B-1 · Medium · correctness — Pagination cap truncates history, and the sync then deletes the rest
+- **Where:** `lib/core/services/xpub_service.dart:195` (`_maxPagesPerAddress = 40`), `:714-740`, and the delete at `:1032-1035`.
+- **What:**
+  - At the cap, the loop returns a partial list with no error.
+  - A server that pages in fewer than 25 rows ends paging after one page.
+  - Pass 4 then deletes every stored row the scan didn't return.
+- **Impact:** For an address with more than about 1,000 transactions, or a self-hosted Esplora still indexing, older rows are deleted along with their categories and notes. The only warning is a count.
+- **Fix direction:** Throw when the cap is hit. Refuse, or ask before, a sync that would remove a large share of a wallet's rows.
+- **Status:** open
+
+### B-2 · Medium · security, privacy — Electrum defaults to plain TCP
+- **Where:** `lib/core/services/electrum_service.dart:23` (`_ssl = false`), `:147-153`; `AppConstants.defaultElectrumPort = 50001`; `wallet_history_section.dart:223-231`.
+- **What:** Plain TCP is the default. The copy warns only that addresses "cross the network readable".
+- **Impact:** On a shared network, someone in the path sees every scripthash. They can also return forged or empty history, which B-1's delete path then turns into lost rows.
+- **Fix direction:** Default to TLS on 50002, or confirm before using plain TCP to a non-private host. Say in the copy that history can be forged as well as read.
+- **Status:** open
+
+### B-3 · Medium · reliability — A dropped Electrum connection takes minutes to fail
+- **Where:** `electrum_service.dart:427-455`, `:301-313`.
+- **What:** `_handleDone` fails only the calls already pending. Later `call()`s keep writing to the dead socket and each waits out the 30 s timeout. `fetchWindow`'s `Future.wait` isn't `eagerError`, and the limiter allows 16 calls in flight.
+- **Impact:** A dropped connection mid-scan can hang behind a spinner for several minutes.
+- **Fix direction:** Add a closed flag that makes `call()` throw at once, and use `eagerError: true`.
+- **Status:** open
+
+### B-4 · Medium · reliability — Esplora rate-limit handling defeats itself on large wallets
+- **Where:** `xpub_service.dart:626-631`, `:648-656`, `:665`, `:688-701`.
+- **What:**
+  - Three workers send at about three times the old serial rate.
+  - While one backs off after a 429, the other two keep sending.
+  - A `Retry-After` over 30 s, or one given as a date, is ignored, and the request is retried after 0.5–1 s.
+  - The third 429 aborts the whole scan, and nothing from it is kept.
+- **Impact:** On public mempool.space, a large wallet may never finish syncing.
+- **Fix direction:** Make backoff global across workers. Fail clearly on a long `Retry-After`. Adapt the spacing.
+- **Status:** open
+
+### B-5 · Medium · performance, privacy — Sync prices one day a second, sending each transaction's exact timestamp
+- **Where:** `xpub_service.dart:1001-1010`; `lib/core/services/btc_price_service.dart:356-366`, `:554-556`, `:578-588`.
+- **What:**
+  - Pass 3 calls `getHistoricalPrice` once per day, throttled to 1 request a second, with `?timestamp=<block time>`, falling back to CoinGecko.
+  - `prefetchHistoricalPrices`, a bulk fetch that sends no dates, is used by imports (`import_service.dart:1744`) but not here.
+- **Impact:** First sync of a wallet with 300 transaction days spends five or more minutes on prices. Users who chose Electrum for privacy still send mempool.space a block-precise timestamp for every transaction, which points at the blocks holding them, alongside their IP. The banner says only "dates".
+- **Fix direction:** Call `prefetchHistoricalPrices` before the per-day loop, as imports do, and make the banner exact.
+- **Status:** open
+
+### B-6 · Medium · privacy — The Add Wallet privacy notice is wrong in both directions
+- **Where:** `lib/features/transactions/widgets/add_wallet_sheet.dart:341-342`, `:369`, `:400`.
+- **What:** The notice keys only on `esploraBaseUrl != mempoolBaseUrl`, never on the data source.
+  - With Electrum chosen, it says history comes from mempool.space.
+  - With any other public instance set, it says "exclusively your custom server… nothing sent to public servers".
+  - "Your xpub is never sent" is true, but every derived address is, and that links the wallet just the same.
+- **Impact:** Users make privacy decisions on copy that is wrong.
+- **Fix direction:** Build it from the same inputs as `DataRoutingBanner`, and say that addresses are sent.
+- **Status:** open
+
+### B-7 · Medium · correctness — An ambiguous `xpub` with no history yet is stored as legacy for good
+- **Where:** `add_wallet_sheet.dart:67-70`; `xpub_service.dart:349-365`, `:836-841`.
+- **What:**
+  - Script-type detection runs only when the wallet is added. If it finds no history, the plain `xpub` is kept, and every later sync derives legacy addresses.
+  - Detection also stops at the first type with history, so funds held under another type of the same key are never scanned.
+- **Impact:** A new Ledger or Trezor native-SegWit account added before its first receive stays empty forever. The user has to delete it and add it again.
+- **Fix direction:** Re-detect on rescan while the wallet is unresolved and empty, or ask the user for the type. Reuse the probe results in the first sync.
+- **Status:** open
+
+### B-8 · Low · reliability, security — No bounds on what a hostile server can send
+- **Where:** `electrum_service.dart:387-391`; `xpub_service.dart:607`, `:617`; `lib/shared/utils/bitcoin_script.dart:120-135`, `:156`, `:163`.
+- **What:**
+  - Lines and HTTP bodies have no size cap.
+  - An 8-byte varint can go negative and slip past the bounds check (throwing `RangeError`, not `FormatException`).
+  - An output value with the top bit set parses as negative.
+- **Impact:** Memory exhaustion is possible over plain TCP. Errors are inconsistent, but all are caught upstream.
+- **Fix direction:** Cap sizes, and reject negative or over-long lengths and values.
+- **Status:** open
+
+### B-9 · Low · maintainability, privacy — Three different tests for "is the default server in use"
+- **Where:**
+  - `btc_price_service.dart:253-256` and `:500-503`: `contains('mempool.space')`
+  - `:452-456`: any custom value
+  - `add_wallet_sheet.dart:342`: exact equality
+  - `bitcoin_servers_section.dart:141-144`: `contains` on unsaved text
+- **What:** Each place decides differently. `BtcPriceService.loadSettings` also reads the URL without normalising it.
+- **Impact:** The same URL counts as default on one screen and custom on another. That decides whether CoinGecko is contacted, and which privacy copy shows.
+- **Fix direction:** One normalised `isDefaultEsplora` predicate, used everywhere.
+- **Status:** open
+
+### B-10 · Low · maintainability — Unused, incorrect Electrum helpers
+- **Where:** `electrum_service.dart:190-225`.
+- **What:** Nothing calls `getHistory` or `getTransaction`. `getTransaction` asks for verbose output, which electrs doesn't support, and swallows every error.
+- **Fix direction:** Delete both. `ElectrumHistory` covers this.
+- **Status:** open
+
+### B-11 · Low · correctness — Extended-key depth is never checked
+- **Where:** `xpub_service.dart:371-401`.
+- **What:** A master (depth 0) or chain-level (depth 4) key is derived as `/chain/i` without complaint.
+- **Impact:** A key exported at the wrong level shows as an empty wallet.
+- **Fix direction:** Warn when the depth isn't 3.
+- **Status:** open
 
 ---
 
-## Third pass — 2026-10-21
+## D — Data layer and core services
 
-Seven parallel reviews (import, data layer, Bitcoin, AI, UI, native/CI/docs,
-tests and dead code), a live run on the iOS simulator, and a check of each
-finding against the code before it was fixed. About 180 findings; the ones
-below are fixed, each with a test that fails on the old code unless noted.
-What is still open is in [`TODO.md`](TODO.md) item 15.
+### D-1 · Medium · performance — Change triggers read the whole transactions table on every change
+- **Where:** `lib/core/services/budget_service.dart:123-124`; `lib/main.dart:173-180`; `lib/core/services/transaction_service.dart:14-17`.
+- **What:** `watchProgress` watches full `select(budgets)` and `select(transactions)` queries only to learn that something changed, and throws the rows away. `main.dart` keeps `watchAll()`, an ordered full select, alive for the whole process, just to call `checkAndNotify`.
+- **Impact:** Every insert, edit or delete re-reads and maps the whole table at least twice on the UI isolate. That causes jank on large histories.
+- **Fix direction:** Use `tableUpdates(...)` as the trigger, and keep `watchAll` for screens that render rows.
+- **Status:** open
 
-**Status:** merged as PRs #22–#28 (docs #29).
+### D-2 · Medium · performance — Dashboard, per-wallet and analytics recompute from every row ever recorded
+- **Where:** `lib/core/services/dashboard_service.dart:82-94`, `:151-156`, `:230`, `:305`, `:361-363`; `btc_price_service.dart:216`.
+- **What:**
+  - Each emission loads every transaction and filters, restates and sorts in Dart.
+  - `watchDashboard` also watches `appSettings`, which the price service writes every 10 minutes and on resume, as do the notification ledger and recurring cursors.
+  - `asyncMap` doesn't merge bursts of changes.
+- **Impact:** O(n log n) over the whole history on every price tick and every change, twice (dashboard and per-wallet). The v7 date index goes unused.
+- **Fix direction:** Do the month sums, stack total and recent-five in SQL, grouped by currency, over the indexed date range.
+- **Status:** open
 
-### Screens that broke outright — #22
-- Both ways of deleting a transaction were broken: the confirmation dialogs
-  popped with the row's or the sheet's context, which sits in the tab's
-  navigator while the dialog is on the root one. Long-press → Delete popped
-  the tab's only page (a blank app in release); the edit sheet's Delete closed
-  the sheet and deleted nothing.
-- The Bitcoin server onboarding page rendered blank on every device: Spacers
-  in a scroll view throw in layout. The other text pages overflowed rather than
-  scrolling on a small phone or at large text. All four share
-  `OnboardingPageFrame` now.
-- Bottom sheets opened inside the tab, so the tab bar stayed live behind them.
-  They open on the root navigator; the budget options sheet, which would then
-  have popped the Budgets tab, pops itself.
-- Settings' server test hung forever on a URL with no scheme (`ArgumentError`
-  is not an `Exception`).
+### D-3 · Medium · correctness — Recurring transactions are only generated on a cold start
+- **Where:** `lib/main.dart:163`. It is the only caller, checked.
+- **What:** The resume listener refreshes only the price.
+- **Impact:** A phone app resumed for days without a cold start, or a desktop window left open, misses rent and salary entries. Budgets and the dashboard under-count, and alerts come late.
+- **Fix direction:** Also run on resume and on a day-change timer. The cursor and hash already make repeat calls safe.
+- **Status:** open
 
-### Import money — #23
-- Swan, Coinbase and Strike profiles booked a fiat column in the account's
-  currency: $500 into a BTC account was 500 BTC. Profiles now say what their
-  amount column is in.
-- A non-display-currency account's sats used the display currency's price.
-- Amex-style cards (charges positive) became all income; `CR`-marked UK
-  statements all spending; a PDF with a running balance read every salary as
-  spending, and a "CREDIT INTEREST" line flipped the rest of it.
-- A same-day refund, or a second identical row, was dropped as a duplicate;
-  the same charge in two accounts kept one row. Hashes now carry the row's
-  occurrence in the file and are scoped to the source, not the one shared
-  wallet. **Behaviour change:** the same statement imported under two sources
-  is now two visible copies rather than one.
-- The Wells Fargo profile never matched a real export, and skipped its first
-  row.
+### D-4 · Medium · privacy — "Reset all data" leaves a full copy of the old database on disk
+- **Where:** `lib/core/database/database.dart:544-547` (the `.bak`), `:381-397`; `danger_zone_section.dart:43`.
+- **What:** Restoring a backup writes `<db>.sqlite.bak`, and nothing ever deletes it. Reset only runs `DELETE`s, with no `VACUUM` or `secure_delete`, so deleted rows also stay in free pages.
+- **Impact:** After any import followed by "Delete Everything", the earlier database stays beside the live one, including transactions, xpubs and server URLs. The dialog promises permanent deletion.
+- **Fix direction:** Remove the `.bak` once a restore succeeds and on reset, and `VACUUM` after reset.
+- **Status:** open
 
-### AI: what it is sent, and the disclosures — #24
-- The prompt hardcoded `$`/USD, rounded every figure, sent a missing price as
-  `$0` and named no month: a GBP user's £12.50 came back as "-$13".
-- Every chat question was sent twice.
-- Import consent for Ollama, LM Studio and Maple carried over to a different
-  server; the Dashboard insight card's recipient went stale after a provider
-  switch; Settings kept saying "nothing leaves" after a public URL was saved;
-  onboarding and the chat sheet judged self-hosted privacy by provider, not
-  URL; the chat sheet offered an "Apple Intelligence URL".
+### D-5 · Medium · reliability — Restore checks only the file header, and a database that won't open bricks launch
+- **Where:** `lib/features/settings/widgets/data_section.dart` (`_looksLikeSqlite`); `lib/main.dart:72-102`.
+- **What:** The only check is the `'SQLite format 3'` header. The first queries in `main()` are not guarded.
+- **Impact:** A truncated, corrupt or foreign SQLite file passes the check, then throws before `runApp`, and the app can't launch. The good data sits in `.bak` with no way back to it.
+- **Fix direction:** Open the candidate read-only first and check `integrity_check`, `user_version` and the expected tables. Catch open failures at startup and offer to restore the `.bak`.
+- **Status:** open
 
-### Data that could be lost or locked — #25
-- The schema upgrade had no transaction: killed partway through v8, the
-  database could never be opened again ("index already exists").
-- An xpub row's hash came from a local time with no offset, so a timezone
-  change made the next sync delete and re-add every row, losing each category
-  and note. Hashes are UTC now, and rows under an older hash are re-keyed in
-  place.
+### D-6 · Low · correctness — Spending exactly equal to a budget is flagged as over
+- **Where:** `lib/core/models/budget_progress.dart:39` (`spentFiat > limit`); `budget_service.dart:166-168`.
+- **What:** Spending is a running sum of doubles. In 20,000 random sets of cent amounts that add up exactly to the limit, 15 % compared as greater: for example `143.92000000000002 > 143.92`.
+- **Impact:** The card turns red, an "exceeded by $0" alert fires, and that month's alert is used up.
+- **Fix direction:** Compare in integer cents.
+- **Status:** open
 
-### UI that showed or saved the wrong thing — #26
-- Budgets rounded each figure on its own ("£13 spent, £88 remaining").
-- A decimal comma was dropped or read as grouping ("4,50" → 450).
-- "Add budget" could replace an existing one; delete did not confirm.
-- The System theme came back as Dark; an unpriced Bitcoin send showed as a
-  green "+".
-- Re-running onboarding wrote defaults over the real settings — including
-  switching a self-hosted Esplora server back to mempool.space; Reset left
-  most in-memory state behind; "Show BTC price: off" promised no price
-  requests, which was never true.
+### D-7 · Low · correctness — Uncategorised spending counts as "Other" everywhere but Budgets
+- **Where:** `budget_service.dart:164`, compared with `dashboard_service.dart:169`, `:187`, `:250`, `:342`.
+- **What:** Budgets skip a `null` category. The dashboard, analytics and export treat it as `'Other'`.
+- **Impact:** An "Other" budget disagrees with the pie chart and the export.
+- **Fix direction:** One rule, used in all four places.
+- **Status:** open
 
-### AI setup and errors — #27
-- A self-hosted server could never pass its first connection test: no model
-  meant "unavailable", and models were only listed once available.
-- Server errors before and during an answer were dropped or reduced to a
-  status code; a half-answer was saved as complete; the offline screen gave
-  server advice to every backend. A hosted answer lost its last frame without
-  a trailing newline.
+### D-8 · Low · correctness — Deleting a category leaves learned import mappings pointing at it
+- **Where:** `lib/core/services/category_service.dart:136-157`; `import_service.dart:1984-1992`.
+- **What:** Mappings and imported rows keep the deleted name, and mappings are applied without checking the category still exists. The check and the delete are also not one transaction.
+- **Impact:** The next import files rows under a category that no longer exists, and they never count against a budget.
+- **Fix direction:** Redirect or remove the mappings in the same transaction as the delete, or check the category when applying a mapping.
+- **Status:** open
 
-### Light mode — #28
-- White on Bitcoin orange is 2.4:1, on every filled button, the FABs and the
-  hero card; text buttons were 2.3:1; the status bar was white on light;
-  several accents were 1.5–2.1:1 as small text.
+### D-9 · Low · reliability — Alerts are marked sent before they are delivered
+- **Where:** `lib/core/services/notification_service.dart:94`, `:120`, `:145`, compared with `:224-226`, `:253`.
+- **What:** `_claim` records the alert. `_show` then returns silently when not initialised, when permission is denied, or when the plugin throws.
+- **Impact:** A user who allows notifications later gets nothing for the rest of the month, and the stack-goal alert for that amount never fires again.
+- **Fix direction:** Claim only after a successful show.
+- **Status:** open
 
-### Claims in this file that were wrong
+### D-10 · Low · performance — Much work is awaited before the first frame
+- **Where:** `lib/main.dart:87`, `:95`, `:99-133`, `:145`, `:148`; `ollama_service.dart:421`, `:448`, `:457`, `:460-461`.
+- **What:** About 15 sequential round trips run before `runApp`: a full settings read, five keychain reads, possible keychain migrations, five more single-key reads of values already loaded, and three service initialisations.
+- **Impact:** Slower cold start, most likely with macOS's file-based keychain. Timings were not measured.
+- **Fix direction:** Read settings once and share them. Load API keys lazily, or after the first frame.
+- **Status:** open
 
-- **"The last 999 ms of the month fall into no month."** Drift stores
-  `DateTime` as whole seconds (there is no `build.yaml`), so a saved row never
-  had sub-second precision; the half-open `DateRange` is still right, but the
-  `month_boundary_test` aggregate group cannot fail against the old code.
-- **"One palette"** — Analytics still ignores user colours, and its seeded
-  colours disagree with the database seed.
-- **"Streams are built once"** — `CategoriesSheet` still builds one in
-  `build()`.
-- **48 px tap targets** — the category icon grid's cells are 33 px.
-- **"The only dead code is item 11's"**, and **`scripthash_test` covers
-  `ElectrumService`** — it tests a helper defined inside itself.
-- **The Wells Fargo `skipHeaderRow` fix** was never applied to the profile.
+### D-11 · Low · correctness — Calendar dates stored as instants and read back in local time
+- **Where:** drift's default timestamp storage (there is no `build.yaml`); `lib/shared/utils/date_range.dart:27-30`; `transaction_service.dart:265-322`.
+- **What:** Picker and CSV dates are local midnight, stored as an instant. Months and recurring dates read them back with the device's current local fields.
+- **Impact:** After moving to a timezone further west, a transaction on the 1st reads as the last day of the previous month, landing in the wrong budget and month, and recurring series shift with it. This was reasoned from the code, not run.
+- **Fix direction:** Store date-only values as calendar dates.
+- **Status:** open
 
-## Working through item 15 — from 2026-10-29
+### D-12 · Low · correctness — Double-tapping Add Wallet can track the same xpub twice
+- **Where:** `lib/core/services/wallet_service.dart:53-65`; `wallets_table.dart`.
+- **What:** `findByXpub` then `insert`, with no transaction and no unique index. Whether the UI already blocks a double tap is unverified.
+- **Impact:** The same wallet counted twice doubles the stack.
+- **Fix direction:** Do both in one transaction, or add a unique index on `xpub` that allows NULLs.
+- **Status:** open
 
-Item 15's open list, fixed one PR at a time, in the order `TODO.md` gave.
-
-### xpub wallets can be re-synced and removed
-- `ManageWalletsSheet` was the app's only re-sync UI and nothing opened it, so
-  a wallet was never refreshed after it was added. The Transactions tab's
-  wallet button now opens it (adding a wallet is one tap further, from the
-  sheet). Each wallet can be removed, which deletes its rows after a
-  confirmation that names how many.
-- Re-adding a tracked key doubled the stack, because rows are hashed per
-  wallet. `addXpubWallet` refuses a key already tracked and points at Rescan;
-  the key is stored trimmed so the check can match.
-- A failed first sync left an empty wallet (it is created before the sync),
-  which the duplicate check would then have blocked a retry on. The sheet
-  removes it again.
-
-### Recurring series have a stable id (schema v9)
-- A series was identified by its period, anchor, description and amount, so
-  editing an instance split it off and the original regenerated: duplicate
-  rows. Renaming the anchor recreated nearly every past instance. Rows now
-  carry `recurringSeriesId`, random when a series is started, and the
-  generation cursor is keyed on it.
-- The dedup hash of a generated instance is built from the series id and the
-  due date only (`TransactionService.recurringDedupHash`); it used to include
-  the description and amount, so an edit changed it.
-- With a stable id the cursor is authoritative. It used to be overridden for a
-  series that looked re-created, which made deleting every instance but the
-  anchor regenerate them all.
-- A series can be stopped: Stop repeating in the edit sheet turns its rows into
-  one-offs and drops the cursor. There was no way to do this.
-- Each instance is priced on its own date (`priceAt`, wired to
-  `getHistoricalPrice` at launch): a fiat series keeps its fiat and gets that
-  day's sats, a Bitcoin one the reverse, falling back to the newest instance's
-  figures when there is no price. Every instance used to copy the anchor's
-  sats. Generated rows also keep `isBitcoin`, which they used to lose.
-- Existing series are adopted by the v9 migration — grouped the way the old key
-  grouped them, and also by wallet, so two identical series in two accounts are
-  no longer one (TODO item 10). Each keeps its cursor.
-
-### Budgets have a currency, and alerts are sent once per occasion
-- A budget was a bare number, read in whatever the display currency was, so
-  switching GBP → USD turned £500 into $500 and could fire an overspend
-  alert. `budgets.currency` (schema v10; existing budgets stamped with the
-  display currency) and `BudgetProgress.limitFiat`, the budget converted into
-  the display currency, which progress, "left", the totals, the alerts and
-  the exported summary all read. With no rate to convert it, the card shows it
-  in its own currency and it is never reported as overspent.
-- Alert dedupe was a per-session set of ids: every cold start re-sent every
-  alert (the stack goal on every launch once reached), and a new month could
-  not alert until a restart, because the id had no month in it. Alerts are
-  now claimed in `AppSettings` by `NotificationLedger`, keyed per category per
-  month and per goal amount; budget keys from other months are pruned.
-
-### xpub keys are scanned for the right addresses, and unpriced rows heal
-- An `xpub` exported for a SegWit account (Ledger, Trezor and others do this)
-  was scanned as legacy and looked empty. Adding a mainnet `xpub` now probes
-  its first 20 receive addresses as native SegWit, nested SegWit and legacy,
-  and stores the key re-encoded for the type that has history
-  (`XpubService.withFormat`), so every later sync derives the right ones.
-- Testnet keys were accepted, scanned against a mainnet server and priced as
-  real BTC. The form and `syncWallet` refuse them.
-- A row whose day had no price was stored with a fiat value of 0 and never
-  priced again. Each sync now re-prices kept rows at 0, and reports how many
-  are still unpriced (`XpubSyncResult.unpricedNote`), naming a self-hosted
-  Esplora server — which has no price endpoint — as the likely cause. That
-  used to give no prices at all without a word.
-
-### The dashboard's figures
-- The "not yet in these totals" note counted unconverted rows across all
-  history, so one old foreign-currency import kept it on every month. It counts
-  the month on screen.
-- The spending breakdown (dashboard bars, Analytics legend) rounded each figure
-  to whole units on its own: £12.50 read £13. Each list now uses one precision,
-  with pence if any figure has them.
-
-### The monospaced font is a font
-- `assets/fonts/RobotoMono-*.ttf` had been GitHub HTML pages since the first
-  commit, so every figure set in `AppTextStyles.mono*` fell back to the system
-  font and ~600 KB of HTML shipped in the bundle. They are the static TTFs from
-  `googlefonts/RobotoMono` now, with the Medium face declared as weight 500.
-- Roboto Mono is under the SIL Open Font License (not Apache 2.0, as this file
-  used to say), which must accompany it: `assets/fonts/OFL.txt` is bundled,
-  registered with `LicenseRegistry`, and Settings → About → Licences shows it.
-
-### Import: cancelling, and the column mapper
-- The cancel flag, the consent answers and the "was it uploaded" flag lived
-  on the `ImportService` singleton, so starting an import reset the previous
-  one's: an import cancelled while its consent dialog was up, answered yes a
-  moment later, carried on and uploaded. Each import now runs in a zone with
-  its own `_ImportRun`, cancelled through its own `ImportCancelToken`; a
-  consent answered after a cancel is refused before anything is sent.
-- Leaving the import screen did not cancel. It cancels its token on dispose.
-- The column mapper took row 0 as the header, so an export opening with a
-  title showed the title as column names and read the mapping against the
-  wrong rows. The mapper and `parseWithMapping` both start from the detected
-  header row.
-- Dates overflowed rather than being rejected: `DateTime` and
-  `DateTime.tryParse` normalise, so 25/12/2025 read as MM/DD became 2027 and
-  31 February became 3 March, in the mapper and the guessing parser alike.
-  `_calendarDate` rejects a date that does not exist. The mapper's formats
-  accept `/`, `-` and `.`; DD/MM/YY is offered; and a column with a first part
-  over 12 is detected as day-first.
-
-### Import: which tier reads it, and what is remembered
-- On-device AI was never used for an import: readiness required a selected
-  model, and Apple Intelligence and Gemini Nano have none by design.
-- A PDF the AI could not read came back empty without trying the heuristic
-  reader, which is what runs when there is no AI at all. It is tried now.
-- A file over 100,000 characters was cut for the AI without a word, so a long
-  statement lost its later rows silently. `ImportResult.aiInputTruncatedAt`
-  says how much was sent, and the preview says so.
-- The column mapper saved its layout before parsing, so a layout that read
-  nothing was tried first on every later import, with no way to remove it. It
-  is saved only after it reads something, and a source's menu has "Forget
-  saved column layout". The mapper's parse also skipped the learned
-  categories; `prepareForReview` applies them on every path.
-- Learned categories were keyed on the description as edited in the preview,
-  which no later file contains. They are keyed on the file's own description
-  (old mappings still match).
-- The keyword categoriser uses the seeded category names, so renaming "Food &
-  Dining" to "Food" filed matches under a name that no longer existed.
-  `CategoryService` records each rename of a built-in category
-  (`system_category_name:<seeded name>`), and imports use the current name.
-
-### Import: pricing, and the smaller misreadings
-- Historical prices were fetched one day per second, serially, behind a bare
-  spinner — five minutes for a year of statement. `prefetchHistoricalPrices`
-  takes a Mempool server's whole price history for the currency in one
-  request when five or more days are uncached, and caches each day's nearest
-  point; the per-day lookups that follow are cache hits. The import button
-  says "Pricing day n of m". It also sends the price server no transaction
-  dates. `BtcPriceService` takes an injectable `http.Client`.
-- "Try Again" on the timeout dialog only closed it; the import had already
-  been cancelled. It runs the import again, and "Close" closes.
-- The column mapper replaced itself with the preview, so backing out lost
-  every column choice. It pushes the preview, and removes itself once the
-  import is done so the summary's Done still returns to the import screen.
-- "Other…" currency could not be chosen: it copied the listed code into the
-  field's state, so the dropdown snapped back and the field never appeared.
-  The custom code must be three letters.
-- Amounts with an ISO code (`GBP 12.50`, `12,50 EUR`), grouped with a narrow
-  no-break space (U+202F) or a Swiss apostrophe did not parse.
-- A model's per-row currency was taken as given. It is kept only when the file
-  names that currency (by code, or by an unambiguous symbol); a photo, which
-  gives nothing to check against, uses the account's.
-
-### AI answers, and the models offered
-- Answers were shown as raw Markdown, asterisks and all. `MarkdownText`
-  renders what models use in a chat answer (headings, lists, fenced code,
-  rules, bold, italic, inline code, links as text) in the chat and the insight
-  card; anything else, and a half-streamed marker, stays as typed. Written in
-  the app because `flutter_markdown` is discontinued.
-- Gemini's answer was read from `parts.first`, dropping the rest of a frame.
-  Every text part is read, skipping the model's own reasoning parts.
-- A refusal or safety stop ended the stream like any other, so the partial
-  answer was kept as complete. `CloudBackend.indicatesRefusal` recognises
-  Anthropic's `refusal`, OpenAI/xAI's `refusal` delta and `content_filter`,
-  and Gemini's safety finish reasons and `promptFeedback.blockReason`; the
-  stream fails with the reason.
-- xAI answers a bad key with a 400 whose `error` is a plain string echoing the
-  key; it came out as "request failed (HTTP 400)". It is reported as a
-  rejected key, and string `error` fields are read elsewhere.
-- Model lists offered embeddings, speech, transcription, image and moderation
-  models (and Ollama's embedding models). `CloudBackend.isChatModel` filters
-  them; Gemini's are filtered by `supportedGenerationMethods`.
-- A saved model missing from the fetched list made the chat's picker show the
-  first model as if it were answering, and Settings show none. `modelChoices`
-  keeps the model in use in the list.
-
-### AI: where it goes, and what is kept
-- Every chat question and answer was written to `ai_conversations` and never
-  read — no screen shows them — so they piled up in the database and in every
-  export of it. Nothing writes there now, and launch clears what earlier
-  builds stored (`OllamaService.clearStoredTranscripts`). The table stays, so
-  no schema change.
-- API keys were stored under `first_unlock`, justified by a background insight
-  refresh that does not exist, and that class lets a key travel in an
-  encrypted backup to another device. iOS uses `first_unlock_this_device`;
-  existing keys are rewritten once (`keychain_keys_device_only`), which the
-  plugin does by replacing the old item. macOS keeps `first_unlock`: its
-  plugin puts the class in the read query, so a change could hide every key,
-  and the file-based keychain does not restore onto other devices anyway.
-- A server on the local network was described as "nothing leaves", though the
-  figures cross the network to another machine; a remote server over plain
-  `http://` got no warning. `OllamaService.transportNoteFor` says which, under
-  the URL field in Settings, onboarding and the chat's settings sheet. The
-  local network still counts as the user's own hardware for consent — decided
-  2026-10-31, below.
-
-### The Stack screen's maths, and the live price
-- The DCA simulator read its amount only when something else rebuilt the
-  screen, so typing changed nothing until a period was tapped. It listens to
-  the field now.
-- Its scenarios were all valued at today's price, so the one assuming the most
-  growth — which buys the fewest sats — showed the smallest figure, and
-  "Optimistic" read as the worst. Each is valued at its own end price
-  (`DcaSimulator.endValue`).
-- The stack goal's monthly average skipped idle months, so stacking in two
-  months of a year read as stacking every month and the projected date came
-  far too soon. Idle months count as zero, over the last 12 complete months
-  (or since the first activity).
-- The live price was fetched at launch and never again. It refreshes every 10
-  minutes while the app runs and on returning to the foreground
-  (`BtcPriceService.startAutoRefresh`, `refreshIfOlderThan`).
-
-### Large text, contrast and category colours
-- Overflows at large text sizes, each now covered in `accessibility_test` at
-  1×, 2× and 3× on a 360 px screen: the transaction row's category line (the
-  existing test used a row with no category), the hero card's fiat-and-change
-  line, the budget card's figures and its sats cost, `StackGoalTile`'s header,
-  and the five button rows in Settings, which wrap now.
-- Contrast: the budget card's spent figure and "left" text were the raw
-  progress colour (green 3.4:1 on white), and selected category chips set
-  their label in the raw category colour. All go through `legibleAccent`.
-- Analytics ignored the colours chosen in Settings → Categories; it reads them
-  now, as the dashboard does.
-- The database seeded Housing, Shopping, Subscriptions and Other in one grey,
-  Transport in the Bitcoin orange and Entertainment in the Income green, while
-  `CategoryPalette` had its own table. There is one table now
-  (`AppConstants.seededCategoryColours`) with nine distinct colours, and the
-  v11 migration recolours built-ins the user never recoloured.
-
-### UI polish, and the splash
-- The hero card's "Import a Bitcoin wallet" pill was styled like a button and
-  did nothing; it opens the wallet sheet.
-- A 12 px spacer between the "Add notes" and "Repeat" toggles — each already
-  a 48 px target — was a strip that did nothing when tapped. Removed.
-- Copy said "bank CSV" and "xpub address" though PDF and photo imports exist
-  and an extended public key is not an address.
-- The category icon grid had eight fixed columns, about 33 px each on a phone;
-  it fits as many 48 px cells as the width allows.
-- Five icon buttons had no tooltip, so no spoken name or hover label.
-- Errors raised inside a sheet — a failed save, an invalid amount, a failed
-  rescan — were snackbars, which show behind the sheet. They are shown in it
-  (`InlineError`, or on the field).
-- `CategoriesSheet` built its stream in `build`, re-querying on every rebuild.
-  Its body is now a `Material`: the coloured box between its `ListTile`s and
-  their Material hid their ink and tripped a debug assertion.
-- Changing month showed the previous month's figures under the new month's
-  name until the new ones arrived (a `StreamBuilder` keeps the old stream's
-  value). The dashboard and Analytics key theirs by month and show a spinner.
-- The splash took ~2.5 s on every cold start for decoration — the app is ready
-  before the first frame — ignored reduced motion, and took an `initFuture`
-  nothing passed. It is ~1.2 s, a tap skips it, reduced motion shows the stack
-  without animating, and the parameter is gone.
-
-### CI checks what it says it checks
-- The Android job built debug, whose merged manifest declares INTERNET
-  whatever `src/main` says, so it could not catch the missing permission it was
-  added for, and R8 never ran. It builds an unsigned release APK through Gradle
-  and checks the merged release manifest for INTERNET.
-- `ndkVersion` was pinned to r27, a leftover; it follows Flutter's default
-  (28.2), and CI caches it rather than downloading it every run.
-- Hygiene: the runner image and Xcode are pinned (`macos-26`, 26.6 — they had
-  moved silently under `macos-latest`/`latest-stable`); actions are on their
-  Node 24 majors; Gradle and Pods are cached; the workflow token is read-only;
-  and a step fails if the committed Drift code is not what the generator
-  produces.
-- `android.enableJetifier` is gone: nothing in the dependency tree uses the
-  pre-AndroidX support library, and it slowed every build.
-
-### Native configuration
-- Android 12+ draws its own splash from `windowSplashScreenBackground`, which
-  was unset: white, then the dark app. Set to `#141414` in both `-v31` styles,
-  and in `flutter_native_splash`'s `android_12` so regenerating keeps it.
-- Notifications used the full-colour launcher icon as their small icon, which
-  Android renders from alpha alone — a white square. A white-on-transparent
-  coin-stack vector, kept from resource shrinking by `res/raw/keep.xml`.
-- No `NSLocalNetworkUsageDescription`, so iOS gave no reason when asking to
-  reach an Ollama or LM Studio server on the network.
-- Gemini Nano's download bar was always indeterminate, on the belief that ML
-  Kit gives no total. `DownloadStarted` carries `bytesToDownload`; the bridge
-  emits a real percentage and Settings shows it.
-- A transient AICore error was reported as "unavailable" and cached for the
-  session, hiding Nano until a restart. It is reported as an error and not
-  cached.
-- The iOS icon set had an entry with `luminosity: light`, which is not an
-  appearance; removed. The launch image was an iPhone-only full-screen picture
-  whose 1x was a 3x-sized file — an iPad showed a phone-shaped rectangle. It
-  is the coin stack alone, universal, at 110/220/330 px; `flutter_native_splash`
-  has `ios: false` so regenerating no longer overwrites it.
-- Dead configuration removed: the macOS Podfile's sqlite3 block and iOS's
-  `use_modular_headers!` (both for pods that now come through Swift Package
-  Manager), `ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS =
-  AppIcon` (a boolean; now `YES`), the PNG launcher mipmaps (`minSdk` 26 only
-  ever uses the adaptive icon), and the Windows/Linux template identity
-  (`com.satsstack.sats_stack`, "sats_stack" titles).
-- Verified by building iOS, macOS and an Android release APK locally.
-
-### No test reaches the internet, and the dead code is gone
-- `auto_category_test` reached live price endpoints on every save, so it
-  depended on the network and sent its requests to third parties.
-  `test/flutter_test_config.dart` refuses any connection to a non-loopback
-  host, for every test; `network_guard_test` proves the guard is in force (a
-  test that swallows the error would pass either way). Nothing else turned out
-  to need the network.
-- Removed, unused: `TransactionService.getAll`, `WalletService.getAll` and
-  `watchAll`, `BudgetService.watchAll`, `BtcPriceService.getCachedPrice`,
-  `ImportService.listSources` and `getTransactionsForSource`,
-  `OllamaService.ollamaConnected`/`lmStudioConnected`/`mapleConnected`,
-  `GeminiNanoState.needsDownload`, `CloudProvider.fromId`,
-  `AppConstants.appName` and `coinGeckoPriceUrl`, `ImportTier.pdfExtracted`,
-  `ImportFileType.unknown` (a non-PDF was read as CSV either way), and an
-  empty `widget_test.dart`. `AppConstants.defaultCurrency` was listed as dead
-  but the v10 migration uses it.
-- `clearAllApiKeys` — Reset all data — left the Bitcoin Core RPC password in
-  the keychain. It deletes it too.
-
-### Tests that could not fail
-- `month_boundary_test`'s aggregates assumed a row could sit in the old
-  closed range's sub-second gap, but drift stores whole seconds, so they could
-  not fail. They now pin the real edges end to end — March's first and last
-  second counted in March, April's first second not — and that a stored date
-  keeps whole seconds only.
-- The DST test passed trivially on CI's UTC runner. CI runs the date-sensitive
-  test files again under `TZ=America/New_York`; the whole suite also passes
-  locally under New York and Auckland time.
-- The unknown-xpub-prefix test passed a truncated string that failed on its
-  checksum before the version was read. It re-encodes a real key under an
-  unknown version and expects "Unsupported extended key".
-- `scripthash_test` tested a helper defined inside itself — there is no
-  scripthash code in the app yet. Deleted; its vector is in TODO item 11.
-- `database_restore_test`'s failed copy used a missing source, which throws
-  before the target is touched, so it passed with the put-back step deleted.
-  `replaceDatabaseFile` takes a copy hook; the test tears the file partway.
-- `ai_enabled_test`'s seed case asserted `aiEnabled`, which is true on any
-  desktop. It asserts the phone rule, both ways.
-- The privacy invariant (`isPrivate == (dataRecipient == null)`) holds just as
-  well for a new hosted provider that forgot its recipient. The private set is
-  now written out exactly.
-- `tab_state_test` built its own copy of the router. `buildRouter(tab:)` is
-  the app's, with stub tabs; a new test covers its redirect off a hidden AI
-  tab.
-- Untested until now (`untested_paths_test`): the xpub sums for a spend with
-  change, a self-send and a split receive; budget alert thresholds at 79, 80,
-  100 and just over 100 %; the move of a Maple key out of the database; and
-  export (now `exportDatabaseTo`) followed by import. The DCA simulator got its
-  tests in #41.
-
-### Transfers between your own wallets (schema v12)
-
-Decided 2026-10-31: a Bitcoin movement counts in fiat income and spending
-unless the user says it is a move between their own wallets. A self-send is a
-spend in one xpub wallet and a receipt in another, so it counted as both, but
-only the user knows which movements are their own.
-
-- `transactions.isOwnTransfer`, off by default, set from a checkbox on a
-  Bitcoin row's edit sheet. Such a row keeps its sats — the stack is where the
-  coins are — and is zeroed in `DashboardService._restate`, which every
-  dashboard, analytics, per-wallet, export and AI-context figure reads, without
-  being counted as unconverted. `BudgetService.getProgress` leaves it out of
-  spending in SQL. The list shows a ⇄ beside it.
-- **Found while adding it:** the v8 and v9 upgrade steps read whole rows, and a
-  whole-row read maps every column the *current* schema has. A database being
-  upgraded does not have the later ones yet, so a non-null column added after
-  v8 threw: anyone upgrading from v7 or v8 with an xpub or a recurring row
-  could not open the app. Both steps now select only the columns they use.
-  `own_transfers_test` upgrades a v7 database holding both kinds of row; it
-  fails on the old steps.
-
-### An AI server on your own network
-
-Decided 2026-10-31: someone who runs their own AI server knows where it is. A
-server on the local network keeps counting as the user's own hardware — no
-consent prompt on import, no off-device banner — and the note under its URL
-says only that the figures go "over your local network to *host*, and no
-further". The café-and-office caution is gone. Plain `http://` to a server
-*outside* the network is still called unencrypted. `ai_privacy_details_test`
-pins both halves.
-
-### Exports on a phone, and the bundled icons
-
-- **Export never worked on iOS or Android.** Both *Export database* and
-  *Export spending summary* called `FilePicker.saveFile` without `bytes`, then
-  wrote to the path it returned. On a phone it returns no path to write to: it
-  takes the bytes and throws without them ("Bytes are required on Android &
-  iOS"). Both now hand the dialog their bytes — the database through
-  `databaseSnapshot`, the same `VACUUM INTO` copy by way of a temporary file —
-  which works on macOS too, where `file_picker` writes them itself. A test
-  fails if any `saveFile` call in `lib` stops passing them.
-- `assets/icons/` is out of the app bundle (110 KB). Nothing loads it; the
-  icon and splash generators read it from the repo by path, which a test
-  checks they still can.
-- The `file_picker` media frameworks were checked and are harmless but cannot
-  be dropped without replacing the plugin — now a smaller item in `TODO.md`.
-
-### Wallet history from your own Electrum server (TODO items 11 and 12)
-
-- Settings → Servers → Bitcoin has a **Wallet history from** choice: Mempool /
-  Esplora, as before, or *My Electrum server* (electrs, Fulcrum) — host, port,
-  TLS, **Save and test**. It switches only once the server answers. A
-  self-signed certificate, which a home node has, is offered for trust with
-  its SHA-256 fingerprint and pinned; until now `fetchCertificateFingerprint`
-  had no caller, so such a server could not be used at all.
-- `ElectrumHistory` reads each address by scripthash
-  (`BitcoinScript.electrumScripthash`, checked against the genesis vector the
-  old `scripthash_test` carried) and turns the raw transactions into Esplora's
-  shape, so the scan's netting, dedup, re-keying and pricing are one code path
-  for both. Each input's spent output is read from its parent transaction:
-  change can be paid to an address the scan has not reached yet. A test runs
-  the same chain through both sources and gets the same rows.
-- Item 12: requests are pipelined on one connection (16 in flight), with no
-  rate-limit pause — what Esplora spends one HTTP request and 120 ms on per
-  address. Esplora itself cannot batch; the scan cursor stays rejected.
-- Prices still come from the Esplora server — Electrum has none — and the
-  routing banner now says the addresses go only to the Electrum server.
-- Bitcoin Core is not in the picker: it keeps no address index, so it cannot
-  list an address's history. Its service stays for broadcasting (`TODO.md`).
-
-### Every schema version upgrades, tested against its real schema (TODO item 13)
-
-- `drift_schemas/` holds the schema of each version, dumped by `drift_dev`
-  from the commit that shipped it — v3 (the first commit) to v12. v1 and v2
-  predate the repository and are v3 less what the v1→v2 and v2→v3 steps add.
-  `test/generated_migrations/` is generated from them.
-- `schema_migration_test` upgrades a database at every version from 1 to 11
-  and checks the result is exactly the current schema, checks a fresh install
-  and the latest dump both match the table definitions — so a schema change
-  without a new dump fails — and runs a v7 database holding real rows through
-  every data step. That last case fails on the whole-row reads #48 removed.
-  The hand-built "fresh database with columns dropped" tests stay, but are no
-  longer the only cover. The test's header says how to add a version.
-- `tab_stream_test` shows Transactions, Budgets and Stack their data, rebuilds
-  each from above, and requires the data on the very next frame and a new row
-  afterwards: a stream built in `build()` fails it, which was checked by
-  moving Transactions' stream there.
-
-### `avoid_dynamic_calls` is on (TODO item 10)
-
-Eight dynamic calls were left in `lib`, all on decoded JSON: Electrum's
-history, and the OpenAI, Grok and Gemini stream frames in `CloudBackend` and
-`OllamaService`. A frame of an unexpected shape — `choices` holding a string,
-`content` not a map — threw `NoSuchMethodError` partway through an answer.
-They read with `is` checks and patterns now, and such a frame is skipped; a
-test feeds every provider those shapes and fails on the old code. The 33 in
-`cloud_backend_test` read through a checked `at(json, path)` helper, whose
-failure names the path. The rule is on, held at zero like the rest.
-
-### Settings is one widget per section (TODO item 14)
-
-`settings_screen.dart` was one 1,871-line state class holding every section's
-controllers and connection tests. It is now 90 lines composing six section
-widgets under `widgets/` — General, AI provider, Bitcoin servers, Data, About
-and Danger Zone — each owning its own state and talking to its service
-directly, as `WalletHistorySection` did first. The code was moved, not
-rewritten.
-
-- No test covered the screen, so `settings_screen_test` was written first,
-  against the old code, and pins each section: theme, currency, price chip,
-  inflation-rate validation, categories, an Ollama URL saved normalised with
-  its LAN note, a hosted provider's disclosure and key, the Mempool server and
-  its banner, onboarding, and a reset — cancelled, and carried out.
-- A collapsed `ExpansionTile` disposes its children, so the split alone lost
-  what was typed in a section, and re-probed the AI server, whenever one was
-  closed and opened. The tiles keep their state (`maintainState`), as the one
-  screen-wide state class did; a test fails without it.
-- The whole screen, every section open, renders pixel-for-pixel the same as
-  before in both themes (checked with a one-off golden comparison).
+### D-13 · Low · performance, maintainability — `usageCounts` loads rows to count them; a misplaced doc comment
+- **Where:** `category_service.dart:140-145`; `lib/shared/constants/app_constants.dart:67-77`, `:105`.
+- **What:** `usageCounts` loads every row in a category only to take `.length`. Separately, `recurringCursorKey`'s doc comment sits on `seededCategoryColours`.
+- **Fix direction:** Use `selectOnly` with `count()`, and move the comment to `recurringCursorKey`.
+- **Status:** open
 
 ---
 
-## Verified correct (no action)
+## U — UI screens and widgets
 
-- BIP32 CKDpub: 37-byte `serP(Kpar) || ser32(i)`, `IL >= n` rejected,
-  point-at-infinity checked, chain code `IR`. P2SH-P2WPKH redeem script and
-  bech32 v0 encoding are right. `_parseExtKey` offsets are right.
-- The migration strategy itself: cumulative `if (from < n)` steps, seeds only in
-  `onCreate`, v1→v5 lands on the same schema as a fresh create.
-- Recurring date arithmetic (calendar fields, anchor-derived, month-end and
-  Feb 29 clamped) and `TransactionService.update`'s use of `write` over
-  `replace` — both well tested.
-- No sats truncation anywhere: every fiat↔sats conversion rounds.
-- Secrets: no API key in `AppSettings`, none logged, none in a URL; the legacy
-  `maple_api_key` row is deleted only after a confirmed keychain write.
-- Streaming UTF-8 uses the stateful decoder on every path, and `cloud_backend`
-  buffers SSE frames across chunk boundaries correctly. Anthropic, Gemini and
-  OpenAI wire formats match their docs.
+### U-1 · Medium · correctness — Re-running onboarding resets the AI provider and its URL
+- **Where:** `lib/features/settings/widgets/about_section.dart:41`; `lib/features/onboarding/onboarding_screen.dart:189-193`, `:227-229`.
+- **What:** `_resetOnboarding` sets `onboardingCompleteNotifier` to false and *then* navigates. `OnboardingScreen` uses that same flag to tell a revisit from a first run, so it always sees a first run, and the availability check replaces the provider with `suggestedDefault` and its default URL. `_finish` then saves them. The comment at `:175-180` says this is exactly what must not happen.
+- **Impact:** Settings → About → Show onboarding, then Next through the pages, quietly switches a Claude, ChatGPT or remote-Ollama user to Apple Intelligence or `localhost` Ollama. On a phone the AI tab can disappear.
+- **Fix direction:** Decide "revisit" from something not cleared before navigating, such as a route parameter or the flag read before it is reset.
+- **Status:** open
+
+### U-2 · Medium · privacy — The Bitcoin routing banner describes unsaved text, not the saved server
+- **Where:** `lib/features/settings/widgets/bitcoin_servers_section.dart:141-144`, `:188-198`.
+- **What:** The banner reads the text field on every keystroke. Typing any URL flips it to "All data routed through your server… mempool.space and CoinGecko are never contacted" before Save, including for a URL that Save will reject.
+- **Impact:** The user is told lookups are private while syncs still go to mempool.space.
+- **Fix direction:** Drive it from the saved `esploraBaseUrl`, or label the live preview "after saving". See also B-9.
+- **Status:** open
+
+### U-3 · Medium · privacy — Onboarding accepts an unusable Esplora URL without saying so
+- **Where:** `lib/features/onboarding/onboarding_screen.dart:104`.
+- **What:** `saveSettings`' null return ("unusable, using mempool.space") is ignored. Settings warns about the same case (`bitcoin_servers_section.dart:56-59`).
+- **Impact:** Someone who mistypes their own node's URL during onboarding has every wallet address sent to mempool.space, and is never told.
+- **Fix direction:** Check the result and warn, or stay on the page, as Settings does.
+- **Status:** open
+
+### U-4 · Medium · privacy — Stored API keys are preloaded into Settings and shown with one tap
+- **Where:** `lib/features/settings/widgets/ai_provider_section.dart:101-104`, `:444`, `:457-467`.
+- **What:** Each provider's key is read from the keychain into a text field as soon as Settings opens (the sections keep their state), and the eye icon reveals it with no re-authentication. The screenshot side of this is P-1.
+- **Impact:** Anyone holding an unlocked phone can read the user's paid API keys.
+- **Fix direction:** Show a "key saved" placeholder instead of the key, and gate reveal behind device authentication.
+- **Status:** open
+
+### U-5 · Medium · performance — The import screen creates its Drift stream in `build()`
+- **Where:** `lib/screens/import/import_file_screen.dart:179`, `:402-415`, `:689-701`.
+- **What:** `stream: app.importService.watchSources()` sits in `build`, and during an AI import every token calls `setState`. So each token re-subscribes and re-queries `import_sources`, the bug class `tab_stream_test` pins for the tabs. The per-token rebuild itself is A-10.
+- **Impact:** Hundreds of queries and full rebuilds per import, and jank while the model streams.
+- **Fix direction:** Create the stream once in `initState`, and give the streamed text its own listenable.
+- **Status:** open
+
+### U-6 · Medium · reliability — Several saves and deletes fail without telling the user
+- **Where:** `transaction_edit_sheet.dart:155-243` (try/finally, no catch anywhere in the file), `:269`, `:301`; `import_preview_screen.dart:45-75`; `import_column_mapper_screen.dart:137-178`; `import_source_setup_screen.dart:48-57`; `danger_zone_section.dart:43-67`; `transactions_screen.dart:659` (`deleteById` neither awaited nor caught); `wallet_history_section.dart:86`, `:97` (an exception leaves `_busy` set).
+- **What:** Exceptions become unhandled async errors. The spinner resets, or sticks, and nothing is shown.
+- **Impact:** A failed import or edit looks like nothing happened. A failure partway through "Reset all data" leaves a half-reset app.
+- **Fix direction:** Catch and show the error, as `AddTransactionSheet` and the categories sheet already do.
+- **Status:** open
+
+### U-7 · Medium · accessibility — Rows overflow at large text sizes
+- **Where:** `lib/features/stack/widgets/stack_hero.dart:104-115`; `stack_goal_card.dart:122-145`, `:166-201`; `dca_simulator.dart:101-145`; `import_file_screen.dart:1111-1164`; `transactions_screen.dart:162-190` (AppBar); `ai_chat_screen.dart:962` (model dropdown without `isExpanded`).
+- **What:** Unflexed text beside `Spacer`s, chips or buttons. The dashboard hero was moved to a `Wrap` for exactly this.
+- **Impact:** Overflow stripes and clipped figures for users with large accessibility text.
+- **Fix direction:** Use `Flexible`, `Wrap` or `ShrinkToFit`, as the dashboard does.
+- **Status:** open
+
+### U-8 · Low · correctness — Switching currency briefly mislabels the price, or keeps it mislabelled if the write fails
+- **Where:** `lib/features/settings/widgets/general_section.dart:86-100`; `onboarding_screen.dart:76-85`.
+- **What:** The notifier is set, then the write is awaited, and only then is `switchCurrency` called. Until that call the old currency's price sits under the new label, and if the write throws, `switchCurrency` never runs.
+- **Impact:** Fiat figures are wrong by the exchange rate for one write, or for the session.
+- **Fix direction:** Call `switchCurrency` with the notifier change, and persist afterwards.
+- **Status:** open
+
+### U-9 · Low · correctness — Budget edit field shows the wrong currency symbol when there is no rate
+- **Where:** `lib/features/budgets/widgets/set_budget_sheet.dart:199-200` vs `:90-93`.
+- **What:** The prefix is always the display currency's symbol, but with no rate the amount shown and saved is in the budget's own currency.
+- **Impact:** A USD budget viewed in GBP reads "£ 300.00" and is saved as $300.
+- **Fix direction:** Use the symbol of the currency that will actually be saved.
+- **Status:** open
+
+### U-10 · Low · correctness, performance — The stack chart misrepresents time and redraws on every price tick
+- **Where:** `lib/features/stack/widgets/stack_history_chart.dart:30-41`, `:99-101`; `stack_screen.dart:210-227`.
+- **What:** The x-axis indexes only months with activity, so a two-year gap is one step. The 3M/6M/1Y filters drop the balance carried in, so a flat stack shows "Not enough data". The chart sits under the price listener but never uses the price.
+- **Impact:** A misleading chart, and pointless rebuild work on each tick.
+- **Fix direction:** Time-based x values with idle months filled, seed each window with the prior balance, and lift the chart out of the listener.
+- **Status:** open
+
+### U-11 · Low · correctness — The date picker asserts on imported dates outside its range
+- **Where:** `lib/features/transactions/widgets/transaction_edit_sheet.dart:127-132`.
+- **What:** `firstDate: 2009-01-03`, `lastDate: tomorrow`, while `initialDate` comes from the row.
+- **Impact:** Editing a pre-2009 fiat row or a future-dated bank row throws in debug and misbehaves in release.
+- **Fix direction:** Clamp `initialDate`, or widen the range for fiat rows.
+- **Status:** open
+
+### U-12 · Low · accessibility — Sheets that don't scroll
+- **Where:** `manage_wallets_sheet.dart:140`; `transactions_screen.dart:383` (filter sheet); `stack_goal_card.dart:272` (`SetGoalSheet`); `ai_chat_screen.dart:1076`.
+- **What:** Plain `Column`s with no scroll.
+- **Impact:** With many wallets or categories, or a large font, the bottom rows and the Apply button can't be reached.
+- **Fix direction:** Wrap them as `SetBudgetSheet` does.
+- **Status:** open
+
+### U-13 · Low · accessibility — Low-contrast text the `legibleAccent` pass missed
+- **Where:** `stack_hero.dart:131-144`; `stack_goal_card.dart:127`, `:213-215`; `dca_simulator.dart:263`; `analytics_screen.dart:590`; `import_file_screen.dart:986`, `:1025`; `import_preview_screen.dart:261`; `ai_chat_screen.dart:1179`.
+- **What:** Raw green, orange or blue used as text colour (the codebase's own figures: 3.4:1 and 2.3:1 on white).
+- **Impact:** Hard to read in light mode.
+- **Fix direction:** Route them through `context.legibleAccent` / `bitcoinOrangeText`.
+- **Status:** open
+
+### U-14 · Low · accessibility — Tap targets under 48 px
+- **Where:** `transactions_screen.dart:168-189` (compact AppBar icons, 40 px), `:508`; `transaction_edit_sheet.dart:353`; `import_file_screen.dart:1033`, `:1148`, `:1154`.
+- **What:** `VisualDensity.compact` and `shrinkWrap` on touch targets.
+- **Impact:** Small controls are hard to hit.
+- **Fix direction:** Drop them on touch platforms.
+- **Status:** open
+
+### U-15 · Low · performance, privacy — Opening Settings calls the AI provider even if Servers is never opened
+- **Where:** `lib/features/settings/settings_screen.dart:82`; `ai_provider_section.dart:78-79`, `:109`, `:125-155`.
+- **What:** `maintainState: true`, added in #54 so collapsed sections keep their state, also builds them while collapsed. So `AiProviderSection.initState` runs `listModels()` (a request to the hosted provider with the user's key) and the platform probes on every Settings open. The old single state class did the same, but now it's a cost of something meant only to preserve text.
+- **Impact:** Changing the theme makes a request to the AI provider, and every Settings open is slower.
+- **Fix direction:** Defer the probes until the section first expands.
+- **Status:** open
+
+### U-16 · Low · privacy — Copied chat answers stay on the clipboard
+- **Where:** `lib/features/ai_chat/ai_chat_screen.dart:546`.
+- **What:** A long-press copies an answer full of financial figures, and it is never cleared. Leftover statement photos are A-7.
+- **Impact:** Figures remain readable by any app that reads the clipboard.
+- **Fix direction:** Clear after a timeout, or say so when copying.
+- **Status:** open
+
+### U-17 · Low · performance — Search reruns the whole filter and grouping on every keystroke
+- **Where:** `lib/features/transactions/transactions_screen.dart:219`, `:285`, `:527-532`.
+- **What:** A case-folded filter over every transaction, then grouping and sorting by day, on each character, with no debounce.
+- **Impact:** Lag on large histories.
+- **Fix direction:** Debounce, and memoise the grouping per data or filter change.
+- **Status:** open
+
+### U-18 · Low · correctness — The price chip's age label can stay at "just now"
+- **Where:** `lib/shared/widgets/btc_price_chip.dart:71`, `:130`.
+- **What:** The age is computed only when the chip rebuilds, and a failed fetch doesn't rebuild it.
+- **Impact:** An offline user sees "just now" on an hours-old price.
+- **Fix direction:** Tick it periodically, or rebuild on each fetch attempt.
+- **Status:** open
+
+### U-19 · Low · reliability — Electrum "Save and test" replaces a working server before testing the new one
+- **Where:** `lib/features/settings/widgets/wallet_history_section.dart:86-91`.
+- **What:** `saveSettings` runs before the test, so if Electrum is already the source, a failed test leaves the broken host in use.
+- **Impact:** One typo breaks syncing until it is noticed.
+- **Fix direction:** Test the candidate first, and persist only on success.
+- **Status:** open
+
+### U-20 · Low · reliability — Onboarding's finish has no double-tap guard or error handling
+- **Where:** `lib/features/onboarding/onboarding_screen.dart:56-65`, `:74-170`.
+- **What:** "Get Started" can run `_finish` twice at once, and a keychain or database error is not caught.
+- **Impact:** Duplicate writes, or a user stuck on the last page with no message.
+- **Fix direction:** Guard against a second tap, and show errors.
+- **Status:** open
+
+### U-21 · Low · reliability — `setState` can run after dispose in the insight flow
+- **Where:** `lib/features/dashboard/dashboard_screen.dart:136-139` → `:157`.
+- **What:** After `await isInsightStale()`, `_generateInsight` calls `setState` without checking `mounted`.
+- **Impact:** Rare, since the tab stays alive, but it throws when it happens.
+- **Fix direction:** Check `mounted`.
+- **Status:** open
+
+### U-22 · Low · maintainability, reliability — Duplicated colour parsers that throw on bad data
+- **Where:** `manage_wallets_sheet.dart:219-222`; `categories_sheet.dart:128-131`, `:433-439`, `:533-535`, `:613-674`; `add_wallet_sheet.dart:547`; `transaction_list_item.dart:173-202`; plus five more `_parseColor` copies.
+- **What:** `int.parse` throws on a malformed colour, which a restored database could hold, and two icon maps are duplicated.
+- **Impact:** A bad colour red-screens a whole sheet.
+- **Fix direction:** Use `CategoryPalette.parseHex` everywhere, and share one icon map.
+- **Status:** open
+
+---
+
+## P — Native configuration, CI and dependencies
+
+### P-1 · Medium · security — No app-switcher or screenshot protection on any platform
+- **Where:** `android/app/src/main/kotlin/app/satsstack/satsstack/MainActivity.kt:6`; `ios/Runner/AppDelegate.swift:6`. Nothing anywhere uses `FLAG_SECURE` or a lifecycle-driven privacy screen (checked).
+- **Impact:** The Recents thumbnail and the iOS app-switcher snapshot capture balances, the stack, transactions and AI chat. Screen recording and screenshots capture everything.
+- **Fix direction:** `FLAG_SECURE` on Android, at least as a setting, and a cover view on iOS `sceneWillResignActive` or Flutter `inactive`.
+- **Status:** open
+
+### P-2 · Medium · privacy — iOS database goes into iCloud and device backups; Android deliberately excludes it
+- **Where:** `lib/core/database/database.dart:483` (Documents directory). There is no iOS entitlements file, and nothing sets `NSURLIsExcludedFromBackupKey` (checked). Compare `android/app/src/main/res/xml/data_extraction_rules.xml:16-25`.
+- **Impact:** The plaintext financial database is uploaded to iCloud Backup, readable by Apple unless Advanced Data Protection is on, and lands in unencrypted Finder backups. The two platforms contradict each other.
+- **Fix direction:** Decide one backup policy for both platforms. On iOS, exclude the database, journal and `.bak` from backup, or document iCloud as intended. Consider `NSFileProtectionComplete`.
+- **Status:** open
+
+### P-3 · Medium · supply-chain — GitHub Actions pinned to mutable tags, including those holding secrets
+- **Where:** `.github/workflows/claude.yml:41-48`, `claude-code-review.yml:37-47`, `ci.yml:28`, `:30`, `:89`, `:104`, `:148`, `:152`.
+- **What:**
+  - `anthropics/claude-code-action@v1` receives the OAuth token and `id-token: write`.
+  - Third-party `subosito/flutter-action@v2` and `maxim-lobanov/setup-xcode@v1.7.0` run on tags.
+  - The plugin marketplace is fetched from a default branch at run time.
+  - `checkout` keeps its credentials.
+  - There is no Dependabot.
+- **Impact:** A moved tag or a compromised upstream runs new code with the tokens, and no commit here shows it.
+- **Fix direction:** Pin each action to a commit SHA, set `persist-credentials: false`, and add Dependabot for `github-actions` and `pub`.
+- **Status:** open
+
+### P-4 · Medium · supply-chain — End-of-life SQLite libs, a discontinued keychain backend, wide version lag
+- **Where:** `pubspec.yaml:15`, `:38`, `:57`, `:60`, `:71`, `:74`; `pubspec.lock:935`.
+- **What:**
+  - `sqlite3_flutter_libs` 0.5.42 is end of life (latest `0.6.0+eol`). It ships the native SQLite that holds all data and comes through the held `drift_flutter ^0.2.8`.
+  - `flutter_secure_storage_macos`, which holds the macOS API keys, is discontinued.
+  - Syncfusion PDF, which parses untrusted PDFs, is seven majors behind (28 against 35).
+  - Further lag: notifications 19 → 22, `file_picker` 10 → 13, `go_router` 16 → 18. Sixty-three packages are locked below versions they could already move to.
+- **Impact:** SQLite fixes stop arriving for the most sensitive native code, and each month of lag makes the upgrade bigger.
+- **Fix direction:**
+  - Plan `drift_flutter` 0.3 / `sqlite3` 3.x as its own change; it also unblocks SQLCipher.
+  - Plan `flutter_secure_storage` 10/11 with a key-migration test.
+  - Run `flutter pub upgrade` within the current constraints regularly.
+- **Status:** open
+
+### P-5 · Medium · privacy — ML Kit GenAI may bring Google's telemetry transport into Android builds
+- **Where:** `android/app/build.gradle.kts:94` (`com.google.mlkit:genai-prompt:1.0.0-beta2`).
+- **What:** The Gradle cache holds `com.google.android.datatransport` (`transport-backend-cct`, `transport-runtime`) next to ML Kit common, which is ML Kit's usual path for reporting usage to Google. Whether it is in the release classpath is unverified.
+- **Impact:** A local-first app may report usage to Google on every Android install, including installs that never use Gemini Nano. That affects the Play Data safety form and the app's privacy copy.
+- **Fix direction:** Check `:app:dependencies --configuration releaseRuntimeClasspath`. Then exclude it, disable it, or declare it.
+- **Status:** open
+
+### P-6 · Low · reliability — The test network guard misses raw sockets
+- **Where:** `test/flutter_test_config.dart:14-27`.
+- **What:** It overrides only `HttpClient`, while Electrum uses `Socket` and `SecureSocket` directly. Its `startsWith('127.')` check also accepts a hostname like `127.example.com`.
+- **Impact:** A test could reach a real Electrum server without anyone noticing.
+- **Fix direction:** Add `IOOverrides` for sockets, compare parsed IP literals, and test the raw-socket case.
+- **Status:** open
+
+### P-7 · Low · privacy — No privacy manifest for the app itself
+- **Where:** `ios/Runner/` and `macos/Runner/`. There is no `PrivacyInfo.xcprivacy` outside Pods.
+- **Impact:** The App Store privacy label may understate collection, since financial context goes to the hosted AI providers when one is chosen.
+- **Fix direction:** Add a Runner manifest declaring no tracking, the data the hosted-AI path sends, and any required-reason APIs.
+- **Status:** open
+
+### P-8 · Low · privacy — Amounts in notifications, including on the lock screen
+- **Where:** `notification_service.dart:100-104`, `:127-131`, `:152-156`, `:243-250`.
+- **What:** Bodies include budget overspends and "You've stacked N sats ≈ $X". No Android `visibility` or `publicVersion` is set.
+- **Impact:** Holdings show on a locked or shared screen, a physical-security concern for Bitcoin.
+- **Fix direction:** Private visibility with a generic public version, or no amounts in the text.
+- **Status:** open
+
+### P-9 · Low · reliability — CI never builds Apple release configs; no job timeouts; Linux/Windows unbuilt
+- **Where:** `.github/workflows/ci.yml:166-172`; `integration_test/`; `linux/`, `windows/`.
+- **What:**
+  - iOS and macOS are built as debug only.
+  - The three integration tests never run.
+  - No job has `timeout-minutes`.
+  - `linux/` and `windows/` are tracked but never built.
+- **Impact:** Release-only Apple regressions can ship, and a hung macOS job burns hours.
+- **Fix direction:** Unsigned `--release` builds for both Apple targets, and timeouts. Delete or build Linux and Windows.
+- **Status:** open
+
+### P-10 · Low · security — macOS: no hardened runtime, and no local-network purpose string
+- **Where:** `macos/Runner.xcodeproj/project.pbxproj:560`, `:636`, `:692`; `macos/Runner/Info.plist`.
+- **What:** The build is ad-hoc signed with no hardened runtime. iOS declares `NSLocalNetworkUsageDescription` and macOS doesn't, though macOS users can point the app at LAN servers.
+- **Impact:** The app can't be notarised (already tracked in `TODO.md`). LAN behaviour on macOS 15+ without the string is unverified.
+- **Fix direction:** Do both when the macOS bundle id is registered.
+- **Status:** open
+
+### P-11 · Low · maintainability — Stale configuration comments; strict analyzer modes off
+- **Where:** `analysis_options.yaml:50-51`; `android/app/build.gradle.kts:37`.
+- **What:**
+  - `avoid_dynamic_calls` is on, but the "Considered and not enabled" list still describes it as 43 sites tracked in `TODO.md`. It was left behind by #53.
+  - The template `// TODO: Specify your own unique Application ID` is still there.
+  - `strict-casts`, `strict-inference` and `strict-raw-types` are all off.
+- **Fix direction:** Delete the stale lines, and consider the strict modes.
+- **Status:** open
+
+### P-12 · Low · security — Committed test TLS key (acceptable, but flagged by scanners)
+- **Where:** `test/fixtures/electrum_test_key.pem`, `electrum_test_cert.pem`.
+- **What:** A self-signed `localhost` pair valid until 2126, used only by `wallet_history_section_test` on loopback. The app never trusts it.
+- **Impact:** No real exposure, but secret scanners will flag it.
+- **Fix direction:** Generate it at test time, or add a scanner allowlist and a README line in `test/fixtures/`.
+- **Status:** open
+
+---
+
+## T — Tests
+
+### T-1 · Low · maintainability — Large screens have no tests at all
+- **Where:** from `flutter test --coverage`, 57 % of lines overall. At 0–3 %:
+  - `import_file_screen.dart` (2 of 507 lines)
+  - `ai_chat_screen.dart` (15 of 501)
+  - `add_transaction_sheet.dart` (0 of 319)
+  - `analytics_screen.dart` (2 of 295)
+  - `ai_provider_page.dart` (0 of 200)
+  - `import_preview_screen.dart` (0 of 193)
+  - `import_column_mapper_screen.dart` (0 of 173)
+  - the onboarding screens (about 1 %)
+  - `import_summary_screen.dart` (0 of 92)
+  - `on_device_ai_section.dart` (0 of 56)
+- **Impact:** The screens where the user adds money and imports statements can regress unnoticed. Several findings above (A-5, A-6, A-10, A-18) live in them.
+- **Fix direction:** Pin each with widget tests before fixing what is in them, as was done for Settings in #54.
+- **Status:** open
+
+---
+
+## Checked and found clean
+
+- **Runtime:** a fresh install makes no network connection before onboarding is finished.
+- **Bitcoin:**
+  - BIP32 derivation (the HMAC split, the IL ≥ n check, point at infinity), hash160, and the P2PKH, P2SH-P2WPKH and bech32 v0 encodings.
+  - Extended private keys refused before anything is stored. Gap limit and change-chain netting.
+  - Electrum scripthash order, SegWit parsing, the coinbase exclusion and the prevout bounds check.
+  - TLS pinning: checked only after CA failure, pinned to the leaf's SHA-256, kept only for the same server. Timeouts exist on every connect and call.
+  - No wallet request is ever made without the user's action.
+- **AI:**
+  - Consent scoped per provider and per server (`scheme://host:port`), withdrawable, and asked again on a URL change.
+  - Backend privacy derived from the URL and failing closed.
+  - API keys never in URLs, the database or logs; auth-error bodies that echo keys suppressed. Transcripts not stored.
+  - SSE parsing handles split frames and `[DONE]` variants. Idle timeouts close the stream.
+  - No regex at backtracking risk. Statement text can shape only the model's JSON, which the user reviews, and there is no tool calling.
+- **Data:**
+  - Migrations atomic, idempotent and selecting only the columns they use.
+  - Indexes match the queries. Budget upsert and category rename are transactional.
+  - Dedup and recurring hashes use fields that can't change. Months are half-open, recurring dates are DST-safe, and FX returns null without a rate.
+  - Export via `VACUUM INTO`. Nothing logs financial data.
+- **Platform:**
+  - The Android manifest declares only `INTERNET`, with only the launcher exported. Android backups exclude the database and keys.
+  - The release isn't debug-signed, and keystores are gitignored.
+  - iOS purpose strings match real use, and keychain items are `this_device`. macOS release entitlements are minimal.
+  - No real secrets in the tree or in any of the 197 commits.
+  - CI is read-only, uses `--enforce-lockfile`, holds analyze and format at zero, runs a DST time-zone test pass, and has no `pull_request_target`.
