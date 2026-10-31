@@ -75,8 +75,10 @@ dependencies:
 
 flutter:
   uses-material-design: true
+  # Not assets/icons/: those are the icon and splash generators' sources,
+  # which they read from the repo by path. Nothing in the app loads them, and
+  # bundling them shipped 110 KB of PNGs in every build.
   assets:
-    - assets/icons/
     # Roboto Mono's licence. The OFL requires it to travel with the font; it
     # is shown under Settings → About → Licences.
     - assets/fonts/OFL.txt

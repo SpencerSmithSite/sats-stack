@@ -110,18 +110,8 @@ connection test, so per-section files mean handing all of it back in as
 parameters and callbacks. That is a design change with real behavioural risk,
 worth doing on purpose rather than as a move.
 
-### 15. Third review pass, 2026-10-21 — what is left
-
-Everything else this pass found is fixed: PRs #22–#28, then #30–#47, each
-recorded in `AUDIT.md` ("Third pass" and "Working through item 15"). Left:
-
-**Native**
-- `file_picker` 10 may still pull in DKCamera, CoreLocation and MediaPlayer
-  through Swift Package Manager — check the built app's frameworks and
-  privacy manifest, and drop the media picker if it is not needed.
-- `assets/icons/` is bundled into the app though nothing loads it; it is the
-  icon generator's source. Moving it out of `flutter: assets:` needs the
-  generator configs checked first.
+> Item 15 — what the third review pass, 2026-10-21, left — is finished:
+> PRs #22–#28 and #30–#50, recorded in `AUDIT.md`.
 
 ---
 
@@ -143,6 +133,15 @@ recorded in `AUDIT.md` ("Third pass" and "Working through item 15"). Left:
   comment in `secure_key_store.dart` explains why the file-based one is in use
   (the ad-hoc-signed target cannot carry the entitlement, so every write fails
   with `errSecMissingEntitlement`).
+- **Drop the unused media picker from iOS builds.** `file_picker` builds
+  through Swift Package Manager, whose package hardcodes its media and audio
+  pickers on, so every iOS build links DKImagePickerController, DKCamera,
+  DKPhotoGallery, SDWebImage, SwiftyGif and TOCropViewController (~12 MB of
+  debug object code) though the app only picks documents. Harmless at review:
+  the camera and photo purpose strings are there for `image_picker` anyway,
+  and the SDKs Apple lists ship privacy manifests. Removing them means
+  replacing `file_picker` — `file_selector` opens files everywhere but cannot
+  save on iOS or Android, so export there would need a share sheet instead.
 - **Verify a real request against each hosted provider.** Every wire format is
   unit tested against the documented shape, but nothing has run against a live
   endpoint with a real key — that needs four paid accounts.

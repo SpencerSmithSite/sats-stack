@@ -546,15 +546,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _showSnack('Database file not found');
         return;
       }
+      // The bytes go to the dialog, which writes them: on iOS and Android it
+      // will not hand back a path to write to, and threw without them.
+      final bytes = await databaseSnapshot(app.db);
+      if (!mounted) return;
       final savePath = await FilePicker.platform.saveFile(
         dialogTitle: 'Export Sats Stack database',
         fileName: 'sats_stack_backup.sqlite',
         allowedExtensions: ['sqlite', 'db'],
         type: FileType.custom,
+        bytes: bytes,
       );
       if (savePath == null) return;
-
-      await exportDatabaseTo(app.db, savePath);
 
       if (!mounted) return;
       _showSnack('Database exported successfully');

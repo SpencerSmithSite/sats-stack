@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:io';
+import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -103,9 +103,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         fileName: 'sats_stack_spending_$monthLabel.csv',
         allowedExtensions: ['csv'],
         type: FileType.custom,
+        // Written by the dialog. On iOS and Android it takes the bytes rather
+        // than returning a path to write to, and threw without them.
+        bytes: utf8.encode(csv),
       );
       if (savePath == null) return;
-      await File(savePath).writeAsString(csv);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Spending summary exported')),

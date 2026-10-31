@@ -497,6 +497,23 @@ Future<void> exportDatabaseTo(AppDatabase db, String path) async {
   await db.customStatement('VACUUM INTO ?', [path]);
 }
 
+/// A consistent copy of [db], as bytes — [exportDatabaseTo] through a
+/// temporary file.
+///
+/// What the export hands the save dialog. On iOS and Android the dialog takes
+/// the file's bytes, not a path to write afterwards, and throws without them:
+/// export failed on both phones with "Bytes are required".
+Future<Uint8List> databaseSnapshot(AppDatabase db) async {
+  final dir = await Directory.systemTemp.createTemp('sats_stack_export');
+  try {
+    final file = File(p.join(dir.path, 'snapshot.sqlite'));
+    await exportDatabaseTo(db, file.path);
+    return await file.readAsBytes();
+  } finally {
+    await dir.delete(recursive: true);
+  }
+}
+
 /// How [replaceDatabaseFile] ended.
 enum RestoreOutcome {
   /// [replaceDatabaseFile]'s source is now the database.
