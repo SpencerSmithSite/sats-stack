@@ -491,7 +491,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** Exceptions become unhandled async errors. The spinner resets, or sticks, and nothing is shown.
 - **Impact:** A failed import or edit looks like nothing happened. A failure partway through "Reset all data" leaves a half-reset app.
 - **Fix direction:** Catch and show the error, as `AddTransactionSheet` and the categories sheet already do.
-- **Status:** open
+- **Status:** fixed in #71. Every site listed now catches and says what failed: the edit sheet (save, delete, stop repeating) shows an inline error; the import preview, column mapper and source setup show a snackbar (the preview's save is one transaction, so it says nothing was saved); the transactions list awaits its delete; a failed reset shows a "Reset did not finish" dialog; the Electrum section's whole save-and-test is guarded so its spinner can't stick. Pinned by `failures_shown_test`, which fails on the old code.
 
 ### U-7 · Medium · accessibility — Rows overflow at large text sizes
 - **Where:** `lib/features/stack/widgets/stack_hero.dart:104-115`; `stack_goal_card.dart:122-145`, `:166-201`; `dca_simulator.dart:101-145`; `import_file_screen.dart:1111-1164`; `transactions_screen.dart:162-190` (AppBar); `ai_chat_screen.dart:962` (model dropdown without `isExpanded`).

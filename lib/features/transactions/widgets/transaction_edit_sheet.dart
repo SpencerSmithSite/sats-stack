@@ -7,6 +7,7 @@ import '../../../core/services/import_service.dart';
 import '../../../main.dart' as app;
 import '../../../shared/theme/app_colors.dart';
 import '../../../shared/utils/amount_input.dart';
+import '../../../shared/widgets/inline_error.dart';
 
 /// A bottom sheet for editing a transaction.
 ///
@@ -238,10 +239,19 @@ class _TransactionEditSheetState extends State<TransactionEditSheet> {
           ).showSnackBar(const SnackBar(content: Text('Transaction updated')));
         }
       }
+    } catch (e) {
+      // On the sheet: it was a try with no catch, so a failed write was an
+      // unhandled error and the sheet just stopped spinning (audit U-6).
+      if (mounted) _showError('Could not save: $e');
     } finally {
       if (mounted) setState(() => _saving = false);
     }
   }
+
+  /// Shown above Save — see [InlineError].
+  String? _error;
+
+  void _showError(String message) => setState(() => _error = message);
 
   Future<void> _delete() async {
     final confirmed = await showDialog<bool>(
@@ -266,7 +276,12 @@ class _TransactionEditSheetState extends State<TransactionEditSheet> {
           ),
     );
     if (confirmed != true || !mounted) return;
-    await app.transactionService.deleteById(widget.existingTx!.id);
+    try {
+      await app.transactionService.deleteById(widget.existingTx!.id);
+    } catch (e) {
+      if (mounted) _showError('Could not delete: $e');
+      return;
+    }
     if (mounted) {
       Navigator.pop(context);
       ScaffoldMessenger.of(
@@ -298,7 +313,12 @@ class _TransactionEditSheetState extends State<TransactionEditSheet> {
           ),
     );
     if (confirmed != true || !mounted) return;
-    await app.transactionService.stopSeries(tx.recurringSeriesId!);
+    try {
+      await app.transactionService.stopSeries(tx.recurringSeriesId!);
+    } catch (e) {
+      if (mounted) _showError('Could not stop it repeating: $e');
+      return;
+    }
     if (mounted) {
       Navigator.pop(context);
       ScaffoldMessenger.of(
@@ -512,6 +532,8 @@ class _TransactionEditSheetState extends State<TransactionEditSheet> {
               ],
               const SizedBox(height: 20),
             ],
+
+            InlineError(_error),
 
             // Save button
             SizedBox(

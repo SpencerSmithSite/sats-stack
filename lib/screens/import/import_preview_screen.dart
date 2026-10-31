@@ -84,6 +84,15 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen> {
           result: true,
         );
       }
+    } catch (e) {
+      // It was a try with no catch: a failed save left the screen as it was,
+      // with nothing said (audit U-6). The save is one transaction, so
+      // nothing was written.
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Import failed, so nothing was saved: $e')),
+        );
+      }
     } finally {
       if (mounted) {
         setState(() {

@@ -52,6 +52,13 @@ class _ImportSourceSetupScreenState extends State<ImportSourceSetupScreen> {
         currency: _currency,
       );
       if (mounted) Navigator.of(context).pop(id);
+    } catch (e) {
+      // It had no catch, so a failed save said nothing (audit U-6).
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Could not add the source: $e')));
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }

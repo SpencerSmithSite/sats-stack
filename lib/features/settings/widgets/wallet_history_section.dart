@@ -88,43 +88,52 @@ class _WalletHistorySectionState extends State<WalletHistorySection> {
       _status = null;
     });
 
-    final electrum = widget.xpub.electrum;
-    final sameServer =
-        host == electrum.host && port == electrum.port && _ssl == electrum.ssl;
-    await electrum.saveSettings(
-      host: host,
-      port: port,
-      ssl: _ssl,
-      certificateFingerprint: sameServer ? electrum.pinnedFingerprint : '',
-    );
-
+    // Everything after the spinner starts is guarded: a failed save, or a
+    // failure inside the certificate prompt's handling, escaped and left the
+    // spinner turning (audit U-6).
     try {
-      await _connected();
-    } on HandshakeException {
-      // An unverified certificate. Only TLS gets here.
-      final fingerprint = await electrum.fetchCertificateFingerprint();
-      if (fingerprint == null || !mounted) {
-        return _say(
-          'The server’s certificate could not be checked',
-          error: true,
-        );
-      }
-      if (!await _askToTrust(fingerprint)) {
-        return _say('Not switched — the certificate was not trusted');
-      }
+      final electrum = widget.xpub.electrum;
+      final sameServer =
+          host == electrum.host &&
+          port == electrum.port &&
+          _ssl == electrum.ssl;
       await electrum.saveSettings(
         host: host,
         port: port,
         ssl: _ssl,
-        certificateFingerprint: fingerprint,
+        certificateFingerprint: sameServer ? electrum.pinnedFingerprint : '',
       );
+
       try {
         await _connected();
+      } on HandshakeException {
+        // An unverified certificate. Only TLS gets here.
+        final fingerprint = await electrum.fetchCertificateFingerprint();
+        if (fingerprint == null || !mounted) {
+          return _say(
+            'The server’s certificate could not be checked',
+            error: true,
+          );
+        }
+        if (!await _askToTrust(fingerprint)) {
+          return _say('Not switched — the certificate was not trusted');
+        }
+        await electrum.saveSettings(
+          host: host,
+          port: port,
+          ssl: _ssl,
+          certificateFingerprint: fingerprint,
+        );
+        try {
+          await _connected();
+        } catch (e) {
+          _say('Could not connect — $e', error: true);
+        }
       } catch (e) {
         _say('Could not connect — $e', error: true);
       }
     } catch (e) {
-      _say('Could not connect — $e', error: true);
+      _say('Could not save — $e', error: true);
     }
   }
 
