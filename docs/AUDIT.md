@@ -1572,6 +1572,29 @@ pins both halves.
 - The `file_picker` media frameworks were checked and are harmless but cannot
   be dropped without replacing the plugin — now a smaller item in `TODO.md`.
 
+### Wallet history from your own Electrum server (TODO items 11 and 12)
+
+- Settings → Servers → Bitcoin has a **Wallet history from** choice: Mempool /
+  Esplora, as before, or *My Electrum server* (electrs, Fulcrum) — host, port,
+  TLS, **Save and test**. It switches only once the server answers. A
+  self-signed certificate, which a home node has, is offered for trust with
+  its SHA-256 fingerprint and pinned; until now `fetchCertificateFingerprint`
+  had no caller, so such a server could not be used at all.
+- `ElectrumHistory` reads each address by scripthash
+  (`BitcoinScript.electrumScripthash`, checked against the genesis vector the
+  old `scripthash_test` carried) and turns the raw transactions into Esplora's
+  shape, so the scan's netting, dedup, re-keying and pricing are one code path
+  for both. Each input's spent output is read from its parent transaction:
+  change can be paid to an address the scan has not reached yet. A test runs
+  the same chain through both sources and gets the same rows.
+- Item 12: requests are pipelined on one connection (16 in flight), with no
+  rate-limit pause — what Esplora spends one HTTP request and 120 ms on per
+  address. Esplora itself cannot batch; the scan cursor stays rejected.
+- Prices still come from the Esplora server — Electrum has none — and the
+  routing banner now says the addresses go only to the Electrum server.
+- Bitcoin Core is not in the picker: it keeps no address index, so it cannot
+  list an address's history. Its service stays for broadcasting (`TODO.md`).
+
 ---
 
 ## Verified correct (no action)

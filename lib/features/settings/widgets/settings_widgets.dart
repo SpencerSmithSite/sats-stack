@@ -13,13 +13,25 @@ import 'package:flutter/material.dart';
 import '../../../shared/theme/app_colors.dart';
 
 class DataRoutingBanner extends StatelessWidget {
-  const DataRoutingBanner({super.key, required this.usingDefault});
+  const DataRoutingBanner({
+    super.key,
+    required this.usingDefault,
+    this.electrumHost,
+  });
 
+  /// Whether prices — and wallet sync, without [electrumHost] — come from
+  /// mempool.space.
   final bool usingDefault;
+
+  /// The user's Electrum server, when wallet history is read from it.
+  final String? electrumHost;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
+    final walletSync =
+        electrumHost == null ? null : 'Your Electrum server ($electrumHost)';
 
     if (usingDefault) {
       return SettingsBanner(
@@ -29,14 +41,19 @@ class DataRoutingBanner extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Using public servers',
+              walletSync == null
+                  ? 'Using public servers'
+                  : 'Prices from public servers',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: context.legibleAccent(const Color(0xFF6AB0E8)),
                 fontWeight: FontWeight.w600,
               ),
             ),
             const SizedBox(height: 4),
-            RouteRow(label: 'Wallet sync', value: 'mempool.space'),
+            RouteRow(
+              label: 'Wallet sync',
+              value: walletSync ?? 'mempool.space',
+            ),
             RouteRow(
               label: 'BTC price',
               value: 'mempool.space · CoinGecko (fallback)',
@@ -47,8 +64,14 @@ class DataRoutingBanner extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              'The operators of these services can see which addresses and prices you request. '
-              'Set a self-hosted server above to route all data through it instead.',
+              walletSync == null
+                  ? 'The operators of these services can see which addresses '
+                      'and prices you request. Set a self-hosted server above '
+                      'to route all data through it instead.'
+                  : 'Your addresses go only to your Electrum server. These '
+                      'services see the price requests, and the dates of '
+                      'historical ones. Set your own Mempool server above to '
+                      'keep those too.',
               // Theme text, not the accent: two paragraphs set in the accent over a
               // tint of it measured 1.97–2.20:1 in light mode.
               style: theme.textTheme.bodySmall?.copyWith(
@@ -75,7 +98,10 @@ class DataRoutingBanner extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 4),
-          RouteRow(label: 'Wallet sync', value: 'Your server only'),
+          RouteRow(
+            label: 'Wallet sync',
+            value: walletSync ?? 'Your server only',
+          ),
           RouteRow(label: 'BTC price', value: 'Your server only'),
           RouteRow(
             label: 'Historical prices',

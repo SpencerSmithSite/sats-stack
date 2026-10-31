@@ -54,40 +54,6 @@ History lives elsewhere and is not duplicated into this file:
 > Items 11–14 were already tracked before the second pass. They are still
 > open and still worth doing; they are simply less urgent than 1–10.
 
-### 11. Wire up the Bitcoin data-source picker
-
-`ElectrumService`, `BitcoinNodeService` and `BitcoinDataSource` compile and
-are referenced by nothing; they exist for this feature. `ElectrumService` has
-no address → scripthash function yet: write one, and test it against the
-genesis vector (`1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa` → scripthash
-`8b01df4e368ea28f8dc0423bcf7a4923e3a12d307c875e47a0cfbf90b5c39161`). The old
-`scripthash_test.dart` tested a copy defined inside itself, and was deleted.
-
-- Settings → Servers gains a picker: Mempool/Esplora (today's only path), the
-  user's own Electrum server, or Bitcoin Core RPC.
-- `XpubService` reads history through the chosen source instead of hardcoding
-  Esplora HTTP.
-- Electrum needs its "trust this certificate?" flow to be reachable. The client
-  verifies certificates properly now and `fetchCertificateFingerprint` exists
-  for exactly this prompt, but no screen calls it, so a self-signed server
-  cannot currently be accepted at all.
-- Bitcoin Core is for connection testing and future broadcasting only — it is
-  not usable for address-history scanning, which is why Electrum is here too.
-
-### 12. xpub scanning: batch the requests further
-
-Derivation now runs in an isolate and a window's requests overlap, so a scan is
-no longer a strictly serial walk. What is left is the request count itself: a
-resync still asks about every derived address.
-
-**The "scan cursor" this file used to propose is not safe, and should not be
-built as described.** Skipping addresses below a high-water mark would miss new
-payments to an address that was already used, and skipping the gap window would
-miss an address funded since the last scan — so nothing in the range is
-actually safe to skip. Reducing the request count needs a server that can
-answer about many addresses at once, which is the Electrum work in item 11
-(`blockchain.scripthash.subscribe`), not a cursor.
-
 ### 13. Close the named test gaps
 
 - **A v1 → v8 migration against a fresh `onCreate`.** There is no generated
@@ -142,6 +108,13 @@ worth doing on purpose rather than as a move.
   and the SDKs Apple lists ship privacy manifests. Removing them means
   replacing `file_picker` — `file_selector` opens files everywhere but cannot
   save on iOS or Android, so export there would need a share sheet instead.
+- **Bitcoin Core.** `BitcoinNodeService` compiles and is referenced by
+  nothing. Core keeps no address index, so it cannot be a wallet-history
+  source (the picker offers Mempool/Esplora and Electrum); it is kept for
+  broadcasting. Wire it up when sending is built, or delete it.
+- **Try the Electrum path against a real electrs and Fulcrum.** It is tested
+  end to end against a local fake server that speaks the protocol, including
+  a self-signed TLS certificate, but not against either real implementation.
 - **Verify a real request against each hosted provider.** Every wire format is
   unit tested against the documented shape, but nothing has run against a live
   endpoint with a real key — that needs four paid accounts.
