@@ -160,7 +160,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** On mobile, `file_picker` and `image_picker` copy the chosen file into the app's cache. Nothing deletes the copy.
 - **Impact:** Whole bank statements and statement photos stay on disk after the import, outside the database that "Reset all data" clears. The per-platform behaviour is from the plugins' documentation, not verified here.
 - **Fix direction:** Delete the picked copy when an import finishes or is cancelled, and in reset.
-- **Status:** open
+- **Status:** fixed in #70. On iOS and Android the import screen deletes its copy of a picked file or photo when the next one is picked or the screen closes (kept until then for Try Again and manual mapping); `discardPickedCopy` only ever deletes inside the app's temporary and cache folders, so a desktop user's own file is never touched. Reset also clears the file picker's cache. Pinned by `picked_files_test`.
 
 ### A-8 · Medium · performance — PDF and CSV parsing run unbounded on the UI isolate
 - **Where:** `import_service.dart:1661-1667`, `:2386-2393`, `:2402-2406`.
