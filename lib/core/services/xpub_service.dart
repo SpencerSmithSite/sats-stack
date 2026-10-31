@@ -45,6 +45,8 @@ class XpubSyncResult {
     required this.addressesScanned,
     this.removed = 0,
     this.unpriced = 0,
+    this.kept = 0,
+    this.historyCapped = false,
   });
 
   final int imported;
@@ -70,6 +72,31 @@ class XpubSyncResult {
 
   /// Rows deleted because the chain no longer backs them — see [XpubService].
   final int removed;
+
+  /// Rows the server no longer reported but that were kept, because the scan
+  /// could not be trusted to have seen everything — see [keptNote].
+  final int kept;
+
+  /// An address had more history than the scan reads, so what it returned
+  /// for that address was only the newest part.
+  final bool historyCapped;
+
+  /// What to tell the user about [kept], or null when nothing was held back.
+  String? get keptNote {
+    if (kept == 0) return null;
+    final rows =
+        kept == 1
+            ? '1 earlier transaction was'
+            : '$kept earlier transactions were';
+    return historyCapped
+        ? '$rows kept although the server did not return them: an address in '
+            'this wallet has more history than Sats Stack reads, so only its '
+            'newest transactions were checked.'
+        : '$rows kept although the server did not return them. When most of '
+            "a wallet's history disappears at once, the usual cause is a "
+            'server still catching up. Rescan later; if they are really gone, '
+            'delete them from the list.';
+  }
 }
 
 /// A sync that could not finish.
@@ -666,9 +693,13 @@ class XpubService {
 
   /// Fetches a window of addresses, at most [_maxConcurrentRequests] at a
   /// time, returning results in the order the addresses were given.
+  ///
+  /// [onCapped] is called for an address whose history ran past
+  /// [_maxPagesPerAddress] pages, so the sync knows it saw only part of it.
   Future<List<List<Map<String, dynamic>>>> _fetchWindow(
-    List<String> addresses,
-  ) async {
+    List<String> addresses, {
+    void Function()? onCapped,
+  }) async {
     final scan = _electrumScan;
     if (scan != null) {
       try {
@@ -689,7 +720,7 @@ class XpubService {
       while (true) {
         final i = next++;
         if (i >= addresses.length) return;
-        results[i] = await _fetchAddressTxs(addresses[i]);
+        results[i] = await _fetchAddressTxs(addresses[i], onCapped: onCapped);
         await Future.delayed(_requestSpacing);
       }
     }
@@ -707,9 +738,17 @@ class XpubService {
   /// A single `/txs` call returns only the newest 25 confirmed transactions, so
   /// a wallet with a longer history on one address used to lose everything
   /// older with no warning.
-  Future<List<Map<String, dynamic>>> _fetchAddressTxs(String address) async {
+  ///
+  /// Stopping at [_maxPagesPerAddress] used to return the newest part as if it
+  /// were all of it, and the sync then deleted every stored row older than
+  /// that (audit B-1). [onCapped] says when that happens.
+  Future<List<Map<String, dynamic>>> _fetchAddressTxs(
+    String address, {
+    void Function()? onCapped,
+  }) async {
     final out = <Map<String, dynamic>>[];
     String? lastSeen;
+    var complete = false;
 
     for (var page = 0; page < _maxPagesPerAddress; page++) {
       final url =
@@ -730,13 +769,16 @@ class XpubService {
       // mempool entries, which is why the page is measured by its confirmed
       // count rather than its length.
       final confirmed = txs.where(_isConfirmed).toList();
-      if (confirmed.length < _pageSize) break;
-      final next = confirmed.last['txid'];
-      if (next is! String) break;
+      final next = confirmed.lastOrNull?['txid'];
+      if (confirmed.length < _pageSize || next is! String) {
+        complete = true;
+        break;
+      }
       lastSeen = next;
       await Future.delayed(_requestSpacing);
     }
 
+    if (!complete) onCapped?.call();
     return out;
   }
 
@@ -817,6 +859,7 @@ class XpubService {
     final owned = <String>{};
     final txById = <String, Map<String, dynamic>>{};
     var addressesScanned = 0;
+    var historyCapped = false;
 
     for (final chainIndex in _chains) {
       final chainName = chainIndex == 0 ? 'receive' : 'change';
@@ -845,7 +888,10 @@ class XpubService {
           'Scanning $chainName addresses ${index + 1}–${index + _gapLimit}…',
         );
 
-        final results = await _fetchWindow(addresses);
+        final results = await _fetchWindow(
+          addresses,
+          onCapped: () => historyCapped = true,
+        );
 
         // Applied in order, so the gap limit means exactly what it meant
         // before: N consecutive unused addresses ends the chain.
@@ -1018,6 +1064,23 @@ class XpubService {
     var removed = 0;
     var unpriced = 0;
 
+    // Rows the chain no longer backs are deleted — but only when the scan can
+    // be trusted to have seen the whole history (audit B-1). Not when an
+    // address was capped: it returned only its newest part. And not when the
+    // server returns fewer transactions than the wallet holds and most of the
+    // wallet is missing: a self-hosted server still indexing answers with
+    // empty or partial lists, and would otherwise have every row, with the
+    // user's categories and notes, deleted on its word. A wallet whose few
+    // rows were genuinely replaced still updates.
+    final missing = [
+      for (final row in stored)
+        if (rekey[row.id] == null && !claimed.contains(row.id)) row.id,
+    ];
+    final holdBack =
+        historyCapped ||
+        (missing.length * 2 > stored.length && rows.length < stored.length);
+    final kept = holdBack ? missing.length : 0;
+
     await _db.transaction(() async {
       for (final row in stored) {
         final replacement = rekey[row.id];
@@ -1029,7 +1092,7 @@ class XpubService {
               date: Value(replacement.date),
             ),
           );
-        } else if (!claimed.contains(row.id)) {
+        } else if (!claimed.contains(row.id) && !holdBack) {
           await (_db.delete(_db.transactions)
             ..where((t) => t.id.equals(row.id))).go();
           removed++;
@@ -1088,6 +1151,8 @@ class XpubService {
       addressesScanned: addressesScanned,
       removed: removed,
       unpriced: unpriced,
+      kept: kept,
+      historyCapped: historyCapped,
     );
   }
 
