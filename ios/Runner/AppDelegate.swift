@@ -16,7 +16,58 @@ import UserNotifications
     if #available(iOS 10.0, *) {
       UNUserNotificationCenter.current().delegate = self
     }
+    observeSceneActivation()
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+
+  // ── Privacy cover ─────────────────────────────────────────────────────────
+  //
+  // iOS photographs the window as the app leaves the foreground, for the app
+  // switcher — the dashboard's balances, the stack, transactions, the AI chat
+  // (audit P-1). The window is covered with the launch artwork first, and
+  // uncovered on return. Scene notifications, because this is a scene-based
+  // app: the app-delegate lifecycle callbacks do not fire for it.
+
+  private var privacyCovers: [UIView] = []
+
+  private func observeSceneActivation() {
+    let center = NotificationCenter.default
+    center.addObserver(
+      forName: UIScene.willDeactivateNotification, object: nil, queue: .main
+    ) { [weak self] note in
+      self?.cover(note.object as? UIWindowScene)
+    }
+    center.addObserver(
+      forName: UIScene.didActivateNotification, object: nil, queue: .main
+    ) { [weak self] _ in
+      self?.uncover()
+    }
+  }
+
+  private func cover(_ scene: UIWindowScene?) {
+    guard let scene = scene else { return }
+    uncover()
+    for window in scene.windows {
+      let cover = UIView(frame: window.bounds)
+      cover.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+      // #141414, as the launch screen.
+      cover.backgroundColor = UIColor(
+        red: 0x14 / 255, green: 0x14 / 255, blue: 0x14 / 255, alpha: 1)
+      if let image = UIImage(named: "LaunchImage") {
+        let artwork = UIImageView(image: image)
+        artwork.contentMode = .center
+        artwork.frame = cover.bounds
+        artwork.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        cover.addSubview(artwork)
+      }
+      window.addSubview(cover)
+      privacyCovers.append(cover)
+    }
+  }
+
+  private func uncover() {
+    privacyCovers.forEach { $0.removeFromSuperview() }
+    privacyCovers.removeAll()
   }
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
