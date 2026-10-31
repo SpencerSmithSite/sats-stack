@@ -1595,6 +1595,24 @@ pins both halves.
 - Bitcoin Core is not in the picker: it keeps no address index, so it cannot
   list an address's history. Its service stays for broadcasting (`TODO.md`).
 
+### Every schema version upgrades, tested against its real schema (TODO item 13)
+
+- `drift_schemas/` holds the schema of each version, dumped by `drift_dev`
+  from the commit that shipped it — v3 (the first commit) to v12. v1 and v2
+  predate the repository and are v3 less what the v1→v2 and v2→v3 steps add.
+  `test/generated_migrations/` is generated from them.
+- `schema_migration_test` upgrades a database at every version from 1 to 11
+  and checks the result is exactly the current schema, checks a fresh install
+  and the latest dump both match the table definitions — so a schema change
+  without a new dump fails — and runs a v7 database holding real rows through
+  every data step. That last case fails on the whole-row reads #48 removed.
+  The hand-built "fresh database with columns dropped" tests stay, but are no
+  longer the only cover. The test's header says how to add a version.
+- `tab_stream_test` shows Transactions, Budgets and Stack their data, rebuilds
+  each from above, and requires the data on the very next frame and a new row
+  afterwards: a stream built in `build()` fails it, which was checked by
+  moving Transactions' stream there.
+
 ---
 
 ## Verified correct (no action)

@@ -54,20 +54,6 @@ History lives elsewhere and is not duplicated into this file:
 > Items 11–14 were already tracked before the second pass. They are still
 > open and still worth doing; they are simply less urgent than 1–10.
 
-### 13. Close the named test gaps
-
-- **A v1 → v8 migration against a fresh `onCreate`.** There is no generated
-  schema history to migrate against, which is why `migrateToV6` and
-  `migrateToV7` are named methods the tests call directly. Real coverage means
-  generating drift's schema history, then asserting an upgraded database
-  matches a freshly created one.
-- **Widget-level stream reactivity.** The import path's single-commit guarantee
-  is asserted at the service level, but nothing checks that a screen subscribes
-  once and survives a rebuild — which is the bug class the split just fixed.
-  `dashboard_rebuild_test.dart` now shows how to pump a whole screen against
-  real services on an in-memory database (including the teardown drift needs),
-  so the other four tabs can follow the same pattern.
-
 ### 14. Decompose Settings properly
 
 `settings_screen.dart` is still 1,575 lines and was deliberately left out of
