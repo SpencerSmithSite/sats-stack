@@ -86,8 +86,13 @@ void main() {
     }
   }
 
-  Future<void> open(WidgetTester tester, String section) async {
+  Future<void> open(
+    WidgetTester tester,
+    String section, {
+    Future<void> Function()? before,
+  }) async {
     await tester.runAsync(services);
+    if (before != null) await tester.runAsync(before);
     tester.view.physicalSize = const Size(430, 5000);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -217,6 +222,48 @@ void main() {
       await settle(tester);
       expect(keys.keys['anthropic'], 'sk-ant-test');
       expect(find.text('Claude settings saved'), findsOneWidget);
+      await close(tester);
+    });
+
+    // A saved key was loaded into the field as Settings opened, where the
+    // eye icon showed it in full (audit U-4).
+    Future<void> withSavedClaudeKey() async {
+      keys.keys['anthropic'] = 'sk-ant-SAVED-SECRET';
+      await app.ollamaService.loadSettings();
+      await app.ollamaService.setActiveProvider(AiProvider.claude);
+    }
+
+    testWidgets('a saved key is never put in the field', (tester) async {
+      await open(tester, 'Servers', before: withSavedClaudeKey);
+      final field = tester.widget<TextField>(
+        find.widgetWithText(TextField, 'Claude API key'),
+      );
+      expect(field.controller!.text, isEmpty);
+      expect(field.decoration!.hintText, contains('Key saved'));
+      expect(find.textContaining('SAVED-SECRET'), findsNothing);
+      // Even shown, there is nothing to show.
+      await tester.tap(find.byTooltip('Show key'));
+      await tester.pump();
+      expect(find.textContaining('SAVED-SECRET'), findsNothing);
+      await close(tester);
+    });
+
+    testWidgets('saving with the field empty keeps the saved key', (
+      tester,
+    ) async {
+      await open(tester, 'Servers', before: withSavedClaudeKey);
+      await tester.tap(find.widgetWithText(FilledButton, 'Save').first);
+      await settle(tester);
+      expect(keys.keys['anthropic'], 'sk-ant-SAVED-SECRET');
+      await close(tester);
+    });
+
+    testWidgets('Remove saved key removes it', (tester) async {
+      await open(tester, 'Servers', before: withSavedClaudeKey);
+      await tester.tap(find.text('Remove saved key'));
+      await settle(tester);
+      expect(keys.keys['anthropic'], isEmpty);
+      expect(find.text('Remove saved key'), findsNothing);
       await close(tester);
     });
 

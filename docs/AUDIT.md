@@ -477,7 +477,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** Each provider's key is read from the keychain into a text field as soon as Settings opens (the sections keep their state), and the eye icon reveals it with no re-authentication. The screenshot side of this is P-1.
 - **Impact:** Anyone holding an unlocked phone can read the user's paid API keys.
 - **Fix direction:** Show a "key saved" placeholder instead of the key, and gate reveal behind device authentication.
-- **Status:** open
+- **Status:** fixed in #69. Key fields start empty and show "Key saved — type a new one to replace it"; saving or testing with an empty field keeps the saved key; a **Remove saved key** button replaces clearing the field. The eye icon has nothing saved to reveal. Pinned by `settings_screen_test`. (Device-authentication gating was not needed once the key is never on screen.)
 
 ### U-5 · Medium · performance — The import screen creates its Drift stream in `build()`
 - **Where:** `lib/screens/import/import_file_screen.dart:179`, `:402-415`, `:689-701`.
