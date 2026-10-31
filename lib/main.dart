@@ -14,6 +14,7 @@ import 'core/services/dashboard_service.dart';
 import 'core/services/import_service.dart';
 import 'core/services/notification_service.dart';
 import 'core/services/ollama_service.dart';
+import 'core/services/recurring_catch_up.dart';
 import 'core/services/removed_model_cleanup.dart';
 import 'core/services/transaction_service.dart';
 import 'core/services/wallet_service.dart';
@@ -156,12 +157,15 @@ void main() async {
                 .ignore(),
   );
 
-  // Generate any recurring transactions that came due since last launch,
-  // each priced on its own date. After the price service is set up, since
-  // that is where the configured price server comes from.
-  transactionService
-      .generateDueRecurring(priceAt: btcPriceService.getHistoricalPrice)
-      .ignore();
+  // Generate any recurring transactions that have come due, each priced on its
+  // own date — now, on every return to the app, and at each midnight while it
+  // stays open. After the price service is set up, since that is where the
+  // configured price server comes from.
+  RecurringCatchUp(
+    () => transactionService.generateDueRecurring(
+      priceAt: btcPriceService.getHistoricalPrice,
+    ),
+  ).start();
 
   // Check budgets at startup and on every subsequent transaction change.
   budgetService
