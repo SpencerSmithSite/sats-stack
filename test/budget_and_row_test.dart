@@ -80,6 +80,7 @@ void main() {
       fiatCurrency: 'USD',
       source: 'xpub',
       isBitcoin: true,
+      isOwnTransfer: false,
       dedupHash: 'h',
       createdAt: DateTime(2025, 3, 4),
     );

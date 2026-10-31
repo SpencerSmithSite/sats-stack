@@ -148,7 +148,9 @@ class BudgetService {
         await (_db.select(_db.transactions)
               ..where((t) => t.date.isBiggerOrEqualValue(range.start))
               ..where((t) => t.date.isSmallerThanValue(range.end))
-              ..where((t) => t.amountFiat.isSmallerThanValue(0)))
+              ..where((t) => t.amountFiat.isSmallerThanValue(0))
+              // A transfer between the user's own wallets is not spending.
+              ..where((t) => t.isOwnTransfer.equals(false)))
             .get();
 
     final categoryIdByName = {for (final c in categories) c.name: c.id};

@@ -85,7 +85,8 @@ class TransactionListItem extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                   if (category != null ||
-                      transaction.recurringPeriod != null) ...[
+                      transaction.recurringPeriod != null ||
+                      transaction.isOwnTransfer) ...[
                     const SizedBox(height: 2),
                     Row(
                       children: [
@@ -108,6 +109,17 @@ class TransactionListItem extends StatelessWidget {
                             Icons.repeat,
                             size: 11,
                             color: context.textSecondary,
+                          ),
+                        ],
+                        if (transaction.isOwnTransfer) ...[
+                          if (category != null ||
+                              transaction.recurringPeriod != null)
+                            const SizedBox(width: 4),
+                          Icon(
+                            Icons.swap_horiz,
+                            size: 11,
+                            color: context.textSecondary,
+                            semanticLabel: 'Own transfer',
                           ),
                         ],
                       ],
