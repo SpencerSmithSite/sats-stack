@@ -1,17 +1,15 @@
 /// The leaf widgets the Settings screen is built from.
 ///
-/// Moved out of settings_screen.dart, which is the one screen the audit's
-/// "split this up" note could not be applied to wholesale: its bulk is a
-/// single state class holding every controller and every connection test, and
-/// carving that into per-section files means passing all of it back in —
-/// a design change, not a move. These are the parts that genuinely were just
-/// sitting at the bottom of the file.
+/// Shared by the section widgets beside this file, which `SettingsScreen`
+/// composes.
 library;
 
 import 'package:flutter/material.dart';
 
 import '../../../shared/theme/app_colors.dart';
 
+/// Shows a summary of which servers are used for data, based on whether a
+/// custom Mempool/Esplora server is configured.
 class DataRoutingBanner extends StatelessWidget {
   const DataRoutingBanner({
     super.key,
