@@ -139,7 +139,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** `direction = mappingAmountIsSigned ? (raw < 0 ? 'debit' : 'credit') : 'debit'`. `parseWithMapping` never gets the source type, so it lacks the rules tier's `chargesMaySignPositive` / `positiveIsDebit` handling. An unsigned column becomes all-debit.
 - **Impact:** For a card that exports purchases as positive amounts, a saved mapping, which is the first tier tried on every later import, files every purchase as income.
 - **Fix direction:** Pass the source type into `parseWithMapping` and share the direction rules with `_parseRowsGeneric`.
-- **Status:** open
+- **Status:** fixed in #65. `parseWithMapping` now takes the account type (read from the source when not given) and applies the rules tier's reading: on a card the majority sign is the charges, a CR-marked unsigned column reads CR as credits, and an unsigned one catches an unmistakable credit by description. Pinned by `mapped_card_signs_test`.
 
 ### A-5 · Medium · privacy — Refreshing an insight sends figures to a hosted provider without naming it
 - **Where:** `lib/features/dashboard/widgets/ai_insight_card.dart:58-59`, `:101`, `:139`.
