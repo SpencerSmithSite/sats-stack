@@ -213,11 +213,12 @@ class OllamaService {
   /// there is nothing to say.
   ///
   /// [recipientFor] treats a server on the local network as the user's own
-  /// hardware, so no off-device banner shows for it — but the old copy then
-  /// said "nothing leaves", which is not what happens: the figures cross the
-  /// network to another machine, and on a shared network that address could
-  /// be anyone's. And a remote server over plain `http://` got no warning at
-  /// all, though everything sent to it travels readable.
+  /// hardware, so no off-device banner or consent prompt shows for it: someone
+  /// who runs their own AI server knows where it is (decided 2026-10-31). The
+  /// note still says the figures cross the network — the old copy said
+  /// "nothing leaves", which is not what happens — but as a plain fact, not a
+  /// warning. A remote server over plain `http://` is warned about: everything
+  /// sent to it travels readable.
   static String? transportNoteFor(AiProvider provider, String url) {
     if (provider != AiProvider.ollama &&
         provider != AiProvider.lmStudio &&
@@ -231,9 +232,7 @@ class OllamaService {
     final host = uri?.host ?? '';
     if (host.isEmpty) return null;
     if (isLocalEndpoint(normalized)) {
-      return 'Sent over your local network to $host, and no further. On a '
-          'shared network — a café, an office — make sure that address is '
-          'your own machine.';
+      return 'Sent over your local network to $host, and no further.';
     }
     if (uri!.scheme == 'http') {
       return 'Sent unencrypted (http://), so anything between here and $host '
