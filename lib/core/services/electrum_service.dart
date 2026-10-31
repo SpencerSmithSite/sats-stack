@@ -19,8 +19,12 @@ class ElectrumService {
   final AppDatabase _db;
 
   String _host = '';
-  int _port = AppConstants.defaultElectrumPort;
-  bool _ssl = false;
+  int _port = AppConstants.defaultElectrumTlsPort;
+
+  /// TLS unless the user turns it off. It defaulted to plain TCP, over which
+  /// anyone on the path reads every address the scan asks about — and can
+  /// answer with forged or empty history (audit B-2).
+  bool _ssl = true;
 
   String get host => _host;
   int get port => _port;
@@ -40,16 +44,18 @@ class ElectrumService {
     final portRows =
         await (_db.select(_db.appSettings)
           ..where((t) => t.key.equals(AppConstants.settingElectrumPort))).get();
-    if (portRows.isNotEmpty) {
-      _port =
-          int.tryParse(portRows.first.value) ??
-          AppConstants.defaultElectrumPort;
-    }
+    final storedPort =
+        portRows.isEmpty ? null : int.tryParse(portRows.first.value);
 
     final sslRows =
         await (_db.select(_db.appSettings)
           ..where((t) => t.key.equals(AppConstants.settingElectrumSsl))).get();
     if (sslRows.isNotEmpty) _ssl = sslRows.first.value == 'true';
+    _port =
+        storedPort ??
+        (_ssl
+            ? AppConstants.defaultElectrumTlsPort
+            : AppConstants.defaultElectrumPort);
 
     final pinRows =
         await (_db.select(_db.appSettings)..where(

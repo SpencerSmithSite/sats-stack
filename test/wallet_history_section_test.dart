@@ -138,7 +138,8 @@ void main() {
         '127.0.0.1',
       );
       await tester.enterText(find.widgetWithText(TextField, 'Port'), '$port');
-      if (tls) await tester.tap(find.text('Use TLS'));
+      // TLS is on by default (audit B-2).
+      if (!tls) await tester.tap(find.text('Use TLS'));
       await tester.pump();
       await _realTap(tester, find.text('Save and test'));
     }
@@ -262,5 +263,94 @@ void main() {
     await tester.tap(find.text('My Electrum server'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
+  });
+
+  group('TLS by default (audit B-2)', () {
+    test('a fresh install uses TLS on 50002', () async {
+      final xpub = XpubService(db);
+      await xpub.loadSettings();
+      expect(xpub.electrum.ssl, isTrue);
+      expect(xpub.electrum.port, 50002);
+    });
+
+    test('a saved plain-TCP server stays as it was', () async {
+      final xpub = XpubService(db);
+      await xpub.electrum.saveSettings(
+        host: 'node.lan',
+        port: 50001,
+        ssl: false,
+      );
+      final reloaded = XpubService(db);
+      await reloaded.loadSettings();
+      expect(reloaded.electrum.ssl, isFalse);
+      expect(reloaded.electrum.port, 50001);
+    });
+
+    Future<XpubService> section(WidgetTester tester) async {
+      tester.view.physicalSize = const Size(430, 1400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final xpub = XpubService(db);
+      await tester.runAsync(xpub.loadSettings);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.dark(),
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: WalletHistorySection(xpub: xpub, onChanged: () {}),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('My Electrum server'));
+      await tester.pumpAndSettle();
+      return xpub;
+    }
+
+    String portText(WidgetTester tester) =>
+        tester
+            .widget<TextField>(find.widgetWithText(TextField, 'Port'))
+            .controller!
+            .text;
+
+    testWidgets('turning TLS off and on moves between the standard ports', (
+      tester,
+    ) async {
+      await section(tester);
+      expect(portText(tester), '50002');
+      await tester.tap(find.text('Use TLS'));
+      await tester.pump();
+      expect(portText(tester), '50001');
+      await tester.tap(find.text('Use TLS'));
+      await tester.pump();
+      expect(portText(tester), '50002');
+
+      // A port the user chose is left alone.
+      await tester.enterText(find.widgetWithText(TextField, 'Port'), '443');
+      await tester.tap(find.text('Use TLS'));
+      await tester.pump();
+      expect(portText(tester), '443');
+    });
+
+    testWidgets('plain TCP to a host outside the network asks first', (
+      tester,
+    ) async {
+      final xpub = await section(tester);
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Electrum server'),
+        'electrum.example.com',
+      );
+      await tester.tap(find.text('Use TLS'));
+      await tester.pump();
+      await tester.tap(find.text('Save and test'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Connect without TLS?'), findsOneWidget);
+      expect(find.textContaining('false history'), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      // Nothing was saved or contacted.
+      expect(xpub.electrum.isConfigured, isFalse);
+    });
   });
 }
