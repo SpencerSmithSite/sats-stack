@@ -1556,6 +1556,22 @@ further". The café-and-office caution is gone. Plain `http://` to a server
 *outside* the network is still called unencrypted. `ai_privacy_details_test`
 pins both halves.
 
+### Exports on a phone, and the bundled icons
+
+- **Export never worked on iOS or Android.** Both *Export database* and
+  *Export spending summary* called `FilePicker.saveFile` without `bytes`, then
+  wrote to the path it returned. On a phone it returns no path to write to: it
+  takes the bytes and throws without them ("Bytes are required on Android &
+  iOS"). Both now hand the dialog their bytes — the database through
+  `databaseSnapshot`, the same `VACUUM INTO` copy by way of a temporary file —
+  which works on macOS too, where `file_picker` writes them itself. A test
+  fails if any `saveFile` call in `lib` stops passing them.
+- `assets/icons/` is out of the app bundle (110 KB). Nothing loads it; the
+  icon and splash generators read it from the repo by path, which a test
+  checks they still can.
+- The `file_picker` media frameworks were checked and are harmless but cannot
+  be dropped without replacing the plugin — now a smaller item in `TODO.md`.
+
 ---
 
 ## Verified correct (no action)
