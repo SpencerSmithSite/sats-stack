@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -67,6 +68,10 @@ class _ImportRun {
 
   /// How much of the file an AI tier was given, when that was not all of it.
   int? truncatedAt;
+
+  /// An AI answer stopped before its JSON did, so the rows after that point
+  /// were never returned — see [ImportResult.aiOutputCutOff].
+  bool outputCutOff = false;
 }
 
 /// Thrown when an import's [ImportCancelToken] is cancelled during it.
@@ -183,6 +188,7 @@ class ImportResult {
     this.sentTo,
     this.aiLabel,
     this.aiInputTruncatedAt,
+    this.aiOutputCutOff = false,
     this.errorMessage,
     this.rawCsvContent,
     this.csvRows,
@@ -228,6 +234,11 @@ class ImportResult {
   /// last months.
   final int? aiInputTruncatedAt;
 
+  /// An AI answer was cut off partway, so rows it had not reached are missing.
+  /// What it did return is kept; until audit A-2 the cut-off answer failed to
+  /// parse at all, after the whole statement had been uploaded.
+  final bool aiOutputCutOff;
+
   /// Why nothing could be read, in words the user can act on, when the cause
   /// is known — for instance that the selected backend cannot read images.
   final String? errorMessage;
@@ -242,6 +253,7 @@ class ImportResult {
     String? sentTo,
     String? aiLabel,
     int? aiInputTruncatedAt,
+    bool aiOutputCutOff = false,
   }) => ImportResult(
     transactions: transactions,
     fileType: fileType,
@@ -255,6 +267,7 @@ class ImportResult {
     sentTo: sentTo,
     aiLabel: aiLabel,
     aiInputTruncatedAt: aiInputTruncatedAt,
+    aiOutputCutOff: aiOutputCutOff,
     errorMessage: errorMessage,
     rawCsvContent: rawCsvContent,
     csvRows: csvRows,
@@ -470,6 +483,7 @@ class ImportService {
     return result.withProvenance(
       sentTo: _run.sent ? ollama.activeDataRecipient : null,
       aiInputTruncatedAt: aiTier ? _run.truncatedAt : null,
+      aiOutputCutOff: aiTier && _run.outputCutOff,
       aiLabel: aiTier ? ollama.activeProvider.label : null,
     );
   }
@@ -959,6 +973,7 @@ Rules:
         content,
         fallbackCurrency: currency,
         onStageChange: onStageChange,
+        header: true,
       );
       _checkCancelled();
       if (txns != null && txns.isNotEmpty) {
@@ -1098,10 +1113,13 @@ Rules:
 
   // ── Tier 1: Ollama ────────────────────────────────────────────────────────
 
+  /// [header] says [content]'s first line is a column header — a CSV — so
+  /// that each part sent on its own carries it.
   Future<List<ParsedTransaction>?> parseWithOllama(
     String content, {
     required String fallbackCurrency,
     void Function(String)? onStageChange,
+    bool header = false,
   }) async {
     final client = http.Client();
     _run.token._attach(client);
@@ -1132,69 +1150,71 @@ Rules:
 FILE CONTENT:
 ''';
 
-      final messages = [
-        {'role': 'user', 'content': '$prefix$truncated'},
-      ];
-
-      onStageChange?.call(
-        'Sending to ${ollama.selectedModel ?? ollama.activeProvider.label} for analysis…',
+      // In parts, each sized to what the backend can read and answer in one
+      // go. The whole file went in one request: the on-device models (about
+      // 4,000 characters of context) overflowed and failed silently, Ollama
+      // truncated the prompt itself, and a hosted provider's answer — capped
+      // at 4,096 tokens, about 90 rows — came back cut off, failed to parse,
+      // and fell back, after the whole statement had been uploaded (audit
+      // A-2, A-3).
+      final chunks = _aiChunks(
+        truncated,
+        header: header,
+        maxChars: max(1500, ollama.contextBudgetChars - prefix.length),
       );
-      await Future.delayed(const Duration(milliseconds: 60));
-      onStageChange?.call('AI is thinking…');
+      if (chunks.isEmpty) return null;
+      final model = ollama.selectedModel ?? ollama.activeProvider.label;
 
-      final buffer = StringBuffer();
-      var tokenCount = 0;
-      await for (final token in ollama.chat(messages, client: client)) {
-        if (_run.token.isCancelled) break;
-        buffer.write(token);
-        _tokenController.add(token); // sync: true — delivered immediately to UI
-        tokenCount++;
-        // Yield to the event loop every 5 tokens. Without this, Dart's
-        // microtask queue processes all tokens before Flutter can schedule
-        // a frame, so the UI only redraws once after generation completes.
-        if (tokenCount % 5 == 0) {
-          await Future<void>.delayed(Duration.zero);
+      final parsed = <ParsedTransaction>[];
+      for (var part = 0; part < chunks.length; part++) {
+        final many = chunks.length > 1;
+        onStageChange?.call(
+          many
+              ? 'Sending part ${part + 1} of ${chunks.length} to $model…'
+              : 'Sending to $model for analysis…',
+        );
+        await Future.delayed(const Duration(milliseconds: 60));
+        onStageChange?.call('AI is thinking…');
+
+        final note =
+            many
+                ? '(Part ${part + 1} of ${chunks.length} of the file'
+                    '${header ? '; its first line is the column header' : ''}.)\n'
+                : '';
+        final messages = [
+          {'role': 'user', 'content': '$prefix$note${chunks[part]}'},
+        ];
+
+        final buffer = StringBuffer();
+        var tokenCount = 0;
+        await for (final token in ollama.chat(messages, client: client)) {
+          if (_run.token.isCancelled) break;
+          buffer.write(token);
+          _tokenController.add(
+            token,
+          ); // sync: true — delivered immediately to UI
+          tokenCount++;
+          // Yield to the event loop every 5 tokens. Without this, Dart's
+          // microtask queue processes all tokens before Flutter can schedule
+          // a frame, so the UI only redraws once after generation completes.
+          if (tokenCount % 5 == 0) {
+            await Future<void>.delayed(Duration.zero);
+          }
         }
+        _checkCancelled();
+
+        onStageChange?.call('Processing results…');
+
+        final answer = buffer.toString().trim();
+        var jsonArray = _extractJsonArray(answer);
+        if (jsonArray == null) {
+          // Cut off mid-array: keep the rows that did arrive, and say so.
+          jsonArray = _recoverCutOffArray(answer);
+          if (jsonArray != null) _run.outputCutOff = true;
+        }
+        if (jsonArray == null) return null;
+        parsed.addAll(_rowsFromModel(jsonArray, fallbackCurrency, content));
       }
-      _checkCancelled();
-
-      onStageChange?.call('Processing results…');
-
-      final jsonArray = _extractJsonArray(buffer.toString().trim());
-      if (jsonArray == null) return null;
-
-      final parsed =
-          jsonArray
-              .map((item) {
-                try {
-                  final map = item as Map<String, dynamic>;
-                  final date = DateTime.tryParse(
-                    (map['date'] as String?) ?? '',
-                  );
-                  if (date == null) return null;
-                  final amount = (map['amount'] as num?)?.toDouble();
-                  if (amount == null) return null;
-                  final direction =
-                      ((map['direction'] as String?) ?? 'debit').toLowerCase();
-                  final description = (map['description'] as String?) ?? '';
-                  final rowCurrency = _modelRowCurrency(
-                    map['currency'] as String?,
-                    fallbackCurrency,
-                    content,
-                  );
-                  return _categorised(
-                    date: date,
-                    amount: amount.abs(),
-                    direction: direction == 'credit' ? 'credit' : 'debit',
-                    description: description,
-                    currency: rowCurrency,
-                  );
-                } catch (_) {
-                  return null;
-                }
-              })
-              .whereType<ParsedTransaction>()
-              .toList();
 
       return parsed;
     } on ImportCancelledException {
@@ -1207,6 +1227,109 @@ FILE CONTENT:
       client.close();
     }
   }
+
+  /// Lines per part sent to the model. Its answer runs about 45 tokens a
+  /// row, so 60 rows stay well inside a hosted provider's 4,096-token cap.
+  static const _aiChunkLines = 60;
+
+  /// [content] in parts of at most [_aiChunkLines] lines and [maxChars]
+  /// characters, each starting with the header line when [header] is set.
+  /// Blank lines are dropped.
+  @visibleForTesting
+  static List<String> aiChunks(
+    String content, {
+    required bool header,
+    required int maxChars,
+  }) {
+    final lines = const LineSplitter().convert(content);
+    final head = header && lines.isNotEmpty ? lines.first : null;
+    final rows = head == null ? lines : lines.sublist(1);
+    final chunks = <String>[];
+    final current = <String>[];
+    var size = head?.length ?? 0;
+    void flush() {
+      if (current.isEmpty) return;
+      chunks.add([if (head != null) head, ...current].join('\n'));
+      current.clear();
+      size = head?.length ?? 0;
+    }
+
+    for (final line in rows) {
+      if (line.trim().isEmpty) continue;
+      final row = line.length > maxChars ? line.substring(0, maxChars) : line;
+      if (current.length >= _aiChunkLines || size + row.length + 1 > maxChars) {
+        flush();
+      }
+      current.add(row);
+      size += row.length + 1;
+    }
+    flush();
+    return chunks;
+  }
+
+  List<String> _aiChunks(
+    String content, {
+    required bool header,
+    required int maxChars,
+  }) => aiChunks(content, header: header, maxChars: maxChars);
+
+  /// The complete objects of a JSON array whose answer stopped partway — no
+  /// closing `]`, perhaps half an object — or null when there are none.
+  @visibleForTesting
+  static List<dynamic>? recoverCutOffArray(String text) {
+    final start = text.indexOf('[');
+    if (start == -1) return null;
+    var end = text.lastIndexOf('}');
+    // Back from the last brace until what precedes it closes an object.
+    for (var tries = 0; end > start && tries < 5; tries++) {
+      try {
+        final decoded = jsonDecode('${text.substring(start, end + 1)}]');
+        if (decoded is List && decoded.isNotEmpty) return decoded;
+        return null;
+      } catch (_) {
+        end = text.lastIndexOf('}', end - 1);
+      }
+    }
+    return null;
+  }
+
+  List<dynamic>? _recoverCutOffArray(String text) => recoverCutOffArray(text);
+
+  /// The model's rows as transactions; a row it got wrong is skipped.
+  List<ParsedTransaction> _rowsFromModel(
+    List<dynamic> jsonArray,
+    String fallbackCurrency,
+    String content,
+  ) =>
+      jsonArray
+          .map((item) {
+            try {
+              final map = item as Map<String, dynamic>;
+              final date = DateTime.tryParse((map['date'] as String?) ?? '');
+              if (date == null) return null;
+              final amount = (map['amount'] as num?)?.toDouble();
+              if (amount == null) return null;
+              final direction =
+                  ((map['direction'] as String?) ?? 'debit').toLowerCase();
+              final description = (map['description'] as String?) ?? '';
+              final rowCurrency = _modelRowCurrency(
+                map['currency'] as String?,
+                fallbackCurrency,
+                content,
+              );
+              return _categorised(
+                date: date,
+                amount: amount.abs(),
+                direction: direction == 'credit' ? 'credit' : 'debit',
+                description: description,
+                currency: rowCurrency,
+              );
+            } catch (_) {
+              return null;
+            }
+          })
+          .whereType<ParsedTransaction>()
+          .toList();
 
   // ── Tier 2: Rule-based CSV parsing ───────────────────────────────────────
 

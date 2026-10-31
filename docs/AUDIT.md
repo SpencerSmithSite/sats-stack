@@ -123,7 +123,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** Up to 100,000 characters go in, but the answer is cut off at about 90 JSON rows. The truncated array has no closing `]`, so `_extractJsonArray` fails and the AI parse returns null.
 - **Impact:** A statement with more than about 90 rows is uploaded in full to the provider, then yields nothing. The app falls back to the rules tier or the heuristic, or shows "could not extract", and never says why. The user paid for the call and their data left the device for no result.
 - **Fix direction:** Size the input to what the output can carry, or chunk it. Raise the import's output cap, or recover the complete objects from a truncated array and say so.
-- **Status:** open
+- **Status:** fixed in #62. The file goes to the model in parts of at most 60 rows (a CSV's header repeated in each), so every answer fits the output cap; a cut-off answer keeps its complete rows, and the preview says rows may be missing. Pinned by `ai_import_size_test`.
 
 ### A-3 · Medium · reliability — AI import input ignores the backend's context window
 - **Where:** `import_service.dart:1105-1108`; `lib/core/services/inference/remote_backends.dart:121-125`.
@@ -132,7 +132,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
   - On-device: overflow errors are swallowed and the user waits for nothing.
   - Ollama: the server truncates the prompt itself, so rows are lost with no notice. Whether it drops the leading instructions is unverified.
 - **Fix direction:** Size the input from `contextBudgetChars`, pass `num_ctx` to Ollama, and set the truncation notice from the real limit. Skip the AI tier when the file cannot fit.
-- **Status:** open
+- **Status:** fixed in #62. Each part is sized to the backend's `contextBudgetChars` (about 2,900 characters on device), and Ollama requests ask for `num_ctx: 8192` so the server stops truncating the prompt. Pinned by `ai_import_size_test`.
 
 ### A-4 · Medium · correctness — Saved column mappings book card charges as income
 - **Where:** `import_service.dart:1624-1625`, called from `:924`.

@@ -206,6 +206,15 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen> {
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
                         ],
+                        if (widget.result.aiOutputCutOff) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            "The AI's answer was cut off partway, so some "
+                            'rows may be missing. Check the list against '
+                            'your statement.',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
                         if (widget.result.tierUsed ==
                             ImportTier.pdfHeuristic) ...[
                           const SizedBox(height: 8),
