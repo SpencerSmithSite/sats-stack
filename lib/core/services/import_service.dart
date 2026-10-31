@@ -944,6 +944,7 @@ Rules:
           content,
           mapping,
           currency: currency,
+          sourceType: source.type,
         );
         if (txns != null && txns.isNotEmpty) {
           return ImportResult(
@@ -1680,10 +1681,14 @@ FILE CONTENT:
 
   // ── Tier 3: Manual column mapping ─────────────────────────────────────────
 
+  /// [sourceType] is the account's type, as for [parseWithRules]: a card's
+  /// signed amounts are read by the card rule. Read from [sourceId] when not
+  /// given.
   Future<List<ParsedTransaction>?> parseWithMapping(
     String csvContent,
     ColumnMapping mapping, {
     String? currency,
+    String? sourceType,
     int? sourceId,
   }) async {
     assert(
@@ -1691,6 +1696,13 @@ FILE CONTENT:
       'parseWithMapping needs the account currency or the source to read it from',
     );
     final rowCurrency = currency ?? await _sourceCurrency(sourceId!);
+    final type =
+        sourceType ??
+        (sourceId == null
+            ? null
+            : (await (db.select(db.importSources)
+                  ..where((t) => t.id.equals(sourceId))).getSingleOrNull())
+                ?.type);
     final allRows = _mappableRows(csvContent);
     if (allRows.length < 2) return null;
 
@@ -1705,15 +1717,27 @@ FILE CONTENT:
     ]);
     double? amountOf(String raw) => _parseAmount(raw, dotGroupsThousands: dots);
 
+    // The rules tier's reading of a single amount column, applied here too.
+    // A saved mapping is the first tier tried on every later import of its
+    // source, and it read every signed figure as "negative is money out" — so
+    // a card that writes purchases as positive (Amex) had every purchase
+    // booked as income, and an unsigned column was all spending (audit A-4).
     final amountIndex = mapping.amountColumn;
-    final mappingAmountIsSigned =
-        amountIndex == null ||
-        allRows
-            .skip(1)
-            .any(
-              (r) =>
-                  amountIndex < r.length && (amountOf(r[amountIndex]) ?? 0) < 0,
-            );
+    final amountCells = [
+      if (amountIndex != null)
+        for (final r in allRows.skip(1))
+          if (amountIndex < r.length) r[amountIndex],
+    ];
+    final values = amountCells.map(amountOf).whereType<double>();
+    final negatives = values.where((v) => v < 0).length;
+    final positives = values.where((v) => v > 0).length;
+    final mappingAmountIsSigned = amountIndex == null || negatives > 0;
+    // On a card, the majority sign is the charges — see _parseRowsGeneric.
+    final positiveIsDebit =
+        mappingAmountIsSigned && type == 'credit_card' && positives > negatives;
+    // No negatives, but some amounts marked CR: those are the credits.
+    final crMarked =
+        !mappingAmountIsSigned && amountCells.any(_crSuffix.hasMatch);
 
     final result = <ParsedTransaction>[];
     for (int i = 1; i < allRows.length; i++) {
@@ -1750,7 +1774,13 @@ FILE CONTENT:
         // uses, so it was the *first* thing tried on every later import of
         // that source.
         direction =
-            mappingAmountIsSigned ? (raw < 0 ? 'debit' : 'credit') : 'debit';
+            mappingAmountIsSigned
+                ? ((raw < 0) != positiveIsDebit ? 'debit' : 'credit')
+                : crMarked
+                ? (_crSuffix.hasMatch(row[mapping.amountColumn!])
+                    ? 'credit'
+                    : 'debit')
+                : _unsignedDirection(description);
       } else {
         final dAmt =
             (mapping.debitColumn != null && mapping.debitColumn! < row.length)
