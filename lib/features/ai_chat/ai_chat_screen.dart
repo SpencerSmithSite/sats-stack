@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -48,7 +49,26 @@ class _AiChatScreenState extends State<AiChatScreen> {
   /// Completed when the stream ends — or by `dispose`, so cancelling does not
   /// leave `_send` waiting on a future nothing will ever complete.
   Completer<void>? _streamDone;
-  String _streamingContent = '';
+
+  /// The answer so far, published at most once a frame. Only the streaming
+  /// bubble listens: each token used to `setState` the whole screen, which
+  /// rebuilt every bubble — re-parsing each one's Markdown — and started a new
+  /// scroll animation (audit A-10).
+  final _streaming = ValueNotifier<String>('');
+  bool _streamFlushScheduled = false;
+
+  void _publishStreamed(StringBuffer buffer) {
+    if (_streamFlushScheduled) return;
+    _streamFlushScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _streamFlushScheduled = false;
+      if (!mounted) return;
+      _streaming.value = buffer.toString();
+      _scrollToBottom();
+    });
+    WidgetsBinding.instance.scheduleFrame();
+  }
+
   String? _error;
 
   List<String> _models = [];
@@ -104,6 +124,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
     _streamClient?.close();
     _inputCtrl.dispose();
     _scrollCtrl.dispose();
+    _streaming.dispose();
     super.dispose();
   }
 
@@ -192,7 +213,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
     setState(() {
       _messages = [..._messages, userMsg];
       _isStreaming = true;
-      _streamingContent = '';
+      _streaming.value = '';
       _error = null;
     });
 
@@ -216,15 +237,13 @@ class _AiChatScreenState extends State<AiChatScreen> {
         .listen(
           (token) {
             buffer.write(token);
-            if (!mounted) return;
-            setState(() => _streamingContent = buffer.toString());
-            _scrollToBottom();
+            if (mounted) _publishStreamed(buffer);
           },
           onError: (Object e) {
             if (mounted) {
               setState(() {
                 _isStreaming = false;
-                _streamingContent = '';
+                _streaming.value = '';
                 _error = 'Error: $e';
               });
             }
@@ -239,7 +258,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
                   _Msg(role: _Role.assistant, content: response),
                 ];
                 _isStreaming = false;
-                _streamingContent = '';
+                _streaming.value = '';
               });
             }
             if (!completion.isCompleted) completion.complete();
@@ -382,7 +401,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
                     child: _ChatList(
                       messages: _messages,
                       isStreaming: _isStreaming,
-                      streamingContent: _streamingContent,
+                      streaming: _streaming,
                       scrollCtrl: _scrollCtrl,
                       starters: _starters,
                       onStarterTap: _send,
@@ -415,7 +434,7 @@ class _ChatList extends StatelessWidget {
   const _ChatList({
     required this.messages,
     required this.isStreaming,
-    required this.streamingContent,
+    required this.streaming,
     required this.scrollCtrl,
     required this.starters,
     required this.onStarterTap,
@@ -423,7 +442,7 @@ class _ChatList extends StatelessWidget {
 
   final List<_Msg> messages;
   final bool isStreaming;
-  final String streamingContent;
+  final ValueListenable<String> streaming;
   final ScrollController scrollCtrl;
   final List<String> starters;
   final ValueChanged<String> onStarterTap;
@@ -432,6 +451,30 @@ class _ChatList extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final empty = messages.isEmpty && !isStreaming;
+
+    // Built as they scroll into view, and rebuilt only when a message is
+    // added; the streaming answer rebuilds its own bubble.
+    if (!empty) {
+      return ListView.builder(
+        controller: scrollCtrl,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        itemCount: messages.length + (isStreaming ? 1 : 0) + 1,
+        itemBuilder: (context, i) {
+          if (i < messages.length) return _Bubble(msg: messages[i]);
+          if (isStreaming && i == messages.length) {
+            return ValueListenableBuilder<String>(
+              valueListenable: streaming,
+              builder:
+                  (_, text, _) => _Bubble(
+                    msg: _Msg(role: _Role.assistant, content: text),
+                    streaming: true,
+                  ),
+            );
+          }
+          return const SizedBox(height: 8);
+        },
+      );
+    }
 
     return ListView(
       controller: scrollCtrl,
@@ -489,16 +532,6 @@ class _ChatList extends StatelessWidget {
           ),
           const SizedBox(height: 24),
         ],
-
-        // Messages
-        for (final msg in messages) _Bubble(msg: msg),
-
-        // Streaming bubble
-        if (isStreaming)
-          _Bubble(
-            msg: _Msg(role: _Role.assistant, content: streamingContent),
-            streaming: true,
-          ),
 
         const SizedBox(height: 8),
       ],

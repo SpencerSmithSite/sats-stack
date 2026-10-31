@@ -183,7 +183,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
   - Import: `_aiOutput += token` plus a whole-screen `setState`, per token.
 - **Impact:** Jank on long answers and large imports.
 - **Fix direction:** Throttle to once a frame, rebuild only the streaming bubble, and use a `StringBuffer`.
-- **Status:** open
+- **Status:** fixed in #68. Streamed text goes into a buffer published at most once a frame, through a notifier only the streaming part listens to: the chat's streaming bubble (in a lazily built list) and the import overlay's output box. Scrolling follows once a frame, not once a token. `chat_streaming_test` checks an earlier bubble is not rebuilt while tokens arrive, and fails on the old code.
 
 ### A-11 · Low · performance — Per-row regex compile against the whole file when checking currency
 - **Where:** `import_service.dart:503`, called per row at `:1175-1179`.
@@ -484,7 +484,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** `stream: app.importService.watchSources()` sits in `build`, and during an AI import every token calls `setState`. So each token re-subscribes and re-queries `import_sources`, the bug class `tab_stream_test` pins for the tabs. The per-token rebuild itself is A-10.
 - **Impact:** Hundreds of queries and full rebuilds per import, and jank while the model streams.
 - **Fix direction:** Create the stream once in `initState`, and give the streamed text its own listenable.
-- **Status:** open
+- **Status:** fixed in #68. The import screen's sources stream is created once, and AI tokens no longer rebuild the screen (see A-10).
 
 ### U-6 · Medium · reliability — Several saves and deletes fail without telling the user
 - **Where:** `transaction_edit_sheet.dart:155-243` (try/finally, no catch anywhere in the file), `:269`, `:301`; `import_preview_screen.dart:45-75`; `import_column_mapper_screen.dart:137-178`; `import_source_setup_screen.dart:48-57`; `danger_zone_section.dart:43-67`; `transactions_screen.dart:659` (`deleteById` neither awaited nor caught); `wallet_history_section.dart:86`, `:97` (an exception leaves `_busy` set).
