@@ -64,12 +64,12 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
 
   @override
   void dispose() {
+    _discardPickedCopies();
     _importToken?.cancel();
     _cancelTimer?.cancel();
     _timeoutTimer?.cancel();
     _tokenSub?.cancel();
     _tokenScrollController.dispose();
-    _discardPickedCopies();
     super.dispose();
   }
 
