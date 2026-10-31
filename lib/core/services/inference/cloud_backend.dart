@@ -517,13 +517,16 @@ class CloudBackend implements InferenceBackend {
       case CloudProvider.xai:
         final choices = data['choices'];
         if (choices is! List || choices.isEmpty) return null;
-        final delta = choices.first['delta'];
+        final first = choices.first;
+        final delta = first is Map ? first['delta'] : null;
         return delta is Map ? delta['content'] as String? : null;
 
       case CloudProvider.gemini:
         final candidates = data['candidates'];
         if (candidates is! List || candidates.isEmpty) return null;
-        final parts = candidates.first['content']?['parts'];
+        final first = candidates.first;
+        final content = first is Map ? first['content'] : null;
+        final parts = content is Map ? content['parts'] : null;
         if (parts is! List || parts.isEmpty) return null;
         // Every text part, not just the first: a frame can carry several, and
         // the rest of the answer was dropped. A part can also carry a function
@@ -592,8 +595,8 @@ class CloudBackend implements InferenceBackend {
         if (choices is! List || choices.isEmpty) return null;
         final first = choices.first;
         if (first is! Map) return null;
-        final refusal =
-            first['delta'] is Map ? first['delta']['refusal'] : null;
+        final delta = first['delta'];
+        final refusal = delta is Map ? delta['refusal'] : null;
         if (refusal is String && refusal.isNotEmpty) return refusal;
         return first['finish_reason'] == 'content_filter'
             ? 'its content filter stopped the answer'

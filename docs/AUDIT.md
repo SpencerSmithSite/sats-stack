@@ -1613,6 +1613,17 @@ pins both halves.
   afterwards: a stream built in `build()` fails it, which was checked by
   moving Transactions' stream there.
 
+### `avoid_dynamic_calls` is on (TODO item 10)
+
+Eight dynamic calls were left in `lib`, all on decoded JSON: Electrum's
+history, and the OpenAI, Grok and Gemini stream frames in `CloudBackend` and
+`OllamaService`. A frame of an unexpected shape — `choices` holding a string,
+`content` not a map — threw `NoSuchMethodError` partway through an answer.
+They read with `is` checks and patterns now, and such a frame is skipped; a
+test feeds every provider those shapes and fails on the old code. The 33 in
+`cloud_backend_test` read through a checked `at(json, path)` helper, whose
+failure names the path. The rule is on, held at zero like the rest.
+
 ---
 
 ## Verified correct (no action)
