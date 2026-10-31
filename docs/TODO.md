@@ -48,8 +48,6 @@ History lives elsewhere and is not duplicated into this file:
   AGP 9.0.1 and Kotlin 2.3.20 will be required soon. AGP 9 is a major
   release (built-in Kotlin, changed DSL defaults), so do it on its own and
   check every plugin builds.
-- **Typed JSON parsing** in place of the 43 `dynamic` calls
-  `avoid_dynamic_calls` would flag, then enable the rule.
 
 > Items 11–14 were already tracked before the second pass. They are still
 > open and still worth doing; they are simply less urgent than 1–10.

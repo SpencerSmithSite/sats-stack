@@ -17,6 +17,10 @@ include: package:flutter_lints/flutter.yaml
 
 linter:
   rules:
+    # A property read on decoded JSON that is not the expected shape throws
+    # NoSuchMethodError, mid-stream: an AI answer cut off by one odd frame. JSON
+    # is read with `is` checks and patterns instead.
+    avoid_dynamic_calls: true
     # Bug classes this codebase has had.
     #
     # A future dropped on the floor: errors vanish and ordering is lost — the

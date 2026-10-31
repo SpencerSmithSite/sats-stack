@@ -12,6 +12,20 @@ import 'package:sats_stack/core/services/ollama_service.dart';
 /// parsing and the privacy flag. That is deliberate — the wire format is the
 /// part most likely to be quietly wrong, and the only way to check it without a
 /// paid API call is to assert on what would have been sent.
+/// The value at [path] in decoded JSON, each step checked: a missing key or
+/// a wrong type fails with the path rather than a `NoSuchMethodError`.
+Object? at(Object? json, List<Object> path) {
+  var node = json;
+  for (final step in path) {
+    node = switch ((node, step)) {
+      (final Map<String, dynamic> m, final String key) => m[key],
+      (final List<dynamic> l, final int i) when i < l.length => l[i],
+      _ => fail('No $step at ${path.takeWhile((s) => s != step)} in $json'),
+    };
+  }
+  return node;
+}
+
 void main() {
   const messages = [
     {'role': 'system', 'content': 'You are an analyst.'},
@@ -116,7 +130,7 @@ void main() {
 
       expect(body['system'], 'You are an analyst.');
       expect(body['messages'], hasLength(1));
-      expect(body['messages'][0]['role'], 'user');
+      expect(at(body, ['messages', 0, 'role']), 'user');
       expect(body['stream'], isTrue);
     });
 
@@ -155,8 +169,8 @@ void main() {
                 as Map<String, dynamic>;
 
         expect(body['messages'], hasLength(2), reason: p.id);
-        expect(body['messages'][0]['role'], 'system', reason: p.id);
-        expect(body['messages'][1]['role'], 'user', reason: p.id);
+        expect(at(body, ['messages', 0, 'role']), 'system', reason: p.id);
+        expect(at(body, ['messages', 1, 'role']), 'user', reason: p.id);
         expect(body['stream'], isTrue, reason: p.id);
       }
     });
@@ -183,11 +197,14 @@ void main() {
               as Map<String, dynamic>;
 
       expect(
-        body['systemInstruction']['parts'][0]['text'],
+        at(body, ['systemInstruction', 'parts', 0, 'text']),
         'You are an analyst.',
       );
       expect(body['contents'], hasLength(1));
-      expect(body['contents'][0]['parts'][0]['text'], 'How much on dining?');
+      expect(
+        at(body, ['contents', 0, 'parts', 0, 'text']),
+        'How much on dining?',
+      );
     });
 
     test('assistant turns are relabelled "model"', () {
@@ -201,7 +218,7 @@ void main() {
               )
               as Map<String, dynamic>;
 
-      expect((body['contents'] as List).map((c) => c['role']), [
+      expect((body['contents'] as List).map((c) => at(c, ['role'])), [
         'user',
         'model',
         'user',
@@ -241,7 +258,7 @@ void main() {
               )
               as Map<String, dynamic>;
 
-      final content = body['messages'][0]['content'] as String;
+      final content = at(body, ['messages', 0, 'content']) as String;
       expect(content, contains('first'));
       expect(content, contains('second'));
     });
@@ -276,10 +293,10 @@ void main() {
               )
               as Map<String, dynamic>;
 
-      final parts = body['messages'][0]['content'] as List;
-      expect(parts[0]['type'], 'image');
-      expect(parts[0]['source']['media_type'], 'image/png');
-      expect(parts[0]['source']['data'], b64);
+      final parts = at(body, ['messages', 0, 'content']) as List;
+      expect(at(parts, [0, 'type']), 'image');
+      expect(at(parts, [0, 'source', 'media_type']), 'image/png');
+      expect(at(parts, [0, 'source', 'data']), b64);
     });
 
     test('OpenAI uses a data: URI', () {
@@ -295,8 +312,8 @@ void main() {
               )
               as Map<String, dynamic>;
 
-      final parts = body['messages'][0]['content'] as List;
-      expect(parts[0]['image_url']['url'], 'data:image/jpeg;base64,$b64');
+      final parts = at(body, ['messages', 0, 'content']) as List;
+      expect(at(parts, [0, 'image_url', 'url']), 'data:image/jpeg;base64,$b64');
     });
 
     test('Gemini uses inline_data', () {
@@ -312,9 +329,9 @@ void main() {
               )
               as Map<String, dynamic>;
 
-      final parts = body['contents'][0]['parts'] as List;
-      expect(parts[0]['inline_data']['mime_type'], 'image/jpeg');
-      expect(parts[0]['inline_data']['data'], b64);
+      final parts = at(body, ['contents', 0, 'parts']) as List;
+      expect(at(parts, [0, 'inline_data', 'mime_type']), 'image/jpeg');
+      expect(at(parts, [0, 'inline_data', 'data']), b64);
     });
   });
 
@@ -898,5 +915,41 @@ void main() {
         expect(p.host, isNotEmpty, reason: p.id);
       }
     });
+  });
+
+  // Read with type checks since `avoid_dynamic_calls` was turned on. A frame
+  // of an unexpected shape used to throw NoSuchMethodError mid-answer.
+  test('a frame of an unexpected shape is skipped, not thrown on', () {
+    for (final p in CloudProvider.values) {
+      for (final frame in <Map<String, dynamic>>[
+        {
+          'choices': ['not a map'],
+        },
+        {
+          'candidates': ['not a map'],
+        },
+        {
+          'candidates': [
+            {'content': 'not a map'},
+          ],
+        },
+        {
+          'choices': [
+            {'delta': 'not a map'},
+          ],
+        },
+      ]) {
+        expect(
+          CloudBackend.extractDelta(p, frame),
+          isNull,
+          reason: '$p $frame',
+        );
+        expect(
+          CloudBackend.indicatesRefusal(p, frame),
+          isNull,
+          reason: '$p $frame',
+        );
+      }
+    }
   });
 }

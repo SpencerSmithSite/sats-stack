@@ -1157,7 +1157,9 @@ Top spending categories:
           final data = jsonDecode(payload) as Map<String, dynamic>;
           final choices = data['choices'] as List?;
           if (choices == null || choices.isEmpty) continue;
-          final delta = choices[0]['delta'] as Map<String, dynamic>?;
+          final first = choices[0];
+          final delta =
+              first is Map ? first['delta'] as Map<String, dynamic>? : null;
           final token = delta?['content'] as String? ?? '';
           if (token.isNotEmpty) yield token;
         } catch (_) {}

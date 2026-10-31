@@ -194,19 +194,15 @@ class ElectrumService {
     final result = await session.call('blockchain.scripthash.get_history', [
       scripthash,
     ]);
-    if (result == null) return [];
-    return (result as List<dynamic>)
-        .where((item) {
-          final h = item['height'];
-          return h is int && h > 0;
-        })
-        .map(
-          (item) => (
-            txid: item['tx_hash'] as String,
-            height: item['height'] as int,
-          ),
-        )
-        .toList();
+    if (result is! List) return [];
+    return [
+      for (final item in result)
+        if (item case {
+          'tx_hash': final String txid,
+          'height': final int height,
+        } when height > 0)
+          (txid: txid, height: height),
+    ];
   }
 
   /// Fetches a decoded (verbose) transaction by txid.
