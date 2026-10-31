@@ -126,6 +126,11 @@ class ParsedTransaction {
     categoryIsFallback = false;
     categoryIsUserChosen = true;
   }
+
+  /// Set by [ImportService.markLikelyDuplicates] when the source already
+  /// holds a row on this day for this amount and direction. Such a row starts
+  /// unticked, and the preview labels it.
+  bool likelyDuplicate = false;
 }
 
 class ColumnMapping {
@@ -2329,6 +2334,79 @@ FILE CONTENT:
     }
 
     return result;
+  }
+
+  /// Unticks the rows of [rows] that look already imported from [sourceId],
+  /// marks them [ParsedTransaction.likelyDuplicate], and returns how many.
+  ///
+  /// The save step's hash catches an exact re-import, but it includes the
+  /// description, and on the AI tiers that is the model's wording: it changes
+  /// between runs, and never matches the rules tier's bank text. Re-importing
+  /// an overlapping statement through AI, or the same file through another
+  /// tier, wrote every overlapping row a second time (audit A-1).
+  ///
+  /// So rows are matched on day, amount and direction, as a count: a file
+  /// with three coffees on a day the source already has two of brings one. A
+  /// stored row with the same description is matched first, so that when the
+  /// counts leave one row new, it is the one with a description not seen
+  /// before. And this only unticks — it never drops a row — because two
+  /// different transactions can share a day, an amount and a direction; the
+  /// preview says so and the user can tick a row back in.
+  Future<int> markLikelyDuplicates(
+    List<ParsedTransaction> rows,
+    int sourceId,
+  ) async {
+    final stored =
+        await (db.select(db.importedTransactions)
+          ..where((t) => t.sourceId.equals(sourceId))).get();
+    if (stored.isEmpty) return 0;
+
+    String normal(String description) =>
+        description.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
+    // The day, not the instant: an AI tier's dates and the rules tier's need
+    // not carry the same time of day.
+    String key(DateTime date, int cents, String direction) =>
+        '${_dayKey(date)}|$cents|$direction';
+
+    final unmatched = <String, List<String>>{};
+    for (final r in stored) {
+      (unmatched[key(r.date, r.amountCents, r.direction)] ??= []).add(
+        normal(r.rawDescription),
+      );
+    }
+    final byKey = <String, List<ParsedTransaction>>{};
+    for (final tx in rows) {
+      final k = key(
+        tx.date,
+        _toSmallestUnit(tx.amount, tx.currency),
+        tx.direction,
+      );
+      if (unmatched.containsKey(k)) (byKey[k] ??= []).add(tx);
+    }
+
+    var marked = 0;
+    void mark(ParsedTransaction tx) {
+      tx
+        ..likelyDuplicate = true
+        ..include = false;
+      marked++;
+    }
+
+    for (final MapEntry(key: k, value: candidates) in byKey.entries) {
+      final pool = unmatched[k]!;
+      final rest = <ParsedTransaction>[];
+      // The same description first…
+      for (final tx in candidates) {
+        if (pool.remove(normal(tx.rawDescription))) {
+          mark(tx);
+        } else {
+          rest.add(tx);
+        }
+      }
+      // …then reworded ones, for as many stored rows as are left.
+      rest.take(pool.length).forEach(mark);
+    }
+    return marked;
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
