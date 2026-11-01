@@ -15,12 +15,20 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    # Only what pubspec.yaml's constraints already allow — `flutter pub
+    # upgrade`, as a PR. Without it Dependabot rewrote the constraints: its
+    # first group moved drift_flutter to 0.3 and analyzer to 14 despite the
+    # holds, which breaks the generated database code. Majors are upgraded
+    # on purpose, by hand.
+    versioning-strategy: lockfile-only
     groups:
-      # Patch and minor bumps together; a major bump gets a PR of its own.
-      minor-and-patch:
-        update-types: [minor, patch]
+      dependencies:
+        patterns: ['*']
     ignore:
       # Held on purpose — see "Critical package version pins" in CLAUDE.md.
+      # The constraints already hold them; this is in case they are widened.
+      - dependency-name: analyzer
+        versions: ['>=9.0.0']
       - dependency-name: drift_flutter
         versions: ['>=0.3.0']
       - dependency-name: fl_chart

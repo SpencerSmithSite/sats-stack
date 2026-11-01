@@ -18,12 +18,14 @@ concurrency:
 
 jobs:
   claude-review:
-    # Same-repo PRs only, and not drafts. A fork's PR runs without secrets
-    # under `pull_request`, so the review could only fail; and a draft is not
-    # ready to be reviewed.
+    # Same-repo PRs only, not drafts, and not Dependabot's. A fork's PR runs
+    # without secrets under `pull_request`, and so does Dependabot's, which
+    # the action also refuses as a bot — so the review could only fail. A
+    # draft is not ready to be reviewed.
     if: |
       github.event.pull_request.head.repo.full_name == github.repository &&
-      !github.event.pull_request.draft
+      !github.event.pull_request.draft &&
+      github.event.pull_request.user.login != 'dependabot[bot]'
 
     runs-on: ubuntu-latest
     permissions:
