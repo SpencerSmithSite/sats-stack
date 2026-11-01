@@ -17,6 +17,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:sats_stack/core/database/database.dart';
 import 'package:sats_stack/core/services/btc_price_service.dart';
+import 'package:sats_stack/core/services/wallet_service.dart';
 import 'package:sats_stack/core/services/xpub_service.dart';
 
 // BIP84 test vector, account m/84'/0'/0'.
@@ -107,6 +108,113 @@ void main() {
       );
       expect(await empty.detectUsedFormat(xpub), isNull);
     });
+
+    // Audit B-7: the type was looked for only when the wallet was added.
+    Future<Wallet> walletFor(String key, {String label = 'Ledger'}) async {
+      final id = await db
+          .into(db.wallets)
+          .insert(
+            WalletsCompanion.insert(
+              label: label,
+              type: 'xpub',
+              xpub: Value(key),
+              color: '#F7931A',
+            ),
+          );
+      return (db.select(db.wallets)..where((w) => w.id.equals(id))).getSingle();
+    }
+
+    Future<String?> storedKey(int id) =>
+        (db.select(db.wallets)
+          ..where((w) => w.id.equals(id))).getSingle().then((w) => w.xpub);
+
+    test(
+      'an xpub added before its first payment is found on a rescan',
+      () async {
+        final wallet = await walletFor(xpub);
+        final before = XpubService(
+          db,
+          client: MockClient((_) async => http.Response('[]', 200)),
+        );
+        final first = await before.syncWallet(
+          wallet: wallet,
+          btcPriceService: _Prices(db, 80000),
+        );
+        expect(first.imported, 0);
+        expect(await storedKey(wallet.id), xpub);
+
+        // The first payment arrives, to a native SegWit address.
+        final again = await chain().syncWallet(
+          wallet: wallet,
+          btcPriceService: _Prices(db, 80000),
+        );
+
+        expect(again.imported, 1);
+        expect(await storedKey(wallet.id), _zpub);
+      },
+      timeout: const Timeout(Duration(minutes: 1)),
+    );
+
+    test('the window that showed the type is not fetched again', () async {
+      var firstReceiveFetches = 0;
+      final counting = XpubService(
+        db,
+        client: MockClient((req) async {
+          if (req.url.path.contains('/address/$_firstReceive/')) {
+            firstReceiveFetches++;
+          }
+          return http.Response(
+            jsonEncode(
+              req.url.path.contains('/address/$_firstReceive/txs') &&
+                      !req.url.path.contains('/chain/')
+                  ? [
+                    {
+                      'txid': 'f00d' * 16,
+                      'status': {'confirmed': true, 'block_time': blockTime},
+                      'vin': const [],
+                      'vout': [
+                        {'scriptpubkey_address': _firstReceive, 'value': 50000},
+                      ],
+                    },
+                  ]
+                  : const [],
+            ),
+            200,
+          );
+        }),
+      );
+      final result = await counting.syncWallet(
+        wallet: await walletFor(xpub),
+        btcPriceService: _Prices(db, 80000),
+      );
+
+      expect(result.imported, 1);
+      expect(firstReceiveFetches, 1);
+    }, timeout: const Timeout(Duration(minutes: 1)));
+
+    test('adding the xpub again finds the wallet it was stored as', () async {
+      final wallet = await walletFor(_zpub);
+      final found = await WalletService(db).findByXpub(xpub);
+      expect(found?.id, wallet.id);
+      // A zpub and a ypub of one key are still different wallets.
+      expect(
+        await WalletService(
+          db,
+        ).findByXpub(XpubService.withFormat(xpub, XpubFormat.p2shP2wpkh)),
+        isNull,
+      );
+    });
+
+    test('a key another wallet already tracks is not stored twice', () async {
+      await walletFor(_zpub, label: 'First');
+      final second = await walletFor(xpub, label: 'Second');
+
+      await expectLater(
+        chain().syncWallet(wallet: second, btcPriceService: _Prices(db, 80000)),
+        throwsA(isA<XpubSyncException>()),
+      );
+      expect(await storedKey(second.id), xpub);
+    }, timeout: const Timeout(Duration(minutes: 1)));
   });
 
   test('a testnet key is refused before any request is made', () async {

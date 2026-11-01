@@ -4,7 +4,8 @@ import 'dart:io' show HttpDate, HttpException;
 import 'package:bech32/bech32.dart';
 import 'package:bs58check/bs58check.dart' as bs58check;
 import 'package:crypto/crypto.dart';
-import 'package:drift/drift.dart' show InsertMode, Value;
+import 'package:drift/drift.dart'
+    show BooleanExpressionOperators, InsertMode, Value;
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:pointycastle/digests/ripemd160.dart';
@@ -396,9 +397,28 @@ class XpubService {
   /// BIP44 reserves `xpub` for legacy addresses, but many wallets (Ledger,
   /// Trezor, Electrum's exports among them) hand out an `xpub` for a native or
   /// nested SegWit account. Scanned as legacy, such a wallet looked empty.
-  bool isAmbiguous(String extKey) {
+  bool isAmbiguous(String extKey) => _isAmbiguous(extKey);
+
+  static bool _isAmbiguous(String extKey) {
     final key = _parseExtKey(extKey);
     return key.format == XpubFormat.p2pkh && key.network == XpubNetwork.mainnet;
+  }
+
+  /// The keys an ambiguous [extKey] may be stored as once its script type is
+  /// found: its SegWit encodings. Empty for any other key.
+  ///
+  /// So that adding a plain `xpub` again is caught as the wallet it already
+  /// is, after a sync stored it as the matching `zpub` or `ypub`.
+  static List<String> resolvedFormsOf(String extKey) {
+    try {
+      if (!_isAmbiguous(extKey)) return const [];
+      return [
+        withFormat(extKey, XpubFormat.p2wpkh),
+        withFormat(extKey, XpubFormat.p2shP2wpkh),
+      ];
+    } on Object {
+      return const [];
+    }
   }
 
   /// Which script type [extKey]'s first receive addresses have history under,
@@ -406,7 +426,13 @@ class XpubService {
   Future<XpubFormat?> detectUsedFormat(String extKey) =>
       _scanning(() => _detectUsedFormat(extKey));
 
-  Future<XpubFormat?> _detectUsedFormat(String extKey) async {
+  Future<XpubFormat?> _detectUsedFormat(String extKey) async =>
+      (await _probeFormats(extKey))?.format;
+
+  /// The first script type with history, as [detectUsedFormat], together
+  /// with the receive window that showed it, so the sync that follows need
+  /// not fetch it again.
+  Future<_Probe?> _probeFormats(String extKey) async {
     for (final format in const [
       XpubFormat.p2wpkh,
       XpubFormat.p2shP2wpkh,
@@ -418,8 +444,14 @@ class XpubService {
         0,
         _gapLimit,
       );
-      final history = await _fetchWindow(addresses);
-      if (history.any((txs) => txs.isNotEmpty)) return format;
+      var capped = false;
+      final history = await _fetchWindow(
+        addresses,
+        onCapped: () => capped = true,
+      );
+      if (history.any((txs) => txs.isNotEmpty)) {
+        return _Probe(format, addresses, history, capped: capped);
+      }
     }
     return null;
   }
@@ -904,7 +936,7 @@ class XpubService {
     required BtcPriceService btcPriceService,
     void Function(String status)? onProgress,
   }) async {
-    final extKey = wallet.xpub;
+    var extKey = wallet.xpub;
     if (extKey == null) {
       return XpubSyncResult(imported: 0, skipped: 0, addressesScanned: 0);
     }
@@ -937,6 +969,37 @@ class XpubService {
             .whereType<String>()
             .toSet();
 
+    // ── An `xpub` whose script type is not known yet ────────────────────────
+    //
+    // Looked for on every sync while the wallet is empty, not only when it
+    // was added (audit B-7). A new account added before its first payment
+    // found no history, kept the plain `xpub`, and every later sync derived
+    // legacy addresses from it — so its SegWit payments never showed up.
+    _Probe? probe;
+    if (existingHashes.isEmpty && _isAmbiguous(extKey)) {
+      onProgress?.call('Checking which address type it uses…');
+      probe = await _probeFormats(extKey);
+      if (probe != null && probe.format != XpubFormat.p2pkh) {
+        final resolved = withFormat(extKey, probe.format);
+        final other =
+            await (_db.select(_db.wallets)
+                  ..where((w) => w.xpub.equals(resolved))
+                  ..where((w) => w.id.equals(wallet.id).not())
+                  ..limit(1))
+                .getSingleOrNull();
+        if (other != null) {
+          throw XpubSyncException(
+            'This key is already tracked as "${other.label}". Rescan that '
+            'wallet instead.',
+          );
+        }
+        extKey = resolved;
+        await (_db.update(_db.wallets)..where(
+          (w) => w.id.equals(wallet.id),
+        )).write(WalletsCompanion(xpub: Value(resolved)));
+      }
+    }
+
     // ── Pass 1: scan both chains ────────────────────────────────────────────
     //
     // Transactions are collected whole and keyed by txid; the net effect is
@@ -963,22 +1026,21 @@ class XpubService {
       // walk would not also have fetched, except at most one window at the
       // very end.
       while (gapCount < _gapLimit) {
-        final addresses = await _deriveWindow(
-          extKey,
-          chainIndex,
-          index,
-          _gapLimit,
-        );
+        // The probe already fetched the first receive window.
+        final reuse = chainIndex == 0 && index == 0 ? probe : null;
+        final addresses =
+            reuse?.addresses ??
+            await _deriveWindow(extKey, chainIndex, index, _gapLimit);
         owned.addAll(addresses);
 
         onProgress?.call(
           'Scanning $chainName addresses ${index + 1}–${index + _gapLimit}…',
         );
 
-        final results = await _fetchWindow(
-          addresses,
-          onCapped: () => historyCapped = true,
-        );
+        if (reuse?.capped ?? false) historyCapped = true;
+        final results =
+            reuse?.history ??
+            await _fetchWindow(addresses, onCapped: () => historyCapped = true);
 
         // Applied in order, so the gap limit means exactly what it meant
         // before: N consecutive unused addresses ends the chain.
@@ -1272,4 +1334,16 @@ class _RawTx {
   final int netSats;
   final String description;
   final String dedupHash;
+}
+
+/// What [XpubService._probeFormats] found.
+class _Probe {
+  _Probe(this.format, this.addresses, this.history, {required this.capped});
+
+  final XpubFormat format;
+  final List<String> addresses;
+  final List<List<Map<String, dynamic>>> history;
+
+  /// Whether an address's history ran past the page cap.
+  final bool capped;
 }

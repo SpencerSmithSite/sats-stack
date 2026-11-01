@@ -61,18 +61,12 @@ class _AddWalletSheetState extends State<AddWalletSheet> {
     Wallet? wallet;
     try {
       // An `xpub` does not say which addresses it is for, and many wallets
-      // export one for a SegWit account. Look before storing it: the script
-      // type is recorded by re-encoding the key (`xpub` → `zpub`).
-      var key = extKey;
-      if (widget.xpubService.isAmbiguous(key)) {
-        setState(() => _syncStatus = 'Checking which address type it uses…');
-        final used = await widget.xpubService.detectUsedFormat(key);
-        if (used != null) key = XpubService.withFormat(key, used);
-      }
-
+      // export one for a SegWit account. The sync looks, and records the
+      // script type by re-encoding the key (`xpub` → `zpub`) — on this sync
+      // and, while the wallet has no history yet, on every rescan after it.
       wallet = await widget.walletService.addXpubWallet(
         label: label,
-        xpub: key,
+        xpub: extKey,
         color: _selectedColor,
       );
 
