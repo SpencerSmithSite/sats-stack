@@ -295,7 +295,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
   - `prefetchHistoricalPrices`, a bulk fetch that sends no dates, is used by imports (`import_service.dart:1744`) but not here.
 - **Impact:** First sync of a wallet with 300 transaction days spends five or more minutes on prices. Users who chose Electrum for privacy still send mempool.space a block-precise timestamp for every transaction, which points at the blocks holding them, alongside their IP. The banner says only "dates".
 - **Fix direction:** Call `prefetchHistoricalPrices` before the per-day loop, as imports do, and make the banner exact.
-- **Status:** open
+- **Status:** fixed in #75. The sync calls `prefetchHistoricalPrices` first, as imports do — the full price history in one request that names no date — and only days it cannot cover are asked for singly; those requests now send midday of the day, not the block time. Pinned by `xpub_bulk_pricing_test`, which fails on the old code.
 
 ### B-6 · Medium · privacy — The Add Wallet privacy notice is wrong in both directions
 - **Where:** `lib/features/transactions/widgets/add_wallet_sheet.dart:341-342`, `:369`, `:400`.
