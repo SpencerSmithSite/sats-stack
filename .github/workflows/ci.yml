@@ -126,6 +126,15 @@ jobs:
           test -n "$manifest"
           grep -q 'android.permission.INTERNET' "$manifest"
 
+      # ML Kit's usage reports to Google go through this backend; the main
+      # manifest removes it (audit P-5).
+      - name: Release manifest has no telemetry upload backend
+        run: |
+          manifest=$(find build/app/intermediates -name AndroidManifest.xml \
+            -path '*merged_manifests/release*' | head -1)
+          test -n "$manifest"
+          ! grep -q 'CctBackendFactory' "$manifest"
+
   apple:
     name: Build ${{ matrix.platform }}
     # Pinned, as Xcode is below: `macos-latest` and `latest-stable` moved

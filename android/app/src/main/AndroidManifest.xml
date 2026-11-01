@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <!-- Required in the MAIN manifest, not just debug/profile. The Flutter
          template declares INTERNET only in those two source sets, for hot
          reload, so a release build had no network access at all: every price
@@ -49,6 +50,20 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- No usage reports to Google. ML Kit, there for Gemini Nano, brings
+             Google's data transport into every Android build, and ML Kit
+             reports its usage through this "cct" backend (audit P-5). With
+             the backend removed the transport has nowhere to send events,
+             and drops them on the device. CI checks that the release
+             manifest does not get it back. -->
+        <service
+            android:name="com.google.android.datatransport.runtime.backends.TransportBackendDiscovery"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="backend:com.google.android.datatransport.cct.CctBackendFactory"
+                tools:node="remove" />
+        </service>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
