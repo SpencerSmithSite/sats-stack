@@ -411,7 +411,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** Mappings and imported rows keep the deleted name, and mappings are applied without checking the category still exists. The check and the delete are also not one transaction.
 - **Impact:** The next import files rows under a category that no longer exists, and they never count against a budget.
 - **Fix direction:** Redirect or remove the mappings in the same transaction as the delete, or check the category when applying a mapping.
-- **Status:** open
+- **Status:** fixed in #92
 
 ### D-9 · Low · reliability — Alerts are marked sent before they are delivered
 - **Where:** `lib/core/services/notification_service.dart:94`, `:120`, `:145`, compared with `:224-226`, `:253`.
@@ -439,13 +439,13 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** `findByXpub` then `insert`, with no transaction and no unique index. Whether the UI already blocks a double tap is unverified.
 - **Impact:** The same wallet counted twice doubles the stack.
 - **Fix direction:** Do both in one transaction, or add a unique index on `xpub` that allows NULLs.
-- **Status:** open
+- **Status:** fixed in #92
 
 ### D-13 · Low · performance, maintainability — `usageCounts` loads rows to count them; a misplaced doc comment
 - **Where:** `category_service.dart:140-145`; `lib/shared/constants/app_constants.dart:67-77`, `:105`.
 - **What:** `usageCounts` loads every row in a category only to take `.length`. Separately, `recurringCursorKey`'s doc comment sits on `seededCategoryColours`.
 - **Fix direction:** Use `selectOnly` with `count()`, and move the comment to `recurringCursorKey`.
-- **Status:** open
+- **Status:** fixed in #92
 
 ---
 

@@ -2174,7 +2174,15 @@ FILE CONTENT:
         await (db.select(db.descriptionCategoryMappings)
           ..where((t) => t.sourceId.equals(sourceId))).get();
     if (rows.isEmpty) return;
-    final map = {for (final r in rows) r.description: r.category};
+    // Only to a category that still exists. A mapping left behind by a
+    // deleted one filed rows under a name no budget counts (audit D-8).
+    final names = {
+      for (final c in await db.select(db.categories).get()) c.name,
+    };
+    final map = {
+      for (final r in rows)
+        if (names.contains(r.category)) r.description: r.category,
+    };
     for (final tx in transactions) {
       final saved =
           map[tx.rawDescription.toLowerCase().trim()] ??

@@ -78,6 +78,21 @@ void main() {
       expect(await wallets.getXpubWallets(), hasLength(1));
     });
 
+    test('a double tap tracks the key once', () async {
+      // Audit D-12: the check and the insert were apart, so two adds at once
+      // could both pass the check.
+      final results = await Future.wait([
+        for (var i = 0; i < 2; i++)
+          wallets
+              .addXpubWallet(label: 'Cold', xpub: _zpub, color: '#F7931A')
+              .then<Object>((w) => w, onError: (Object e) => e),
+      ]);
+
+      expect(results.whereType<Wallet>(), hasLength(1));
+      expect(results.whereType<DuplicateWalletException>(), hasLength(1));
+      expect(await wallets.getXpubWallets(), hasLength(1));
+    });
+
     test(
       'the stored key is trimmed, so the duplicate check can match',
       () async {

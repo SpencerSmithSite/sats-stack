@@ -68,17 +68,6 @@ abstract final class AppConstants {
   // earlier build left it.
   static const settingRemovedLocalModelId = 'local_model_id';
 
-  /// How far a recurring series has been generated — a high-water mark.
-  ///
-  /// Without it, the resume point is the latest *surviving* instance, so
-  /// deleting the most recent one lowers it and the next launch recreates the
-  /// row the user just deleted (its hash is derived from the anchor and the
-  /// due date, so it comes back identical). Deleting a middle instance never
-  /// had that problem, which made the behaviour inconsistent as well as wrong.
-  /// [seriesId] is the row's `recurringSeriesId`. Before schema v9 it was a
-  /// fingerprint of the period, anchor, description and amount, which changed
-  /// whenever an instance was edited — see
-  /// `AppDatabase.adoptLegacyRecurringSeries`.
   /// The built-in categories' colours: what the database seeds and what
   /// `CategoryPalette` draws them in. One table, because there were two and
   /// they disagreed — the seed made Housing, Shopping, Subscriptions and Other
@@ -112,6 +101,17 @@ abstract final class AppConstants {
   /// keyword table uses the seeded names.
   static const systemCategoryNamePrefix = 'system_category_name:';
 
+  /// How far a recurring series has been generated — a high-water mark.
+  ///
+  /// Without it, the resume point is the latest *surviving* instance, so
+  /// deleting the most recent one lowers it and the next launch recreates the
+  /// row the user just deleted (its hash is derived from the anchor and the
+  /// due date, so it comes back identical). Deleting a middle instance never
+  /// had that problem, which made the behaviour inconsistent as well as wrong.
+  /// [seriesId] is the row's `recurringSeriesId`. Before schema v9 it was a
+  /// fingerprint of the period, anchor, description and amount, which changed
+  /// whenever an instance was edited — see
+  /// `AppDatabase.adoptLegacyRecurringSeries`.
   static String recurringCursorKey(String seriesId) =>
       'recurring_cursor_$seriesId';
 
