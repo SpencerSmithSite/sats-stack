@@ -275,7 +275,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** `_handleDone` fails only the calls already pending. Later `call()`s keep writing to the dead socket and each waits out the 30 s timeout. `fetchWindow`'s `Future.wait` isn't `eagerError`, and the limiter allows 16 calls in flight.
 - **Impact:** A dropped connection mid-scan can hang behind a spinner for several minutes.
 - **Fix direction:** Add a closed flag that makes `call()` throw at once, and use `eagerError: true`.
-- **Status:** open
+- **Status:** fixed in #74. The session records why its connection ended and every later call fails at once with that; `ElectrumHistory`'s waits use `eagerError`. A 60-address window against a server that drops mid-scan now fails in under 5 s (90 s on the old code). Pinned by `electrum_session_test`.
 
 ### B-4 · Medium · reliability — Esplora rate-limit handling defeats itself on large wallets
 - **Where:** `xpub_service.dart:626-631`, `:648-656`, `:665`, `:688-701`.
