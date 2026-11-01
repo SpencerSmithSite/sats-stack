@@ -619,7 +619,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **Where:** `lib/core/database/database.dart:483` (Documents directory). There is no iOS entitlements file, and nothing sets `NSURLIsExcludedFromBackupKey` (checked). Compare `android/app/src/main/res/xml/data_extraction_rules.xml:16-25`.
 - **Impact:** The plaintext financial database is uploaded to iCloud Backup, readable by Apple unless Advanced Data Protection is on, and lands in unencrypted Finder backups. The two platforms contradict each other.
 - **Fix direction:** Decide one backup policy for both platforms. On iOS, exclude the database, journal and `.bak` from backup, or document iCloud as intended. Consider `NSFileProtectionComplete`.
-- **Status:** open
+- **Status:** fixed in #72 — decided by Spencer 2026-10-31: offer both. Settings → Data → **Include in iCloud backup** (iOS only). Off by default for a new install and after a reset; an existing install keeps the backup it had and can switch it off. With it on, the copy says iCloud backups are end-to-end encrypted only with Advanced Data Protection. The flag is set on the database file through a native channel at every launch. Pinned by `icloud_backup_test`; compiles for iOS, not yet seen on a phone. (`NSFileProtectionComplete` was not adopted.)
 
 ### P-3 · Medium · supply-chain — GitHub Actions pinned to mutable tags, including those holding secrets
 - **Where:** `.github/workflows/claude.yml:41-48`, `claude-code-review.yml:37-47`, `ci.yml:28`, `:30`, `:89`, `:104`, `:148`, `:152`.

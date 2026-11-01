@@ -4,18 +4,53 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/database/database.dart';
+import '../../../core/services/icloud_backup.dart';
 import '../../../main.dart' as app;
 import '../../../shared/theme/app_colors.dart';
 
 /// Settings → Data: export the database, and replace it from a backup.
 class DataSection extends StatefulWidget {
-  const DataSection({super.key});
+  const DataSection({super.key, bool? showICloudChoice})
+    : _showICloudChoice = showICloudChoice;
+
+  /// Whether to offer the iCloud backup choice — iOS only, unless a test says
+  /// otherwise.
+  final bool? _showICloudChoice;
 
   @override
   State<DataSection> createState() => _DataSectionState();
 }
 
 class _DataSectionState extends State<DataSection> {
+  late final bool _showICloud =
+      widget._showICloudChoice ?? ICloudBackup.applies;
+
+  /// Null until read.
+  bool? _inICloud;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_showICloud) _loadICloud();
+  }
+
+  Future<void> _loadICloud() async {
+    final included = await ICloudBackup.included(app.db);
+    if (mounted) setState(() => _inICloud = included);
+  }
+
+  Future<void> _setICloud(bool included) async {
+    setState(() => _inICloud = included);
+    try {
+      await ICloudBackup.setIncluded(app.db, included);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _inICloud = !included);
+        _showSnack('Could not change the backup setting: $e');
+      }
+    }
+  }
+
   Future<void> _exportDb() async {
     try {
       final dbFile = await databaseFile();
@@ -181,6 +216,25 @@ class _DataSectionState extends State<DataSection> {
           subtitle: const Text('Replace current data from a backup'),
           onTap: _importDb,
         ),
+        if (_showICloud && _inICloud != null)
+          SwitchListTile(
+            secondary: const Icon(Icons.cloud_outlined),
+            title: const Text('Include in iCloud backup'),
+            subtitle: Text(
+              _inICloud!
+                  ? 'Your transactions, wallets and settings go into this '
+                      "iPhone's iCloud backup, so a restored phone has them. "
+                      'iCloud backups are end-to-end encrypted only with '
+                      'Advanced Data Protection turned on; without it, Apple '
+                      'can read them.'
+                  : 'Your data stays on this iPhone and is left out of '
+                      'iCloud backups. A new or restored phone starts empty: '
+                      'use Export database to move it.',
+            ),
+            isThreeLine: true,
+            value: _inICloud!,
+            onChanged: _setICloud,
+          ),
       ],
     );
   }

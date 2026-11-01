@@ -12,6 +12,7 @@ import 'core/services/btc_price_service.dart';
 import 'core/services/budget_service.dart';
 import 'core/services/category_service.dart';
 import 'core/services/dashboard_service.dart';
+import 'core/services/icloud_backup.dart';
 import 'core/services/import_service.dart';
 import 'core/services/notification_service.dart';
 import 'core/services/ollama_service.dart';
@@ -91,6 +92,10 @@ void main() async {
   unawaited(
     databaseFile().then(discardRestoreBackup).catchError((Object _) {}),
   );
+  // Whether the database is in iCloud backups is the user's choice on iOS,
+  // and the flag that says so is set on the file — so again on each launch,
+  // in case a restore replaced it (audit P-2).
+  unawaited(ICloudBackup.applyStored(db).catchError((Object _) {}));
   transactionService = TransactionService(db);
   categoryService = CategoryService(db);
   walletService = WalletService(db);
