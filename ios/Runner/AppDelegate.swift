@@ -79,5 +79,34 @@ import UserNotifications
       forPlugin: "FoundationModelsBridge") {
       FoundationModelsBridge.register(with: registrar)
     }
+
+    // Whether the database goes into iCloud and device backups — the user's
+    // choice in Settings → Data (ICloudBackup in Dart). iOS reads it from a
+    // flag on each file, which Flutter has no way to set.
+    if let registrar = engineBridge.pluginRegistry.registrar(
+      forPlugin: "BackupExclusion") {
+      let channel = FlutterMethodChannel(
+        name: "app.satsstack/backup", binaryMessenger: registrar.messenger())
+      channel.setMethodCallHandler { call, result in
+        guard call.method == "setExcludedFromBackup",
+          let args = call.arguments as? [String: Any],
+          let path = args["path"] as? String,
+          let excluded = args["excluded"] as? Bool
+        else {
+          result(FlutterMethodNotImplemented)
+          return
+        }
+        var url = URL(fileURLWithPath: path)
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = excluded
+        do {
+          try url.setResourceValues(values)
+          result(nil)
+        } catch {
+          result(FlutterError(
+            code: "backup", message: error.localizedDescription, details: nil))
+        }
+      }
+    }
   }
 }

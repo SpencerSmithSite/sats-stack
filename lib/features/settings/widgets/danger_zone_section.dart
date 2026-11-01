@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/database/database.dart';
+import '../../../core/services/icloud_backup.dart';
 import '../../../main.dart' as app;
 import '../../../shared/constants/app_constants.dart';
 import '../../../shared/theme/app_colors.dart';
@@ -56,6 +57,12 @@ class _DangerZoneSectionState extends State<DangerZoneSection> {
       // And any statement or photo the pickers copied into the app's cache.
       try {
         await FilePicker.platform.clearTemporaryFiles();
+      } catch (_) {}
+      // A fresh start takes a new install's default: out of iCloud. Left
+      // unset, the next launch would read the finished onboarding as an old
+      // install and put it back in.
+      try {
+        await ICloudBackup.setIncluded(app.db, false);
       } catch (_) {}
       // API keys live in the keychain, so `resetAndReseed` cannot reach them.
       // Leaving a user's credentials behind after "delete everything" would be a
