@@ -1,0 +1,29 @@
+# Update proposals for the workflow actions (pinned to commits) and the Dart
+# packages (audit P-3). Each arrives as a PR to review like any other.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ['*']
+
+  - package-ecosystem: pub
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # Patch and minor bumps together; a major bump gets a PR of its own.
+      minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      # Held on purpose — see "Critical package version pins" in CLAUDE.md.
+      - dependency-name: drift_flutter
+        versions: ['>=0.3.0']
+      - dependency-name: fl_chart
+        versions: ['>=1.0.0']
+      - dependency-name: flutter_secure_storage
+        versions: ['>=10.0.0']
