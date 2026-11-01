@@ -34,7 +34,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 1
           # The action sets up its own token for git; this one need not stay
@@ -45,7 +45,7 @@ jobs:
       # whatever that repository's default branch held at run time, and ran
       # with the OAuth token (audit P-3). Move the commit on purpose.
       - name: Checkout the code-review plugin
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: anthropics/claude-code
           ref: c017428c8c27e604840435048d5bce6a9a22c040
