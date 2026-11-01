@@ -47,6 +47,14 @@ class _MemoryKeyStore extends SecureKeyStore {
   Future<void> deleteEntry(String entry) => delete(entry);
 }
 
+/// Records [switchCurrency] instead of looking up a price.
+class _SwitchRecorder extends BtcPriceService {
+  _SwitchRecorder() : super(app.db);
+  final switchedTo = <String>[];
+  @override
+  void switchCurrency(String currency) => switchedTo.add(currency);
+}
+
 void main() {
   driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
 
@@ -143,6 +151,29 @@ void main() {
       expect(app.showBtcPriceNotifier.value, isFalse);
       expect(await setting(tester, AppConstants.settingShowBtcPrice), 'false');
       await close(tester);
+    });
+
+    testWidgets('a currency that cannot be saved still moves the price', (
+      tester,
+    ) async {
+      // Audit U-8: the price was switched only after the write, so a failed
+      // write left the old currency's price under the new label.
+      final prices = _SwitchRecorder();
+      await open(
+        tester,
+        'General',
+        before: () async => app.btcPriceService = prices,
+      );
+      await tester.runAsync(() => app.db.close());
+
+      await tester.tap(find.widgetWithText(ChoiceChip, 'GBP'));
+      await settle(tester);
+
+      expect(app.currencyNotifier.value, 'GBP');
+      expect(prices.switchedTo, ['GBP']);
+      expect(find.textContaining('could not be saved'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 1));
     });
 
     testWidgets('the inflation rate is checked, then saved', (tester) async {

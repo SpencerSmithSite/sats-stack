@@ -1,5 +1,5 @@
-/// Adding a budget cannot replace one, and an outgoing Bitcoin payment is
-/// shown as one.
+/// Adding a budget cannot replace one, editing one shows the currency it is
+/// saved in, and an outgoing Bitcoin payment is shown as one.
 library;
 
 import 'package:drift/drift.dart' hide isNull, isNotNull;
@@ -7,6 +7,7 @@ import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sats_stack/core/database/database.dart';
+import 'package:sats_stack/core/models/budget_progress.dart';
 import 'package:sats_stack/core/services/budget_service.dart';
 import 'package:sats_stack/core/services/category_service.dart';
 import 'package:sats_stack/features/budgets/widgets/set_budget_sheet.dart';
@@ -59,6 +60,63 @@ void main() {
     // Picking it and saving replaced the £300 budget.
     expect(find.text('Food & Dining'), findsNothing);
     expect(find.text('Transport'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 1));
+    await tester.runAsync(() => app.db.close());
+  });
+
+  testWidgets('a budget with no rate is edited in its own currency', (
+    tester,
+  ) async {
+    // Audit U-9: a USD budget, viewed in GBP with no rate to convert it.
+    late BudgetService budgets;
+    late CategoryService categories;
+    late BudgetProgress progress;
+    await tester.runAsync(() async {
+      app.db = AppDatabase.forTesting(NativeDatabase.memory());
+      app.currencyNotifier = ValueNotifier('GBP');
+      budgets = BudgetService(app.db);
+      categories = CategoryService(app.db);
+      final food = (await categories.getAll()).firstWhere(
+        (c) => c.name == 'Food & Dining',
+      );
+      await budgets.upsert(
+        categoryId: food.id,
+        amountFiat: 300,
+        currency: 'USD',
+      );
+      progress = BudgetProgress(
+        budget: (await budgets.getAll()).single,
+        category: food,
+        spentFiat: 0,
+        limitFiat: null,
+      );
+    });
+    tester.view.physicalSize = const Size(430, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.dark(),
+        home: Scaffold(
+          body: SetBudgetSheet(
+            budgetService: budgets,
+            categoryService: categories,
+            existing: progress,
+          ),
+        ),
+      ),
+    );
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 100)),
+    );
+    await tester.pumpAndSettle();
+
+    // It read "£ 300.00", and was saved as $300.
+    expect(find.text('\$ '), findsOneWidget);
+    expect(find.text('£ '), findsNothing);
 
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(seconds: 1));
