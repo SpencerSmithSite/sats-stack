@@ -59,19 +59,26 @@ class WalletService {
     required String color,
   }) async {
     xpub = xpub.trim();
-    final existing = await findByXpub(xpub);
-    if (existing != null) throw DuplicateWalletException(existing);
-    final id = await _db
-        .into(_db.wallets)
-        .insert(
-          WalletsCompanion.insert(
-            label: label,
-            type: 'xpub',
-            xpub: Value(xpub),
-            color: color,
-          ),
-        );
-    return (_db.select(_db.wallets)..where((w) => w.id.equals(id))).getSingle();
+    // The check and the insert in one transaction. Drift runs transactions
+    // one at a time, so a second add of the same key — a double tap — waits
+    // for the first and then finds it. Apart, both could pass the check and
+    // the stack was counted twice (audit D-12).
+    return _db.transaction(() async {
+      final existing = await findByXpub(xpub);
+      if (existing != null) throw DuplicateWalletException(existing);
+      final id = await _db
+          .into(_db.wallets)
+          .insert(
+            WalletsCompanion.insert(
+              label: label,
+              type: 'xpub',
+              xpub: Value(xpub),
+              color: color,
+            ),
+          );
+      return (_db.select(_db.wallets)
+        ..where((w) => w.id.equals(id))).getSingle();
+    });
   }
 
   /// How many transactions belong to [walletId].

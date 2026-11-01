@@ -133,26 +133,51 @@ class CategoryService {
 
   /// Returns the number of transactions and budgets referencing this category.
   /// Call before delete to check if safe.
+  ///
+  /// Counted in SQL. It loaded every row in the category to take `.length`
+  /// (audit D-13).
   Future<({int transactions, int budgets})> usageCounts(
     int categoryId,
     String categoryName,
   ) async {
-    final txCount = await (_db.select(_db.transactions)..where(
-      (t) => t.category.equals(categoryName),
-    )).get().then((l) => l.length);
-    final budgetCount = await (_db.select(_db.budgets)..where(
-      (b) => b.categoryId.equals(categoryId),
-    )).get().then((l) => l.length);
-    return (transactions: txCount, budgets: budgetCount);
+    final txCount = _db.transactions.id.count();
+    final txRow =
+        await (_db.selectOnly(_db.transactions)
+              ..addColumns([txCount])
+              ..where(_db.transactions.category.equals(categoryName)))
+            .getSingle();
+    final budgetCount = _db.budgets.id.count();
+    final budgetRow =
+        await (_db.selectOnly(_db.budgets)
+              ..addColumns([budgetCount])
+              ..where(_db.budgets.categoryId.equals(categoryId)))
+            .getSingle();
+    return (
+      transactions: txRow.read(txCount) ?? 0,
+      budgets: budgetRow.read(budgetCount) ?? 0,
+    );
   }
 
   /// Deletes a custom category. Returns false if it is still referenced by
   /// transactions or budgets (caller should show a warning instead).
-  Future<bool> deleteCategory(int categoryId, String categoryName) async {
-    final counts = await usageCounts(categoryId, categoryName);
-    if (counts.transactions > 0 || counts.budgets > 0) return false;
-    await (_db.delete(_db.categories)
-      ..where((t) => t.id.equals(categoryId))).go();
-    return true;
+  ///
+  /// One transaction, so nothing can start using the category between the
+  /// check and the delete. The import mappings learned for it go with it, and
+  /// the import history forgets it: they kept the deleted name, and the next
+  /// import filed rows under a category that no longer existed, which no
+  /// budget ever counted (audit D-8).
+  Future<bool> deleteCategory(int categoryId, String categoryName) {
+    return _db.transaction(() async {
+      final counts = await usageCounts(categoryId, categoryName);
+      if (counts.transactions > 0 || counts.budgets > 0) return false;
+      await (_db.delete(_db.descriptionCategoryMappings)
+        ..where((t) => t.category.equals(categoryName))).go();
+      await (_db.update(_db.importedTransactions)..where(
+        (t) => t.category.equals(categoryName),
+      )).write(const ImportedTransactionsCompanion(category: Value(null)));
+      await (_db.delete(_db.categories)
+        ..where((t) => t.id.equals(categoryId))).go();
+      return true;
+    });
   }
 }

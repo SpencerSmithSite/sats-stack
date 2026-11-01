@@ -120,6 +120,88 @@ void main() {
     expect(mapping.category, 'Eating Out');
   });
 
+  group('deleting a custom category', () {
+    late int customId;
+    setUp(() async {
+      await categories.createCategory(
+        name: 'Pets',
+        color: '#123456',
+        icon: 'pets',
+      );
+      customId =
+          (await (db.select(db.categories)
+                ..where((c) => c.name.equals('Pets'))).getSingle())
+              .id;
+    });
+
+    test('counts what uses it', () async {
+      // Audit D-13: counted by loading every row.
+      expect(await categories.usageCounts(foodId, 'Food & Dining'), (
+        transactions: 1,
+        budgets: 1,
+      ));
+      expect(await categories.usageCounts(customId, 'Pets'), (
+        transactions: 0,
+        budgets: 0,
+      ));
+    });
+
+    test('takes its import mappings with it', () async {
+      // Audit D-8: they kept the deleted name, and the next import filed
+      // rows under it.
+      final sourceId = await db
+          .into(db.importSources)
+          .insert(
+            ImportSourcesCompanion.insert(
+              name: 'Chase',
+              type: 'bank',
+              currency: 'USD',
+            ),
+          );
+      await db
+          .into(db.importedTransactions)
+          .insert(
+            ImportedTransactionsCompanion.insert(
+              sourceId: sourceId,
+              date: DateTime(2025, 3, 11),
+              amountCents: -2500,
+              direction: 'debit',
+              description: 'PET SHOP',
+              category: const Value('Pets'),
+              currency: 'USD',
+              rawDescription: 'PET SHOP',
+              importHash: 'pets',
+            ),
+          );
+      await db
+          .into(db.descriptionCategoryMappings)
+          .insert(
+            DescriptionCategoryMappingsCompanion.insert(
+              description: 'pet shop',
+              sourceId: sourceId,
+              category: 'Pets',
+            ),
+          );
+
+      expect(await categories.deleteCategory(customId, 'Pets'), isTrue);
+
+      expect(await db.select(db.descriptionCategoryMappings).get(), isEmpty);
+      expect(
+        (await db.select(db.importedTransactions).getSingle()).category,
+        isNull,
+      );
+    });
+
+    test('is refused while a transaction uses it', () async {
+      expect(await categories.deleteCategory(foodId, 'Food & Dining'), isFalse);
+      expect(
+        await (db.select(db.categories)
+          ..where((c) => c.id.equals(foodId))).getSingleOrNull(),
+        isNotNull,
+      );
+    });
+  });
+
   test('changing only the colour touches no transaction', () async {
     await categories.updateCategory(
       id: foodId,
