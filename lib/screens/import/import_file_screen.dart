@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
@@ -28,8 +29,44 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
   // Processing state
   bool _isProcessing = false;
   String _currentStage = '';
-  String _aiOutput = '';
   bool _showCancel = false;
+
+  /// What the model has streamed so far. Tokens are added to the buffer and
+  /// published at most once a frame; only the output box listens. Each token
+  /// used to `setState` the whole screen — re-subscribing its sources query
+  /// as well — and grow the string by concatenation (audit U-5, A-10).
+  final _aiBuffer = StringBuffer();
+  final _aiOutput = ValueNotifier<String>('');
+  bool _aiFlushScheduled = false;
+
+  void _addToken(String token) {
+    _aiBuffer.write(token);
+    if (_aiFlushScheduled) return;
+    _aiFlushScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _aiFlushScheduled = false;
+      if (!mounted) return;
+      _aiOutput.value = _aiBuffer.toString();
+      if (_tokenScrollController.hasClients) {
+        _tokenScrollController.animateTo(
+          _tokenScrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 80),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+    WidgetsBinding.instance.scheduleFrame();
+  }
+
+  void _clearAiOutput() {
+    _aiBuffer.clear();
+    _aiOutput.value = '';
+  }
+
+  /// Created once. It was built inside `build()`, so every rebuild — every
+  /// streamed token, while an import ran — started a new query.
+  late final Stream<List<ImportSource>> _sources =
+      app.importService.watchSources();
 
   // Timers & subscriptions
   Timer? _cancelTimer;
@@ -56,6 +93,7 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
     _timeoutTimer?.cancel();
     _tokenSub?.cancel();
     _tokenScrollController.dispose();
+    _aiOutput.dispose();
     super.dispose();
   }
 
@@ -176,7 +214,7 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
       body: Stack(
         children: [
           StreamBuilder<List<ImportSource>>(
-            stream: app.importService.watchSources(),
+            stream: _sources,
             builder: (context, snap) {
               final sources = snap.data ?? [];
               return CustomScrollView(
@@ -391,27 +429,16 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
     // Called straight after a picker returns, and the screen may have been
     // closed while it was open.
     if (!mounted) return;
+    _clearAiOutput();
     setState(() {
       _isProcessing = true;
       _currentStage = 'Reading your statement…';
-      _aiOutput = '';
       _showCancel = false;
     });
 
     // Subscribe to live AI token stream
     _tokenSub = app.importService.importTokenStream.listen((token) {
-      if (!mounted) return;
-      setState(() => _aiOutput += token);
-      // Auto-scroll to bottom
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_tokenScrollController.hasClients) {
-          _tokenScrollController.animateTo(
-            _tokenScrollController.position.maxScrollExtent,
-            duration: const Duration(milliseconds: 80),
-            curve: Curves.easeOut,
-          );
-        }
-      });
+      if (mounted) _addToken(token);
     });
 
     // Show Cancel after 5 seconds
@@ -494,10 +521,10 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
     _onTimeout = null;
     _tokenSub = null;
     if (mounted) {
+      _clearAiOutput();
       setState(() {
         _isProcessing = false;
         _showCancel = false;
-        _aiOutput = '';
         _currentStage = '';
       });
     }
@@ -679,25 +706,15 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
   }) async {
     // See [_processFile].
     if (!mounted) return;
+    _clearAiOutput();
     setState(() {
       _isProcessing = true;
       _currentStage = 'Preparing image…';
-      _aiOutput = '';
       _showCancel = false;
     });
 
     _tokenSub = app.importService.importTokenStream.listen((token) {
-      if (!mounted) return;
-      setState(() => _aiOutput += token);
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_tokenScrollController.hasClients) {
-          _tokenScrollController.animateTo(
-            _tokenScrollController.position.maxScrollExtent,
-            duration: const Duration(milliseconds: 80),
-            curve: Curves.easeOut,
-          );
-        }
-      });
+      if (mounted) _addToken(token);
     });
 
     _cancelTimer = Timer(const Duration(seconds: 5), () {
@@ -844,7 +861,7 @@ class _ImportProgressOverlay extends StatelessWidget {
   });
 
   final String stage;
-  final String aiOutput;
+  final ValueListenable<String> aiOutput;
   final bool showCancel;
   final ScrollController scrollController;
   final VoidCallback onCancel;
@@ -852,7 +869,6 @@ class _ImportProgressOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final hasOutput = aiOutput.isNotEmpty;
 
     return Positioned.fill(
       child: Container(
@@ -905,35 +921,49 @@ class _ImportProgressOverlay extends StatelessWidget {
                       ),
                     ),
 
-                    // Live AI token output
-                    if (hasOutput) ...[
-                      const SizedBox(height: 16),
-                      Container(
-                        height: 130,
-                        decoration: BoxDecoration(
-                          color: cs.surfaceContainerHighest,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: cs.outlineVariant.withValues(alpha: 0.5),
-                          ),
-                        ),
-                        child: SingleChildScrollView(
-                          controller: scrollController,
-                          padding: const EdgeInsets.all(10),
-                          child: Text(
-                            // Show last 3 000 chars so the widget stays bounded
-                            aiOutput.length > 3000
-                                ? aiOutput.substring(aiOutput.length - 3000)
-                                : aiOutput,
-                            style: TextStyle(
-                              fontFamily: 'monospace',
-                              fontSize: 11,
-                              color: cs.primary,
+                    // Live AI token output — the only part that rebuilds as
+                    // tokens arrive.
+                    ValueListenableBuilder<String>(
+                      valueListenable: aiOutput,
+                      builder: (context, aiOutput, _) {
+                        if (aiOutput.isEmpty) return const SizedBox.shrink();
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const SizedBox(height: 16),
+                            Container(
+                              height: 130,
+                              decoration: BoxDecoration(
+                                color: cs.surfaceContainerHighest,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: cs.outlineVariant.withValues(
+                                    alpha: 0.5,
+                                  ),
+                                ),
+                              ),
+                              child: SingleChildScrollView(
+                                controller: scrollController,
+                                padding: const EdgeInsets.all(10),
+                                child: Text(
+                                  // Show last 3 000 chars so the widget stays bounded
+                                  aiOutput.length > 3000
+                                      ? aiOutput.substring(
+                                        aiOutput.length - 3000,
+                                      )
+                                      : aiOutput,
+                                  style: TextStyle(
+                                    fontFamily: 'monospace',
+                                    fontSize: 11,
+                                    color: cs.primary,
+                                  ),
+                                ),
+                              ),
                             ),
-                          ),
-                        ),
-                      ),
-                    ],
+                          ],
+                        );
+                      },
+                    ),
 
                     // Cancel button (delayed)
                     if (showCancel) ...[
