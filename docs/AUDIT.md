@@ -631,7 +631,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
   - There is no Dependabot.
 - **Impact:** A moved tag or a compromised upstream runs new code with the tokens, and no commit here shows it.
 - **Fix direction:** Pin each action to a commit SHA, set `persist-credentials: false`, and add Dependabot for `github-actions` and `pub`.
-- **Status:** open
+- **Status:** fixed in #79
 
 ### P-4 · Medium · supply-chain — End-of-life SQLite libs, a discontinued keychain backend, wide version lag
 - **Where:** `pubspec.yaml:15`, `:38`, `:57`, `:60`, `:71`, `:74`; `pubspec.lock:935`.
