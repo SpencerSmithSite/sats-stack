@@ -167,7 +167,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** `readAsBytes()` has no size check. `PdfTextExtractor.extractText()` and `CsvToListConverter().convert()` run synchronously on the main isolate, and the CSV is parsed up to three times on the fall-through path.
 - **Impact:** A large statement freezes the UI for seconds, during which Cancel can't respond. A very large one can exhaust a phone's memory.
 - **Fix direction:** Limit size at pick time, parse in `Isolate.run`, and parse once per import.
-- **Status:** open
+- **Status:** fixed in #73. Files over 25 MB are refused before they are read, with a message to import a shorter range; PDF text extraction and CSV parsing run in `Isolate.run`; a CSV is parsed once per import and the later tiers reuse the rows. Pinned by `import_off_ui_test`.
 
 ### A-9 · Low · correctness — Chat system prompt goes stale for the whole session
 - **Where:** `ai_chat_screen.dart:86-90`, `:138-150`.
