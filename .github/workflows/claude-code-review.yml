@@ -18,12 +18,14 @@ concurrency:
 
 jobs:
   claude-review:
-    # Same-repo PRs only, and not drafts. A fork's PR runs without secrets
-    # under `pull_request`, so the review could only fail; and a draft is not
-    # ready to be reviewed.
+    # Same-repo PRs only, not drafts, and not Dependabot's. A fork's PR runs
+    # without secrets under `pull_request`, and so does Dependabot's, which
+    # the action also refuses as a bot — so the review could only fail. A
+    # draft is not ready to be reviewed.
     if: |
       github.event.pull_request.head.repo.full_name == github.repository &&
-      !github.event.pull_request.draft
+      !github.event.pull_request.draft &&
+      github.event.pull_request.user.login != 'dependabot[bot]'
 
     runs-on: ubuntu-latest
     permissions:
@@ -41,24 +43,18 @@ jobs:
           # in the working tree.
           persist-credentials: false
 
-      # The plugin marketplace at a fixed commit. Given as a URL, it was
-      # whatever that repository's default branch held at run time, and ran
-      # with the OAuth token (audit P-3). Move the commit on purpose.
-      - name: Checkout the code-review plugin
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: anthropics/claude-code
-          ref: c017428c8c27e604840435048d5bce6a9a22c040
-          path: .claude-marketplace
-          fetch-depth: 1
-          persist-credentials: false
-
       - name: Run Claude Code Review
         id: claude-review
         uses: anthropics/claude-code-action@d535f5172dec02b204866b393d6b20b9b2aaf98d # v1.0.266
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          plugin_marketplaces: './.claude-marketplace'
+          # Not pinned, and cannot be: Claude Code reserves this marketplace's
+          # name for a GitHub source in the anthropics organisation, so a
+          # checkout at a fixed commit is refused ("The name
+          # 'claude-code-plugins' is reserved"), and the action takes a bare
+          # `.git` URL with no ref. It is Anthropic's own repository — the
+          # same publisher as the pinned action that holds the token.
+          plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
           plugins: 'code-review@claude-code-plugins'
           prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
           # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
