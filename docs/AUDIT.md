@@ -519,7 +519,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** The x-axis indexes only months with activity, so a two-year gap is one step. The 3M/6M/1Y filters drop the balance carried in, so a flat stack shows "Not enough data". The chart sits under the price listener but never uses the price.
 - **Impact:** A misleading chart, and pointless rebuild work on each tick.
 - **Fix direction:** Time-based x values with idle months filled, seed each window with the prior balance, and lift the chart out of the listener.
-- **Status:** open
+- **Status:** fixed in #90
 
 ### U-11 · Low · correctness — The date picker asserts on imported dates outside its range
 - **Where:** `lib/features/transactions/widgets/transaction_edit_sheet.dart:127-132`.

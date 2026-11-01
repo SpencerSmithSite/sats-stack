@@ -63,10 +63,35 @@ void main() {
 
   test('history is cumulative and in order', () {
     expect(StackStats.from(txns, now).history, {
+      DateTime(2026, 7): 0,
       DateTime(2026, 8): 150000,
       DateTime(2026, 9): 180000,
       DateTime(2026, 10): 195000,
     });
+  });
+
+  test('every month is in the history, idle ones at the balance', () {
+    // Audit U-10: only months with activity were there, so a two-year gap
+    // was one step on the chart.
+    final s = StackStats.from([
+      tx(DateTime(2024, 9, 1), 100000),
+      tx(DateTime(2026, 9, 1), 50000),
+    ], now);
+    expect(s.history.length, 27); // August 2024 to October 2026
+    expect(s.history[DateTime(2024, 8)], 0);
+    expect(s.history[DateTime(2025, 9)], 100000);
+    expect(s.history[DateTime(2026, 8)], 100000);
+    expect(s.history[DateTime(2026, 10)], 150000);
+  });
+
+  test('a stack that sat still still has a line to draw', () {
+    // Nothing for a year: the last three months are the carried balance.
+    // The 3M window found no months at all, and showed "Not enough data".
+    final s = StackStats.from([tx(DateTime(2025, 6, 1), 80000)], now);
+    final lastThree = s.history.entries.where(
+      (e) => !e.key.isBefore(DateTime(2026, 8)),
+    );
+    expect(lastThree.map((e) => e.value), [80000, 80000, 80000]);
   });
 
   test('knows when the month has turned under it', () {
