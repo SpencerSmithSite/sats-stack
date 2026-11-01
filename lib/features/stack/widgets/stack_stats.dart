@@ -64,12 +64,23 @@ class StackStats {
       avg = (sum / window).round();
     }
 
-    // Cumulative balance at the end of each month with activity.
-    final sorted = byMonth.keys.toList()..sort();
-    var cumulative = 0;
-    final history = <DateTime, int>{
-      for (final m in sorted) m: cumulative += byMonth[m]!,
-    };
+    // Cumulative balance at the end of every month, from the month before
+    // the first activity (at zero) through this one. It held only the months
+    // with activity, so the chart drew a two-year gap as one step, and a
+    // stack untouched for a while had too few points to draw (audit U-10).
+    final history = <DateTime, int>{};
+    if (first != null) {
+      final last = byMonth.keys.reduce((a, b) => a.isAfter(b) ? a : b);
+      final end = last.isAfter(currentMonth) ? last : currentMonth;
+      var cumulative = 0;
+      for (
+        var m = DateTime(first.year, first.month - 1);
+        !m.isAfter(end);
+        m = DateTime(m.year, m.month + 1)
+      ) {
+        history[m] = cumulative += byMonth[m] ?? 0;
+      }
+    }
 
     return StackStats(
       totalSats: total,
@@ -93,7 +104,8 @@ class StackStats {
   /// counted as zero.
   final int avgMonthlySats;
 
-  /// Month → cumulative sats at its end, oldest first.
+  /// Month → cumulative sats at its end, oldest first: every month from the
+  /// one before the first activity, at zero, through this one.
   final Map<DateTime, int> history;
 
   /// The calendar month "this month" was computed for.

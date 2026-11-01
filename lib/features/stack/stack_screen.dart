@@ -207,25 +207,22 @@ class _StackScreenState extends State<StackScreen> {
             );
           }
 
-          return ValueListenableBuilder<double?>(
-            valueListenable: app.btcPriceService.priceNotifier,
-            builder: (context, btcPrice, _) {
-              return ValueListenableBuilder<String>(
-                valueListenable: app.currencyNotifier,
-                builder: (context, currency, _) {
-                  return _StackContent(
-                    stats: stats,
-                    currency: currency,
-                    btcPrice: btcPrice,
-                    period: _period,
-                    onPeriodChanged: (p) => setState(() => _period = p),
-                    stackGoalSats: _stackGoalSats,
-                    onEditGoal: () => _openSetGoal(context),
-                    dcaController: _dcaController,
-                    dcaYears: _dcaYears,
-                    onDcaYearsChanged: (y) => setState(() => _dcaYears = y),
-                  );
-                },
+          // No price listener out here: only the cards that show a fiat
+          // figure listen for it. The chart sat under it too and redrew on
+          // every tick without using the price (audit U-10).
+          return ValueListenableBuilder<String>(
+            valueListenable: app.currencyNotifier,
+            builder: (context, currency, _) {
+              return _StackContent(
+                stats: stats,
+                currency: currency,
+                period: _period,
+                onPeriodChanged: (p) => setState(() => _period = p),
+                stackGoalSats: _stackGoalSats,
+                onEditGoal: () => _openSetGoal(context),
+                dcaController: _dcaController,
+                dcaYears: _dcaYears,
+                onDcaYearsChanged: (y) => setState(() => _dcaYears = y),
               );
             },
           );
@@ -241,7 +238,6 @@ class _StackContent extends StatelessWidget {
   const _StackContent({
     required this.stats,
     required this.currency,
-    required this.btcPrice,
     required this.period,
     required this.onPeriodChanged,
     required this.stackGoalSats,
@@ -253,7 +249,6 @@ class _StackContent extends StatelessWidget {
 
   final StackStats stats;
   final String currency;
-  final double? btcPrice;
   final StackPeriod period;
   final ValueChanged<StackPeriod> onPeriodChanged;
   final int? stackGoalSats;
@@ -273,11 +268,13 @@ class _StackContent extends StatelessWidget {
         const SizedBox(height: 8),
 
         // ── Hero ─────────────────────────────────────────────────────────────
-        StackHero(
-          totalSats: stats.totalSats,
-          monthSats: stats.monthSats,
-          btcPrice: btcPrice,
-          currency: currency,
+        _Priced(
+          (btcPrice) => StackHero(
+            totalSats: stats.totalSats,
+            monthSats: stats.monthSats,
+            btcPrice: btcPrice,
+            currency: currency,
+          ),
         ),
         const SizedBox(height: 20),
 
@@ -288,31 +285,34 @@ class _StackContent extends StatelessWidget {
             history: history,
             period: period,
             onPeriodChanged: onPeriodChanged,
-            btcPrice: btcPrice,
           ),
           const SizedBox(height: 20),
         ],
 
         // ── Stack goal ────────────────────────────────────────────────────────
         _SectionHeader(title: 'Stack Goal'),
-        StackGoalCard(
-          totalSats: stats.totalSats,
-          goalSats: stackGoalSats,
-          avgMonthlySats: stats.avgMonthlySats,
-          btcPrice: btcPrice,
-          onEdit: onEditGoal,
-          currency: currency,
+        _Priced(
+          (btcPrice) => StackGoalCard(
+            totalSats: stats.totalSats,
+            goalSats: stackGoalSats,
+            avgMonthlySats: stats.avgMonthlySats,
+            btcPrice: btcPrice,
+            onEdit: onEditGoal,
+            currency: currency,
+          ),
         ),
         const SizedBox(height: 20),
 
         // ── DCA simulator ─────────────────────────────────────────────────────
         _SectionHeader(title: 'DCA Simulator'),
-        DcaSimulator(
-          btcPrice: btcPrice,
-          controller: dcaController,
-          years: dcaYears,
-          onYearsChanged: onDcaYearsChanged,
-          currency: currency,
+        _Priced(
+          (btcPrice) => DcaSimulator(
+            btcPrice: btcPrice,
+            controller: dcaController,
+            years: dcaYears,
+            onYearsChanged: onDcaYearsChanged,
+            currency: currency,
+          ),
         ),
         const SizedBox(height: 8),
       ],
@@ -331,6 +331,18 @@ class _StackContent extends StatelessWidget {
 // ── Set Goal sheet ────────────────────────────────────────────────────────────
 
 // ── Shared sub-widgets ────────────────────────────────────────────────────────
+
+/// [builder]'s card, rebuilt when the BTC price changes and only then.
+class _Priced extends StatelessWidget {
+  const _Priced(this.builder);
+  final Widget Function(double? btcPrice) builder;
+
+  @override
+  Widget build(BuildContext context) => ValueListenableBuilder<double?>(
+    valueListenable: app.btcPriceService.priceNotifier,
+    builder: (context, btcPrice, _) => builder(btcPrice),
+  );
+}
 
 class _SectionHeader extends StatelessWidget {
   const _SectionHeader({required this.title});

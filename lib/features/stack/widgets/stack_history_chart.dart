@@ -19,13 +19,14 @@ class HistoryChartCard extends StatelessWidget {
     required this.history,
     required this.period,
     required this.onPeriodChanged,
-    required this.btcPrice,
   });
 
+  /// Every month's closing balance — see `StackStats.history` — so the
+  /// window below always starts from the balance carried into it, and a
+  /// stack that sat still has a flat line rather than "Not enough data".
   final Map<DateTime, int> history;
   final StackPeriod period;
   final ValueChanged<StackPeriod> onPeriodChanged;
-  final double? btcPrice;
 
   List<MapEntry<DateTime, int>> _filtered() {
     final entries =
@@ -78,7 +79,7 @@ class HistoryChartCard extends StatelessWidget {
                             ),
                           ),
                         )
-                        : StackLineChart(entries: filtered, btcPrice: btcPrice),
+                        : StackLineChart(entries: filtered),
               ),
             ],
           ),
@@ -89,10 +90,10 @@ class HistoryChartCard extends StatelessWidget {
 }
 
 class StackLineChart extends StatelessWidget {
-  const StackLineChart({super.key, required this.entries, this.btcPrice});
+  const StackLineChart({super.key, required this.entries});
 
+  /// One per calendar month, in order, so the index is time.
   final List<MapEntry<DateTime, int>> entries;
-  final double? btcPrice;
 
   @override
   Widget build(BuildContext context) {
