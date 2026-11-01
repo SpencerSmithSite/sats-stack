@@ -304,15 +304,15 @@ class ElectrumHistory {
   Future<List<List<Map<String, dynamic>>>> fetchWindow(
     List<String> addresses,
   ) async {
-    final histories = await Future.wait([
+    final histories = await Future.wait(eagerError: true, [
       for (final a in addresses)
         _call('blockchain.scripthash.get_history', [
           BitcoinScript.electrumScripthash(a),
         ]),
     ]);
-    return Future.wait([
+    return Future.wait(eagerError: true, [
       for (final history in histories)
-        Future.wait([
+        Future.wait(eagerError: true, [
           for (final item in (history as List<dynamic>? ?? const []))
             _esploraShaped(item as Map<String, dynamic>),
         ]),
@@ -330,7 +330,7 @@ class ElectrumHistory {
       };
     }
     final (tx, time) = await (_tx(txid), _blockTime(height)).wait;
-    final vin = await Future.wait([
+    final vin = await Future.wait(eagerError: true, [
       for (final input in tx.inputs) _prevout(input),
     ]);
     return {
@@ -395,9 +395,18 @@ class ElectrumSession {
         .transform(utf8.decoder)
         .transform(const LineSplitter())
         .listen(_handleLine, onError: _handleError, onDone: _handleDone);
+    // A write to a socket the server has closed surfaces here; [_closedBy]
+    // already reports it to every caller.
+    unawaited(_socket.done.then((_) {}, onError: (Object _) {}));
   }
 
   final Socket _socket;
+
+  /// Why the connection ended, once it has. Every later [call] fails with it
+  /// at once. Calls after a disconnect used to be written to the dead socket
+  /// and each wait out its 30-second timeout — so a scan whose server dropped
+  /// hung behind its spinner for minutes, 16 requests at a time (audit B-3).
+  Object? _closedBy;
   final _pending = <int, Completer<dynamic>>{};
   int _nextId = 1;
   StreamSubscription<String>? _subscription;
@@ -424,6 +433,7 @@ class ElectrumSession {
   }
 
   void _handleError(dynamic e) {
+    _closedBy ??= e as Object;
     for (final c in _pending.values) {
       if (!c.isCompleted) c.completeError(e);
     }
@@ -431,6 +441,7 @@ class ElectrumSession {
   }
 
   void _handleDone() {
+    _closedBy ??= const SocketException('Connection closed');
     for (final c in _pending.values) {
       if (!c.isCompleted) {
         c.completeError(const SocketException('Connection closed'));
@@ -441,6 +452,7 @@ class ElectrumSession {
 
   /// Sends a JSON-RPC request and waits for the response.
   Future<dynamic> call(String method, List<dynamic> params) {
+    if (_closedBy case final reason?) return Future<dynamic>.error(reason);
     final id = _nextId++;
     final completer = Completer<dynamic>();
     _pending[id] = completer;
@@ -462,6 +474,7 @@ class ElectrumSession {
 
   /// Closes the socket connection.
   void close() {
+    _closedBy ??= StateError('Session closed');
     _subscription?.cancel();
     _socket.destroy();
   }
