@@ -652,7 +652,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** The Gradle cache holds `com.google.android.datatransport` (`transport-backend-cct`, `transport-runtime`) next to ML Kit common, which is ML Kit's usual path for reporting usage to Google. Whether it is in the release classpath is unverified.
 - **Impact:** A local-first app may report usage to Google on every Android install, including installs that never use Gemini Nano. That affects the Play Data safety form and the app's privacy copy.
 - **Fix direction:** Check `:app:dependencies --configuration releaseRuntimeClasspath`. Then exclude it, disable it, or declare it.
-- **Status:** open
+- **Status:** fixed in #81. It is in the release classpath (`transport-backend-cct` 2.3.3, via `com.google.mlkit:common` 18.11.0). The main manifest now removes its upload backend, and CI checks that the release manifest has no `CctBackendFactory`
 
 ### P-6 · Low · reliability — The test network guard misses raw sockets
 - **Where:** `test/flutter_test_config.dart:14-27`.
