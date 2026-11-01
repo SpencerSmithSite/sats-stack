@@ -645,7 +645,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
   - Plan `drift_flutter` 0.3 / `sqlite3` 3.x as its own change; it also unblocks SQLCipher.
   - Plan `flutter_secure_storage` 10/11 with a key-migration test.
   - Run `flutter pub upgrade` within the current constraints regularly.
-- **Status:** open
+- **Status:** partly fixed in #80: the 63 packages are upgraded within their constraints. Still open: `drift_flutter` 0.3 with `sqlite3` 3.x (the end-of-life SQLite libs), `flutter_secure_storage` 10+, and the majors (Syncfusion, notifications, `file_picker`, `go_router`), each as its own change
 
 ### P-5 · Medium · privacy — ML Kit GenAI may bring Google's telemetry transport into Android builds
 - **Where:** `android/app/build.gradle.kts:94` (`com.google.mlkit:genai-prompt:1.0.0-beta2`).
