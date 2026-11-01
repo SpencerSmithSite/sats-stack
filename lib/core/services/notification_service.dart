@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../../shared/utils/currency_utils.dart';
@@ -15,19 +16,44 @@ import '../database/database.dart';
 /// every cold start re-sent every alert (the stack goal on every launch once
 /// reached), while a new month could not alert at all until the app was
 /// killed, because the id did not include the month.
+///
+/// An alert that does not reach the screen — not initialised, permission
+/// refused, the plugin throwing — is handed back with [release], so it can
+/// still be sent later. It used to stay claimed, which meant allowing
+/// notifications in Settings brought nothing for the rest of the month, and
+/// that stack goal's alert never at all (audit D-9).
 class NotificationService {
-  /// [claim] returns true the first time it sees a key. Defaults to an
-  /// in-memory set, for tests.
-  NotificationService({Future<bool> Function(String key)? claim})
-    : _claim = claim ?? _sessionClaim();
+  /// [claim] returns true the first time it sees a key, and [release] forgets
+  /// one. Both default to an in-memory set, for tests. [deliver] stands in
+  /// for the plugin in tests, returning whether the alert was shown.
+  NotificationService({
+    Future<bool> Function(String key)? claim,
+    Future<void> Function(String key)? release,
+    @visibleForTesting
+    Future<bool> Function(int id, String title, String body)? deliver,
+  }) {
+    if (claim == null) {
+      final seen = <String>{};
+      _claim = (key) async => seen.add(key);
+      _release = release ?? (key) async => seen.remove(key);
+    } else {
+      _claim = claim;
+      _release = release ?? (_) async {};
+    }
+    _deliver = deliver ?? _show;
+  }
 
   final _plugin = FlutterLocalNotificationsPlugin();
 
-  final Future<bool> Function(String key) _claim;
+  late final Future<bool> Function(String key) _claim;
+  late final Future<void> Function(String key) _release;
+  late final Future<bool> Function(int id, String title, String body) _deliver;
 
-  static Future<bool> Function(String) _sessionClaim() {
-    final seen = <String>{};
-    return (key) async => seen.add(key);
+  /// Sends the alert for [key] unless it has been sent, and gives the claim
+  /// back if it could not be shown.
+  Future<void> _sendOnce(String key, int id, String title, String body) async {
+    if (!await _claim(key)) return;
+    if (!await _deliver(id, title, body)) await _release(key);
   }
 
   /// The occasion key's month part, e.g. `2026-10`.
@@ -90,19 +116,16 @@ class NotificationService {
     required String currency,
     required DateTime month,
   }) async {
-    final id = _budgetIdBase + categoryId * 2;
-    if (!await _claim('budget_warn_${categoryId}_${monthKey(month)}')) return;
-
     final budgetStr = CurrencyUtils.format(
       budgetAmount,
       currency,
       decimalDigits: 0,
     );
-    await _show(
-      id: id,
-      title: 'Budget warning: $categoryName',
-      body:
-          "You've used $percentUsed% of your $budgetStr $categoryName budget this month.",
+    await _sendOnce(
+      'budget_warn_${categoryId}_${monthKey(month)}',
+      _budgetIdBase + categoryId * 2,
+      'Budget warning: $categoryName',
+      "You've used $percentUsed% of your $budgetStr $categoryName budget this month.",
     );
   }
 
@@ -116,20 +139,17 @@ class NotificationService {
     required String currency,
     required DateTime month,
   }) async {
-    final id = _budgetIdBase + categoryId * 2 + 1;
-    if (!await _claim('budget_over_${categoryId}_${monthKey(month)}')) return;
-
     final overStr = CurrencyUtils.format(overBy, currency, decimalDigits: 0);
     final budgetStr = CurrencyUtils.format(
       budgetAmount,
       currency,
       decimalDigits: 0,
     );
-    await _show(
-      id: id,
-      title: 'Over budget: $categoryName',
-      body:
-          "You've exceeded your $budgetStr $categoryName budget by $overStr this month.",
+    await _sendOnce(
+      'budget_over_${categoryId}_${monthKey(month)}',
+      _budgetIdBase + categoryId * 2 + 1,
+      'Over budget: $categoryName',
+      "You've exceeded your $budgetStr $categoryName budget by $overStr this month.",
     );
   }
 
@@ -140,19 +160,17 @@ class NotificationService {
     required String currency,
     double? btcPrice,
   }) async {
-    const id = _stackGoalId;
-    // Per goal amount, so raising the goal and reaching it again alerts again.
-    if (!await _claim('stack_goal_$goalSats')) return;
-
     final satsStr = _formatSats(goalSats);
     final fiatPart =
         btcPrice != null && btcPrice > 0
             ? ' ≈ ${CurrencyUtils.format(goalSats / 1e8 * btcPrice, currency, decimalDigits: 0)}'
             : '';
-    await _show(
-      id: id,
-      title: 'Stack goal reached!',
-      body: "You've stacked $satsStr sats$fiatPart. Incredible work.",
+    // Per goal amount, so raising the goal and reaching it again alerts again.
+    await _sendOnce(
+      'stack_goal_$goalSats',
+      _stackGoalId,
+      'Stack goal reached!',
+      "You've stacked $satsStr sats$fiatPart. Incredible work.",
     );
   }
 
@@ -216,14 +234,11 @@ class NotificationService {
     return _permissionGranted = true;
   }
 
-  Future<void> _show({
-    required int id,
-    required String title,
-    required String body,
-  }) async {
-    if (!_initialized) return;
+  /// True only when the plugin accepted the notification.
+  Future<bool> _show(int id, String title, String body) async {
+    if (!_initialized) return false;
     try {
-      if (!await _ensurePermission()) return;
+      if (!await _ensurePermission()) return false;
 
       await _plugin.show(
         id,
@@ -250,7 +265,10 @@ class NotificationService {
           ),
         ),
       );
-    } catch (_) {}
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 }
 
@@ -286,5 +304,12 @@ class NotificationLedger {
           .insert(AppSettingsCompanion.insert(key: '$_prefix$key', value: '1'));
       return true;
     });
+  }
+
+  /// Forgets [key], so the next [claim] of it succeeds: the alert it stood
+  /// for was not shown.
+  Future<void> release(String key) async {
+    await (_db.delete(_db.appSettings)
+      ..where((t) => t.key.equals('$_prefix$key'))).go();
   }
 }
