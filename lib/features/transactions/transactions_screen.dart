@@ -654,9 +654,19 @@ class _TransactionRow extends StatelessWidget {
                 child: const Text('Cancel'),
               ),
               TextButton(
-                onPressed: () {
+                onPressed: () async {
                   Navigator.pop(ctx);
-                  app.transactionService.deleteById(transaction.id);
+                  // Awaited, and its failure shown: it was neither, so a
+                  // delete that failed left the row in place with no word
+                  // (audit U-6).
+                  final messenger = ScaffoldMessenger.of(context);
+                  try {
+                    await app.transactionService.deleteById(transaction.id);
+                  } catch (e) {
+                    messenger.showSnackBar(
+                      SnackBar(content: Text('Could not delete: $e')),
+                    );
+                  }
                 },
                 style: TextButton.styleFrom(foregroundColor: AppColors.danger),
                 child: const Text('Delete'),

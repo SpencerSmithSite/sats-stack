@@ -173,6 +173,14 @@ class _ImportColumnMapperScreenState extends State<ImportColumnMapperScreen> {
       if (imported == true && mounted && route != null) {
         Navigator.of(context).removeRoute(route);
       }
+    } catch (e) {
+      // A try with no catch: a failure here was an unhandled error, and the
+      // button simply stopped spinning (audit U-6).
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not read the file this way: $e')),
+        );
+      }
     } finally {
       if (mounted) setState(() => _parsing = false);
     }
