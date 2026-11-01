@@ -110,70 +110,54 @@ void main() async {
   xpubService = XpubService(db);
   budgetService = BudgetService(db, rates: _currentRates);
   ollamaService = OllamaService(db);
-  await ollamaService.loadSettings();
-  // Chat transcripts are no longer stored; drop any an earlier build kept.
-  unawaited(ollamaService.clearStoredTranscripts());
   importService = ImportService(db, ollamaService);
-  // One rule, owned by OllamaService. Seeding this from
-  // `isDesktop || isConnected` meant an on-device provider lost the tab on
-  // every restart: its `isConnected` is a probe `loadSettings` only kicks off.
-  aiEnabledNotifier = ValueNotifier(ollamaService.aiEnabled);
-  await xpubService.loadSettings();
-  // btcPriceService.loadSettings() is called inside initialize() below.
-
-  // Onboarding state, for the router's redirect.
-  final onboardingRows =
-      await (db.select(db.appSettings)..where(
-        (t) => t.key.equals(AppConstants.settingOnboardingComplete),
-      )).get();
-  onboardingCompleteNotifier = ValueNotifier(
-    onboardingRows.isNotEmpty && onboardingRows.first.value == 'true',
-  );
-
-  // Load persisted theme mode
-  final themeRows =
-      await (db.select(db.appSettings)
-        ..where((t) => t.key.equals(AppConstants.settingThemeMode))).get();
-  final savedTheme = themeRows.isNotEmpty ? themeRows.first.value : null;
-  themeModeNotifier = ValueNotifier(themeModeFromSetting(savedTheme));
-
-  // Load persisted currency
-  final currencyRows =
-      await (db.select(db.appSettings)
-        ..where((t) => t.key.equals(AppConstants.settingCurrency))).get();
-  final savedCurrency =
-      currencyRows.isNotEmpty ? currencyRows.first.value : 'USD';
-  currencyNotifier = ValueNotifier(savedCurrency);
-
-  // Load persisted show-BTC-price toggle (default: on)
-  final showPriceRows =
-      await (db.select(db.appSettings)
-        ..where((t) => t.key.equals(AppConstants.settingShowBtcPrice))).get();
-  final showPrice =
-      showPriceRows.isEmpty || showPriceRows.first.value != 'false';
-  showBtcPriceNotifier = ValueNotifier(showPrice);
-
-  // Load persisted inflation rate (default: 3.5%)
-  final inflationRows =
-      await (db.select(db.appSettings)
-        ..where((t) => t.key.equals(AppConstants.settingInflationRate))).get();
-  final savedInflation =
-      inflationRows.isNotEmpty
-          ? double.tryParse(inflationRows.first.value) ??
-              AppConstants.defaultInflationRate
-          : AppConstants.defaultInflationRate;
-  inflationRateNotifier = ValueNotifier(savedInflation);
-
-  // Initialise local notifications (owned by NotificationService).
   final notificationLedger = NotificationLedger(db);
   notificationService = NotificationService(
     claim: notificationLedger.claim,
     release: notificationLedger.release,
   );
-  await notificationService.initialize();
 
-  // Load cached BTC price before first frame; fetches fresh in background if stale
-  await btcPriceService.initialize();
+  // Independent of one another, so started together rather than awaited in
+  // turn: between them they read the keychain, the notification plugin and
+  // the price cache, and launch waited for each in sequence (audit D-10).
+  // btcPriceService.initialize() loads its own settings first.
+  await Future.wait([
+    ollamaService.loadSettings(),
+    xpubService.loadSettings(),
+    notificationService.initialize(),
+    btcPriceService.initialize(),
+  ]);
+  // Chat transcripts are no longer stored; drop any an earlier build kept.
+  unawaited(ollamaService.clearStoredTranscripts());
+  // One rule, owned by OllamaService. Seeding this from
+  // `isDesktop || isConnected` meant an on-device provider lost the tab on
+  // every restart: its `isConnected` is a probe `loadSettings` only kicks off.
+  aiEnabledNotifier = ValueNotifier(ollamaService.aiEnabled);
+
+  // The rest of the persisted settings, in one read rather than one per key.
+  final settings = {
+    for (final row in await db.select(db.appSettings).get()) row.key: row.value,
+  };
+  // Onboarding state, for the router's redirect.
+  onboardingCompleteNotifier = ValueNotifier(
+    settings[AppConstants.settingOnboardingComplete] == 'true',
+  );
+  themeModeNotifier = ValueNotifier(
+    themeModeFromSetting(settings[AppConstants.settingThemeMode]),
+  );
+  currencyNotifier = ValueNotifier(
+    settings[AppConstants.settingCurrency] ?? 'USD',
+  );
+  // Default: on.
+  showBtcPriceNotifier = ValueNotifier(
+    settings[AppConstants.settingShowBtcPrice] != 'false',
+  );
+  // Default: 3.5%.
+  inflationRateNotifier = ValueNotifier(
+    double.tryParse(settings[AppConstants.settingInflationRate] ?? '') ??
+        AppConstants.defaultInflationRate,
+  );
+
   btcPriceService.startAutoRefresh();
   // Timers do not run while the app is suspended, so catch up on return.
   AppLifecycleListener(
