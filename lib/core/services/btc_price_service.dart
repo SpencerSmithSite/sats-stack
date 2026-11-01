@@ -550,7 +550,11 @@ class BtcPriceService {
     DateTime date,
   ) async {
     try {
-      final timestamp = date.millisecondsSinceEpoch ~/ 1000;
+      // Midday of the day, not the moment: prices are kept per day anyway,
+      // and the exact time — a transaction's block time — told the server
+      // which block it was in (audit B-5).
+      final midday = DateTime(date.year, date.month, date.day, 12);
+      final timestamp = midday.millisecondsSinceEpoch ~/ 1000;
       final uri = Uri.parse(
         '$baseUrl/v1/historical-price?timestamp=$timestamp',
       );

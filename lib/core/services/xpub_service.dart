@@ -1046,6 +1046,19 @@ class XpubService {
       for (final r in newRows) _dayKey(r.date): r.date,
       for (final r in unpricedKept) _dayKey(r.date): r.date,
     };
+    // The whole price history in one request, which names no date, before
+    // any day is asked for on its own. Every day was asked for separately, one
+    // a second — five minutes for a wallet with 300 transaction days — each
+    // request carrying that transaction's block time, so a user who chose
+    // Electrum for privacy still told mempool.space when each of their
+    // transactions happened (audit B-5). The statement import already did this.
+    if (datesToPrice.isNotEmpty) {
+      onProgress?.call('Fetching price history…');
+      await btcPriceService.prefetchHistoricalPrices(
+        datesToPrice.values,
+        currency,
+      );
+    }
     final priceByDay = <String, double?>{};
     var fetched = 0;
     for (final entry in datesToPrice.entries) {
