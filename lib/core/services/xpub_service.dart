@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io' show HttpDate, HttpException;
 
 import 'package:bech32/bech32.dart';
 import 'package:bs58check/bs58check.dart' as bs58check;
@@ -179,9 +180,14 @@ List<String> deriveAddressWindow(List<Object> message) {
 
 class XpubService {
   /// [client] is for tests, which answer from memory instead of the network.
-  XpubService(this._db, {http.Client? client, ElectrumService? electrum})
-    : _client = client ?? http.Client(),
-      electrum = electrum ?? ElectrumService(_db);
+  XpubService(
+    this._db, {
+    http.Client? client,
+    ElectrumService? electrum,
+    @visibleForTesting Future<void> Function(Duration)? sleep,
+  }) : _client = client ?? http.Client(),
+       electrum = electrum ?? ElectrumService(_db),
+       _sleep = sleep ?? Future.delayed;
 
   final AppDatabase _db;
 
@@ -219,6 +225,29 @@ class XpubService {
   static const _requestSpacing = Duration(milliseconds: 120);
   static const _requestTimeout = Duration(seconds: 20);
   static const _maxAttempts = 3;
+
+  /// A 429 is retried more often than other failures, because every retry
+  /// now waits for the whole scan to back off (audit B-4): the third 429 used
+  /// to abort a large wallet's scan while the other workers kept sending.
+  static const _maxRateLimitAttempts = 5;
+
+  /// The longest `Retry-After` waited out. A longer one fails the scan with
+  /// the wait in the message, rather than freezing the progress line.
+  static const _maxRetryAfter = Duration(seconds: 30);
+
+  /// The most [_spacing] widens to after repeated 429s.
+  static const _maxRequestSpacing = Duration(seconds: 2);
+
+  final Future<void> Function(Duration) _sleep;
+
+  /// The pause between requests now: [_requestSpacing], doubled on each 429
+  /// and eased back on each success.
+  Duration _spacing = _requestSpacing;
+
+  /// A pause every worker waits out before its next request, set by the
+  /// first 429. A 429 to one worker used to pause only that one, while the
+  /// others kept sending and drew more.
+  Future<void>? _rateLimitPause;
 
   /// Esplora returns 25 confirmed transactions per page. The cap is a
   /// stop-loss against a server that keeps returning full pages.
@@ -631,59 +660,113 @@ class XpubService {
   /// rate limit, an offline device or a wrong URL all reported a healthy scan of
   /// an empty wallet.
   Future<dynamic> _getJson(String url) async {
+    final host = Uri.parse(url).host;
     Object? lastError;
-    for (var attempt = 1; attempt <= _maxAttempts; attempt++) {
+    var failures = 0;
+    var rateLimits = 0;
+    while (true) {
+      await _awaitRateLimitPause();
       http.Response response;
       try {
         response = await _client.get(Uri.parse(url)).timeout(_requestTimeout);
       } catch (e) {
         lastError = e;
-        if (attempt == _maxAttempts) break;
-        await Future.delayed(_backoff(attempt));
+        if (++failures == _maxAttempts) break;
+        await _sleep(_backoff(failures));
         continue;
       }
 
       if (response.statusCode == 200) {
+        _easeSpacing();
         try {
           return jsonDecode(response.body);
         } on FormatException {
           throw XpubSyncException(
-            '${Uri.parse(url).host} did not return JSON — is it an Esplora '
-            'server?',
+            '$host did not return JSON — is it an Esplora server?',
           );
         }
       }
 
-      final retryable =
-          response.statusCode == 429 || response.statusCode >= 500;
-      if (retryable && attempt < _maxAttempts) {
-        await Future.delayed(_retryAfter(response) ?? _backoff(attempt));
+      if (response.statusCode == 429) {
+        final asked = retryAfter(response.headers['retry-after']);
+        if (asked != null && asked > _maxRetryAfter) {
+          throw XpubSyncException(
+            '$host asks for a pause of ${_describeWait(asked)} before more '
+            'requests. Try again then, or point Settings → Bitcoin server at '
+            'your own node.',
+          );
+        }
+        if (++rateLimits == _maxRateLimitAttempts) {
+          throw XpubSyncException(
+            'Rate limited by $host. Wait a minute and try again, or point '
+            'Settings → Bitcoin server at your own node.',
+          );
+        }
+        _widenSpacing();
+        await _pauseForRateLimit(asked ?? _backoff(rateLimits + 1));
         continue;
       }
 
-      throw XpubSyncException(
-        response.statusCode == 429
-            ? 'Rate limited by ${Uri.parse(url).host}. Wait a minute and try '
-                'again, or point Settings → Bitcoin server at your own node.'
-            : '${Uri.parse(url).host} returned HTTP ${response.statusCode}',
-      );
+      if (response.statusCode >= 500 && ++failures < _maxAttempts) {
+        await _sleep(_backoff(failures));
+        continue;
+      }
+
+      throw XpubSyncException('$host returned HTTP ${response.statusCode}');
     }
-    throw XpubSyncException(
-      'Could not reach ${Uri.parse(url).host}: $lastError',
-    );
+    throw XpubSyncException('Could not reach $host: $lastError');
   }
 
   static Duration _backoff(int attempt) =>
       Duration(milliseconds: 500 * (1 << (attempt - 1)));
 
-  static Duration? _retryAfter(http.Response response) {
-    final header = response.headers['retry-after'];
+  /// The wait a `Retry-After` header asks for: a number of seconds, or an
+  /// HTTP date. A date used to be ignored, and the request retried at once.
+  @visibleForTesting
+  static Duration? retryAfter(String? header, {DateTime? now}) {
     if (header == null) return null;
-    final seconds = int.tryParse(header.trim());
-    if (seconds == null || seconds < 0) return null;
-    // Cap it: a server asking us to wait ten minutes should surface as an
-    // error, not as a frozen progress line.
-    return seconds <= 30 ? Duration(seconds: seconds) : null;
+    final value = header.trim();
+    final seconds = int.tryParse(value);
+    if (seconds != null) return seconds < 0 ? null : Duration(seconds: seconds);
+    try {
+      final wait = HttpDate.parse(value).difference(now ?? DateTime.now());
+      return wait.isNegative ? Duration.zero : wait;
+    } on FormatException {
+      return null;
+    } on HttpException {
+      return null;
+    }
+  }
+
+  static String _describeWait(Duration wait) {
+    if (wait.inMinutes < 2) return '${wait.inSeconds} seconds';
+    if (wait.inHours < 2) return '${wait.inMinutes} minutes';
+    return '${wait.inHours} hours';
+  }
+
+  Future<void> _awaitRateLimitPause() async {
+    while (_rateLimitPause != null) {
+      await _rateLimitPause;
+    }
+  }
+
+  /// Starts a pause for every worker, unless one is already running, in
+  /// which case the worker waits that one out with the rest.
+  Future<void> _pauseForRateLimit(Duration wait) {
+    return _rateLimitPause ??= _sleep(
+      wait,
+    ).whenComplete(() => _rateLimitPause = null);
+  }
+
+  void _widenSpacing() {
+    final wider = _spacing * 2;
+    _spacing = wider > _maxRequestSpacing ? _maxRequestSpacing : wider;
+  }
+
+  void _easeSpacing() {
+    if (_spacing <= _requestSpacing) return;
+    final eased = _spacing * 0.9;
+    _spacing = eased < _requestSpacing ? _requestSpacing : eased;
   }
 
   /// How many address requests may be in flight at once.
@@ -725,7 +808,7 @@ class XpubService {
         final i = next++;
         if (i >= addresses.length) return;
         results[i] = await _fetchAddressTxs(addresses[i], onCapped: onCapped);
-        await Future.delayed(_requestSpacing);
+        await _sleep(_spacing);
       }
     }
 
@@ -779,7 +862,7 @@ class XpubService {
         break;
       }
       lastSeen = next;
-      await Future.delayed(_requestSpacing);
+      await _sleep(_spacing);
     }
 
     if (!complete) onCapped?.call();

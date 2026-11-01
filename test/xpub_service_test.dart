@@ -5,6 +5,7 @@
 /// used to ignore entirely, making every change output invisible.
 library;
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -366,5 +367,131 @@ void main() {
       final rows = await db.select(db.transactions).get();
       expect(rows.map((r) => r.amountSats), [50000]);
     }, timeout: const Timeout(Duration(minutes: 1)));
+
+    // Audit B-4: rate limiting.
+    XpubService limited(
+      http.Response Function(int n, http.Request req) respond, {
+      Future<void> Function(Duration)? sleep,
+    }) {
+      var n = 0;
+      return XpubService(
+        db,
+        client: MockClient((req) async => respond(n++, req)),
+        sleep: sleep ?? (_) async {},
+      );
+    }
+
+    http.Response empty() => http.Response('[]', 200);
+
+    test('a 429 pauses every worker, not just the one it hit', () async {
+      final prices = await cachedPrices();
+      final pause = Completer<void>();
+      var pauses = 0;
+      var sent = 0;
+      final sync = limited(
+        (n, _) {
+          sent++;
+          return n == 0 ? http.Response('', 429) : empty();
+        },
+        sleep: (d) {
+          // The spacing between requests passes at once; the backoff after
+          // the 429 is held until the test lets it go.
+          if (d < const Duration(milliseconds: 500)) return Future.value();
+          pauses++;
+          return pause.future;
+        },
+      );
+
+      final done = sync.syncWallet(
+        wallet: await xpubWallet('Cold'),
+        btcPriceService: prices,
+      );
+      // Addresses are derived on another isolate, so wait in real time.
+      for (var i = 0; pauses == 0 && i < 500; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+      final sentDuringPause = sent;
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+
+      expect(pauses, 1);
+      // The other two workers' first requests were already in flight, and
+      // nothing more went out while the pause ran. They used to keep going.
+      expect(sentDuringPause, lessThanOrEqualTo(3));
+      expect(sent, sentDuringPause);
+
+      pause.complete();
+      final result = await done;
+      expect(result.imported, 0);
+      expect(sent, greaterThan(40));
+    });
+
+    test('four 429s in a row are waited out', () async {
+      // To the same address: the third one used to abort the scan.
+      final prices = await cachedPrices();
+      final waits = <Duration>[];
+      var toFunded = 0;
+      final sync = limited(
+        (_, req) =>
+            req.url.path.contains(funded) && toFunded++ < 4
+                ? http.Response('', 429)
+                : empty(),
+        sleep: (d) async => waits.add(d),
+      );
+
+      final result = await sync.syncWallet(
+        wallet: await xpubWallet('Cold'),
+        btcPriceService: prices,
+      );
+
+      expect(result.imported, 0);
+      expect(waits.where((d) => d >= const Duration(seconds: 1)), isNotEmpty);
+    });
+
+    test('a long Retry-After fails the sync and says how long', () async {
+      final prices = await cachedPrices();
+      final sync = limited(
+        (_, _) => http.Response('', 429, headers: {'retry-after': '600'}),
+      );
+
+      await expectLater(
+        sync.syncWallet(
+          wallet: await xpubWallet('Cold'),
+          btcPriceService: prices,
+        ),
+        throwsA(
+          isA<XpubSyncException>().having(
+            (e) => e.toString(),
+            'message',
+            contains('10 minutes'),
+          ),
+        ),
+      );
+    });
+  });
+
+  group('Retry-After', () {
+    final now = DateTime.utc(2026, 10, 31, 12);
+
+    test('reads a number of seconds', () {
+      expect(XpubService.retryAfter('12'), const Duration(seconds: 12));
+      expect(XpubService.retryAfter(' 0 '), Duration.zero);
+      expect(XpubService.retryAfter('-1'), isNull);
+    });
+
+    test('reads an HTTP date, which was ignored', () {
+      expect(
+        XpubService.retryAfter('Sat, 31 Oct 2026 12:05:00 GMT', now: now),
+        const Duration(minutes: 5),
+      );
+      expect(
+        XpubService.retryAfter('Sat, 31 Oct 2026 11:00:00 GMT', now: now),
+        Duration.zero,
+      );
+    });
+
+    test('ignores anything else', () {
+      expect(XpubService.retryAfter(null), isNull);
+      expect(XpubService.retryAfter('soon'), isNull);
+    });
   });
 }

@@ -286,7 +286,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
   - The third 429 aborts the whole scan, and nothing from it is kept.
 - **Impact:** On public mempool.space, a large wallet may never finish syncing.
 - **Fix direction:** Make backoff global across workers. Fail clearly on a long `Retry-After`. Adapt the spacing.
-- **Status:** open
+- **Status:** fixed in #77
 
 ### B-5 · Medium · performance, privacy — Sync prices one day a second, sending each transaction's exact timestamp
 - **Where:** `xpub_service.dart:1001-1010`; `lib/core/services/btc_price_service.dart:356-366`, `:554-556`, `:578-588`.
