@@ -77,12 +77,14 @@ class StackHero extends StatelessWidget {
                 color: AppColors.bitcoinOrange,
               ),
               const SizedBox(width: 4),
-              Text(
-                'Total Stack',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: context.bitcoinOrangeText,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.5,
+              Flexible(
+                child: Text(
+                  'Total Stack',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: context.bitcoinOrangeText,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.5,
+                  ),
                 ),
               ),
             ],
@@ -101,7 +103,13 @@ class StackHero extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          Row(
+          // A Wrap, as on the dashboard's hero: the fiat value and the
+          // month's change do not fit one line on a small phone with a large
+          // stack, let alone at a large text size (audit U-7).
+          Wrap(
+            spacing: 12,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               Text(
                 '≈ $fiatValue',
@@ -109,7 +117,6 @@ class StackHero extends StatelessWidget {
                   color: theme.colorScheme.onSurface.withAlpha(200),
                 ),
               ),
-              const Spacer(),
               if (monthSats != 0) MonthChange(sats: monthSats),
             ],
           ),
@@ -139,9 +146,11 @@ class MonthChange extends StatelessWidget {
           color: color,
         ),
         const SizedBox(width: 2),
-        Text(
-          '$formatted sats this month',
-          style: AppTextStyles.monoSmall.copyWith(color: color, fontSize: 11),
+        Flexible(
+          child: Text(
+            '$formatted sats this month',
+            style: AppTextStyles.monoSmall.copyWith(color: color, fontSize: 11),
+          ),
         ),
       ],
     );

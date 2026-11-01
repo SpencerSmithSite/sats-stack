@@ -1003,6 +1003,9 @@ class _ModelSelector extends StatelessWidget {
       child: DropdownButton<String>(
         value: choices.contains(selected) ? selected : choices.first,
         isDense: true,
+        // Fills the title's width and ellipsises: a long Ollama tag at a
+        // large text size ran past the app bar's actions (audit U-7).
+        isExpanded: true,
         icon: const Icon(Icons.expand_more, size: 18),
         style: Theme.of(
           context,
@@ -1012,7 +1015,12 @@ class _ModelSelector extends StatelessWidget {
           for (final m in choices)
             DropdownMenuItem(
               value: m,
-              child: Text(m, style: const TextStyle(fontSize: 14)),
+              child: Text(
+                m,
+                style: const TextStyle(fontSize: 14),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
         ],
         onChanged: (v) {

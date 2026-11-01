@@ -1058,30 +1058,52 @@ class _AiBanner extends StatelessWidget {
         ),
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Row(
-        children: [
-          const Icon(Icons.auto_awesome, size: 18, color: Color(0xFFF7931A)),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              'Connect an AI provider for AI-powered imports — any bank format, any layout.',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ),
-          TextButton(
+      child: Builder(
+        builder: (context) {
+          final message = Text(
+            'Connect an AI provider for AI-powered imports — any bank format, any layout.',
+            style: Theme.of(context).textTheme.bodySmall,
+          );
+          final connect = TextButton(
             onPressed: onConnect,
             style: TextButton.styleFrom(
               foregroundColor: const Color(0xFFF7931A),
             ),
             child: const Text('Connect →'),
-          ),
-          IconButton(
-            icon: const Icon(Icons.close, size: 16),
-            tooltip: 'Dismiss',
-            onPressed: onDismiss,
-            visualDensity: VisualDensity.compact,
-          ),
-        ],
+          );
+          // At a large text size "Connect →" beside the message left it no
+          // room (audit U-7), so the button goes under it instead.
+          final large = MediaQuery.textScalerOf(context).scale(10) > 13;
+          return Row(
+            crossAxisAlignment:
+                large ? CrossAxisAlignment.start : CrossAxisAlignment.center,
+            children: [
+              const Icon(
+                Icons.auto_awesome,
+                size: 18,
+                color: Color(0xFFF7931A),
+              ),
+              const SizedBox(width: 10),
+              if (large)
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [message, connect],
+                  ),
+                )
+              else ...[
+                Expanded(child: message),
+                connect,
+              ],
+              IconButton(
+                icon: const Icon(Icons.close, size: 16),
+                tooltip: 'Dismiss',
+                onPressed: onDismiss,
+                visualDensity: VisualDensity.compact,
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -1157,9 +1179,12 @@ class _SourceCard extends StatelessWidget {
       margin: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Container(
+        // At a large text size the three buttons beside the name pushed the
+        // row past the edge, so they go to a line of their own (audit U-7).
+        child: Builder(
+          builder: (context) {
+            final large = MediaQuery.textScalerOf(context).scale(10) > 13;
+            final badge = Container(
               width: 40,
               height: 40,
               decoration: BoxDecoration(
@@ -1171,9 +1196,8 @@ class _SourceCard extends StatelessWidget {
                 size: 20,
                 color: cs.onPrimaryContainer,
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
+            );
+            final name = Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1189,28 +1213,52 @@ class _SourceCard extends StatelessWidget {
                   ),
                 ],
               ),
-            ),
-            IconButton(
+            );
+            final more = IconButton(
               icon: const Icon(Icons.more_vert),
               tooltip: 'More options for ${source.name}',
               onPressed: () => _showMenu(context),
               visualDensity: VisualDensity.compact,
-            ),
-            IconButton(
+            );
+            final photo = IconButton(
               icon: const Icon(Icons.photo_camera_outlined),
               tooltip: 'Import from photo',
               onPressed: onImportImage,
               visualDensity: VisualDensity.compact,
-            ),
-            FilledButton.icon(
+            );
+            final import = FilledButton.icon(
               onPressed: onImport,
               icon: const Icon(Icons.upload_file, size: 16),
               label: const Text('Import'),
               style: FilledButton.styleFrom(
                 visualDensity: VisualDensity.compact,
               ),
-            ),
-          ],
+            );
+            if (!large) {
+              return Row(
+                children: [
+                  badge,
+                  const SizedBox(width: 12),
+                  name,
+                  more,
+                  photo,
+                  import,
+                ],
+              );
+            }
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(children: [badge, const SizedBox(width: 12), name, more]),
+                const SizedBox(height: 8),
+                Wrap(
+                  alignment: WrapAlignment.end,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [photo, import],
+                ),
+              ],
+            );
+          },
         ),
       ),
     );

@@ -11,6 +11,7 @@ import '../../../shared/theme/app_text_styles.dart';
 import '../../../shared/utils/amount_input.dart';
 import '../../../shared/utils/currency_utils.dart';
 import '../../../shared/utils/sat_converter.dart';
+import '../../../shared/widgets/shrink_to_fit.dart';
 import 'period_chip.dart';
 
 class DcaSimulator extends StatelessWidget {
@@ -97,11 +98,14 @@ class DcaSimulator extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Inputs
-              Row(
+              // Inputs — the field, then the period chips beneath it. Side by
+              // side, the four chips beside the field overflowed a small
+              // phone at a large text size (audit U-7).
+              Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
+                  SizedBox(
+                    width: double.infinity,
                     child: TextField(
                       controller: controller,
                       keyboardType: const TextInputType.numberWithOptions(
@@ -118,27 +122,22 @@ class DcaSimulator extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  const SizedBox(height: 12),
+                  Text(
+                    'Period',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: context.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Wrap(
                     children: [
-                      Text(
-                        'Period',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: context.textSecondary,
+                      for (final y in _yearOptions)
+                        PeriodChip(
+                          label: '${y}y',
+                          selected: years == y,
+                          onTap: () => onYearsChanged(y),
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          for (final y in _yearOptions)
-                            PeriodChip(
-                              label: '${y}y',
-                              selected: years == y,
-                              onTap: () => onYearsChanged(y),
-                            ),
-                        ],
-                      ),
                     ],
                   ),
                 ],
@@ -154,7 +153,8 @@ class DcaSimulator extends StatelessWidget {
                 )
               else ...[
                 // Total invested line
-                Row(
+                Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     Text(
                       'Total invested:',
@@ -265,9 +265,15 @@ class ScenarioRow extends StatelessWidget {
             ),
           ),
         ),
-        Text(
-          '≈ $fiatValue',
-          style: AppTextStyles.monoSmall.copyWith(color: context.textSecondary),
+        // Scaled down rather than pushed off the edge (audit U-7).
+        ShrinkToFit(
+          maxFraction: 0.3,
+          child: Text(
+            '≈ $fiatValue',
+            style: AppTextStyles.monoSmall.copyWith(
+              color: context.textSecondary,
+            ),
+          ),
         ),
       ],
     );
