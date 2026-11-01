@@ -359,7 +359,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** `watchProgress` watches full `select(budgets)` and `select(transactions)` queries only to learn that something changed, and throws the rows away. `main.dart` keeps `watchAll()`, an ordered full select, alive for the whole process, just to call `checkAndNotify`.
 - **Impact:** Every insert, edit or delete re-reads and maps the whole table at least twice on the UI isolate. That causes jank on large histories.
 - **Fix direction:** Use `tableUpdates(...)` as the trigger, and keep `watchAll` for screens that render rows.
-- **Status:** open
+- **Status:** fixed in #67. Budgets' change trigger is a `SELECT 1` over both tables, and the app-wide budget check listens to `tableUpdates` — neither reads a row any more.
 
 ### D-2 · Medium · performance — Dashboard, per-wallet and analytics recompute from every row ever recorded
 - **Where:** `lib/core/services/dashboard_service.dart:82-94`, `:151-156`, `:230`, `:305`, `:361-363`; `btc_price_service.dart:216`.
@@ -369,7 +369,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
   - `asyncMap` doesn't merge bursts of changes.
 - **Impact:** O(n log n) over the whole history on every price tick and every change, twice (dashboard and per-wallet). The v7 date index goes unused.
 - **Fix direction:** Do the month sums, stack total and recent-five in SQL, grouped by currency, over the indexed date range.
-- **Status:** open
+- **Status:** fixed in #67. The dashboard, export and per-wallet figures read the month's rows through the date index; the stack totals and row counts are SQL sums; the recent list is `ORDER BY … LIMIT 5`; analytics reads only the six months and the year it shows. `dashboard_targeted_reads_test` checks every figure against a full pass over 400 random rows, and gives the same results on the old code.
 
 ### D-3 · Medium · correctness — Recurring transactions are only generated on a cold start
 - **Where:** `lib/main.dart:163`. It is the only caller, checked.

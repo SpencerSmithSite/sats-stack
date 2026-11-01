@@ -1,4 +1,6 @@
-import 'package:drift/drift.dart' show ResultSetImplementation;
+// Column operators and aggregates (`isBiggerOrEqualValue`, `sum`) are drift
+// extensions, which a `show` clause would hide.
+import 'package:drift/drift.dart';
 import 'package:intl/intl.dart';
 
 import '../../shared/constants/app_constants.dart';
@@ -68,6 +70,48 @@ class DashboardService {
     Set<ResultSetImplementation<dynamic, dynamic>> tables,
   ) => _db.customSelect('SELECT 1', readsFrom: tables).watch();
 
+  // ── Targeted reads ─────────────────────────────────────────────────────────
+  //
+  // Every figure here used to be computed from every transaction ever
+  // recorded — read, mapped and restated on the UI isolate — on every change,
+  // twice over for the dashboard and its per-wallet breakdown, and again
+  // every ten minutes when the price service wrote its cache (audit D-2).
+  // Each now reads what it shows: a date range through the v7 index, or a sum
+  // sqlite works out without handing over the rows.
+
+  /// The rows dated within [range].
+  Future<List<Transaction>> _rowsIn(DateRange range) =>
+      (_db.select(_db.transactions)..where(
+        (t) =>
+            t.date.isBiggerOrEqualValue(range.start) &
+            t.date.isSmallerThanValue(range.end),
+      )).get();
+
+  /// Every Bitcoin row's sats added up, per wallet.
+  Future<Map<int, int>> _stackSatsByWallet() async {
+    final t = _db.transactions;
+    final sats = t.amountSats.sum();
+    final rows =
+        await (_db.selectOnly(t)
+              ..addColumns([t.walletId, sats])
+              ..where(t.isBitcoin.equals(true))
+              ..groupBy([t.walletId]))
+            .get();
+    return {for (final r in rows) r.read(t.walletId)!: r.read(sats) ?? 0};
+  }
+
+  /// How many rows each wallet holds.
+  Future<Map<int, int>> _rowCountByWallet() async {
+    final t = _db.transactions;
+    final count = t.id.count();
+    final rows =
+        await (_db.selectOnly(t)
+              ..addColumns([t.walletId, count])
+              ..groupBy([t.walletId]))
+            .get();
+    return {for (final r in rows) r.read(t.walletId)!: r.read(count) ?? 0};
+  }
+
   /// Emits a fresh [DashboardData] whenever anything it reads changes.
   /// The [month] parameter controls which month's aggregates are returned.
   ///
@@ -79,46 +123,35 @@ class DashboardService {
     DateTime month, {
     double inflationRate = 3.5,
   }) {
-    return _changesTo({_db.transactions, _db.appSettings}).asyncMap((_) async {
-      final txns = await _db.select(_db.transactions).get();
-      return _compute(txns, month, inflationRate: inflationRate);
-    });
+    return _changesTo({
+      _db.transactions,
+      _db.appSettings,
+    }).asyncMap((_) => _compute(month, inflationRate: inflationRate));
   }
 
   /// Emits a per-wallet breakdown whenever a transaction or a wallet changes.
   Stream<List<WalletSummary>> watchPerWallet(DateTime month) {
-    return _changesTo({_db.transactions, _db.wallets}).asyncMap((_) async {
-      final txns = await _db.select(_db.transactions).get();
-      return _computePerWallet(txns, month);
-    });
+    return _changesTo({
+      _db.transactions,
+      _db.wallets,
+    }).asyncMap((_) => _computePerWallet(month));
   }
 
-  Future<List<WalletSummary>> _computePerWallet(
-    List<Transaction> originalTxns,
-    DateTime month,
-  ) async {
-    final allTxns = _restate(originalTxns).rows;
+  Future<List<WalletSummary>> _computePerWallet(DateTime month) async {
     final wallets = await _db.select(_db.wallets).get();
-    final range = DateRange.month(month);
+    final stackSats = await _stackSatsByWallet();
+    final rowCounts = await _rowCountByWallet();
 
-    // Grouped in one pass. Filtering `allTxns` inside the wallet loop made
-    // this O(wallets × transactions), re-walking the whole history once per
-    // wallet on every change — on the UI isolate.
+    // The month's rows, grouped in one pass.
     final byWallet = <int, List<Transaction>>{};
-    for (final t in allTxns) {
+    for (final t in _restate(await _rowsIn(DateRange.month(month))).rows) {
       (byWallet[t.walletId] ??= <Transaction>[]).add(t);
     }
 
     final result = <WalletSummary>[];
     for (final wallet in wallets) {
-      final walletTxns = byWallet[wallet.id] ?? const <Transaction>[];
-
-      final totalSats = walletTxns
-          .where((t) => t.isBitcoin)
-          .fold(0, (s, t) => s + t.amountSats);
-
-      final monthTxns =
-          walletTxns.where((t) => range.contains(t.date)).toList();
+      final totalSats = stackSats[wallet.id] ?? 0;
+      final monthTxns = byWallet[wallet.id] ?? const <Transaction>[];
 
       final monthChangeSats = monthTxns
           .where((t) => t.isBitcoin)
@@ -140,7 +173,7 @@ class DashboardService {
           monthChangeSats: monthChangeSats,
           monthIncomeFiat: monthIncome,
           monthSpendFiat: monthSpend,
-          transactionCount: walletTxns.length,
+          transactionCount: rowCounts[wallet.id] ?? 0,
         ),
       );
     }
@@ -149,17 +182,30 @@ class DashboardService {
   }
 
   Stream<AnalyticsData> watchAnalytics(DateTime selectedMonth) {
-    return _db
-        .select(_db.transactions)
-        .watch()
-        .asyncMap((txns) => _computeAnalytics(txns, selectedMonth));
+    return _changesTo({
+      _db.transactions,
+    }).asyncMap((_) => _computeAnalytics(selectedMonth));
   }
 
-  Future<AnalyticsData> _computeAnalytics(
-    List<Transaction> originalTxns,
-    DateTime selectedMonth,
-  ) async {
-    final allTxns = _restate(originalTxns).rows;
+  Future<AnalyticsData> _computeAnalytics(DateTime selectedMonth) async {
+    // Everything shown is within the six months to the selected one, or its
+    // calendar year, so only those rows are read.
+    final sixMonthsBack = DateTime(
+      selectedMonth.year,
+      selectedMonth.month - 5,
+      1,
+    );
+    final yearStart = DateTime(selectedMonth.year, 1, 1);
+    final allTxns =
+        _restate(
+          await _rowsIn(
+            DateRange(
+              sixMonthsBack.isBefore(yearStart) ? sixMonthsBack : yearStart,
+              // "YTD" here is the whole calendar year, as it always was.
+              DateRange.year(selectedMonth).end,
+            ),
+          ),
+        ).rows;
     // ── Selected month breakdown ─────────────────────────────────────────────
     final range = DateRange.month(selectedMonth);
     final monthTxns = allTxns.where((t) => range.contains(t.date)).toList();
@@ -227,7 +273,7 @@ class DashboardService {
     required String currency,
     double? btcPrice,
   }) async {
-    final txns = _restate(await _db.select(_db.transactions).get()).rows;
+    final txns = _restate(await _rowsIn(DateRange.month(month))).rows;
     final budgets = await _db.select(_db.budgets).get();
     final categories = await _db.select(_db.categories).get();
 
@@ -301,23 +347,16 @@ class DashboardService {
     return rows.join('\n');
   }
 
-  Future<DashboardData> getDashboard(DateTime month) async {
-    final txns = await _db.select(_db.transactions).get();
-    return _compute(txns, month);
-  }
+  Future<DashboardData> getDashboard(DateTime month) => _compute(month);
 
   // ── Private ────────────────────────────────────────────────────────────────
 
   Future<DashboardData> _compute(
-    List<Transaction> originalTxns,
     DateTime month, {
     double inflationRate = 3.5,
   }) async {
-    final range = DateRange.month(month);
-    final restated = _restate(originalTxns);
-    final allTxns = restated.rows;
-
-    final monthTxns = allTxns.where((t) => range.contains(t.date)).toList();
+    final restated = _restate(await _rowsIn(DateRange.month(month)));
+    final monthTxns = restated.rows;
 
     // ── Fiat aggregates ──────────────────────────────────────────────────────
     double income = 0;
@@ -344,8 +383,10 @@ class DashboardService {
     }
 
     // ── Bitcoin stack ────────────────────────────────────────────────────────
-    final btcTxns = allTxns.where((t) => t.isBitcoin);
-    final totalStackSats = btcTxns.fold<int>(0, (s, t) => s + t.amountSats);
+    final totalStackSats = (await _stackSatsByWallet()).values.fold<int>(
+      0,
+      (s, v) => s + v,
+    );
 
     final monthBtcTxns = monthTxns.where((t) => t.isBitcoin);
     final monthStackChange = monthBtcTxns.fold<int>(
@@ -358,9 +399,15 @@ class DashboardService {
     // row's own currency label, so a $50 charge must still read $50 — a
     // converted figure under the original label would be a new version of the
     // same bug.
-    final sorted = List<Transaction>.from(originalTxns)
-      ..sort((a, b) => b.date.compareTo(a.date));
-    final recent = sorted.take(5).toList();
+    // Newest first; on the same date, in the order they were recorded.
+    final recent =
+        await (_db.select(_db.transactions)
+              ..orderBy([
+                (t) => OrderingTerm.desc(t.date),
+                (t) => OrderingTerm.asc(t.id),
+              ])
+              ..limit(5))
+            .get();
 
     // ── Stack goal from settings ─────────────────────────────────────────────
     final goalEntry =
