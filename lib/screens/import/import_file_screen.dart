@@ -10,6 +10,7 @@ import '../../core/database/database.dart';
 import '../../core/services/import_service.dart';
 import '../../core/services/ollama_service.dart';
 import '../../main.dart' as app;
+import '../../shared/utils/picked_files.dart';
 import '../../shared/utils/platform_utils.dart';
 import '../../shared/widgets/ai_privacy_disclosure.dart';
 import 'import_column_mapper_screen.dart';
@@ -86,8 +87,21 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
   // Image picking
   final _imagePicker = ImagePicker();
 
+  /// The app's own copies of what was picked — see [discardPickedCopy].
+  /// Kept until the next pick or until this screen goes, because Try Again
+  /// and "Map Columns Manually" read the file again.
+  final _pickedCopies = <String>{};
+
+  void _discardPickedCopies() {
+    for (final path in _pickedCopies) {
+      unawaited(discardPickedCopy(path));
+    }
+    _pickedCopies.clear();
+  }
+
   @override
   void dispose() {
+    _discardPickedCopies();
     _importToken?.cancel();
     _cancelTimer?.cancel();
     _timeoutTimer?.cancel();
@@ -380,6 +394,9 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
       final proceed = await _showPdfNoAiDialog();
       if (!proceed) return;
     }
+
+    _discardPickedCopies();
+    _pickedCopies.add(file.path!);
 
     // Store for timeout fallback
     _processingFilePath = file.path;
@@ -692,6 +709,8 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
       imageQuality: 85,
     );
     if (image == null) return;
+    _discardPickedCopies();
+    _pickedCopies.add(image.path);
     await _processImage(
       filePath: image.path,
       fileName: image.name,
