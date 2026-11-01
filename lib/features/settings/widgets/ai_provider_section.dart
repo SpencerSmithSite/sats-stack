@@ -90,18 +90,19 @@ class _AiProviderSectionState extends State<AiProviderSection> {
 
     // Maple
     _mapleUrlCtrl = TextEditingController(text: app.ollamaService.mapleBaseUrl);
-    _mapleApiKeyCtrl = TextEditingController(
-      text: app.ollamaService.mapleApiKey,
-    );
+    // Empty, as are the hosted providers' below: a saved key is shown as
+    // saved, not loaded into the field (audit U-4).
+    _mapleApiKeyCtrl = TextEditingController();
     _mapleSelectedModel = app.ollamaService.mapleSelectedModel;
 
-    // Hosted providers. The key field is seeded from the keychain so an already
-    // configured provider does not look empty, and the model list starts as the
+    // Hosted providers. The key fields start empty. They were seeded from the
+    // keychain as Settings opened — and with the sections kept alive, every
+    // provider's key sat in a text field the eye icon would show in full to
+    // anyone holding the unlocked phone (audit U-4). A saved key is shown as
+    // "Key saved"; typing a new one replaces it. The model list starts as the
     // static fallback so the dropdown is useful before any key is entered.
     for (final p in CloudProvider.values) {
-      _cloudKeyCtrls[p.id] = TextEditingController(
-        text: app.ollamaService.cloudApiKey(p),
-      );
+      _cloudKeyCtrls[p.id] = TextEditingController();
       _cloudModels[p.id] = p.fallbackModels;
       _cloudSelectedModel[p.id] = app.ollamaService.cloudModel(p);
       _cloudKeyVisible[p.id] = false;
@@ -309,8 +310,10 @@ class _AiProviderSectionState extends State<AiProviderSection> {
     final stored = await app.ollamaService.saveCloudSettings(
       p,
       model: _cloudSelectedModel[p.id],
-      apiKey: key,
+      // An empty field keeps the saved key.
+      apiKey: key.isEmpty ? null : key,
     );
+    _cloudKeyCtrls[p.id]!.clear();
     // A hosted provider needs nothing but a key, so saving one is enough to
     // bring the tab back on a phone.
     _refreshAiEnabled();
@@ -328,15 +331,29 @@ class _AiProviderSectionState extends State<AiProviderSection> {
     );
   }
 
+  /// Clearing the field used to be how a key was removed; with the field no
+  /// longer holding it, this is.
+  Future<void> _removeCloudKey(CloudProvider p) async {
+    await app.ollamaService.saveCloudSettings(p, apiKey: '');
+    _refreshAiEnabled();
+    if (!mounted) return;
+    setState(() => _cloudStatus = null);
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('${p.label} key removed')));
+  }
+
   Future<void> _testCloudConnection(CloudProvider p) async {
     setState(() {
       _testingCloudId = p.id;
       _cloudStatus = null;
     });
+    final typed = _cloudKeyCtrls[p.id]!.text.trim();
     await app.ollamaService.saveCloudSettings(
       p,
-      apiKey: _cloudKeyCtrls[p.id]!.text.trim(),
+      apiKey: typed.isEmpty ? null : typed,
     );
+    _cloudKeyCtrls[p.id]!.clear();
 
     final status = await app.ollamaService.checkStatus();
     if (!mounted) return;
@@ -370,8 +387,10 @@ class _AiProviderSectionState extends State<AiProviderSection> {
     await app.ollamaService.saveMapleSettings(
       url: url,
       model: _mapleSelectedModel,
-      apiKey: key,
+      // An empty field keeps the saved key.
+      apiKey: key.isEmpty ? null : key,
     );
+    _mapleApiKeyCtrl.clear();
     if (url.isEmpty) {
       await app.ollamaService.setConnected(false);
       _refreshAiEnabled();
@@ -390,7 +409,11 @@ class _AiProviderSectionState extends State<AiProviderSection> {
     });
     final url = _mapleUrlCtrl.text.trim();
     final key = _mapleApiKeyCtrl.text.trim();
-    await app.ollamaService.saveMapleSettings(url: url, apiKey: key);
+    await app.ollamaService.saveMapleSettings(
+      url: url,
+      apiKey: key.isEmpty ? null : key,
+    );
+    _mapleApiKeyCtrl.clear();
     _showEffectiveUrl(_mapleUrlCtrl, app.ollamaService.mapleBaseUrl);
     final ok = await app.ollamaService.isAvailable();
     if (!mounted) return;
@@ -439,6 +462,7 @@ class _AiProviderSectionState extends State<AiProviderSection> {
           final looksWrong =
               value.text.trim().isNotEmpty &&
               !value.text.trim().startsWith(cloud.keyPrefix);
+          final saved = app.ollamaService.cloudApiKey(cloud).isNotEmpty;
           return TextField(
             controller: ctrl,
             obscureText: !visible,
@@ -446,7 +470,10 @@ class _AiProviderSectionState extends State<AiProviderSection> {
             enableSuggestions: false,
             decoration: InputDecoration(
               labelText: '${cloud.label} API key',
-              hintText: '${cloud.keyPrefix}…',
+              hintText:
+                  saved
+                      ? 'Key saved — type a new one to replace it'
+                      : '${cloud.keyPrefix}…',
               helperText:
                   looksWrong
                       ? '${cloud.label} keys usually start with '
@@ -469,6 +496,15 @@ class _AiProviderSectionState extends State<AiProviderSection> {
           );
         },
       ),
+      if (app.ollamaService.cloudApiKey(cloud).isNotEmpty)
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: () => _removeCloudKey(cloud),
+            icon: const Icon(Icons.key_off_outlined, size: 18),
+            label: const Text('Remove saved key'),
+          ),
+        ),
       ApiKeyHelpLink(provider: _selectedProvider),
       const SizedBox(height: 4),
       DropdownButtonFormField<String>(
@@ -900,11 +936,26 @@ class _AiProviderSectionState extends State<AiProviderSection> {
                 TextField(
                   controller: _mapleApiKeyCtrl,
                   obscureText: true,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'API key',
-                    hintText: 'maple_sk_...',
+                    hintText:
+                        app.ollamaService.mapleApiKey.isNotEmpty
+                            ? 'Key saved — type a new one to replace it'
+                            : 'maple_sk_...',
                   ),
                 ),
+                if (app.ollamaService.mapleApiKey.isNotEmpty)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: () async {
+                        await app.ollamaService.saveMapleSettings(apiKey: '');
+                        if (mounted) setState(() {});
+                      },
+                      icon: const Icon(Icons.key_off_outlined, size: 18),
+                      label: const Text('Remove saved key'),
+                    ),
+                  ),
                 const SizedBox(height: 12),
                 if (_mapleModels.isNotEmpty)
                   DropdownButtonFormField<String>(
