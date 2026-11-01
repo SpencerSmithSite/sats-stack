@@ -68,7 +68,7 @@ dependencies:
   url_launcher: ^6.3.0
 
   # Local Notifications
-  flutter_local_notifications: ^19.5.0
+  flutter_local_notifications: ^22.3.3
 
   # PDF text extraction
   syncfusion_flutter_pdf: ^28.1.0
