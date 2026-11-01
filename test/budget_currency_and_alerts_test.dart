@@ -40,7 +40,12 @@ void main() {
   FxRates usd() => const FxRates(display: 'USD', btcPrices: prices);
   FxRates usdNoRates() => const FxRates(display: 'USD', btcPrices: {});
 
-  Future<void> spend(double amount, String currency, DateTime date) => db
+  Future<void> spend(
+    double amount,
+    String currency,
+    DateTime date, {
+    String? category = 'Food & Dining',
+  }) => db
       .into(db.transactions)
       .insert(
         TransactionsCompanion.insert(
@@ -50,11 +55,61 @@ void main() {
           amountSats: 0,
           amountFiat: -amount,
           fiatCurrency: currency,
-          category: const Value('Food & Dining'),
+          category: Value(category),
           source: 'manual',
-          dedupHash: '$amount-$currency-$date',
+          dedupHash: '$amount-$currency-$date-$category',
         ),
       );
+
+  group('edges', () {
+    test('spending exactly the budget is not over it', () async {
+      // Audit D-6: these sum to 143.92000000000002 as doubles.
+      await BudgetService(
+        db,
+      ).upsert(categoryId: foodId, amountFiat: 143.92, currency: 'USD');
+      for (final (i, a) in [12.34, 56.78, 74.80].indexed) {
+        await spend(a, 'USD', DateTime(2026, 3, 10 + i));
+      }
+      expect(12.34 + 56.78 + 74.80 > 143.92, isTrue);
+
+      final p =
+          (await BudgetService(
+            db,
+            rates: usd,
+          ).getProgress(DateTime(2026, 3))).single;
+
+      expect(p.isOverBudget, isFalse);
+
+      await spend(0.01, 'USD', DateTime(2026, 3, 20));
+      final over =
+          (await BudgetService(
+            db,
+            rates: usd,
+          ).getProgress(DateTime(2026, 3))).single;
+      expect(over.isOverBudget, isTrue);
+    });
+
+    test('uncategorised spending counts against an Other budget', () async {
+      // Audit D-7: the dashboard, Analytics and the export count it as
+      // Other; Budgets skipped it.
+      final otherId =
+          (await (db.select(db.categories)
+                ..where((c) => c.name.equals('Other'))).getSingle())
+              .id;
+      await BudgetService(
+        db,
+      ).upsert(categoryId: otherId, amountFiat: 100, currency: 'USD');
+      await spend(40, 'USD', DateTime(2026, 3, 10), category: null);
+
+      final p =
+          (await BudgetService(
+            db,
+            rates: usd,
+          ).getProgress(DateTime(2026, 3))).single;
+
+      expect(p.spentFiat, 40);
+    });
+  });
 
   group('a budget keeps its currency', () {
     test('a £500 budget reads as \$625 after switching to dollars', () async {

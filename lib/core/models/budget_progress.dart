@@ -34,10 +34,17 @@ class BudgetProgress {
   /// Without the zero guard, a category with no amount set reads as overspent
   /// the moment anything is spent in it, and the alert says "you've exceeded
   /// your $0 Food budget by $47".
+  ///
+  /// Compared in whole cents. Spending is a running sum of doubles, and
+  /// cent amounts that add up to exactly the budget often sum a hair over it
+  /// (`143.92000000000002 > 143.92`): the card went red and an "exceeded by
+  /// $0" alert used up that month's one alert (audit D-6).
   bool get isOverBudget {
     final limit = limitFiat;
-    return limit != null && limit > 0 && spentFiat > limit;
+    return limit != null && limit > 0 && _cents(spentFiat) > _cents(limit);
   }
+
+  static int _cents(double amount) => (amount * 100).round();
 
   double? get remainingFiat {
     final limit = limitFiat;
