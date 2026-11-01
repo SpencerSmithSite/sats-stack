@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:math';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -540,6 +541,9 @@ class ImportService {
   /// [onStageChange] is called with a human-readable string at each processing
   /// stage so the UI can show meaningful progress. Throws [ImportCancelledException]
   /// if [cancelImport] is called during processing.
+  /// The largest statement file read: 25 MB, years of a busy account.
+  static const maxStatementBytes = 25 * 1024 * 1024;
+
   Future<ImportResult> importFile({
     required String filePath,
     required String fileName,
@@ -553,6 +557,23 @@ class ImportService {
     // export goes the same way as a .csv.
     final fileType =
         lname.endsWith('.pdf') ? ImportFileType.pdf : ImportFileType.csv;
+
+    // A size check before anything is read. A statement was read whole into
+    // memory and parsed on the UI isolate, so a years-long export froze the
+    // screen — Cancel included — and a big enough one could run a phone out
+    // of memory (audit A-8).
+    final size = await File(filePath).length();
+    if (size > maxStatementBytes) {
+      return ImportResult(
+        transactions: [],
+        fileType: fileType,
+        fileName: fileName,
+        errorMessage:
+            'This file is ${(size / (1024 * 1024)).toStringAsFixed(0)} MB. '
+            'Statements over ${maxStatementBytes ~/ (1024 * 1024)} MB are not '
+            'read — export a shorter date range and import it in parts.',
+      );
+    }
 
     ImportResult result;
     if (fileType == ImportFileType.pdf) {
@@ -610,6 +631,7 @@ class ImportService {
   ) async {
     try {
       final content = await File(filePath).readAsString();
+      await _primeCsvRows(content);
       final allRows = _mappableRows(content);
       return ImportResult(
         transactions: [],
@@ -909,6 +931,8 @@ Rules:
     final String content;
     try {
       content = await _readTextFile(filePath);
+      // Parsed once, off the UI isolate; the steps below read the result.
+      await _primeCsvRows(content);
     } catch (_) {
       return ImportResult(
         transactions: [],
@@ -1819,13 +1843,21 @@ FILE CONTENT:
   Future<String?> extractPdfText(String filePath) async {
     try {
       final bytes = await File(filePath).readAsBytes();
-      final document = PdfDocument(inputBytes: bytes);
-      final extractor = PdfTextExtractor(document);
-      final text = extractor.extractText();
-      document.dispose();
+      // In its own isolate: extraction is synchronous and, for a long
+      // statement, seconds of work that froze the UI (audit A-8).
+      final text = await Isolate.run(() => _pdfText(bytes));
       return text.trim().isEmpty ? null : text;
     } catch (_) {
       return null;
+    }
+  }
+
+  static String _pdfText(Uint8List bytes) {
+    final document = PdfDocument(inputBytes: bytes);
+    try {
+      return PdfTextExtractor(document).extractText();
+    } finally {
+      document.dispose();
     }
   }
 
@@ -2623,7 +2655,36 @@ FILE CONTENT:
     }
   }
 
+  /// The last file parsed, and its rows. A CSV went through
+  /// [_parseCsvRows] up to three times on the fall-through path — rules,
+  /// then the mapper's rows — each a full synchronous parse (audit A-8).
+  String? _parsedContent;
+  List<List<String>>? _parsedRows;
+
+  /// Parses [content] off the UI isolate, so the synchronous
+  /// [_parseCsvRows] calls that follow find it done.
+  Future<void> _primeCsvRows(String content) async {
+    if (_parsedRows != null && identical(content, _parsedContent)) return;
+    final rows = await Isolate.run(() => parseCsvRows(content));
+    _parsedContent = content;
+    _parsedRows = rows;
+  }
+
   List<List<String>> _parseCsvRows(String content) {
+    final cached = _parsedRows;
+    if (cached != null &&
+        (identical(content, _parsedContent) || content == _parsedContent)) {
+      return cached;
+    }
+    final rows = parseCsvRows(content);
+    _parsedContent = content;
+    _parsedRows = rows;
+    return rows;
+  }
+
+  /// [content] as rows of fields — static, so it can run in an isolate.
+  @visibleForTesting
+  static List<List<String>> parseCsvRows(String content) {
     // A leading BOM is invisible but sticks to the first header, so
     // 'date' != '\uFEFFdate' and column detection fails on a textbook CSV.
     var text = content.startsWith('\uFEFF') ? content.substring(1) : content;
