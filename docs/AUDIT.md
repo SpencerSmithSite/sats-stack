@@ -498,7 +498,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** Unflexed text beside `Spacer`s, chips or buttons. The dashboard hero was moved to a `Wrap` for exactly this.
 - **Impact:** Overflow stripes and clipped figures for users with large accessibility text.
 - **Fix direction:** Use `Flexible`, `Wrap` or `ShrinkToFit`, as the dashboard does.
-- **Status:** open
+- **Status:** fixed in #76
 
 ### U-8 · Low · correctness — Switching currency briefly mislabels the price, or keeps it mislabelled if the write fails
 - **Where:** `lib/features/settings/widgets/general_section.dart:86-100`; `onboarding_screen.dart:76-85`.

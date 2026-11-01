@@ -128,11 +128,16 @@ class StackGoalCard extends StatelessWidget {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  const Spacer(),
-                  Text(
-                    '${_formatSats(totalSats)} / ${_formatSats(goalSats!)} sats',
-                    style: AppTextStyles.monoSmall.copyWith(
-                      color: context.textSecondary,
+                  const SizedBox(width: 8),
+                  // Takes what is left and wraps, rather than pushing the row
+                  // past the edge at a large text size (audit U-7).
+                  Expanded(
+                    child: Text(
+                      '${_formatSats(totalSats)} / ${_formatSats(goalSats!)} sats',
+                      textAlign: TextAlign.end,
+                      style: AppTextStyles.monoSmall.copyWith(
+                        color: context.textSecondary,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -163,40 +168,54 @@ class StackGoalCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 // ── Projection row ──────────────────────────────────────
-                Row(
+                // Wraps; each icon stays with its figure.
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 4,
                   children: [
-                    if (avgMonthlySats > 0) ...[
-                      Icon(
-                        Icons.trending_up,
-                        size: 13,
-                        color: context.textSecondary,
+                    if (avgMonthlySats > 0)
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.trending_up,
+                            size: 13,
+                            color: context.textSecondary,
+                          ),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              '+${_formatSats(avgMonthlySats)} sats/mo avg',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: context.textSecondary,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '+${_formatSats(avgMonthlySats)} sats/mo avg',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: context.textSecondary,
-                          fontSize: 11,
-                        ),
+                    if (_projectedDate(remaining) case final date?)
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.flag_outlined,
+                            size: 13,
+                            color: AppColors.bitcoinOrange,
+                          ),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              'Goal by ${DateFormat('MMM yyyy').format(date)}',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: context.bitcoinOrangeText,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 12),
-                    ],
-                    if (_projectedDate(remaining) case final date?) ...[
-                      Icon(
-                        Icons.flag_outlined,
-                        size: 13,
-                        color: AppColors.bitcoinOrange,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Goal by ${DateFormat('MMM yyyy').format(date)}',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: context.bitcoinOrangeText,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
                   ],
                 ),
               ] else if (progress >= 1.0) ...[
