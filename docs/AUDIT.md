@@ -397,14 +397,14 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** Spending is a running sum of doubles. In 20,000 random sets of cent amounts that add up exactly to the limit, 15 % compared as greater: for example `143.92000000000002 > 143.92`.
 - **Impact:** The card turns red, an "exceeded by $0" alert fires, and that month's alert is used up.
 - **Fix direction:** Compare in integer cents.
-- **Status:** open
+- **Status:** fixed in #91
 
 ### D-7 · Low · correctness — Uncategorised spending counts as "Other" everywhere but Budgets
 - **Where:** `budget_service.dart:164`, compared with `dashboard_service.dart:169`, `:187`, `:250`, `:342`.
 - **What:** Budgets skip a `null` category. The dashboard, analytics and export treat it as `'Other'`.
 - **Impact:** An "Other" budget disagrees with the pie chart and the export.
 - **Fix direction:** One rule, used in all four places.
-- **Status:** open
+- **Status:** fixed in #91
 
 ### D-8 · Low · correctness — Deleting a category leaves learned import mappings pointing at it
 - **Where:** `lib/core/services/category_service.dart:136-157`; `import_service.dart:1984-1992`.

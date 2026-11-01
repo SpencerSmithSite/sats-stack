@@ -106,6 +106,12 @@ abstract final class AppConstants {
   /// keyword table uses the seeded names.
   static const systemCategoryNamePrefix = 'system_category_name:';
 
+  /// The category a row's spending is counted under: its own, or "Other"
+  /// when it has none. The one rule for the dashboard, Analytics, the export
+  /// and Budgets — Budgets skipped an uncategorised row, so an "Other" budget
+  /// disagreed with the pie chart and the export (audit D-7).
+  static String spendingCategory(String? category) => category ?? 'Other';
+
   static String recurringCursorKey(String seriesId) =>
       'recurring_cursor_$seriesId';
 

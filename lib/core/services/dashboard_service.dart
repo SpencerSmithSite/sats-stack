@@ -212,7 +212,7 @@ class DashboardService {
 
     final byCategory = <String, double>{};
     for (final t in monthTxns.where((t) => t.amountFiat < 0)) {
-      final cat = t.category ?? 'Other';
+      final cat = AppConstants.spendingCategory(t.category);
       byCategory[cat] = (byCategory[cat] ?? 0) + t.amountFiat.abs();
     }
 
@@ -230,7 +230,7 @@ class DashboardService {
           inc += t.amountFiat;
         } else {
           spend += t.amountFiat.abs();
-          final cat = t.category ?? 'Other';
+          final cat = AppConstants.spendingCategory(t.category);
           mByCategory[cat] = (mByCategory[cat] ?? 0) + t.amountFiat.abs();
         }
       }
@@ -293,7 +293,7 @@ class DashboardService {
     for (final t in txns.where(
       (t) => range.contains(t.date) && t.amountFiat < 0,
     )) {
-      final cat = t.category ?? 'Other';
+      final cat = AppConstants.spendingCategory(t.category);
       spentByCat[cat] = (spentByCat[cat] ?? 0) + t.amountFiat.abs();
     }
 
@@ -378,7 +378,7 @@ class DashboardService {
     // ── Spending by category (this month's expenses only) ───────────────────
     final byCategory = <String, double>{};
     for (final t in monthTxns.where((t) => t.amountFiat < 0)) {
-      final cat = t.category ?? 'Other';
+      final cat = AppConstants.spendingCategory(t.category);
       byCategory[cat] = (byCategory[cat] ?? 0) + t.amountFiat.abs();
     }
 

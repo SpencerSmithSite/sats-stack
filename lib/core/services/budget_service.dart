@@ -4,6 +4,7 @@ import 'dart:async';
 // extensions, which a `show` clause would hide.
 import 'package:drift/drift.dart';
 
+import '../../shared/constants/app_constants.dart';
 import '../../shared/utils/date_range.dart';
 import '../database/database.dart';
 import '../models/budget_progress.dart';
@@ -169,7 +170,7 @@ class BudgetService {
     final fx = _rates();
     final monthSpend = <int, double>{};
     for (final t in monthTxns) {
-      final id = categoryIdByName[t.category];
+      final id = categoryIdByName[AppConstants.spendingCategory(t.category)];
       if (id == null) continue;
       final spent = fx.convert(t.amountFiat.abs(), t.fiatCurrency);
       if (spent == null) continue;
