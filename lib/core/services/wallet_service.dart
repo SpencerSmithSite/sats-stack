@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 import '../database/database.dart';
+import 'xpub_service.dart';
 
 class WalletService {
   WalletService(this._db);
@@ -23,9 +24,16 @@ class WalletService {
   /// Compared on the trimmed text, which is the key's canonical base58check
   /// encoding: the same account entered as an `xpub` and as a `zpub` derives
   /// different addresses, so those are genuinely different wallets.
+  ///
+  /// The exception is a plain `xpub`, which a sync stores as the SegWit key
+  /// it turns out to be (see [XpubService.resolvedFormsOf]): it also matches
+  /// a wallet holding that key.
   Future<Wallet?> findByXpub(String xpub) {
+    xpub = xpub.trim();
     return (_db.select(_db.wallets)
-          ..where((w) => w.xpub.equals(xpub.trim()))
+          ..where(
+            (w) => w.xpub.isIn([xpub, ...XpubService.resolvedFormsOf(xpub)]),
+          )
           ..limit(1))
         .getSingleOrNull();
   }
