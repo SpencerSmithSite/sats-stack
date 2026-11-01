@@ -85,18 +85,32 @@ class _GeneralSectionState extends State<GeneralSection> {
 
   Future<void> _saveCurrency(String code) async {
     setState(() => _currency = code);
-    app.currencyNotifier.value = code;
-    await app.db
-        .into(app.db.appSettings)
-        .insertOnConflictUpdate(
-          AppSettingsCompanion.insert(
-            key: AppConstants.settingCurrency,
-            value: code,
-          ),
-        );
-    // Switch currency in price service — uses cached in-memory prices when
-    // available so no extra network request is needed.
+    // The price first, in the same frame as the label. The write used to sit
+    // between them, so the old currency's price showed under the new label
+    // until it finished — and for the rest of the session if it threw (audit
+    // U-8). Uses the cached prices when it has them, so usually no request.
     app.btcPriceService.switchCurrency(code);
+    app.currencyNotifier.value = code;
+    try {
+      await app.db
+          .into(app.db.appSettings)
+          .insertOnConflictUpdate(
+            AppSettingsCompanion.insert(
+              key: AppConstants.settingCurrency,
+              value: code,
+            ),
+          );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'The currency changed, but could not be saved. It will be back '
+            'to the old one next time the app opens.',
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _saveShowBtcPrice(bool value) async {

@@ -111,7 +111,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   Future<void> _finish() async {
     if (!_serverOk()) return;
-    // Save currency
+    // Save currency. The price is switched with the label, not after the
+    // write, so the two never disagree (audit U-8).
+    app.btcPriceService.switchCurrency(_currency);
     app.currencyNotifier.value = _currency;
     await app.db
         .into(app.db.appSettings)
@@ -121,7 +123,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             value: _currency,
           ),
         );
-    app.btcPriceService.switchCurrency(_currency);
 
     // Save theme
     app.themeModeNotifier.value = _themeMode;

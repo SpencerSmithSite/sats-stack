@@ -65,6 +65,18 @@ class _SetBudgetSheetState extends State<SetBudgetSheet> {
     });
   }
 
+  /// The currency the amount is shown and saved in: the display currency,
+  /// unless an existing budget has no rate into it, when it stays in its own.
+  /// The field's symbol used to be the display currency's either way, so a
+  /// USD budget viewed in GBP read "£ 300.00" and was saved as $300 (audit
+  /// U-9).
+  String get _savedCurrency {
+    final existing = widget.existing;
+    return existing != null && existing.limitFiat == null
+        ? existing.budget.currency
+        : app.currencyNotifier.value;
+  }
+
   List<Category> get _unbudgetedCategories {
     final budgetedIds = _existingBudgets.map((b) => b.categoryId).toSet();
     return _categories.where((c) => !budgetedIds.contains(c.id)).toList();
@@ -83,14 +95,10 @@ class _SetBudgetSheetState extends State<SetBudgetSheet> {
       _error = null;
     });
     try {
-      final existing = widget.existing;
       await widget.budgetService.upsert(
         categoryId: cat.id,
         amountFiat: amount,
-        currency:
-            (existing != null && existing.limitFiat == null)
-                ? existing.budget.currency
-                : app.currencyNotifier.value,
+        currency: _savedCurrency,
       );
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
@@ -196,8 +204,7 @@ class _SetBudgetSheetState extends State<SetBudgetSheet> {
                   ),
                   decoration: InputDecoration(
                     labelText: 'Monthly budget',
-                    prefixText:
-                        '${CurrencyUtils.symbolFor(app.currencyNotifier.value)} ',
+                    prefixText: '${CurrencyUtils.symbolFor(_savedCurrency)} ',
                     hintText: '500.00',
                   ),
                 ),

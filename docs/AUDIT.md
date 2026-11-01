@@ -505,14 +505,14 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** The notifier is set, then the write is awaited, and only then is `switchCurrency` called. Until that call the old currency's price sits under the new label, and if the write throws, `switchCurrency` never runs.
 - **Impact:** Fiat figures are wrong by the exchange rate for one write, or for the session.
 - **Fix direction:** Call `switchCurrency` with the notifier change, and persist afterwards.
-- **Status:** open
+- **Status:** fixed in #88
 
 ### U-9 · Low · correctness — Budget edit field shows the wrong currency symbol when there is no rate
 - **Where:** `lib/features/budgets/widgets/set_budget_sheet.dart:199-200` vs `:90-93`.
 - **What:** The prefix is always the display currency's symbol, but with no rate the amount shown and saved is in the budget's own currency.
 - **Impact:** A USD budget viewed in GBP reads "£ 300.00" and is saved as $300.
 - **Fix direction:** Use the symbol of the currency that will actually be saved.
-- **Status:** open
+- **Status:** fixed in #88
 
 ### U-10 · Low · correctness, performance — The stack chart misrepresents time and redraws on every price tick
 - **Where:** `lib/features/stack/widgets/stack_history_chart.dart:30-41`, `:99-101`; `stack_screen.dart:210-227`.
