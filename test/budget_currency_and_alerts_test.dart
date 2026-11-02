@@ -264,5 +264,68 @@ void main() {
         'budget_over_${foodId}_2026-04',
       ]);
     });
+
+    test('a released key can be claimed again', () async {
+      final ledger = NotificationLedger(db);
+      expect(await ledger.claim('stack_goal_100'), isTrue);
+      await ledger.release('stack_goal_100');
+      expect(await ledger.claim('stack_goal_100'), isTrue);
+      expect(await ledger.claim('stack_goal_100'), isFalse);
+    });
+
+    // Audit D-9: an alert that could not be shown — permission refused, the
+    // plugin not ready — stayed claimed, so it never came at all.
+    test('an alert that is not shown is sent again later', () async {
+      final ledger = NotificationLedger(db);
+      var shown = false;
+      final attempts = <String>[];
+      final notifications = NotificationService(
+        claim: ledger.claim,
+        release: ledger.release,
+        deliver: (id, title, body) async {
+          attempts.add(title);
+          return shown;
+        },
+      );
+      Future<void> reach() =>
+          notifications.showStackGoalReached(goalSats: 100, currency: 'USD');
+
+      await reach(); // refused
+      await reach(); // still refused
+      shown = true; // the user allows notifications
+      await reach();
+      await reach(); // already sent
+      expect(attempts, hasLength(3));
+      expect(await ledger.claim('stack_goal_100'), isFalse);
+    });
+
+    test('a budget alert that is not shown is not marked sent', () async {
+      final ledger = NotificationLedger(db);
+      final notifications = NotificationService(
+        claim: ledger.claim,
+        release: ledger.release,
+        deliver: (id, title, body) async => false,
+      );
+      await notifications.showBudgetOverspend(
+        categoryId: foodId,
+        categoryName: 'Food & Dining',
+        overBy: 50,
+        budgetAmount: 100,
+        currency: 'USD',
+        month: DateTime(2026, 3),
+      );
+      expect(await ledger.claim('budget_over_${foodId}_2026-03'), isTrue);
+    });
+
+    test('without the plugin ready, nothing is marked sent', () async {
+      // Never initialised, as before the plugin starts or when it fails to.
+      final ledger = NotificationLedger(db);
+      final notifications = NotificationService(
+        claim: ledger.claim,
+        release: ledger.release,
+      );
+      await notifications.showStackGoalReached(goalSats: 100, currency: 'USD');
+      expect(await ledger.claim('stack_goal_100'), isTrue);
+    });
   });
 }

@@ -418,7 +418,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** `_claim` records the alert. `_show` then returns silently when not initialised, when permission is denied, or when the plugin throws.
 - **Impact:** A user who allows notifications later gets nothing for the rest of the month, and the stack-goal alert for that amount never fires again.
 - **Fix direction:** Claim only after a successful show.
-- **Status:** open
+- **Status:** fixed in #93
 
 ### D-10 · Low · performance — Much work is awaited before the first frame
 - **Where:** `lib/main.dart:87`, `:95`, `:99-133`, `:145`, `:148`; `ollama_service.dart:421`, `:448`, `:457`, `:460-461`.

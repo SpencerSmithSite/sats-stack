@@ -165,8 +165,10 @@ void main() async {
   inflationRateNotifier = ValueNotifier(savedInflation);
 
   // Initialise local notifications (owned by NotificationService).
+  final notificationLedger = NotificationLedger(db);
   notificationService = NotificationService(
-    claim: NotificationLedger(db).claim,
+    claim: notificationLedger.claim,
+    release: notificationLedger.release,
   );
   await notificationService.initialize();
 
