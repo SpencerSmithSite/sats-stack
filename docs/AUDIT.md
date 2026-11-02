@@ -425,7 +425,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** About 15 sequential round trips run before `runApp`: a full settings read, five keychain reads, possible keychain migrations, five more single-key reads of values already loaded, and three service initialisations.
 - **Impact:** Slower cold start, most likely with macOS's file-based keychain. Timings were not measured.
 - **Fix direction:** Read settings once and share them. Load API keys lazily, or after the first frame.
-- **Status:** open
+- **Status:** fixed in #94
 
 ### D-11 · Low · correctness — Calendar dates stored as instants and read back in local time
 - **Where:** drift's default timestamp storage (there is no `build.yaml`); `lib/shared/utils/date_range.dart:27-30`; `transaction_service.dart:265-322`.

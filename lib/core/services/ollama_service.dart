@@ -445,16 +445,23 @@ class OllamaService {
     );
     _mapleSelectedModel = map[AppConstants.settingMapleModel];
     _mapleConnected = map[AppConstants.settingMapleConnected] == 'true';
-    _mapleApiKey = await _keyStore.read(_mapleKeyId);
 
     // Hosted providers. Models and connection state come from settings; the
-    // keys come from the keychain.
+    // keys come from the keychain, all read at once rather than one after
+    // another before the first frame (audit D-10).
     for (final p in CloudProvider.values) {
       final model = map[AppConstants.cloudModelKey(p.id)];
       if (model != null && model.isNotEmpty) _cloudModels[p.id] = model;
       _cloudConnected[p.id] =
           map[AppConstants.cloudConnectedKey(p.id)] == 'true';
-      _cloudKeys[p.id] = await _keyStore.read(p.id);
+    }
+    final keys = await Future.wait([
+      _keyStore.read(_mapleKeyId),
+      for (final p in CloudProvider.values) _keyStore.read(p.id),
+    ]);
+    _mapleApiKey = keys.first;
+    for (final (i, p) in CloudProvider.values.indexed) {
+      _cloudKeys[p.id] = keys[i + 1];
     }
 
     await _migrateMapleKeyToKeychain(map);
