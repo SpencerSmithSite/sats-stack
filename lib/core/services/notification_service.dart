@@ -77,7 +77,7 @@ class NotificationService {
   Future<void> initialize() async {
     try {
       await _plugin.initialize(
-        const InitializationSettings(
+        settings: const InitializationSettings(
           // iOS was missing entirely, so on the TestFlight build the plugin
           // was never configured for it: no permission was ever requested and
           // no budget or stack-goal notification could appear at all.
@@ -241,10 +241,10 @@ class NotificationService {
       if (!await _ensurePermission()) return false;
 
       await _plugin.show(
-        id,
-        title,
-        body,
-        const NotificationDetails(
+        id: id,
+        title: title,
+        body: body,
+        notificationDetails: const NotificationDetails(
           iOS: DarwinNotificationDetails(
             presentAlert: true,
             presentBadge: false,
