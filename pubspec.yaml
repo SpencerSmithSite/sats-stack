@@ -60,7 +60,7 @@ dependencies:
   intl: ^0.19.0
 
   # App metadata
-  package_info_plus: ^8.0.0
+  package_info_plus: ^9.0.1
 
   # Opens each hosted provider's "create an API key" page in the browser.
   # "Where do I get this?" is the first question every time a key field appears,
