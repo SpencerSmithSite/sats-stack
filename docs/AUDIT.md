@@ -432,7 +432,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** Picker and CSV dates are local midnight, stored as an instant. Months and recurring dates read them back with the device's current local fields.
 - **Impact:** After moving to a timezone further west, a transaction on the 1st reads as the last day of the previous month, landing in the wrong budget and month, and recurring series shift with it. This was reasoned from the code, not run.
 - **Fix direction:** Store date-only values as calendar dates.
-- **Status:** open
+- **Status:** deferred, decided 2026-11-02 — see `docs/TODO.md` item 10
 
 ### D-12 · Low · correctness — Double-tapping Add Wallet can track the same xpub twice
 - **Where:** `lib/core/services/wallet_service.dart:53-65`; `wallets_table.dart`.

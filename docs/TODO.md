@@ -49,6 +49,20 @@ History lives elsewhere and is not duplicated into this file:
   AGP 9.0.1 and Kotlin 2.3.20 will be required soon. AGP 9 is a major
   release (built-in Kotlin, changed DSL defaults), so do it on its own and
   check every plugin builds.
+- **Calendar dates across timezones (audit D-11).** Deferred 2026-11-02.
+  Picker and CSV dates are stored as local midnight, an instant, and read
+  back in the device's current timezone, so after moving west a transaction
+  on the 1st lands in the previous month. The fix is a schema migration that
+  rewrites every `transactions.date`, `recurringAnchorDate` and
+  `imported_transactions.date` as a calendar date. It also needs every
+  reader changed (month ranges, recurring series, grouping, display) and a
+  rule for xpub rows, which carry a real block time. Large and hard to undo
+  for a bug that needs a move between timezones to show.
+- **Two dependency majors need code changes.** Dependabot's `csv` 8 (#84)
+  removes `CsvToListConverter`, which `import_service.dart` uses, and
+  `flutter_local_notifications` 22 (#85) makes `initialize` and `show` take
+  named arguments (`notification_service.dart`). Do each by hand on its own
+  branch, then close Dependabot's PR.
 
 > Items 11–14 — the Bitcoin data-source picker, xpub batching, the named
 > test gaps and the Settings split — are finished: PRs #51, #52 and #54.
