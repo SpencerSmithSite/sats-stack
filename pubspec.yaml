@@ -29,7 +29,7 @@ dependencies:
   bech32: ^0.2.2
 
   # CSV Import
-  csv: ^6.0.0
+  csv: ^8.0.0
 
   # Charts
   fl_chart: ^0.71.0

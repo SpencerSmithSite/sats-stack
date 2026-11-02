@@ -2699,10 +2699,11 @@ FILE CONTENT:
     // Classic Mac exports end lines with a bare `\r`; normalising only `\r\n`
     // left such a file as one enormous row.
     text = text.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
-    final rows = CsvToListConverter(
-      eol: '\n',
+    // Empty lines are kept, as csv 6 kept them, so row numbers still match
+    // the file's lines.
+    final rows = CsvDecoder(
       fieldDelimiter: _sniffDelimiter(text),
-      shouldParseNumbers: false,
+      skipEmptyLines: false,
     ).convert(text);
     return rows.map((r) => r.map((e) => e.toString()).toList()).toList();
   }
