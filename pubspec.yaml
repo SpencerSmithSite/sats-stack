@@ -35,7 +35,7 @@ dependencies:
   fl_chart: ^0.71.0
 
   # File Picking
-  file_picker: ^10.3.10
+  file_picker: ^11.0.3
   image_picker: ^1.1.0
 
   # Explicit because `database.dart` joins the database path itself — it is
