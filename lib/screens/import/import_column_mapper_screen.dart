@@ -64,33 +64,15 @@ class _ImportColumnMapperScreenState extends State<ImportColumnMapperScreen> {
     _assignments = List.filled(_headers.length, 'skip');
   }
 
-  // Inspects preview rows for the given column and auto-selects the date format.
+  // Inspects the column's dates and auto-selects the date format.
   // Must be called inside setState (mutates _mapping.dateFormat directly).
   void _detectDateFormat(int colIndex) {
-    final values =
-        _previewRows
-            .map((r) => colIndex < r.length ? r[colIndex].trim() : '')
-            .where((v) => v.isNotEmpty)
-            .take(3)
-            .toList();
-    if (values.isEmpty) return;
-    if (values.every((v) => RegExp(r'^\d{4}[-/.]\d{1,2}').hasMatch(v))) {
-      _mapping.dateFormat = 'YYYY-MM-DD';
-      return;
-    }
-    final numeric = RegExp(r'^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4}|\d{2})(?!\d)');
-    final matches = values.map(numeric.firstMatch).toList();
-    if (matches.any((m) => m == null)) return;
-    // A first part over 12 can only be a day. Without this, a DD/MM export
-    // was offered as MM/DD and every date after the 12th was rejected.
-    final dayFirst = matches.any((m) => int.parse(m!.group(1)!) > 12);
-    final shortYear = matches.every((m) => m!.group(3)!.length == 2);
-    _mapping.dateFormat = switch ((dayFirst, shortYear)) {
-      (true, true) => 'DD/MM/YY',
-      (true, false) => 'DD/MM/YYYY',
-      (false, true) => 'MM/DD/YY',
-      (false, false) => 'MM/DD/YYYY',
-    };
+    _mapping.dateFormat =
+        guessDateFormat([
+          for (final r in (widget.result.csvRows ?? const []).skip(1))
+            if (colIndex < r.length) r[colIndex],
+        ]) ??
+        _mapping.dateFormat;
   }
 
   void _onAssign(int colIndex, String assignment) {
@@ -426,4 +408,37 @@ class _ImportColumnMapperScreenState extends State<ImportColumnMapperScreen> {
       ),
     );
   }
+}
+
+/// The date format of a column's [values], or null if they do not settle it.
+///
+/// Read from the whole column. It used to be the first three rows, so a UK
+/// export whose first dates fell on the 12th or earlier — 01/03, 05/03,
+/// 11/03 — was taken as month-first, and every later row after the 12th was
+/// rejected (audit A-18). A stray line that is not a date, a total say, does
+/// not block the guess as long as most of the column is dates.
+String? guessDateFormat(List<String> values) {
+  final dates = [
+    for (final v in values)
+      if (v.trim().isNotEmpty) v.trim(),
+  ];
+  if (dates.isEmpty) return null;
+  bool most(int n) => n * 2 > dates.length;
+
+  if (most(dates.where(RegExp(r'^\d{4}[-/.]\d{1,2}').hasMatch).length)) {
+    return 'YYYY-MM-DD';
+  }
+  final numeric = RegExp(r'^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4}|\d{2})(?!\d)');
+  final matches = dates.map(numeric.firstMatch).whereType<RegExpMatch>();
+  if (!most(matches.length)) return null;
+  // A first part over 12 can only be a day. Without this, a DD/MM export
+  // was offered as MM/DD and every date after the 12th was rejected.
+  final dayFirst = matches.any((m) => int.parse(m.group(1)!) > 12);
+  final shortYear = matches.every((m) => m.group(3)!.length == 2);
+  return switch ((dayFirst, shortYear)) {
+    (true, true) => 'DD/MM/YY',
+    (true, false) => 'DD/MM/YYYY',
+    (false, true) => 'MM/DD/YY',
+    (false, false) => 'MM/DD/YYYY',
+  };
 }
