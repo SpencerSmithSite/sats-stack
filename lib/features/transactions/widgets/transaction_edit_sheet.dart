@@ -125,11 +125,20 @@ class _TransactionEditSheetState extends State<TransactionEditSheet> {
   }
 
   Future<void> _pickDate() async {
+    // The row's own date is always in range. An imported fiat row can
+    // predate Bitcoin's first block, and a bank can date one ahead; outside
+    // the range, the picker asserted in debug and misbehaved in release
+    // (audit U-11).
+    final day = DateUtils.dateOnly(_date);
+    final first = DateTime(2009, 1, 3);
+    final last = DateUtils.dateOnly(
+      DateTime.now(),
+    ).add(const Duration(days: 1));
     final picked = await showDatePicker(
       context: context,
-      initialDate: _date,
-      firstDate: DateTime(2009, 1, 3),
-      lastDate: DateTime.now().add(const Duration(days: 1)),
+      initialDate: day,
+      firstDate: day.isBefore(first) ? day : first,
+      lastDate: day.isAfter(last) ? day : last,
     );
     if (picked != null && mounted) setState(() => _date = picked);
   }
