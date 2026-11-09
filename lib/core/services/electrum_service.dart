@@ -189,47 +189,6 @@ class ElectrumService {
     }
   }
 
-  /// Fetches confirmed transaction history for a scripthash.
-  ///
-  /// Returns `({txid, height})` pairs. Only confirmed entries (height > 0) are
-  /// included; height 0 = unconfirmed mempool, height -1 = unconfirmed child.
-  Future<List<({String txid, int height})>> getHistory(
-    ElectrumSession session,
-    String scripthash,
-  ) async {
-    final result = await session.call('blockchain.scripthash.get_history', [
-      scripthash,
-    ]);
-    if (result is! List) return [];
-    return [
-      for (final item in result)
-        if (item case {
-          'tx_hash': final String txid,
-          'height': final int height,
-        } when height > 0)
-          (txid: txid, height: height),
-    ];
-  }
-
-  /// Fetches a decoded (verbose) transaction by txid.
-  ///
-  /// Returns null if the server does not support verbose transactions or if the
-  /// txid is not found. Never throws.
-  Future<Map<String, dynamic>?> getTransaction(
-    ElectrumSession session,
-    String txid,
-  ) async {
-    try {
-      final result = await session.call('blockchain.transaction.get', [
-        txid,
-        true,
-      ]);
-      return result as Map<String, dynamic>?;
-    } catch (_) {
-      return null;
-    }
-  }
-
   /// Returns the UNIX timestamp of a block by height using its 80-byte header.
   ///
   /// Timestamp is a LE uint32 at bytes 68–71 of the block header.

@@ -341,7 +341,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **Where:** `electrum_service.dart:190-225`.
 - **What:** Nothing calls `getHistory` or `getTransaction`. `getTransaction` asks for verbose output, which electrs doesn't support, and swallows every error.
 - **Fix direction:** Delete both. `ElectrumHistory` covers this.
-- **Status:** open
+- **Status:** fixed in #117
 
 ### B-11 · Low · correctness — Extended-key depth is never checked
 - **Where:** `xpub_service.dart:371-401`.
