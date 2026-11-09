@@ -547,7 +547,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** `VisualDensity.compact` and `shrinkWrap` on touch targets.
 - **Impact:** Small controls are hard to hit.
 - **Fix direction:** Drop them on touch platforms.
-- **Status:** fixed in #PR
+- **Status:** fixed in #130
 
 ### U-15 · Low · performance, privacy — Opening Settings calls the AI provider even if Servers is never opened
 - **Where:** `lib/features/settings/settings_screen.dart:82`; `ai_provider_section.dart:78-79`, `:109`, `:125-155`.
