@@ -348,7 +348,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** A master (depth 0) or chain-level (depth 4) key is derived as `/chain/i` without complaint.
 - **Impact:** A key exported at the wrong level shows as an empty wallet.
 - **Fix direction:** Warn when the depth isn't 3.
-- **Status:** open
+- **Status:** fixed in #118
 
 ---
 

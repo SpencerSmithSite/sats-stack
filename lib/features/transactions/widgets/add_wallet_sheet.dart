@@ -267,9 +267,11 @@ class _FormBody extends StatelessWidget {
                 // as one rather than passing as mainnet.
                 final XpubFormat format;
                 final XpubNetwork network;
+                final String? depthWarning;
                 try {
                   format = xpubService.detectFormat(text);
                   network = xpubService.detectNetwork(text);
+                  depthWarning = xpubService.depthWarning(text);
                 } catch (_) {
                   return const SizedBox.shrink();
                 }
@@ -281,12 +283,26 @@ class _FormBody extends StatelessWidget {
                 if (network == XpubNetwork.testnet) hint = '$hint · testnet';
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 4),
-                  child: Text(
-                    hint,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: context.bitcoinOrangeText,
-                      fontWeight: FontWeight.w500,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        hint,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: context.bitcoinOrangeText,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      if (depthWarning != null) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          depthWarning,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: context.legibleAccent(AppColors.danger),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 );
               },

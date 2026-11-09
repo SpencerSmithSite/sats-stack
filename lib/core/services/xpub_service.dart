@@ -151,6 +151,7 @@ typedef _ExtKey =
       Uint8List chaincode,
       XpubFormat format,
       XpubNetwork network,
+      int depth,
     });
 
 // ── Isolate entry ─────────────────────────────────────────────────────────────
@@ -373,6 +374,27 @@ class XpubService {
 
   XpubNetwork detectNetwork(String extKey) => _parseExtKey(extKey).network;
 
+  /// What to tell the user about where in its wallet's tree [extKey] sits,
+  /// or null when it is an account key — the depth-3 key BIP44, 49 and 84
+  /// wallets export, from which `/chain/index` gives the addresses.
+  ///
+  /// Not a refusal: Electrum's own wallets export a depth-0 or depth-1 key,
+  /// and `/chain/index` is right for those too. But a master key from another
+  /// wallet, or a chain key one level too deep, derives addresses nothing
+  /// was ever sent to, and the wallet showed as empty with no reason given
+  /// (audit B-11).
+  String? depthWarning(String extKey) => switch (_parseExtKey(extKey).depth) {
+    3 => null,
+    4 =>
+      'This looks like a receive or change chain key, not an account key, '
+          'so the wallet would show as empty. Export the account key '
+          '(depth 3) instead.',
+    final depth =>
+      'This key is at depth $depth, not the account level (depth 3) most '
+          'wallets export. If the wallet shows as empty, export the account '
+          'key instead.',
+  };
+
   /// [extKey] re-encoded under [format]'s version bytes, same network.
   ///
   /// How a wallet records its script type: the type is the version, so an
@@ -490,6 +512,7 @@ class XpubService {
       chaincode: chaincode,
       format: meta.format,
       network: meta.network,
+      depth: payload[4],
     );
   }
 
