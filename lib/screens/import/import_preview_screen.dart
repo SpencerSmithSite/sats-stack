@@ -224,6 +224,20 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen> {
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
                         ],
+                        if (widget.result.aiRowsDropped case final n
+                            when n > 0) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            n == 1
+                                ? "1 row the AI returned couldn't be read, so "
+                                    'it was left out. Check the list against '
+                                    'your statement.'
+                                : "$n rows the AI returned couldn't be read, "
+                                    'so they were left out. Check the list '
+                                    'against your statement.',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
                         if (widget.result.tierUsed ==
                             ImportTier.pdfHeuristic) ...[
                           const SizedBox(height: 8),
