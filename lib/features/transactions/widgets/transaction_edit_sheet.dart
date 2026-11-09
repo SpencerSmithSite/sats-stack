@@ -379,7 +379,6 @@ class _TransactionEditSheetState extends State<TransactionEditSheet> {
                     icon: Icon(Icons.delete_outline, color: AppColors.danger),
                     onPressed: _delete,
                     tooltip: 'Delete',
-                    visualDensity: VisualDensity.compact,
                   ),
               ],
             ),
