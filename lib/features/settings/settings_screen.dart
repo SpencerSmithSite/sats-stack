@@ -57,7 +57,7 @@ class SettingsScreen extends StatelessWidget {
 }
 
 /// One collapsible section, collapsed to start with.
-class _Section extends StatelessWidget {
+class _Section extends StatefulWidget {
   const _Section({
     required this.icon,
     required this.title,
@@ -71,20 +71,35 @@ class _Section extends StatelessWidget {
   final Color? colour;
 
   @override
+  State<_Section> createState() => _SectionState();
+}
+
+class _SectionState extends State<_Section> {
+  /// Whether the section has been opened. Its contents are built only from
+  /// then on: kept alive while collapsed, they were also built while never
+  /// opened, so every Settings visit ran the AI section's model-list request
+  /// to the provider, with the user's key, and its platform probes (audit
+  /// U-15).
+  bool _opened = false;
+
+  @override
   Widget build(BuildContext context) {
     return ExpansionTile(
-      leading: Icon(icon, color: colour),
-      title: Text(title, style: TextStyle(color: colour)),
+      leading: Icon(widget.icon, color: widget.colour),
+      title: Text(widget.title, style: TextStyle(color: widget.colour)),
       childrenPadding: EdgeInsets.zero,
       // Each section's state lives in its own widget, which a collapsed tile
       // would otherwise dispose: what was typed, a test's result, and a fresh
       // probe of the AI server every time it was opened.
       maintainState: true,
+      onExpansionChanged: (open) {
+        if (open && !_opened) setState(() => _opened = true);
+      },
       // Left, like the rows in them: the default centres the section headers
       // ("AI PROVIDER", "BITCOIN") and nothing else.
       expandedCrossAxisAlignment: CrossAxisAlignment.start,
       tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      children: children,
+      children: _opened ? widget.children : const [],
     );
   }
 }
