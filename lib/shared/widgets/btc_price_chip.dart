@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -22,6 +24,26 @@ class BtcPriceChip extends StatefulWidget {
 
 class _BtcPriceChipState extends State<BtcPriceChip> {
   bool _refreshing = false;
+
+  /// Rebuilds the chip so its age label keeps up. The label was worked out
+  /// only when something else rebuilt the chip, and a failed fetch changes
+  /// nothing, so an offline user saw "just now" on an hours-old price (audit
+  /// U-18).
+  Timer? _ageTicker;
+
+  @override
+  void initState() {
+    super.initState();
+    _ageTicker = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted && widget.service.lastFetchedAt != null) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _ageTicker?.cancel();
+    super.dispose();
+  }
 
   Future<void> _refresh() async {
     if (_refreshing) return;

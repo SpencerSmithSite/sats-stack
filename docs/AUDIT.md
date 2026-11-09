@@ -575,7 +575,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** The age is computed only when the chip rebuilds, and a failed fetch doesn't rebuild it.
 - **Impact:** An offline user sees "just now" on an hours-old price.
 - **Fix direction:** Tick it periodically, or rebuild on each fetch attempt.
-- **Status:** open
+- **Status:** fixed in #124
 
 ### U-19 · Low · reliability — Electrum "Save and test" replaces a working server before testing the new one
 - **Where:** `lib/features/settings/widgets/wallet_history_section.dart:86-91`.
