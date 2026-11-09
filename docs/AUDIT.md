@@ -174,7 +174,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** The prompt is built once, and rebuilt only when the provider configuration changes. The tab stays alive.
 - **Impact:** After an import, an edit or a new month, the AI answers from old figures. Both the AI and the UI reviewer found this; the comment at `:141` claiming the tab is disposed when you switch away is no longer true.
 - **Fix direction:** Rebuild per send, or when transactions change.
-- **Status:** open
+- **Status:** fixed in #105
 
 ### A-10 · Medium · performance — Per-token full rebuilds and quadratic string growth while streaming
 - **Where:** `ai_chat_screen.dart:217-221`; `import_file_screen.dart:402-415`.
