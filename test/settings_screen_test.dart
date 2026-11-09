@@ -47,6 +47,17 @@ class _MemoryKeyStore extends SecureKeyStore {
   Future<void> deleteEntry(String entry) => delete(entry);
 }
 
+/// Counts requests for the AI provider's model list.
+class _CountingModels extends OllamaService {
+  _CountingModels(super.db, {required super.keyStore});
+  var listed = 0;
+  @override
+  Future<List<String>> listModels() async {
+    listed++;
+    return const [];
+  }
+}
+
 /// Records [switchCurrency] instead of looking up a price.
 class _SwitchRecorder extends BtcPriceService {
   _SwitchRecorder() : super(app.db);
@@ -436,5 +447,37 @@ void main() {
       expect(find.text('ONBOARD first'), findsOneWidget);
       await close(tester);
     });
+  });
+
+  // Audit U-15: kept alive while collapsed, the sections were also built
+  // while never opened, so changing the theme asked the AI provider for its
+  // model list, with the user's key.
+  testWidgets('the AI provider is not asked until Servers is opened', (
+    tester,
+  ) async {
+    late _CountingModels ai;
+    await open(
+      tester,
+      'General',
+      before: () async {
+        app.ollamaService = ai = _CountingModels(app.db, keyStore: keys);
+        await ai.loadSettings();
+      },
+    );
+    await tester.tap(find.text('Light'));
+    await settle(tester);
+    expect(ai.listed, 0);
+
+    await tester.tap(find.text('Servers'));
+    await settle(tester);
+    expect(ai.listed, 1);
+
+    // Closed and opened again, the section is kept: no second request.
+    await tester.tap(find.text('Servers'));
+    await settle(tester);
+    await tester.tap(find.text('Servers'));
+    await settle(tester);
+    expect(ai.listed, 1);
+    await close(tester);
   });
 }
