@@ -261,8 +261,15 @@ class _ImportPreviewScreenState extends State<ImportPreviewScreen> {
                                 Expanded(
                                   child: Text(
                                     'Transactions extracted without AI — please review carefully before importing.',
-                                    style: Theme.of(context).textTheme.bodySmall
-                                        ?.copyWith(color: Colors.orange),
+                                    // Raw orange text is under 2.5:1 on the
+                                    // light tint (audit U-13).
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodySmall?.copyWith(
+                                      color: context.legibleAccent(
+                                        Colors.orange,
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ],

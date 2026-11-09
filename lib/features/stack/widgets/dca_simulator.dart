@@ -260,7 +260,8 @@ class ScenarioRow extends StatelessWidget {
           child: Text(
             '$satsStr sats',
             style: AppTextStyles.monoSmall.copyWith(
-              color: color,
+              // The dot keeps the raw colour; text needs contrast (U-13).
+              color: context.legibleAccent(color),
               fontWeight: FontWeight.w600,
             ),
           ),

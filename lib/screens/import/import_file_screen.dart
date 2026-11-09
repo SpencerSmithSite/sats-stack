@@ -10,6 +10,7 @@ import '../../core/database/database.dart';
 import '../../core/services/import_service.dart';
 import '../../core/services/ollama_service.dart';
 import '../../main.dart' as app;
+import '../../shared/theme/app_colors.dart';
 import '../../shared/utils/picked_files.dart';
 import '../../shared/utils/platform_utils.dart';
 import '../../shared/widgets/ai_privacy_disclosure.dart';
@@ -981,7 +982,9 @@ class _ImportProgressOverlay extends StatelessWidget {
                                   style: TextStyle(
                                     fontFamily: 'monospace',
                                     fontSize: 11,
-                                    color: cs.primary,
+                                    // The theme's primary is the raw orange,
+                                    // 2.3:1 on white (audit U-13).
+                                    color: context.bitcoinOrangeText,
                                   ),
                                 ),
                               ),
@@ -1037,9 +1040,10 @@ class _AiConnectedBanner extends StatelessWidget {
           const SizedBox(width: 8),
           Text(
             'AI-powered imports connected',
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: const Color(0xFF1D9E75)),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              // The raw green on its own tint is 3.4:1 (audit U-13).
+              color: context.legibleAccent(const Color(0xFF1D9E75)),
+            ),
           ),
         ],
       ),

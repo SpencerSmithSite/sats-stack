@@ -587,7 +587,11 @@ class _ChipOption extends StatelessWidget {
             style: TextStyle(
               fontSize: 12,
               fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-              color: selected ? color : context.textSecondary,
+              // The border keeps the raw colour; text needs contrast (U-13).
+              color:
+                  selected
+                      ? context.legibleAccent(color)
+                      : context.textSecondary,
             ),
           ),
         ),
