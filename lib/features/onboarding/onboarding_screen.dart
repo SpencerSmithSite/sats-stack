@@ -109,8 +109,30 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
+  /// Set while [_finish] runs. Get Started could start it twice at once,
+  /// and a failure left the user on the last page with nothing said (audit
+  /// U-20).
+  bool _finishing = false;
+
   Future<void> _finish() async {
-    if (!_serverOk()) return;
+    if (_finishing || !_serverOk()) return;
+    setState(() => _finishing = true);
+    try {
+      await _save();
+      if (mounted) context.go('/dashboard');
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Couldn't finish setting up: $e. Try again.")),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _finishing = false);
+    }
+  }
+
+  /// Writes every choice made on the way through, then marks onboarding done.
+  Future<void> _save() async {
     // Save currency. The price is switched with the label, not after the
     // write, so the two never disagree (audit U-8).
     app.btcPriceService.switchCurrency(_currency);
@@ -205,8 +227,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ),
         );
     app.onboardingCompleteNotifier.value = true;
-
-    if (mounted) context.go('/dashboard');
   }
 
   @override
@@ -340,7 +360,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             BottomBar(
               page: _page,
               pageCount: _pageCount,
-              onNext: _next,
+              onNext: _finishing ? null : _next,
               onPrevious: _previous,
             ),
           ],

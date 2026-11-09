@@ -95,7 +95,9 @@ class BottomBar extends StatelessWidget {
 
   final int page;
   final int pageCount;
-  final VoidCallback onNext;
+
+  /// Null while Get Started is saving, which disables it.
+  final VoidCallback? onNext;
   final VoidCallback onPrevious;
 
   @override
