@@ -58,11 +58,6 @@ History lives elsewhere and is not duplicated into this file:
   reader changed (month ranges, recurring series, grouping, display) and a
   rule for xpub rows, which carry a real block time. Large and hard to undo
   for a bug that needs a move between timezones to show.
-- **Two dependency majors need code changes.** Dependabot's `csv` 8 (#84)
-  removes `CsvToListConverter`, which `import_service.dart` uses, and
-  `flutter_local_notifications` 22 (#85) makes `initialize` and `show` take
-  named arguments (`notification_service.dart`). Do each by hand on its own
-  branch, then close Dependabot's PR.
 
 > Items 11–14 — the Bitcoin data-source picker, xpub batching, the named
 > test gaps and the Settings split — are finished: PRs #51, #52 and #54.
