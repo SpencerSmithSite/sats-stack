@@ -109,6 +109,26 @@ abstract class InferenceBackend {
   }
 }
 
+/// A backend that can answer about an image, for the receipt-photo import.
+///
+/// The on-device backends cannot, and do not implement it. Image chat used to
+/// be a second copy of each server backend's streaming code inside
+/// `OllamaService`, which threw a plain `Exception` on a failed status and
+/// skipped every frame it could not read — a server's `error` frame included —
+/// so a rejected key or an out-of-memory model ended as a generic failure, or
+/// as a half-answer that looked complete (audit A-12). Here it shares the
+/// backend's own request, error and idle-timeout handling.
+abstract interface class ImageInferenceBackend implements InferenceBackend {
+  /// Stream an answer to [prompt] about [base64Image] (raw base64, no `data:`
+  /// prefix). Throws [InferenceException] on failure, as [chat] does.
+  Stream<String> chatWithImage(
+    String prompt,
+    String base64Image, {
+    String mimeType = 'image/jpeg',
+    http.Client? client,
+  });
+}
+
 /// Result of an availability check, carrying a reason when unavailable so the
 /// UI can tell the user what to fix rather than just greying something out.
 class BackendStatus {

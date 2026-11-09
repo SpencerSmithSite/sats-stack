@@ -197,7 +197,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** `_ollamaChatWithImage` and `_openAiChatWithImage` re-implement streaming. They throw a plain `Exception` and swallow every frame with `catch (_) {}`, `error` frames included.
 - **Impact:** A rejected key or an out-of-memory error mid-stream ends as a generic failure, or as a partial result that looks complete.
 - **Fix direction:** Move image chat into the backends, reusing their error and idle-timeout handling.
-- **Status:** open
+- **Status:** fixed in #110
 
 ### A-13 · Low · reliability — CloudBackend's error-body read has no timeout
 - **Where:** `cloud_backend.dart:703`.

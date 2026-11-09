@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/foundation.dart' show ValueNotifier;
 import 'package:http/http.dart' as http;
@@ -982,7 +981,7 @@ Top spending categories:
 
   /// Whether the active backend can read an image at all — see
   /// [chatWithImage]. None of the on-device backends can.
-  bool get canReadImages => !_activeProvider.isOnDevice;
+  bool get canReadImages => backend is ImageInferenceBackend;
 
   /// Streams response tokens from the active provider for a vision (image+text)
   /// request. [base64Image] is raw base64-encoded image data (no data: prefix).
@@ -992,188 +991,27 @@ Top spending categories:
     String mimeType = 'image/jpeg',
     http.Client? client,
   }) async* {
-    switch (_activeProvider) {
-      case AiProvider.ollama:
-        yield* _ollamaChatWithImage(prompt, base64Image, client: client);
-      case AiProvider.lmStudio:
-        yield* _openAiChatWithImage(
-          prompt,
-          base64Image,
-          mimeType: mimeType,
-          baseUrl: _lmStudioBaseUrl,
-          model: _lmStudioSelectedModel,
-          apiKey: '',
-          client: client,
-        );
-      case AiProvider.maple:
-        yield* _openAiChatWithImage(
-          prompt,
-          base64Image,
-          mimeType: mimeType,
-          baseUrl: _mapleBaseUrl,
-          model: _mapleSelectedModel,
-          apiKey: _mapleApiKey,
-          client: client,
-        );
-      case AiProvider.claude:
-      case AiProvider.chatGpt:
-      case AiProvider.gemini:
-      case AiProvider.grok:
-        // Every hosted provider reads images, and they are by some margin the
-        // best thing to point the receipt import at.
-        yield* cloudBackendFor(_activeProvider.cloudProvider!).chatWithImage(
-          prompt,
-          base64Image,
-          mimeType: mimeType,
-          client: client,
-        );
-      case AiProvider.appleIntelligence:
-      case AiProvider.geminiNano:
-        // Neither on-device backend takes an image on the path this app uses:
-        // Apple's Foundation Models bridge here is text-only, and ML Kit's
-        // Prompt API exposes multimodal input separately from the text stream.
-        //
-        // Thrown rather than silently returning nothing, because the caller is
-        // the receipt-photo import — a blank answer there looks like the model
-        // failed to read the image rather than like the wrong backend being
-        // selected, and the user needs to know which.
-        throw InferenceException(
-          '${backend.displayName} cannot read images. Switch to Ollama or a '
-          'hosted model in Settings to import from a photo.',
-        );
-    }
-  }
-
-  Stream<String> _ollamaChatWithImage(
-    String prompt,
-    String base64Image, {
-    http.Client? client,
-  }) async* {
-    final model = _selectedModel;
-    if (model == null || model.isEmpty) {
-      throw StateError('No Ollama model selected');
-    }
-
-    final ownedClient = client == null;
-    final c = client ?? http.Client();
-    try {
-      final request = http.Request('POST', Uri.parse('$_baseUrl/api/chat'));
-      request.headers['Content-Type'] = 'application/json';
-      request.body = jsonEncode({
-        'model': model,
-        'messages': [
-          {
-            'role': 'user',
-            'content': prompt,
-            'images': [base64Image],
-          },
-        ],
-        'stream': true,
-      });
-
-      final streamedResponse = await c
-          .send(request)
-          .timeout(const Duration(seconds: 60));
-      if (streamedResponse.statusCode != 200) {
-        throw Exception('Ollama returned ${streamedResponse.statusCode}');
-      }
-
-      await for (final line in streamedResponse.stream
-          .transform(utf8.decoder)
-          .idleTimeout(const Duration(seconds: 120), 'The model')
-          .transform(const LineSplitter())) {
-        if (line.trim().isEmpty) continue;
-        try {
-          final data = jsonDecode(line) as Map<String, dynamic>;
-          if (data['done'] == true) return;
-          final token =
-              (data['message'] as Map<String, dynamic>?)?['content']
-                  as String? ??
-              '';
-          if (token.isNotEmpty) yield token;
-        } catch (_) {}
-      }
-    } finally {
-      if (ownedClient) c.close();
-    }
-  }
-
-  Stream<String> _openAiChatWithImage(
-    String prompt,
-    String base64Image, {
-    String mimeType = 'image/jpeg',
-    required String baseUrl,
-    required String? model,
-    required String apiKey,
-    http.Client? client,
-  }) async* {
-    if (model == null || model.isEmpty) {
-      throw StateError('No model selected');
-    }
-
-    final ownedClient = client == null;
-    final c = client ?? http.Client();
-    try {
-      final request = http.Request(
-        'POST',
-        Uri.parse('$baseUrl/chat/completions'),
+    final active = backend;
+    if (active is! ImageInferenceBackend) {
+      // Neither on-device backend takes an image on the path this app uses:
+      // Apple's Foundation Models bridge here is text-only, and ML Kit's
+      // Prompt API exposes multimodal input separately from the text stream.
+      //
+      // Thrown rather than silently returning nothing, because the caller is
+      // the receipt-photo import — a blank answer there looks like the model
+      // failed to read the image rather than like the wrong backend being
+      // selected, and the user needs to know which.
+      throw InferenceException(
+        '${active.displayName} cannot read images. Switch to Ollama or a '
+        'hosted model in Settings to import from a photo.',
       );
-      request.headers['Content-Type'] = 'application/json';
-      if (apiKey.isNotEmpty) {
-        request.headers['Authorization'] = 'Bearer $apiKey';
-      }
-      request.body = jsonEncode({
-        'model': model,
-        'messages': [
-          {
-            'role': 'user',
-            'content': [
-              {
-                'type': 'image_url',
-                'image_url': {'url': 'data:$mimeType;base64,$base64Image'},
-              },
-              {'type': 'text', 'text': prompt},
-            ],
-          },
-        ],
-        'stream': true,
-      });
-
-      final streamedResponse = await c
-          .send(request)
-          .timeout(const Duration(seconds: 60));
-      if (streamedResponse.statusCode != 200) {
-        throw Exception('Server returned ${streamedResponse.statusCode}');
-      }
-
-      await for (final line in streamedResponse.stream
-          .transform(utf8.decoder)
-          .idleTimeout(const Duration(seconds: 120), 'The model')
-          .transform(const LineSplitter())) {
-        if (line.trim().isEmpty) continue;
-        if (!line.startsWith('data:')) continue;
-        // `substring(5).trim()` rather than matching the exact string
-        // 'data: [DONE]': the space after the colon is optional in SSE, and a
-        // server that omits it (or adds trailing whitespace) used to fall
-        // through the terminator check and then through the 'data: ' prefix
-        // filter, so the stream just ended with no explicit finish.
-        final payload = line.substring(5).trim();
-        if (payload == '[DONE]') return;
-        if (payload.isEmpty) continue;
-        try {
-          final data = jsonDecode(payload) as Map<String, dynamic>;
-          final choices = data['choices'] as List?;
-          if (choices == null || choices.isEmpty) continue;
-          final first = choices[0];
-          final delta =
-              first is Map ? first['delta'] as Map<String, dynamic>? : null;
-          final token = delta?['content'] as String? ?? '';
-          if (token.isNotEmpty) yield token;
-        } catch (_) {}
-      }
-    } finally {
-      if (ownedClient) c.close();
     }
+    yield* active.chatWithImage(
+      prompt,
+      base64Image,
+      mimeType: mimeType,
+      client: client,
+    );
   }
 
   // ── Monthly insight ───────────────────────────────────────────────────────

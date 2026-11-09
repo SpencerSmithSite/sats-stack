@@ -127,7 +127,7 @@ enum CloudProvider {
 }
 
 /// Streams answers from a hosted model using the user's own API key.
-class CloudBackend implements InferenceBackend {
+class CloudBackend implements ImageInferenceBackend {
   const CloudBackend({
     required this.provider,
     required this.model,
@@ -664,6 +664,7 @@ class CloudBackend implements InferenceBackend {
 
   /// Stream an answer about an image. Every provider here reads images, which
   /// is the main reason the receipt import is worth pointing at one.
+  @override
   Stream<String> chatWithImage(
     String prompt,
     String base64Image, {

@@ -16,7 +16,7 @@ import 'inference_backend.dart';
 /// between tokens, and a slow answer is not a broken one.
 const _idleGap = Duration(seconds: 120);
 
-class OllamaBackend implements InferenceBackend {
+class OllamaBackend implements ImageInferenceBackend {
   OllamaBackend({
     required this.baseUrl,
     required this.model,
@@ -111,6 +111,32 @@ class OllamaBackend implements InferenceBackend {
   Stream<String> chat(
     List<Map<String, String>> messages, {
     http.Client? client,
+  }) => _stream(messages, client: client, timeout: const Duration(seconds: 30));
+
+  /// Ollama takes the image as base64 in the message's `images`.
+  @override
+  Stream<String> chatWithImage(
+    String prompt,
+    String base64Image, {
+    String mimeType = 'image/jpeg',
+    http.Client? client,
+  }) => _stream(
+    [
+      {
+        'role': 'user',
+        'content': prompt,
+        'images': [base64Image],
+      },
+    ],
+    client: client,
+    // Reading an image takes a local model a while to start answering.
+    timeout: const Duration(seconds: 60),
+  );
+
+  Stream<String> _stream(
+    List<Map<String, Object>> messages, {
+    http.Client? client,
+    required Duration timeout,
   }) async* {
     final m = model;
     if (m == null || m.isEmpty) {
@@ -132,9 +158,7 @@ class OllamaBackend implements InferenceBackend {
         'options': {'num_ctx': numCtx},
       });
 
-      final streamedResponse = await c
-          .send(request)
-          .timeout(const Duration(seconds: 30));
+      final streamedResponse = await c.send(request).timeout(timeout);
 
       if (streamedResponse.statusCode != 200) {
         throw InferenceException(
@@ -175,7 +199,7 @@ class OllamaBackend implements InferenceBackend {
 /// with one implementation, because the wire format is identical and the only
 /// differences — the default URL, whether a key is sent, and crucially whether
 /// data leaves the device — are configuration rather than behaviour.
-class OpenAiCompatBackend implements InferenceBackend {
+class OpenAiCompatBackend implements ImageInferenceBackend {
   OpenAiCompatBackend({
     required this.id,
     required this.displayName,
@@ -260,6 +284,36 @@ class OpenAiCompatBackend implements InferenceBackend {
   Stream<String> chat(
     List<Map<String, String>> messages, {
     http.Client? client,
+  }) => _stream(messages, client: client, timeout: const Duration(seconds: 30));
+
+  /// The image goes in as a `data:` URL content part, before the prompt.
+  @override
+  Stream<String> chatWithImage(
+    String prompt,
+    String base64Image, {
+    String mimeType = 'image/jpeg',
+    http.Client? client,
+  }) => _stream(
+    [
+      {
+        'role': 'user',
+        'content': [
+          {
+            'type': 'image_url',
+            'image_url': {'url': 'data:$mimeType;base64,$base64Image'},
+          },
+          {'type': 'text', 'text': prompt},
+        ],
+      },
+    ],
+    client: client,
+    timeout: const Duration(seconds: 60),
+  );
+
+  Stream<String> _stream(
+    List<Map<String, Object>> messages, {
+    http.Client? client,
+    required Duration timeout,
   }) async* {
     final m = model;
     if (m == null || m.isEmpty) {
@@ -280,9 +334,7 @@ class OpenAiCompatBackend implements InferenceBackend {
         'stream': true,
       });
 
-      final streamedResponse = await c
-          .send(request)
-          .timeout(const Duration(seconds: 30));
+      final streamedResponse = await c.send(request).timeout(timeout);
 
       if (streamedResponse.statusCode != 200) {
         throw InferenceException(
