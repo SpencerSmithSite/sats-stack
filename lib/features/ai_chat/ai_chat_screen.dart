@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 
 import '../../core/models/ai_provider.dart';
@@ -10,6 +9,7 @@ import '../../core/services/ollama_service.dart';
 import '../../main.dart' as app;
 import '../../shared/theme/app_colors.dart';
 import '../../shared/theme/app_text_styles.dart';
+import '../../shared/utils/brief_clipboard.dart';
 import '../../shared/utils/model_choices.dart';
 import '../../shared/utils/platform_utils.dart';
 import '../../shared/widgets/ai_privacy_disclosure.dart';
@@ -596,11 +596,14 @@ class _Bubble extends StatelessWidget {
               onLongPressHint: 'Copy message',
               child: GestureDetector(
                 onLongPress: () {
-                  Clipboard.setData(ClipboardData(text: msg.content));
+                  unawaited(copyBriefly(msg.content));
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('Copied to clipboard'),
-                      duration: Duration(seconds: 1),
+                      content: Text(
+                        'Copied. The clipboard is cleared in a minute, since '
+                        'this holds your figures.',
+                      ),
+                      duration: Duration(seconds: 3),
                     ),
                   );
                 },

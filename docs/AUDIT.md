@@ -561,7 +561,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** A long-press copies an answer full of financial figures, and it is never cleared. Leftover statement photos are A-7.
 - **Impact:** Figures remain readable by any app that reads the clipboard.
 - **Fix direction:** Clear after a timeout, or say so when copying.
-- **Status:** open
+- **Status:** fixed in #125
 
 ### U-17 · Low · performance — Search reruns the whole filter and grouping on every keystroke
 - **Where:** `lib/features/transactions/transactions_screen.dart:219`, `:285`, `:527-532`.
