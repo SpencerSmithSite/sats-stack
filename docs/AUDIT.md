@@ -596,7 +596,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** After `await isInsightStale()`, `_generateInsight` calls `setState` without checking `mounted`.
 - **Impact:** Rare, since the tab stays alive, but it throws when it happens.
 - **Fix direction:** Check `mounted`.
-- **Status:** fixed in #PR
+- **Status:** fixed in #121
 
 ### U-22 · Low · maintainability, reliability — Duplicated colour parsers that throw on bad data
 - **Where:** `manage_wallets_sheet.dart:219-222`; `categories_sheet.dart:128-131`, `:433-439`, `:533-535`, `:613-674`; `add_wallet_sheet.dart:547`; `transaction_list_item.dart:173-202`; plus five more `_parseColor` copies.
