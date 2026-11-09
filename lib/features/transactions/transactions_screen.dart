@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show setEquals;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -41,6 +42,57 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   Map<String, Category> _categoriesByName = const {};
   StreamSubscription<List<Category>>? _categorySub;
 
+  /// Search waits for a pause in typing, and the list is worked out again
+  /// only when the rows, the search or the filters change. Every keystroke
+  /// filtered every transaction and regrouped them by day, which lagged on a
+  /// long history (audit U-17).
+  Timer? _searchPause;
+  static const _searchPauseLength = Duration(milliseconds: 250);
+  ({
+    List<Transaction> rows,
+    String query,
+    Set<String> categories,
+    Set<String> sources,
+    List<(DateTime, List<Transaction>)> days,
+  })?
+  _shown;
+
+  /// [all] filtered and grouped by day, newest first.
+  List<(DateTime, List<Transaction>)> _days(List<Transaction> all) {
+    final shown = _shown;
+    if (shown != null &&
+        identical(shown.rows, all) &&
+        shown.query == _searchQuery &&
+        setEquals(shown.categories, _filterCategories) &&
+        setEquals(shown.sources, _filterSources)) {
+      return shown.days;
+    }
+    final groups = <DateTime, List<Transaction>>{};
+    for (final tx in _applyFilters(all)) {
+      final date = DateTime(tx.date.year, tx.date.month, tx.date.day);
+      groups.putIfAbsent(date, () => []).add(tx);
+    }
+    final days = [
+      for (final date in groups.keys.toList()..sort((a, b) => b.compareTo(a)))
+        (date, groups[date]!),
+    ];
+    _shown = (
+      rows: all,
+      query: _searchQuery,
+      categories: {..._filterCategories},
+      sources: {..._filterSources},
+      days: days,
+    );
+    return days;
+  }
+
+  void _onSearchChanged(String text) {
+    _searchPause?.cancel();
+    _searchPause = Timer(_searchPauseLength, () {
+      if (mounted) setState(() => _searchQuery = text);
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -54,6 +106,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
 
   @override
   void dispose() {
+    _searchPause?.cancel();
     _categorySub?.cancel();
     _searchCtrl.dispose();
     super.dispose();
@@ -205,6 +258,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                           icon: const Icon(Icons.clear, size: 18),
                           tooltip: 'Clear search',
                           onPressed: () {
+                            _searchPause?.cancel();
                             _searchCtrl.clear();
                             setState(() => _searchQuery = '');
                           },
@@ -216,7 +270,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
-              onChanged: (v) => setState(() => _searchQuery = v),
+              onChanged: _onSearchChanged,
             ),
           ),
           // ── Active filter chips ───────────────────────────────────────
@@ -282,9 +336,9 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                   );
                 }
 
-                final filtered = _applyFilters(all);
+                final days = _days(all);
 
-                if (filtered.isEmpty) {
+                if (days.isEmpty) {
                   return EmptyState(
                     icon: Icons.search_off_outlined,
                     title: 'No results',
@@ -292,6 +346,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                         'Try a different search term or clear the filters.',
                     actionLabel: 'Clear filters',
                     onAction: () {
+                      _searchPause?.cancel();
                       _searchCtrl.clear();
                       setState(() {
                         _searchQuery = '';
@@ -302,7 +357,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                 }
 
                 return _TransactionList(
-                  transactions: filtered,
+                  days: days,
                   categoriesByName: _categoriesByName,
                 );
               },
@@ -514,29 +569,19 @@ class _ActiveFilterChip extends StatelessWidget {
 // ── Transaction list (unchanged logic) ───────────────────────────────────────
 
 class _TransactionList extends StatelessWidget {
-  const _TransactionList({
-    required this.transactions,
-    required this.categoriesByName,
-  });
+  const _TransactionList({required this.days, required this.categoriesByName});
 
-  final List<Transaction> transactions;
+  /// Each day with its transactions, newest first.
+  final List<(DateTime, List<Transaction>)> days;
   final Map<String, Category> categoriesByName;
 
   @override
   Widget build(BuildContext context) {
-    final groups = <DateTime, List<Transaction>>{};
-    for (final tx in transactions) {
-      final date = DateTime(tx.date.year, tx.date.month, tx.date.day);
-      groups.putIfAbsent(date, () => []).add(tx);
-    }
-    final sortedDates = groups.keys.toList()..sort((a, b) => b.compareTo(a));
-
     return ListView.builder(
       padding: const EdgeInsets.only(bottom: 80),
-      itemCount: sortedDates.length,
+      itemCount: days.length,
       itemBuilder: (context, i) {
-        final date = sortedDates[i];
-        final dayTxs = groups[date]!;
+        final (date, dayTxs) = days[i];
         return _DateGroup(
           date: date,
           transactions: dayTxs,
