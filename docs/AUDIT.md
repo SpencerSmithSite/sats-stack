@@ -247,7 +247,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
   - The column mapper picks DD/MM or MM/DD from only the first 3 rows, so a UK file whose first days are all 12 or under is read month-first and later rows are rejected.
   - The summary CSV writes category names unquoted, so a comma shifts columns and a leading `=` becomes a formula.
 - **Fix direction:** Skip the vision warning for hosted providers, fix the copy, sample the whole column, and quote CSV fields with a formula-prefix guard.
-- **Status:** open
+- **Status:** fixed in #116
 
 ---
 

@@ -152,9 +152,13 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
+                    // Not "$recipient's servers": a self-hosted recipient is
+                    // "the server you configured (host)", which made "…the
+                    // server you configured (host)'s servers" (audit A-18).
                     '${provider.label} reads statements far better than the '
-                    "built-in rules do, but it runs on $recipient's servers: the "
-                    'contents of $subject would be uploaded to them.',
+                    "built-in rules do, but it doesn't run on this device: "
+                    'the contents of $subject would be uploaded to '
+                    '$recipient.',
                     style: Theme.of(
                       ctx,
                     ).textTheme.bodyMedium?.copyWith(height: 1.45),
@@ -641,9 +645,12 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
       return;
     }
 
-    // Warn if model likely doesn't support vision
+    // Warn if model likely doesn't support vision. Not for a hosted
+    // provider: every model the four offer reads images, and each import
+    // warned that it might not (audit A-18).
     final model = app.ollamaService.selectedModel;
-    if (!OllamaService.looksLikeVisionModel(model)) {
+    if (app.ollamaService.activeProvider.cloudProvider == null &&
+        !OllamaService.looksLikeVisionModel(model)) {
       final action = await _showVisionWarningDialog(model ?? 'unknown');
       if (action == 'settings') {
         if (mounted) unawaited(context.push('/settings'));

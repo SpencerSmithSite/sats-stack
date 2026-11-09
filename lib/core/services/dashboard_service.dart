@@ -266,6 +266,22 @@ class DashboardService {
     );
   }
 
+  /// [value] as one CSV field (audit A-18).
+  ///
+  /// Category names are the user's own text. Written bare, a comma moved the
+  /// rest of the row into the wrong columns, and a name starting `=`, `+`,
+  /// `-` or `@` was run as a formula by the spreadsheet that opened the file.
+  /// Such a name gets a leading `'`, which spreadsheets show as text, and any
+  /// field holding a comma, quote or line break is quoted.
+  static String csvField(String value) {
+    var field = value;
+    if (field.isNotEmpty && '=+-@\t\r'.contains(field[0])) field = "'$field";
+    if (field.contains(RegExp('[",\r\n]'))) {
+      field = '"${field.replaceAll('"', '""')}"';
+    }
+    return field;
+  }
+
   /// Builds a human-readable CSV for [month] containing per-category spending
   /// vs budget, utilisation %, and sats opportunity cost.
   Future<String> exportMonthlySummary({
@@ -322,7 +338,7 @@ class DashboardService {
               ? (spent / btcPrice * 100000000).round()
               : 0;
       rows.add(
-        '$cat,'
+        '${csvField(cat)},'
         '${budgeted.toStringAsFixed(2)},'
         '${spent.toStringAsFixed(2)},'
         '${pct.toStringAsFixed(0)}%,'
