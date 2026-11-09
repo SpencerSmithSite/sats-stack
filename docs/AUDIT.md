@@ -526,7 +526,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** `firstDate: 2009-01-03`, `lastDate: tomorrow`, while `initialDate` comes from the row.
 - **Impact:** Editing a pre-2009 fiat row or a future-dated bank row throws in debug and misbehaves in release.
 - **Fix direction:** Clamp `initialDate`, or widen the range for fiat rows.
-- **Status:** fixed in #PR
+- **Status:** fixed in #120
 
 ### U-12 · Low · accessibility — Sheets that don't scroll
 - **Where:** `manage_wallets_sheet.dart:140`; `transactions_screen.dart:383` (filter sheet); `stack_goal_card.dart:272` (`SetGoalSheet`); `ai_chat_screen.dart:1076`.
