@@ -137,61 +137,68 @@ class _ManageWalletsSheetState extends State<ManageWalletsSheet> {
         ),
         child: SafeArea(
           top: false,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Handle
-              Center(
-                child: Container(
-                  width: 36,
-                  height: 4,
-                  margin: const EdgeInsets.symmetric(vertical: 12),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.outline,
-                    borderRadius: BorderRadius.circular(2),
+          // Scrolls: with many rows or a large text size, the bottom rows
+          // and the button were out of reach (audit U-12).
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Handle
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    margin: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.outline,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                   ),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-                child: Row(
-                  children: [
-                    const Icon(Icons.account_balance_wallet_outlined, size: 20),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Wallets',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.account_balance_wallet_outlined,
+                        size: 20,
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 8),
+                      Text(
+                        'Wallets',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const Divider(height: 1),
-              switch (_step) {
-                _Step.list => _ListBody(
-                  error: _rescanError,
-                  wallets: _wallets,
-                  onRescan: _rescan,
-                  onRemove: _remove,
-                  onAdd: _openAddWallet,
-                ),
-                _Step.syncing => _SyncingBody(
-                  walletLabel: _syncingWalletLabel ?? 'Wallet',
-                  status: _syncStatus,
-                ),
-                _Step.done => _DoneBody(
-                  result: _syncResult!,
-                  walletLabel: _syncingWalletLabel ?? 'Wallet',
-                  onClose: () => Navigator.of(context).pop(),
-                  onBack:
-                      () => setState(() {
-                        _step = _Step.list;
-                        _syncResult = null;
-                      }),
-                ),
-              },
-            ],
+                const Divider(height: 1),
+                switch (_step) {
+                  _Step.list => _ListBody(
+                    error: _rescanError,
+                    wallets: _wallets,
+                    onRescan: _rescan,
+                    onRemove: _remove,
+                    onAdd: _openAddWallet,
+                  ),
+                  _Step.syncing => _SyncingBody(
+                    walletLabel: _syncingWalletLabel ?? 'Wallet',
+                    status: _syncStatus,
+                  ),
+                  _Step.done => _DoneBody(
+                    result: _syncResult!,
+                    walletLabel: _syncingWalletLabel ?? 'Wallet',
+                    onClose: () => Navigator.of(context).pop(),
+                    onBack:
+                        () => setState(() {
+                          _step = _Step.list;
+                          _syncResult = null;
+                        }),
+                  ),
+                },
+              ],
+            ),
           ),
         ),
       ),

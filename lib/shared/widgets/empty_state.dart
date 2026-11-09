@@ -21,7 +21,9 @@ class EmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Center(
-      child: Padding(
+      // Scrolls: at a large text size on a short phone the message and its
+      // button overflowed the space below the search bar (audit U-12).
+      child: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 40),
         child: Column(
           mainAxisSize: MainAxisSize.min,
