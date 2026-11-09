@@ -589,7 +589,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** "Get Started" can run `_finish` twice at once, and a keychain or database error is not caught.
 - **Impact:** Duplicate writes, or a user stuck on the last page with no message.
 - **Fix direction:** Guard against a second tap, and show errors.
-- **Status:** open
+- **Status:** fixed in #122
 
 ### U-21 · Low · reliability — `setState` can run after dispose in the insight flow
 - **Where:** `lib/features/dashboard/dashboard_screen.dart:136-139` → `:157`.
