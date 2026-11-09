@@ -204,7 +204,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** `response.stream.bytesToString()` on a non-200 response is unbounded, while `remote_backends.dart:364-367` caps the same job at 5 s.
 - **Impact:** A stalled proxy leaves the spinner spinning, and the dashboard insight has no cancel.
 - **Fix direction:** Use the same short timeout, and cap the body size.
-- **Status:** open
+- **Status:** fixed in #PR
 
 ### A-14 · Low · correctness — AI rows are validated loosely
 - **Where:** `import_service.dart:816-823`, `:1166-1174`.

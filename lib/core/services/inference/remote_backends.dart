@@ -369,10 +369,7 @@ Future<String> _describeFailure(
   }
   String? detail;
   try {
-    final body = await response.stream
-        .transform(utf8.decoder)
-        .join()
-        .timeout(const Duration(seconds: 5));
+    final body = await readErrorBody(response.stream);
     final data = _jsonObject(body);
     detail = data == null ? null : _errorMessage(data);
     if (detail == null && body.trim().isNotEmpty && body.length <= 200) {
