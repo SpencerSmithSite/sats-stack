@@ -139,6 +139,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (mounted) setState(() {});
     if (app.ollamaService.sendsDataOffDevice) return;
     final stale = await app.ollamaService.isInsightStale();
+    if (!mounted) return;
     // Not awaited: the card shows the cached insight meanwhile, and the
     // generator handles its own failures.
     if (stale) unawaited(_generateInsight(userAsked: false));
@@ -153,7 +154,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   /// visible at all — and the backend's own explanation, which
   /// `CloudBackend.describeError` takes care to make readable, was dropped.
   Future<void> _generateInsight({bool userAsked = true}) async {
-    if (_isGeneratingInsight) return;
+    // Reached after an await from [_initInsight], when the screen may be gone:
+    // the setState below then threw (audit U-21).
+    if (!mounted || _isGeneratingInsight) return;
     // The automatic refresh is for a private backend only. Checked again here:
     // the backend may have changed while the staleness check was awaited.
     if (!userAsked && app.ollamaService.sendsDataOffDevice) return;
