@@ -387,12 +387,44 @@ List<int> _hexDecode(String hex) {
 
 // ── Session ───────────────────────────────────────────────────────────────────
 
+/// The longest reply line accepted, in characters. A line is one JSON-RPC
+/// reply; Fulcrum's own send buffer defaults to 8 MB and ElectrumX's to 1 MB.
+const maxElectrumLine = 16 * 1024 * 1024;
+
+/// Passes text through while no line in it runs past [max] characters.
+///
+/// The line splitter buffers until it sees a newline, so a server that never
+/// sent one — over plain TCP, anyone on the path — was buffered until memory
+/// ran out (audit B-8). The connection now fails instead.
+StreamTransformer<String, String> boundedLines(int max) =>
+    StreamTransformer.fromBind((chunks) async* {
+      var run = 0;
+      await for (final chunk in chunks) {
+        // A line ending inside this chunk is bounded by the chunk itself; only
+        // the one carried over from earlier chunks can grow without limit.
+        final first = chunk.indexOf('\n');
+        if (first == -1 || run + first > max) {
+          run += first == -1 ? chunk.length : first;
+        } else {
+          run = chunk.length - chunk.lastIndexOf('\n') - 1;
+        }
+        if (run > max) {
+          throw FormatException(
+            'The server sent a reply over ${max ~/ (1024 * 1024)} MB without '
+            'ending it',
+          );
+        }
+        yield chunk;
+      }
+    });
+
 /// An active Electrum TCP session. Dispose by calling [close].
 class ElectrumSession {
   ElectrumSession._(this._socket) {
     _subscription = _socket
         .cast<List<int>>()
         .transform(utf8.decoder)
+        .transform(boundedLines(maxElectrumLine))
         .transform(const LineSplitter())
         .listen(_handleLine, onError: _handleError, onDone: _handleDone);
     // A write to a socket the server has closed surfaces here; [_closedBy]

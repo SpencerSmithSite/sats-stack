@@ -102,6 +102,9 @@ class RawTransaction {
   static const _coinbase =
       '0000000000000000000000000000000000000000000000000000000000000000';
 
+  /// The most an output can pay: 21 million bitcoin, in sats.
+  static const _maxMoney = 2100000000000000;
+
   /// Parses the hex of a serialised transaction, legacy or SegWit. Throws
   /// [FormatException] on anything malformed. Coinbase inputs are left out:
   /// they spend nothing.
@@ -109,7 +112,9 @@ class RawTransaction {
     final b = _hexBytes(hex);
     var i = 0;
     Uint8List take(int n) {
-      if (i + n > b.length) {
+      // A negative length — an 8-byte varint past 2^63 reads as one — slipped
+      // past the check below and threw a RangeError (audit B-8).
+      if (n < 0 || n > b.length - i) {
         throw const FormatException('Truncated transaction');
       }
       final out = Uint8List.sublistView(b, i, i + n);
@@ -161,6 +166,11 @@ class RawTransaction {
     final outputs = <({int value, Uint8List script})>[];
     for (var n = varint(); n > 0; n--) {
       final value = le(take(8));
+      // With its top bit set, the value read as negative and was counted as
+      // money leaving rather than refused (audit B-8).
+      if (value < 0 || value > _maxMoney) {
+        throw const FormatException('Output value out of range');
+      }
       outputs.add((value: value, script: Uint8List.fromList(take(varint()))));
     }
     return RawTransaction(inputs: inputs, outputs: outputs);
