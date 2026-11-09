@@ -67,27 +67,40 @@ void main() {
   });
 
   group('the enum invariant still holds', () {
-    test('isPrivate matches the absence of a named recipient', () {
+    test('a hosted provider, and only one, names a fixed recipient', () {
       for (final provider in AiProvider.values) {
         expect(
-          provider.isPrivate,
-          provider.dataRecipient == null,
+          provider.isHosted,
+          provider.dataRecipient != null,
           reason: provider.key,
         );
       }
     });
 
-    test('the private providers are exactly these', () {
+    test('the providers not hosted are exactly these', () {
       // The invariant above holds just as well for a new hosted provider that
       // forgot to name its recipient — both sides are wrong together. So the
-      // private set is written out: adding a provider to it has to be done
-      // here, on purpose.
-      expect(AiProvider.values.where((p) => p.isPrivate).toSet(), {
+      // set is written out: adding a provider to it has to be done here, on
+      // purpose.
+      expect(AiProvider.values.where((p) => !p.isHosted).toSet(), {
         AiProvider.appleIntelligence,
         AiProvider.geminiNano,
         AiProvider.ollama,
         AiProvider.lmStudio,
       });
+    });
+
+    test('not hosted is not private: a remote server is named', () {
+      // What `AiProvider.isPrivate` got wrong (audit A-16): it called these
+      // two private whatever their URL.
+      for (final p in [AiProvider.ollama, AiProvider.lmStudio]) {
+        expect(OllamaService.recipientFor(p, 'http://localhost:11434'), isNull);
+        expect(
+          OllamaService.recipientFor(p, 'https://llm.example.com'),
+          'the server you configured (llm.example.com)',
+          reason: p.key,
+        );
+      }
     });
   });
 

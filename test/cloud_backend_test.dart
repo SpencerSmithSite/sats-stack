@@ -33,7 +33,7 @@ void main() {
   ];
 
   group('privacy flag', () {
-    test('every hosted provider reports isPrivate false', () {
+    test('every hosted provider is marked hosted', () {
       for (final p in [
         AiProvider.claude,
         AiProvider.chatGpt,
@@ -41,34 +41,30 @@ void main() {
         AiProvider.grok,
         AiProvider.maple,
       ]) {
-        expect(
-          p.isPrivate,
-          isFalse,
-          reason: '${p.label} must not claim privacy',
-        );
+        expect(p.isHosted, isTrue, reason: '${p.label} must not claim privacy');
       }
     });
 
-    test('every on-device and self-hosted backend reports isPrivate true', () {
+    test('no on-device or self-hosted backend is marked hosted', () {
       for (final p in [
         AiProvider.ollama,
         AiProvider.lmStudio,
         AiProvider.appleIntelligence,
         AiProvider.geminiNano,
       ]) {
-        expect(p.isPrivate, isTrue, reason: '${p.label} keeps data on device');
+        expect(p.isHosted, isFalse, reason: '${p.label} is not a service');
       }
     });
 
     test('the backend agrees with the enum it is constructed from', () {
-      // The enum duplicates `isPrivate` so the picker can label a row without
-      // building a backend. If the two ever disagree the app tells the user one
+      // The enum's `isHosted` lets the picker label a row without building a
+      // backend. If the two ever disagree the app tells the user one
       // thing and does another.
       for (final p in AiProvider.values) {
         final cloud = p.cloudProvider;
         if (cloud == null) continue;
         final backend = CloudBackend(provider: cloud, model: null, apiKey: 'k');
-        expect(backend.isPrivate, p.isPrivate);
+        expect(backend.isPrivate, !p.isHosted);
       }
     });
 
@@ -83,8 +79,8 @@ void main() {
       expect(AiProvider.maple.dataRecipient, isNotNull);
     });
 
-    test('a private backend names no recipient', () {
-      for (final p in AiProvider.values.where((p) => p.isPrivate)) {
+    test('a provider that is not hosted names no fixed recipient', () {
+      for (final p in AiProvider.values.where((p) => !p.isHosted)) {
         expect(p.dataRecipient, isNull, reason: p.label);
       }
     });
@@ -870,7 +866,7 @@ void main() {
         ),
       ]) {
         expect(c.suggestedDefault.needsApiKey, isFalse);
-        expect(c.suggestedDefault.isPrivate, isTrue);
+        expect(c.suggestedDefault.isHosted, isFalse);
       }
     });
 

@@ -609,8 +609,7 @@ class _AiProviderSectionState extends State<AiProviderSection> {
   ///
   /// For the active provider this is derived from the URL actually configured,
   /// which is the only way to be right about Ollama and LM Studio: their
-  /// `AiProvider.isPrivate` is hardcoded true while their endpoint is a
-  /// free-text field. For any other provider it is the enum's fixed answer,
+  /// endpoint is a free-text field. For any other provider it is the enum's fixed answer,
   /// which is correct for the hosted four and honest for an unconfigured
   /// self-hosted one.
   String? _recipientFor(AiProvider provider) =>
@@ -734,10 +733,10 @@ class _AiProviderSectionState extends State<AiProviderSection> {
               // picture to a third party, and that cannot sit under a
               // blanket "local-first" promise unqualified.
               // Gated on where the data would actually go, not on the
-              // enum. `AiProvider.isPrivate` is hardcoded true for
-              // Ollama and LM Studio, whose URLs are free-text fields
-              // the user can point at a VPS — so this banner was
-              // hidden for exactly the configuration that needs it.
+              // enum. The enum called Ollama and LM Studio private,
+              // but their URLs are free-text fields the user can point
+              // at a VPS — so this banner was hidden for exactly the
+              // configuration that needs it.
               // `_selectedRecipient` is null when nothing leaves.
               if (_selectedRecipient != null) ...[
                 const SizedBox(height: 8),
