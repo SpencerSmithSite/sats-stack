@@ -631,7 +631,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
   - There is no Dependabot.
 - **Impact:** A moved tag or a compromised upstream runs new code with the tokens, and no commit here shows it.
 - **Fix direction:** Pin each action to a commit SHA, set `persist-credentials: false`, and add Dependabot for `github-actions` and `pub`.
-- **Status:** fixed in #79, #89 and #104 (#89's `lockfile-only` is unsupported for pub, so its Dependabot settings never applied; #104 replaces them). The plugin marketplace stays unpinned: Claude Code accepts its reserved name only from Anthropic's GitHub, and the action takes no ref
+- **Status:** fixed in #79, #89 and #104; Dependabot narrowed to the workflow actions in #111. Its pub updates kept moving held packages: pub has no `lockfile-only` mode (#89's never applied), and a grouped update moves whatever the updated package needs past every ignore rule (#109). Dart packages are upgraded by hand. The plugin marketplace stays unpinned: Claude Code accepts its reserved name only from Anthropic's GitHub, and the action takes no ref
 
 ### P-4 · Medium · supply-chain — End-of-life SQLite libs, a discontinued keychain backend, wide version lag
 - **Where:** `pubspec.yaml:15`, `:38`, `:57`, `:60`, `:71`, `:74`; `pubspec.lock:935`.

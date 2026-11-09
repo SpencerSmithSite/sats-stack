@@ -1,5 +1,13 @@
-# Update proposals for the workflow actions (pinned to commits) and the Dart
-# packages (audit P-3). Each arrives as a PR to review like any other.
+# Update proposals for the workflow actions, which are pinned to commits
+# (audit P-3) and so never move on their own. Each arrives as a PR to review
+# like any other.
+#
+# There is no `pub` entry, on purpose. Dependabot's pub updater has no
+# lockfile-only mode, and a grouped update moves whatever the updated package
+# needs, past every ignore rule: build_runner 2.15.2+ needs analyzer 13, which
+# dragged drift_flutter to 0.3 and broke the generated database code (#99,
+# #109). Everything else it proposed was a major. Dart packages are upgraded
+# by hand, after `flutter pub outdated`, one PR each.
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -9,39 +17,3 @@ updates:
     groups:
       actions:
         patterns: ['*']
-
-  - package-ecosystem: pub
-    directory: /
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
-    # Minor and patch bumps only; majors are upgraded on purpose, by hand.
-    # `lockfile-only` would say that directly, but Dependabot's pub updater
-    # does not support it (only auto, widen, increase and
-    # increase-if-necessary): with it this file never took effect, and
-    # Dependabot kept running the previous one. `increase-if-necessary`
-    # leaves a constraint alone while the new version satisfies it.
-    versioning-strategy: increase-if-necessary
-    groups:
-      dependencies:
-        patterns: ['*']
-    ignore:
-      - dependency-name: '*'
-        update-types: ['version-update:semver-major']
-      # Held on purpose — see "Critical package version pins" in CLAUDE.md.
-      # A 0.x step such as drift_flutter 0.2 -> 0.3 counts as a minor here.
-      - dependency-name: drift_flutter
-        versions: ['>=0.3.0']
-      # drift and drift_dev 2.32 need sqlite3 3, which only drift_flutter 0.3
-      # accepts: a grouped drift bump dragged drift_flutter past its rule above
-      # (#99). analyzer 9+ breaks drift_dev 2.31's generated code.
-      - dependency-name: drift
-        versions: ['>=2.32.0']
-      - dependency-name: drift_dev
-        versions: ['>=2.32.0']
-      - dependency-name: analyzer
-        versions: ['>=9.0.0']
-      - dependency-name: fl_chart
-        versions: ['>=1.0.0']
-      - dependency-name: flutter_secure_storage
-        versions: ['>=10.0.0']
