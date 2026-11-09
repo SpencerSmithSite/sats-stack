@@ -324,7 +324,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
   - An output value with the top bit set parses as negative.
 - **Impact:** Memory exhaustion is possible over plain TCP. Errors are inconsistent, but all are caught upstream.
 - **Fix direction:** Cap sizes, and reject negative or over-long lengths and values.
-- **Status:** open
+- **Status:** fixed in #119
 
 ### B-9 · Low · maintainability, privacy — Three different tests for "is the default server in use"
 - **Where:**

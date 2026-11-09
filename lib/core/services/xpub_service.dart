@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io' show HttpDate, HttpException;
+import 'dart:typed_data' show BytesBuilder;
 
 import 'package:bech32/bech32.dart';
 import 'package:bs58check/bs58check.dart' as bs58check;
@@ -714,6 +715,31 @@ class XpubService {
   /// every failure, which the scan loop read as "this address is unused" — so a
   /// rate limit, an offline device or a wrong URL all reported a healthy scan of
   /// an empty wallet.
+  /// The largest Esplora response read. A busy address's page of history is
+  /// tens of kilobytes; a whole transaction a few hundred.
+  static const maxResponseBytes = 16 * 1024 * 1024;
+
+  /// GET [uri], refusing a body past [maxResponseBytes]. `_client.get` read
+  /// whatever the server sent into memory, however much (audit B-8).
+  Future<http.Response> _getBounded(Uri uri) async {
+    final response = await _client.send(http.Request('GET', uri));
+    final bytes = BytesBuilder(copy: false);
+    await for (final chunk in response.stream) {
+      bytes.add(chunk);
+      if (bytes.length > maxResponseBytes) {
+        throw XpubSyncException(
+          '${uri.host} sent a response over 16 MB. Is it an Esplora server?',
+        );
+      }
+    }
+    return http.Response.bytes(
+      bytes.takeBytes(),
+      response.statusCode,
+      headers: response.headers,
+      request: response.request,
+    );
+  }
+
   Future<dynamic> _getJson(String url) async {
     final host = Uri.parse(url).host;
     Object? lastError;
@@ -723,7 +749,9 @@ class XpubService {
       await _awaitRateLimitPause();
       http.Response response;
       try {
-        response = await _client.get(Uri.parse(url)).timeout(_requestTimeout);
+        response = await _getBounded(Uri.parse(url)).timeout(_requestTimeout);
+      } on XpubSyncException {
+        rethrow;
       } catch (e) {
         lastError = e;
         if (++failures == _maxAttempts) break;
