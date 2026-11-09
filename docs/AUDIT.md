@@ -214,7 +214,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
   - A missing `direction` defaults to debit.
 - **Impact:** Rows go missing or land in the wrong month, with no notice.
 - **Fix direction:** Parse with `_parseAmount` and `_calendarDate`, and count dropped rows.
-- **Status:** open
+- **Status:** fixed in #PR
 
 ### A-15 · Low · correctness — Monthly insight staleness ignores the month boundary
 - **Where:** `ollama_service.dart:1182-1191`.

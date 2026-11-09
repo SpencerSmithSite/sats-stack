@@ -73,6 +73,10 @@ class _ImportRun {
   /// An AI answer stopped before its JSON did, so the rows after that point
   /// were never returned — see [ImportResult.aiOutputCutOff].
   bool outputCutOff = false;
+
+  /// Rows the AI returned that could not be read — see
+  /// [ImportResult.aiRowsDropped].
+  int modelRowsDropped = 0;
 }
 
 /// Thrown when an import's [ImportCancelToken] is cancelled during it.
@@ -190,6 +194,7 @@ class ImportResult {
     this.aiLabel,
     this.aiInputTruncatedAt,
     this.aiOutputCutOff = false,
+    this.aiRowsDropped = 0,
     this.errorMessage,
     this.rawCsvContent,
     this.csvRows,
@@ -240,6 +245,12 @@ class ImportResult {
   /// parse at all, after the whole statement had been uploaded.
   final bool aiOutputCutOff;
 
+  /// Rows the AI returned without a readable date or amount, or without
+  /// saying which way the money went. They are left out rather than guessed
+  /// at; until audit A-14 they went missing without a word, and a row with
+  /// no direction was booked as spending.
+  final int aiRowsDropped;
+
   /// Why nothing could be read, in words the user can act on, when the cause
   /// is known — for instance that the selected backend cannot read images.
   final String? errorMessage;
@@ -255,6 +266,7 @@ class ImportResult {
     String? aiLabel,
     int? aiInputTruncatedAt,
     bool aiOutputCutOff = false,
+    int aiRowsDropped = 0,
   }) => ImportResult(
     transactions: transactions,
     fileType: fileType,
@@ -269,6 +281,7 @@ class ImportResult {
     aiLabel: aiLabel,
     aiInputTruncatedAt: aiInputTruncatedAt,
     aiOutputCutOff: aiOutputCutOff,
+    aiRowsDropped: aiRowsDropped,
     errorMessage: errorMessage,
     rawCsvContent: rawCsvContent,
     csvRows: csvRows,
@@ -485,6 +498,7 @@ class ImportService {
       sentTo: _run.sent ? ollama.activeDataRecipient : null,
       aiInputTruncatedAt: aiTier ? _run.truncatedAt : null,
       aiOutputCutOff: aiTier && _run.outputCutOff,
+      aiRowsDropped: aiTier ? _run.modelRowsDropped : 0,
       aiLabel: aiTier ? ollama.activeProvider.label : null,
     );
   }
@@ -849,36 +863,9 @@ Rules:
         );
       }
 
-      final parsed =
-          jsonArray
-              .map((item) {
-                try {
-                  final map = item as Map<String, dynamic>;
-                  final date = DateTime.tryParse(
-                    (map['date'] as String?) ?? '',
-                  );
-                  if (date == null) return null;
-                  final amount = (map['amount'] as num?)?.toDouble();
-                  if (amount == null) return null;
-                  final direction =
-                      ((map['direction'] as String?) ?? 'debit').toLowerCase();
-                  final description = (map['description'] as String?) ?? '';
-                  // A photo gives nothing to check the model's code against,
-                  // so the account's own currency stands.
-                  final rowCurrency = fallbackCurrency;
-                  return _categorised(
-                    date: date,
-                    amount: amount.abs(),
-                    direction: direction == 'credit' ? 'credit' : 'debit',
-                    description: description,
-                    currency: rowCurrency,
-                  );
-                } catch (_) {
-                  return null;
-                }
-              })
-              .whereType<ParsedTransaction>()
-              .toList();
+      // A photo gives nothing to check the model's code against, so the
+      // account's own currency stands.
+      final parsed = _rowsFromModel(jsonArray, (_) => fallbackCurrency);
 
       return ImportResult(
         transactions: parsed,
@@ -1329,36 +1316,84 @@ FILE CONTENT:
 
   List<dynamic>? _recoverCutOffArray(String text) => recoverCutOffArray(text);
 
-  /// The model's rows as transactions; a row it got wrong is skipped.
+  /// The model's rows as transactions. A row it got wrong is left out and
+  /// counted in [_ImportRun.modelRowsDropped].
   List<ParsedTransaction> _rowsFromModel(
     List<dynamic> jsonArray,
     String Function(String? code) currencyOf,
-  ) =>
-      jsonArray
-          .map((item) {
-            try {
-              final map = item as Map<String, dynamic>;
-              final date = DateTime.tryParse((map['date'] as String?) ?? '');
-              if (date == null) return null;
-              final amount = (map['amount'] as num?)?.toDouble();
-              if (amount == null) return null;
-              final direction =
-                  ((map['direction'] as String?) ?? 'debit').toLowerCase();
-              final description = (map['description'] as String?) ?? '';
-              final rowCurrency = currencyOf(map['currency'] as String?);
-              return _categorised(
-                date: date,
-                amount: amount.abs(),
-                direction: direction == 'credit' ? 'credit' : 'debit',
-                description: description,
-                currency: rowCurrency,
-              );
-            } catch (_) {
-              return null;
-            }
-          })
-          .whereType<ParsedTransaction>()
-          .toList();
+  ) {
+    final rows = <ParsedTransaction>[];
+    for (final item in jsonArray) {
+      final row = _rowFromModel(item, currencyOf);
+      if (row == null) {
+        _run.modelRowsDropped++;
+      } else {
+        rows.add(row);
+      }
+    }
+    return rows;
+  }
+
+  static final _modelDate = RegExp(r'^(\d{4})-(\d{2})-(\d{2})(?![\d])');
+
+  /// One row of a model's answer, read as strictly as a file's own rows are
+  /// (audit A-14), or null.
+  ///
+  /// - The date is the calendar day the model wrote, in the ISO form the
+  ///   prompt asks for. `DateTime.tryParse` turned 2026-02-30 into 2 March,
+  ///   and read `2026-03-31T23:30:00Z` as an instant, which local time could
+  ///   move into another day or month. Anything else is refused rather than
+  ///   guessed at: `03/04/2026` has no order to read it in.
+  /// - An amount given as text (`"12.50"`, `"1,234.50"`) is parsed rather than
+  ///   dropping the row.
+  /// - A row that does not say which way the money went is not booked as
+  ///   spending by default. A negative amount still says it.
+  ParsedTransaction? _rowFromModel(
+    Object? item,
+    String Function(String? code) currencyOf,
+  ) {
+    if (item is! Map) return null;
+    final rawDate = item['date'];
+    final day =
+        rawDate is String ? _modelDate.firstMatch(rawDate.trim()) : null;
+    final date =
+        day == null
+            ? null
+            : _calendarDate(
+              int.parse(day[1]!),
+              int.parse(day[2]!),
+              int.parse(day[3]!),
+            );
+    if (date == null) return null;
+
+    final rawAmount = item['amount'];
+    final amount = switch (rawAmount) {
+      final num n => n.toDouble(),
+      final String text => _parseAmount(text),
+      _ => null,
+    };
+    if (amount == null || !amount.isFinite) return null;
+
+    final rawDirection = item['direction'];
+    final stated =
+        rawDirection is String ? rawDirection.trim().toLowerCase() : null;
+    final direction = switch (stated) {
+      'debit' || 'credit' => stated!,
+      _ when amount < 0 => 'debit',
+      _ => null,
+    };
+    if (direction == null) return null;
+
+    final description = item['description'];
+    final code = item['currency'];
+    return _categorised(
+      date: date,
+      amount: amount.abs(),
+      direction: direction,
+      description: description is String ? description : '',
+      currency: currencyOf(code is String ? code : null),
+    );
+  }
 
   // ── Tier 2: Rule-based CSV parsing ───────────────────────────────────────
 
