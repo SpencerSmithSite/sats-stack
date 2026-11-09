@@ -8,6 +8,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sats_stack/core/database/database.dart';
 import 'package:sats_stack/core/services/icloud_backup.dart';
+import 'package:sats_stack/core/services/ollama_service.dart';
+import 'package:sats_stack/core/services/secure_key_store.dart';
 import 'package:sats_stack/features/settings/widgets/data_section.dart';
 import 'package:sats_stack/main.dart' as app;
 import 'package:sats_stack/shared/constants/app_constants.dart';
@@ -58,6 +60,7 @@ void main() {
     tester,
   ) async {
     app.db = db;
+    app.ollamaService = OllamaService(db, keyStore: const SecureKeyStore());
     tester.view.physicalSize = const Size(430, 1200);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -86,6 +89,7 @@ void main() {
 
   testWidgets('elsewhere there is no such switch', (tester) async {
     app.db = db;
+    app.ollamaService = OllamaService(db, keyStore: const SecureKeyStore());
     await tester.pumpWidget(
       MaterialApp(
         theme: AppTheme.dark(),

@@ -12,6 +12,7 @@ import '../../../shared/theme/app_colors.dart';
 import '../../../shared/utils/model_choices.dart';
 import '../../../shared/utils/platform_utils.dart';
 import '../../../shared/widgets/ai_privacy_disclosure.dart';
+import '../../../shared/widgets/credentials_outside_keychain_note.dart';
 import 'import_consent_section.dart';
 import 'on_device_ai_section.dart';
 import 'settings_widgets.dart';
@@ -744,6 +745,11 @@ class _AiProviderSectionState extends State<AiProviderSection> {
                   provider: _selectedProvider,
                   recipient: _selectedRecipient,
                 ),
+              ],
+              if (app.ollamaService.credentialsOutsideKeychain case final items
+                  when items.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                CredentialsOutsideKeychainNote(items: items),
               ],
               if (_urlCtrlFor(_selectedProvider) case final ctrl?)
                 ValueListenableBuilder<TextEditingValue>(
