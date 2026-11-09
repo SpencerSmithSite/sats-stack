@@ -221,7 +221,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** An insight is stale only 30 days after it was made, but it is about "last month".
 - **Impact:** A September insight made on 2 October still shows on 1 November.
 - **Fix direction:** Store the month it covers, and compare that.
-- **Status:** open
+- **Status:** fixed in #113
 
 ### A-16 · Low · maintainability — `AiProvider.isPrivate` is a trap
 - **Where:** `lib/core/models/ai_provider.dart:140`.

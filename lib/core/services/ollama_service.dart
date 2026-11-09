@@ -1024,15 +1024,40 @@ Top spending categories:
     return rows.isNotEmpty ? rows.first.value : null;
   }
 
-  Future<bool> isInsightStale() async {
-    final dateRows =
+  /// The month the cached insight is about, or null if there is none.
+  ///
+  /// An insight saved before the month was stored has only the time it was
+  /// made; the Dashboard only ever asks about the month before, so that is
+  /// the one it covers.
+  Future<DateTime?> cachedInsightMonth() async {
+    final rows =
         await (_db.select(_db.appSettings)..where(
-          (t) => t.key.equals(AppConstants.settingMonthlyInsightDate),
+          (t) => t.key.isIn([
+            AppConstants.settingMonthlyInsightMonth,
+            AppConstants.settingMonthlyInsightDate,
+          ]),
         )).get();
-    if (dateRows.isEmpty) return true;
-    final stored = DateTime.tryParse(dateRows.first.value);
-    if (stored == null) return true;
-    return DateTime.now().difference(stored).inDays >= 30;
+    final values = {for (final r in rows) r.key: r.value};
+    final month = DateTime.tryParse(
+      '${values[AppConstants.settingMonthlyInsightMonth]}-01',
+    );
+    if (month != null) return DateTime(month.year, month.month);
+    final made = DateTime.tryParse(
+      values[AppConstants.settingMonthlyInsightDate] ?? '',
+    );
+    return made == null ? null : DateTime(made.year, made.month - 1);
+  }
+
+  /// Whether the cached insight is about some month other than last month.
+  ///
+  /// It was stale only 30 days after it was made, though it is about a whole
+  /// month: one made on 2 October about September still showed on 1 November
+  /// (audit A-15).
+  Future<bool> isInsightStale({DateTime? now}) async {
+    final covered = await cachedInsightMonth();
+    if (covered == null) return true;
+    final today = now ?? DateTime.now();
+    return covered != DateTime(today.year, today.month - 1);
   }
 
   Future<String> generateMonthlyInsight({
@@ -1085,6 +1110,10 @@ Top spending categories:
     await _upsertSetting(
       AppConstants.settingMonthlyInsightDate,
       DateTime.now().toIso8601String(),
+    );
+    await _upsertSetting(
+      AppConstants.settingMonthlyInsightMonth,
+      DateFormat('yyyy-MM').format(month),
     );
 
     return insight;

@@ -33,6 +33,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   DateTime _selectedMonth = DateTime(DateTime.now().year, DateTime.now().month);
 
   String? _cachedInsight;
+
+  /// The month [_cachedInsight] is about, which the card names: with a hosted
+  /// provider it is only regenerated on a tap, so it can be an older month.
+  DateTime? _insightMonth;
   bool _isGeneratingInsight = false;
 
   /// Who would receive this month's figures, or null when the active backend
@@ -125,6 +129,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _initInsight() async {
     _insightInitialised = true;
     _cachedInsight = await app.ollamaService.loadCachedInsight();
+    _insightMonth = await app.ollamaService.cachedInsightMonth();
     // A hosted provider is told nothing unless the user asks. Generating this
     // automatically meant that selecting Claude in Settings and opening the
     // Dashboard uploaded the month's income, spending, surplus, stack total
@@ -183,7 +188,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
         spendingByCategory: data.spendingByCategory,
         stackGoalSats: data.stackGoalSats,
       );
-      if (mounted) setState(() => _cachedInsight = insight);
+      if (mounted) {
+        setState(() {
+          _cachedInsight = insight;
+          _insightMonth = lastMonth;
+        });
+      }
     } catch (e) {
       debugPrint('Insight generation failed: $e');
       if (userAsked && mounted) _showInsightError('No insight: $e');
@@ -260,6 +270,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               selectedMonth: _selectedMonth,
               inflationRate: app.inflationRateNotifier.value,
               cachedInsight: _cachedInsight,
+              insightMonth: _insightMonth,
               isGeneratingInsight: _isGeneratingInsight,
               onRefreshInsight: _generateInsight,
               insightRecipient: _insightRecipient,
@@ -339,6 +350,7 @@ class _DashboardContent extends StatelessWidget {
     required this.selectedMonth,
     required this.inflationRate,
     this.cachedInsight,
+    this.insightMonth,
     this.isGeneratingInsight = false,
     this.onRefreshInsight,
     this.insightRecipient,
@@ -350,6 +362,7 @@ class _DashboardContent extends StatelessWidget {
   final DateTime selectedMonth;
   final double inflationRate;
   final String? cachedInsight;
+  final DateTime? insightMonth;
   final bool isGeneratingInsight;
   final VoidCallback? onRefreshInsight;
 
@@ -617,6 +630,7 @@ class _DashboardContent extends StatelessWidget {
               (_, aiEnabled, _) => AiInsightCard(
                 aiEnabled: aiEnabled,
                 cachedInsight: cachedInsight,
+                insightMonth: insightMonth,
                 isGenerating: isGeneratingInsight,
                 onRefresh: onRefreshInsight,
                 offDeviceRecipient: insightRecipient,
