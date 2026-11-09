@@ -568,7 +568,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** A case-folded filter over every transaction, then grouping and sorting by day, on each character, with no debounce.
 - **Impact:** Lag on large histories.
 - **Fix direction:** Debounce, and memoise the grouping per data or filter change.
-- **Status:** fixed in #PR
+- **Status:** fixed in #127
 
 ### U-18 · Low · correctness — The price chip's age label can stay at "just now"
 - **Where:** `lib/shared/widgets/btc_price_chip.dart:71`, `:130`.
