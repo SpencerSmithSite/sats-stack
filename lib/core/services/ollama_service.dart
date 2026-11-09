@@ -313,11 +313,28 @@ class OllamaService {
     return false;
   }
 
-  /// Base URL of the Ollama server (used for Ollama-specific settings UI).
-  String get baseUrl => _baseUrl;
+  /// The Ollama server's address, for showing and for the Settings field: a
+  /// saved password reads as [passwordMask], which saved back keeps it.
+  String get baseUrl => maskPassword(_baseUrl);
 
-  String get lmStudioBaseUrl => _lmStudioBaseUrl;
-  String get mapleBaseUrl => _mapleBaseUrl;
+  String get lmStudioBaseUrl => maskPassword(_lmStudioBaseUrl);
+  String get mapleBaseUrl => maskPassword(_mapleBaseUrl);
+
+  /// What is stored unencrypted in `AppSettings` because the keychain refused
+  /// it — a legacy Maple key, or a server login — named for a sentence.
+  /// Settings → Data exports that table whole, so the user is told (audit
+  /// A-17).
+  List<String> get credentialsOutsideKeychain => [
+    for (final key in _outsideKeychain)
+      switch (key) {
+        AppConstants.settingMapleApiKey => 'your Maple API key',
+        AppConstants.settingOllamaUrl => 'your Ollama server login',
+        AppConstants.settingLmStudioUrl => 'your LM Studio server login',
+        AppConstants.settingMapleUrl => 'your Maple server login',
+        _ => key,
+      },
+  ];
+  final _outsideKeychain = <String>{};
   String get mapleApiKey => _mapleApiKey;
 
   /// Model selected for the currently active provider.
@@ -419,28 +436,38 @@ class OllamaService {
     final rows = await _db.select(_db.appSettings).get();
     final map = {for (final r in rows) r.key: r.value};
 
+    // Server addresses, each with its login from the keychain, if any.
+    final urls = await Future.wait([
+      _loadServerUrl(
+        map,
+        AppConstants.settingOllamaUrl,
+        AppConstants.defaultOllamaUrl,
+      ),
+      _loadServerUrl(
+        map,
+        AppConstants.settingLmStudioUrl,
+        AppConstants.defaultLmStudioUrl,
+      ),
+      _loadServerUrl(
+        map,
+        AppConstants.settingMapleUrl,
+        AppConstants.defaultMapleUrl,
+        scheme: 'https',
+      ),
+    ]);
+
     // Ollama
-    _baseUrl = _serverUrl(
-      map[AppConstants.settingOllamaUrl],
-      AppConstants.defaultOllamaUrl,
-    );
+    _baseUrl = urls[0];
     _selectedModel = map[AppConstants.settingOllamaModel];
     _isConnected = map[AppConstants.settingOllamaConnected] == 'true';
 
     // LM Studio
-    _lmStudioBaseUrl = _serverUrl(
-      map[AppConstants.settingLmStudioUrl],
-      AppConstants.defaultLmStudioUrl,
-    );
+    _lmStudioBaseUrl = urls[1];
     _lmStudioSelectedModel = map[AppConstants.settingLmStudioModel];
     _lmStudioConnected = map[AppConstants.settingLmStudioConnected] == 'true';
 
     // Maple
-    _mapleBaseUrl = _serverUrl(
-      map[AppConstants.settingMapleUrl],
-      AppConstants.defaultMapleUrl,
-      scheme: 'https',
-    );
+    _mapleBaseUrl = urls[2];
     _mapleSelectedModel = map[AppConstants.settingMapleModel];
     _mapleConnected = map[AppConstants.settingMapleConnected] == 'true';
 
@@ -511,13 +538,14 @@ class OllamaService {
 
     if (_mapleApiKey.isEmpty) {
       final stored = await _keyStore.write(_mapleKeyId, legacy);
+      _mapleApiKey = legacy;
       if (!stored) {
-        _mapleApiKey = legacy;
+        _outsideKeychain.add(AppConstants.settingMapleApiKey);
         return;
       }
-      _mapleApiKey = legacy;
     }
 
+    _outsideKeychain.remove(AppConstants.settingMapleApiKey);
     await (_db.delete(_db.appSettings)
       ..where((t) => t.key.equals(AppConstants.settingMapleApiKey))).go();
   }
@@ -537,6 +565,74 @@ class OllamaService {
     return normalizeServerUrl(raw, defaultScheme: scheme) ?? raw.trim();
   }
 
+  /// The keychain entry holding the login for the server in [settingKey].
+  static String _loginEntry(String settingKey) => 'server_login_$settingKey';
+
+  /// The server address saved under [settingKey], with its login put back.
+  ///
+  /// The keychain holds the whole address the login was saved with, and the
+  /// login is used only while the saved address still goes to the same place:
+  /// a restored backup that names another server must not be sent it. An
+  /// address still carrying a login in the table — saved by an earlier build,
+  /// or when the keychain refused — is moved into the keychain now.
+  Future<String> _loadServerUrl(
+    Map<String, String> settings,
+    String settingKey,
+    String fallback, {
+    String scheme = 'http',
+  }) async {
+    final saved = _serverUrl(settings[settingKey], fallback, scheme: scheme);
+    final split = splitUserInfo(saved);
+    if (split.userInfo != null) {
+      if (await _keyStore.writeEntry(_loginEntry(settingKey), saved)) {
+        await _upsertSetting(settingKey, split.url);
+        _outsideKeychain.remove(settingKey);
+      } else {
+        _outsideKeychain.add(settingKey);
+      }
+      return saved;
+    }
+    final withLogin = await _keyStore.readEntry(_loginEntry(settingKey));
+    if (withLogin.isEmpty || serverOrigin(withLogin) != serverOrigin(saved)) {
+      return saved;
+    }
+    return withUserInfo(saved, splitUserInfo(withLogin).userInfo);
+  }
+
+  /// Saves the address typed into [settingKey]'s field and returns the one to
+  /// use, login included.
+  ///
+  /// A `user:password@` part goes to the keychain and the address is stored
+  /// without it: `AppSettings` is plain SQLite that Settings → Data exports
+  /// whole, and stored there the password went out with every export (audit
+  /// A-17). If the keychain refuses, the whole address is stored as before, so
+  /// the server still works, and [credentialsOutsideKeychain] says so.
+  Future<String> _saveServerUrl(
+    String settingKey,
+    String typed, {
+    required String current,
+    required String fallback,
+    String scheme = 'http',
+  }) async {
+    final split = splitUserInfo(_serverUrl(typed, fallback, scheme: scheme));
+    final login = resolveTypedUserInfo(
+      split.userInfo,
+      splitUserInfo(current).userInfo,
+    );
+    final full = withUserInfo(split.url, login);
+    final stored = await _keyStore.writeEntry(
+      _loginEntry(settingKey),
+      login == null ? '' : full,
+    );
+    await _upsertSetting(settingKey, stored ? split.url : full);
+    if (!stored && login != null) {
+      _outsideKeychain.add(settingKey);
+    } else {
+      _outsideKeychain.remove(settingKey);
+    }
+    return full;
+  }
+
   /// Where a stored choice of the removed downloadable-model backend moves to:
   /// the platform's own on-device model, or Ollama where there is none.
   static AiProvider replacementForRemovedLocalModel({
@@ -551,8 +647,12 @@ class OllamaService {
   /// Persist Ollama settings (URL and/or model).
   Future<void> saveSettings({String? url, String? model}) async {
     if (url != null) {
-      _baseUrl = _serverUrl(url, AppConstants.defaultOllamaUrl);
-      await _upsertSetting(AppConstants.settingOllamaUrl, _baseUrl);
+      _baseUrl = await _saveServerUrl(
+        AppConstants.settingOllamaUrl,
+        url,
+        current: _baseUrl,
+        fallback: AppConstants.defaultOllamaUrl,
+      );
     }
     if (model != null) {
       _selectedModel = model;
@@ -563,8 +663,12 @@ class OllamaService {
   /// Persist LM Studio settings.
   Future<void> saveLmStudioSettings({String? url, String? model}) async {
     if (url != null) {
-      _lmStudioBaseUrl = _serverUrl(url, AppConstants.defaultLmStudioUrl);
-      await _upsertSetting(AppConstants.settingLmStudioUrl, _lmStudioBaseUrl);
+      _lmStudioBaseUrl = await _saveServerUrl(
+        AppConstants.settingLmStudioUrl,
+        url,
+        current: _lmStudioBaseUrl,
+        fallback: AppConstants.defaultLmStudioUrl,
+      );
     }
     if (model != null) {
       _lmStudioSelectedModel = model;
@@ -583,12 +687,13 @@ class OllamaService {
     String? apiKey,
   }) async {
     if (url != null) {
-      _mapleBaseUrl = _serverUrl(
+      _mapleBaseUrl = await _saveServerUrl(
+        AppConstants.settingMapleUrl,
         url,
-        AppConstants.defaultMapleUrl,
+        current: _mapleBaseUrl,
+        fallback: AppConstants.defaultMapleUrl,
         scheme: 'https',
       );
-      await _upsertSetting(AppConstants.settingMapleUrl, _mapleBaseUrl);
     }
     if (model != null) {
       _mapleSelectedModel = model;
@@ -597,6 +702,11 @@ class OllamaService {
     if (apiKey != null) {
       _mapleApiKey = apiKey;
       final ok = await _keyStore.write(_mapleKeyId, apiKey);
+      // Now in the keychain: the old plaintext copy can go.
+      if (ok && _outsideKeychain.remove(AppConstants.settingMapleApiKey)) {
+        await (_db.delete(_db.appSettings)
+          ..where((t) => t.key.equals(AppConstants.settingMapleApiKey))).go();
+      }
       configChanges.value++;
       return ok;
     }
@@ -643,6 +753,14 @@ class OllamaService {
     }
     await _keyStore.delete(_mapleKeyId);
     _mapleApiKey = '';
+    for (final key in [
+      AppConstants.settingOllamaUrl,
+      AppConstants.settingLmStudioUrl,
+      AppConstants.settingMapleUrl,
+    ]) {
+      await _keyStore.deleteEntry(_loginEntry(key));
+    }
+    _outsideKeychain.clear();
     // The Bitcoin Core RPC password lives in the same keychain; a reset that
     // left it behind would not be a reset.
     await _keyStore.deleteEntry(AppConstants.settingBitcoinRpcPassword);

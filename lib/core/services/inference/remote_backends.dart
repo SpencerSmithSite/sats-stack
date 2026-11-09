@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../../../shared/utils/url_utils.dart';
 import 'cloud_backend.dart';
 import 'inference_backend.dart';
 
@@ -73,12 +74,14 @@ class OllamaBackend implements ImageInferenceBackend {
           .get(Uri.parse('$baseUrl/api/tags'))
           .timeout(const Duration(seconds: 5));
       return response.statusCode == 200
-          ? BackendStatus.available('$model on $baseUrl')
+          ? BackendStatus.available('$model on ${maskPassword(baseUrl)}')
           : BackendStatus.unavailable(
             'Ollama returned ${response.statusCode}.',
           );
     } catch (_) {
-      return BackendStatus.unavailable('Could not reach Ollama at $baseUrl.');
+      return BackendStatus.unavailable(
+        'Could not reach Ollama at ${maskPassword(baseUrl)}.',
+      );
     }
   }
 
@@ -184,6 +187,12 @@ class OllamaBackend implements ImageInferenceBackend {
         final token = message is Map ? message['content'] : null;
         if (token is String && token.isNotEmpty) yield token;
       }
+    } on http.ClientException catch (e) {
+      // Its own text ends with the whole request URL, login included, and is
+      // shown in the chat (audit A-17).
+      throw InferenceException(
+        'Could not reach $displayName at ${maskPassword(baseUrl)}: ${e.message}',
+      );
     } finally {
       if (ownedClient) c.close();
     }
@@ -251,12 +260,14 @@ class OpenAiCompatBackend implements ImageInferenceBackend {
         );
       }
       return response.statusCode == 200
-          ? BackendStatus.available('$model on $baseUrl')
+          ? BackendStatus.available('$model on ${maskPassword(baseUrl)}')
           : BackendStatus.unavailable(
             'Server returned ${response.statusCode}.',
           );
     } catch (_) {
-      return BackendStatus.unavailable('Could not reach $baseUrl.');
+      return BackendStatus.unavailable(
+        'Could not reach ${maskPassword(baseUrl)}.',
+      );
     }
   }
 
@@ -374,6 +385,12 @@ class OpenAiCompatBackend implements ImageInferenceBackend {
         final token = delta is Map ? delta['content'] : null;
         if (token is String && token.isNotEmpty) yield token;
       }
+    } on http.ClientException catch (e) {
+      // Its own text ends with the whole request URL, login included, and is
+      // shown in the chat (audit A-17).
+      throw InferenceException(
+        'Could not reach $displayName at ${maskPassword(baseUrl)}: ${e.message}',
+      );
     } finally {
       if (ownedClient) c.close();
     }

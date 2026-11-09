@@ -7,6 +7,7 @@ import '../../../core/database/database.dart';
 import '../../../core/services/icloud_backup.dart';
 import '../../../main.dart' as app;
 import '../../../shared/theme/app_colors.dart';
+import '../../../shared/widgets/credentials_outside_keychain_note.dart';
 
 /// Settings → Data: export the database, and replace it from a backup.
 class DataSection extends StatefulWidget {
@@ -210,6 +211,12 @@ class _DataSectionState extends State<DataSection> {
           subtitle: const Text('Save a copy of your SQLite file'),
           onTap: _exportDb,
         ),
+        if (app.ollamaService.credentialsOutsideKeychain case final items
+            when items.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: CredentialsOutsideKeychainNote(items: items),
+          ),
         ListTile(
           leading: const Icon(Icons.download_outlined),
           title: const Text('Import database'),
