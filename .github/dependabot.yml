@@ -15,22 +15,32 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
-    # Only what pubspec.yaml's constraints already allow — `flutter pub
-    # upgrade`, as a PR. Without it Dependabot rewrote the constraints: its
-    # first group moved drift_flutter to 0.3 and analyzer to 14 despite the
-    # holds, which breaks the generated database code. Majors are upgraded
-    # on purpose, by hand.
-    versioning-strategy: lockfile-only
+    # Minor and patch bumps only; majors are upgraded on purpose, by hand.
+    # `lockfile-only` would say that directly, but Dependabot's pub updater
+    # does not support it (only auto, widen, increase and
+    # increase-if-necessary): with it this file never took effect, and
+    # Dependabot kept running the previous one. `increase-if-necessary`
+    # leaves a constraint alone while the new version satisfies it.
+    versioning-strategy: increase-if-necessary
     groups:
       dependencies:
         patterns: ['*']
     ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
       # Held on purpose — see "Critical package version pins" in CLAUDE.md.
-      # The constraints already hold them; this is in case they are widened.
-      - dependency-name: analyzer
-        versions: ['>=9.0.0']
+      # A 0.x step such as drift_flutter 0.2 -> 0.3 counts as a minor here.
       - dependency-name: drift_flutter
         versions: ['>=0.3.0']
+      # drift and drift_dev 2.32 need sqlite3 3, which only drift_flutter 0.3
+      # accepts: a grouped drift bump dragged drift_flutter past its rule above
+      # (#99). analyzer 9+ breaks drift_dev 2.31's generated code.
+      - dependency-name: drift
+        versions: ['>=2.32.0']
+      - dependency-name: drift_dev
+        versions: ['>=2.32.0']
+      - dependency-name: analyzer
+        versions: ['>=9.0.0']
       - dependency-name: fl_chart
         versions: ['>=1.0.0']
       - dependency-name: flutter_secure_storage
