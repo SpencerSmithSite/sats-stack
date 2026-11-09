@@ -702,7 +702,7 @@ class CloudBackend implements InferenceBackend {
       final response = await c.send(request).timeout(timeout);
 
       if (response.statusCode != 200) {
-        final text = await response.stream.bytesToString();
+        final text = await readErrorBody(response.stream);
         throw InferenceException(_describeError(response.statusCode, text));
       }
 
@@ -824,6 +824,38 @@ class CloudBackend implements InferenceBackend {
 
   @override
   void dispose() {}
+}
+
+/// The body of a failed response, for its error message: what arrives within
+/// [wait], and at most [maxBytes] of it.
+///
+/// Read whole and without a limit, a proxy that sent the status and then
+/// stalled left the chat's spinner — and the dashboard insight, which has no
+/// cancel — waiting for good (audit A-13). An error message needs a few
+/// hundred bytes; past that the status code says enough.
+Future<String> readErrorBody(
+  Stream<List<int>> body, {
+  Duration wait = const Duration(seconds: 5),
+  int maxBytes = 16 * 1024,
+}) async {
+  final bytes = <int>[];
+  final done = Completer<void>();
+  void finish() {
+    if (!done.isCompleted) done.complete();
+  }
+
+  final sub = body.listen(
+    (chunk) {
+      bytes.addAll(chunk.take(maxBytes - bytes.length));
+      if (bytes.length >= maxBytes) finish();
+    },
+    onError: (Object _) => finish(),
+    onDone: finish,
+    cancelOnError: true,
+  );
+  await done.future.timeout(wait, onTimeout: () {});
+  await sub.cancel();
+  return utf8.decode(bytes, allowMalformed: true);
 }
 
 /// [chunks], then a newline: a final frame the server did not end with one
