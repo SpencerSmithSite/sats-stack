@@ -12,7 +12,7 @@ dependencies:
 
   # Database
   drift: ^2.23.0
-  drift_flutter: ^0.2.8
+  drift_flutter: ^0.3.1
 
   # Navigation
   go_router: ^17.5.0
@@ -57,7 +57,7 @@ dependencies:
   flutter_secure_storage: ^9.2.2
 
   # Formatting
-  intl: ^0.19.0
+  intl: ^0.20.3
 
   # App metadata
   package_info_plus: ^9.0.1
@@ -103,7 +103,7 @@ dev_dependencies:
   # drift_flutter hold allows, accepts analyzer 10 but generates without the
   # tables' REFERENCES clauses and the managers' reference classes under it.
   # Lift with the drift_flutter 0.3 upgrade.
-  analyzer: ">=8.1.1 <9.0.0"
+  analyzer: ^14.7.0
   build_runner: ^2.4.14
   flutter_launcher_icons: ^0.14.3
   flutter_native_splash: ^2.4.0
