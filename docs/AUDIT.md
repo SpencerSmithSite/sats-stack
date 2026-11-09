@@ -190,7 +190,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** A new `RegExp` is compiled for each row and run over the whole untruncated file, whenever the model's currency differs from the account's.
 - **Impact:** Cost grows with rows times file size.
 - **Fix direction:** Cache the answer per claimed code for the import.
-- **Status:** open
+- **Status:** fixed in #106
 
 ### A-12 · Low · reliability — Vision paths duplicate the backends and lose errors
 - **Where:** `lib/core/services/ollama_service.dart:1040-1170`.

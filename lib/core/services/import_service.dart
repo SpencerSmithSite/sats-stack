@@ -1190,6 +1190,15 @@ FILE CONTENT:
       if (chunks.isEmpty) return null;
       final model = ollama.selectedModel ?? ollama.activeProvider.label;
 
+      // The check reads the whole file, so it is made once per code the model
+      // claims, not once per row: per row it compiled a pattern each time and
+      // its cost grew with rows times file size (audit A-11).
+      final rowCurrencies = <String?, String>{};
+      String currencyOf(String? code) => rowCurrencies.putIfAbsent(
+        code,
+        () => _modelRowCurrency(code, fallbackCurrency, content),
+      );
+
       final parsed = <ParsedTransaction>[];
       for (var part = 0; part < chunks.length; part++) {
         final many = chunks.length > 1;
@@ -1238,7 +1247,7 @@ FILE CONTENT:
           if (jsonArray != null) _run.outputCutOff = true;
         }
         if (jsonArray == null) return null;
-        parsed.addAll(_rowsFromModel(jsonArray, fallbackCurrency, content));
+        parsed.addAll(_rowsFromModel(jsonArray, currencyOf));
       }
 
       return parsed;
@@ -1323,8 +1332,7 @@ FILE CONTENT:
   /// The model's rows as transactions; a row it got wrong is skipped.
   List<ParsedTransaction> _rowsFromModel(
     List<dynamic> jsonArray,
-    String fallbackCurrency,
-    String content,
+    String Function(String? code) currencyOf,
   ) =>
       jsonArray
           .map((item) {
@@ -1337,11 +1345,7 @@ FILE CONTENT:
               final direction =
                   ((map['direction'] as String?) ?? 'debit').toLowerCase();
               final description = (map['description'] as String?) ?? '';
-              final rowCurrency = _modelRowCurrency(
-                map['currency'] as String?,
-                fallbackCurrency,
-                content,
-              );
+              final rowCurrency = currencyOf(map['currency'] as String?);
               return _categorised(
                 date: date,
                 amount: amount.abs(),
