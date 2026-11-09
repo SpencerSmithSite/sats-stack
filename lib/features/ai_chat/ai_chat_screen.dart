@@ -78,7 +78,6 @@ class _AiChatScreenState extends State<AiChatScreen> {
   /// Intelligence is switched off", "The server rejected the API key".
   String? _offlineReason;
   bool _checking = true;
-  String? _systemPrompt;
 
   static const _starters = [
     'Analyze my spending this month',
@@ -156,21 +155,19 @@ class _AiChatScreenState extends State<AiChatScreen> {
       await app.ollamaService.saveModelForActiveProvider(models.first);
     }
 
-    final prompt = await _buildSystemPrompt();
-    // Re-checked: the guard above is before `saveModelForActiveProvider` and
-    // `_buildSystemPrompt`, and the latter reads and aggregates the whole
-    // transactions table, so the screen can easily be gone by now. Switching
-    // tabs genuinely disposes it.
+    // Re-checked: the screen can be gone after `saveModelForActiveProvider`.
     if (!mounted) return;
 
     setState(() {
       _ollamaAvailable = true;
       _checking = false;
       _models = models;
-      _systemPrompt = prompt;
     });
   }
 
+  /// Built for each question, not once per screen: the tab stays alive, so a
+  /// prompt built when it opened went on describing that day's figures after
+  /// an import, an edit or the turn of the month (audit A-9).
   Future<String> _buildSystemPrompt() async {
     final now = DateTime.now();
     final data = await app.dashboardService.getDashboard(now);
@@ -193,23 +190,17 @@ class _AiChatScreenState extends State<AiChatScreen> {
 
     _inputCtrl.clear();
     final userMsg = _Msg(role: _Role.user, content: text);
-    // From the history *before* this message is added to it. Built after, the
-    // new message was in the history and was then appended again, so every
+    // The history *before* this message is added to it. Taken after, the new
+    // message was in the history and was then appended again, so every
     // question reached the model twice — and a hosted provider billed it
     // twice.
-    final apiMessages = buildChatRequest(
-      systemPrompt: _systemPrompt,
-      history: [
-        for (final m in _messages)
-          (
-            role: m.role == _Role.user ? 'user' : 'assistant',
-            content: m.content,
-          ),
-      ],
-      userMessage: text,
-      budgetChars: app.ollamaService.contextBudgetChars,
-    );
+    final history = [
+      for (final m in _messages)
+        (role: m.role == _Role.user ? 'user' : 'assistant', content: m.content),
+    ];
 
+    // Streaming from here, so a second send during the prompt's read below
+    // is refused by the guard above.
     setState(() {
       _messages = [..._messages, userMsg];
       _isStreaming = true;
@@ -218,6 +209,27 @@ class _AiChatScreenState extends State<AiChatScreen> {
     });
 
     _scrollToBottom();
+
+    final String systemPrompt;
+    try {
+      systemPrompt = await _buildSystemPrompt();
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isStreaming = false;
+          _error = 'Could not read your figures: $e';
+        });
+      }
+      return;
+    }
+    if (!mounted) return;
+
+    final apiMessages = buildChatRequest(
+      systemPrompt: systemPrompt,
+      history: history,
+      userMessage: text,
+      budgetChars: app.ollamaService.contextBudgetChars,
+    );
 
     final buffer = StringBuffer();
 
