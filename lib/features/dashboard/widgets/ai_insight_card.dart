@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../../shared/theme/app_colors.dart';
 import '../../../shared/widgets/markdown_text.dart';
@@ -17,6 +18,7 @@ class AiInsightCard extends StatelessWidget {
     super.key,
     this.aiEnabled = false,
     this.cachedInsight,
+    this.insightMonth,
     this.isGenerating = false,
     this.onRefresh,
     this.offDeviceRecipient,
@@ -27,6 +29,11 @@ class AiInsightCard extends StatelessWidget {
   final bool aiEnabled;
 
   final String? cachedInsight;
+
+  /// The month [cachedInsight] is about, named in the heading. With a hosted
+  /// provider it is regenerated only on a tap, so it can be an older month
+  /// than the last one (audit A-15).
+  final DateTime? insightMonth;
   final bool isGenerating;
   final VoidCallback? onRefresh;
 
@@ -98,15 +105,20 @@ class AiInsightCard extends StatelessWidget {
                 color: accent,
               ),
               const SizedBox(width: 6),
-              Text(
-                aiEnabled ? 'AI Insight' : 'Tip',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: accentText,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.3,
+              Expanded(
+                child: Text(
+                  !aiEnabled
+                      ? 'Tip'
+                      : _hasInsight && insightMonth != null
+                      ? 'AI Insight · ${DateFormat.yMMMM().format(insightMonth!)}'
+                      : 'AI Insight',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: accentText,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.3,
+                  ),
                 ),
               ),
-              const Spacer(),
               if (aiEnabled && onRefresh != null && !_needsConsentToGenerate)
                 Tappable(
                   label:

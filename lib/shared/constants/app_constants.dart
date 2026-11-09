@@ -19,6 +19,8 @@ abstract final class AppConstants {
   static const settingStackGoalSats = 'stack_goal_sats';
   static const settingMonthlyInsight = 'monthly_insight';
   static const settingMonthlyInsightDate = 'monthly_insight_date';
+  // The month the cached insight is about, as `yyyy-MM`.
+  static const settingMonthlyInsightMonth = 'monthly_insight_month';
   static const settingElectrumUrl = 'electrum_url';
   // JSON-encoded map of all fetched currency prices e.g. '{"USD":97000,"EUR":89000}'
   static const settingBtcAllPrices = 'btc_all_prices';
