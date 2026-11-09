@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../../../core/models/bitcoin_data_source.dart';
+import '../../../core/services/electrum_service.dart';
 import '../../../core/services/ollama_service.dart';
 import '../../../core/services/xpub_service.dart';
 import '../../../shared/constants/app_constants.dart';
@@ -66,9 +67,10 @@ class _WalletHistorySectionState extends State<WalletHistorySection> {
     });
   }
 
-  /// Saves what is typed — keeping a pinned certificate only for the same
-  /// server — tests it, and on success makes it the source. A self-signed
-  /// TLS certificate is offered for trust rather than failing outright.
+  /// Tests what is typed — keeping a pinned certificate only for the same
+  /// server — and only once it answers saves it and makes it the source. A
+  /// self-signed TLS certificate is offered for trust rather than failing
+  /// outright.
   Future<void> _saveAndTest() async {
     final host = _host.text.trim();
     final port = int.tryParse(_port.text.trim());
@@ -97,7 +99,7 @@ class _WalletHistorySectionState extends State<WalletHistorySection> {
           host == electrum.host &&
           port == electrum.port &&
           _ssl == electrum.ssl;
-      await electrum.saveSettings(
+      final candidate = electrum.candidate(
         host: host,
         port: port,
         ssl: _ssl,
@@ -105,10 +107,10 @@ class _WalletHistorySectionState extends State<WalletHistorySection> {
       );
 
       try {
-        await _connected();
+        await _connected(candidate);
       } on HandshakeException {
         // An unverified certificate. Only TLS gets here.
-        final fingerprint = await electrum.fetchCertificateFingerprint();
+        final fingerprint = await candidate.fetchCertificateFingerprint();
         if (fingerprint == null || !mounted) {
           return _say(
             'The server’s certificate could not be checked',
@@ -118,14 +120,15 @@ class _WalletHistorySectionState extends State<WalletHistorySection> {
         if (!await _askToTrust(fingerprint)) {
           return _say('Not switched — the certificate was not trusted');
         }
-        await electrum.saveSettings(
-          host: host,
-          port: port,
-          ssl: _ssl,
-          certificateFingerprint: fingerprint,
-        );
         try {
-          await _connected();
+          await _connected(
+            electrum.candidate(
+              host: host,
+              port: port,
+              ssl: _ssl,
+              certificateFingerprint: fingerprint,
+            ),
+          );
         } catch (e) {
           _say('Could not connect — $e', error: true);
         }
@@ -180,8 +183,16 @@ class _WalletHistorySectionState extends State<WalletHistorySection> {
     });
   }
 
-  Future<void> _connected() async {
-    final status = await widget.xpub.electrum.testConnection();
+  /// Tests [candidate], and only if it answers saves it and makes Electrum
+  /// the source.
+  Future<void> _connected(ElectrumService candidate) async {
+    final status = await candidate.testConnection();
+    await widget.xpub.electrum.saveSettings(
+      host: candidate.host,
+      port: candidate.port,
+      ssl: candidate.ssl,
+      certificateFingerprint: candidate.pinnedFingerprint,
+    );
     await widget.xpub.saveDataSource(BitcoinDataSource.electrum);
     widget.onChanged();
     _say(status);

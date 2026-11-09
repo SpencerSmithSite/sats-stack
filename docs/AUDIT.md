@@ -582,7 +582,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** `saveSettings` runs before the test, so if Electrum is already the source, a failed test leaves the broken host in use.
 - **Impact:** One typo breaks syncing until it is noticed.
 - **Fix direction:** Test the candidate first, and persist only on success.
-- **Status:** open
+- **Status:** fixed in #123
 
 ### U-20 · Low · reliability — Onboarding's finish has no double-tap guard or error handling
 - **Where:** `lib/features/onboarding/onboarding_screen.dart:56-65`, `:74-170`.

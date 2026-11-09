@@ -93,6 +93,22 @@ class ElectrumService {
     }
   }
 
+  /// A copy aimed at [host]:[port], held in memory only. Settings tests a
+  /// server through one and saves it only once it answers: saving first left
+  /// a mistyped host in use when Electrum was already the source (audit
+  /// U-19).
+  ElectrumService candidate({
+    required String host,
+    required int port,
+    required bool ssl,
+    String certificateFingerprint = '',
+  }) =>
+      ElectrumService(_db)
+        .._host = host.trim()
+        .._port = port
+        .._ssl = ssl
+        .._pinnedFingerprint = certificateFingerprint;
+
   /// SHA-256 of the certificate the user chose to trust, or empty.
   String _pinnedFingerprint = '';
 

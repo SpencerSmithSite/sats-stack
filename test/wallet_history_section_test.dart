@@ -161,6 +161,41 @@ void main() {
       await tester.runAsync(server.close);
     });
 
+    testWidgets('a server that does not answer replaces nothing', (
+      tester,
+    ) async {
+      // Saving came before testing, so with Electrum already the source a
+      // typo left the broken server in use (audit U-19).
+      final server =
+          (await tester.runAsync(
+            () => ServerSocket.bind(InternetAddress.loopbackIPv4, 0),
+          ))!;
+      server.listen(_electrum);
+      final xpub = await pump(tester);
+      await fillIn(tester, server.port);
+      await settle(tester, find.textContaining('Connected to 127.0.0.1'));
+      expect(xpub.dataSource, BitcoinDataSource.electrum);
+
+      final closed =
+          (await tester.runAsync(() async {
+            final s = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+            final port = s.port;
+            await s.close();
+            return port;
+          }))!;
+      await tester.enterText(find.widgetWithText(TextField, 'Port'), '$closed');
+      await _realTap(tester, find.text('Save and test'));
+      await settle(tester, find.textContaining('Could not connect'));
+
+      expect(find.textContaining('Could not connect'), findsOneWidget);
+      expect(xpub.electrum.port, server.port);
+      expect(xpub.dataSource, BitcoinDataSource.electrum);
+      final saved = XpubService(db);
+      await tester.runAsync(saved.electrum.loadSettings);
+      expect(saved.electrum.port, server.port);
+      await tester.runAsync(server.close);
+    });
+
     testWidgets('a self-signed certificate is offered, and trusted', (
       tester,
     ) async {
