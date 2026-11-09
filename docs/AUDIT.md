@@ -603,7 +603,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** `int.parse` throws on a malformed colour, which a restored database could hold, and two icon maps are duplicated.
 - **Impact:** A bad colour red-screens a whole sheet.
 - **Fix direction:** Use `CategoryPalette.parseHex` everywhere, and share one icon map.
-- **Status:** open
+- **Status:** fixed in #PR
 
 ---
 

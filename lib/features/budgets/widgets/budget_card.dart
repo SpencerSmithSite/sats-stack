@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+
 import '../../../core/models/budget_progress.dart';
 import '../../../shared/theme/app_colors.dart';
 import '../../../shared/theme/app_text_styles.dart';
+import '../../../shared/theme/category_palette.dart';
 import '../../../shared/utils/currency_utils.dart';
 import '../../../shared/utils/sat_converter.dart';
 
@@ -25,7 +27,8 @@ class BudgetCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final color =
-        _parseColor(progress.category.color) ?? AppColors.bitcoinOrange;
+        CategoryPalette.parseHex(progress.category.color) ??
+        AppColors.bitcoinOrange;
 
     final limit = progress.limitFiat;
     final remaining = progress.remainingFiat;
@@ -258,13 +261,6 @@ class BudgetCard extends StatelessWidget {
             ),
           ),
     );
-  }
-
-  Color? _parseColor(String hex) {
-    final clean = hex.replaceFirst('#', '');
-    if (clean.length != 6) return null;
-    final value = int.tryParse('FF$clean', radix: 16);
-    return value != null ? Color(value) : null;
   }
 }
 

@@ -5,6 +5,7 @@ import '../../../core/services/btc_price_service.dart';
 import '../../../core/services/wallet_service.dart';
 import '../../../core/services/xpub_service.dart';
 import '../../../shared/theme/app_colors.dart';
+import '../../../shared/theme/category_palette.dart';
 import '../../../shared/widgets/inline_error.dart';
 import 'add_wallet_sheet.dart';
 
@@ -216,11 +217,6 @@ class _ListBody extends StatelessWidget {
   final Future<void> Function(Wallet) onRemove;
   final VoidCallback onAdd;
 
-  Color _parseColor(String hex) {
-    final clean = hex.replaceFirst('#', '');
-    return Color(int.parse('FF$clean', radix: 16));
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -262,7 +258,11 @@ class _ListBody extends StatelessWidget {
                     ),
                     leading: CircleAvatar(
                       radius: 16,
-                      backgroundColor: _parseColor(wallet.color),
+                      // A malformed colour threw and red-screened the sheet
+                      // (audit U-22).
+                      backgroundColor:
+                          CategoryPalette.parseHex(wallet.color) ??
+                          AppColors.bitcoinOrange,
                     ),
                     title: Text(
                       wallet.label,
