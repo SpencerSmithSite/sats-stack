@@ -554,7 +554,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** `maintainState: true`, added in #54 so collapsed sections keep their state, also builds them while collapsed. So `AiProviderSection.initState` runs `listModels()` (a request to the hosted provider with the user's key) and the platform probes on every Settings open. The old single state class did the same, but now it's a cost of something meant only to preserve text.
 - **Impact:** Changing the theme makes a request to the AI provider, and every Settings open is slower.
 - **Fix direction:** Defer the probes until the section first expands.
-- **Status:** fixed in #PR
+- **Status:** fixed in #126
 
 ### U-16 · Low · privacy — Copied chat answers stay on the clipboard
 - **Where:** `lib/features/ai_chat/ai_chat_screen.dart:546`.
