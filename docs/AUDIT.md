@@ -228,7 +228,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** It is true for Ollama and LM Studio whatever their URL. No runtime code reads it any more, only tests and comments. The test `isPrivate == (dataRecipient == null)` holds because both are wrong in the same way for a remote URL.
 - **Impact:** A future caller would bring back the false "nothing leaves" claim.
 - **Fix direction:** Rename it (for example `isPrivateByConstruction`), or remove it in favour of `OllamaService.recipientFor`.
-- **Status:** open
+- **Status:** fixed in #PR
 
 ### A-17 · Low · security — Credentials outside the keychain
 - **Where:** `ollama_service.dart:503-514`; `remote_backends.dart:72`, `:77`.

@@ -16,7 +16,7 @@ import '../services/inference/cloud_backend.dart';
 ///   for its own status instead of pinging a host.
 /// * **Your own server** — [ollama], [lmStudio]. A host the user runs.
 /// * **Hosted, needs a key** — [claude], [chatGpt], [gemini], [grok], [maple].
-///   These send the user's financial data to a third party. See [isPrivate].
+///   These send the user's financial data to a third party. See [isHosted].
 enum AiProvider {
   ollama,
   lmStudio,
@@ -128,20 +128,22 @@ enum AiProvider {
     AiProvider.grok => null,
   };
 
-  /// Whether answers are generated without anything leaving the device.
+  /// Whether this is a service someone else runs, so the user's figures
+  /// always leave for it: the four hosted providers, and [maple].
   ///
-  /// Duplicated from the backend's own `isPrivate` so the picker can label a
-  /// row it has not constructed a backend for. Keep the two in step: this is
-  /// the one claim in the app that must never be wrong.
-  ///
-  /// [ollama] and [lmStudio] count as private: the host is hardware the user
-  /// controls, whether that is this machine or a box on their LAN. Every hosted
-  /// service does not, including [maple].
-  bool get isPrivate => this != AiProvider.maple && cloudProvider == null;
+  /// Not the opposite of private. [ollama] and [lmStudio] are false here, but
+  /// their URL is free text and can name a server anywhere, so whether data
+  /// leaves for one of them is `OllamaService.recipientFor`'s answer, from the
+  /// URL. This used to be `isPrivate`, true for both whatever their URL: no
+  /// code read it any more, but a caller that did would have brought back the
+  /// false "nothing leaves" claim (audit A-16).
+  bool get isHosted => this == AiProvider.maple || cloudProvider != null;
 
   /// Who receives the user's financial data, for the privacy disclosure.
   ///
-  /// Null when nothing leaves the device. Named rather than left vague because
+  /// Null for a provider with no fixed recipient: the on-device ones, and
+  /// [ollama] and [lmStudio], whose recipient is their URL's host — see
+  /// `OllamaService.recipientFor`. Named rather than left vague because
   /// "sent to a server" is not a disclosure — the user needs to know *whose*.
   String? get dataRecipient => switch (this) {
     AiProvider.maple => 'the Maple server you configured',

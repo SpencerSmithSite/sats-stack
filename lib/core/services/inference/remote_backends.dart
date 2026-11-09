@@ -8,9 +8,9 @@ import 'inference_backend.dart';
 
 /// A model served by Ollama, on this machine or another one the user runs.
 ///
-/// [isPrivate] is true: the host is the user's own hardware, whether that is
-/// localhost or a box on their LAN. That is a different claim from a hosted
-/// service, and the picker says so.
+/// [isPrivate] when its URL is on this machine or the local network — the
+/// user's own hardware — and not otherwise: the URL is free text, and can name
+/// a server anywhere.
 /// How long a self-hosted server may go silent mid-answer before the request
 /// is abandoned. Generous: a local model on modest hardware can take a while
 /// between tokens, and a slow answer is not a broken one.

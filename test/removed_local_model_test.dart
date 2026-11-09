@@ -49,7 +49,7 @@ void main() {
         androidBridged: false,
       );
       expect(none, AiProvider.ollama);
-      expect(none.isPrivate, isTrue);
+      expect(none.isHosted, isFalse);
     });
 
     test('is rewritten on load, and its model setting deleted', () async {

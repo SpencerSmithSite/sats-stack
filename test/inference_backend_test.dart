@@ -32,19 +32,18 @@ void main() {
     });
 
     test('exactly the hosted backends are marked as leaving the device', () {
-      // The one claim in the app that must never be wrong. Stated as "privacy
-      // and having a named recipient are opposites" rather than by listing the
-      // hosted providers, so adding a backend cannot pass this test by being
-      // forgotten — a new value with no `dataRecipient` that claims privacy it
-      // does not have will fail here.
+      // The one claim in the app that must never be wrong. Stated as "being
+      // hosted and having a named recipient go together" as well as by listing
+      // the hosted providers, so adding a backend cannot pass this test by
+      // being forgotten — a new hosted value with no `dataRecipient` fails.
       for (final p in AiProvider.values) {
         expect(
-          p.isPrivate,
-          p.dataRecipient == null,
-          reason: '${p.name}: isPrivate must match having a data recipient',
+          p.isHosted,
+          p.dataRecipient != null,
+          reason: '${p.name}: isHosted must match having a data recipient',
         );
       }
-      expect(AiProvider.values.where((p) => !p.isPrivate).toSet(), {
+      expect(AiProvider.values.where((p) => p.isHosted).toSet(), {
         AiProvider.maple,
         AiProvider.claude,
         AiProvider.chatGpt,

@@ -178,8 +178,7 @@ class OllamaService {
   /// sentence; null when nothing leaves hardware the user controls.
   ///
   /// Static so onboarding can judge a URL that is still being typed, rather
-  /// than the provider alone: `AiProvider.isPrivate` is true for Ollama and
-  /// LM Studio, whose URL can point anywhere.
+  /// than the provider alone: Ollama and LM Studio can point anywhere.
   static String? recipientFor(AiProvider provider, String url) {
     String? host() {
       final h = Uri.tryParse(normalizeServerUrl(url) ?? url)?.host;
