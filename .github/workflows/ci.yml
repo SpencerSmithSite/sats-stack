@@ -24,6 +24,10 @@ jobs:
   analyze-and-test:
     name: Format, analyze and test
     runs-on: ubuntu-latest
+    # Every job has a ceiling: a hung step used to run to GitHub's six-hour
+    # limit, billing the whole time (audit P-9). Each is about three times a
+    # normal run.
+    timeout-minutes: 20
     steps:
       # Actions are pinned to a commit, with the tag it was in a comment: a
       # tag can be moved to new code, a commit cannot (audit P-3). Dependabot
@@ -86,6 +90,7 @@ jobs:
   android:
     name: Build Android (release)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -147,6 +152,7 @@ jobs:
     # Pinned, as Xcode is below: `macos-latest` and `latest-stable` moved
     # under the project without a commit saying so.
     runs-on: macos-26
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -181,10 +187,25 @@ jobs:
 
       - run: flutter pub get --enforce-lockfile
 
-      - name: Build iOS (unsigned)
+      # Release, as Android is: only debug was built, so anything that breaks
+      # under AOT compilation, tree shaking or the release Xcode settings
+      # could ship (audit P-9). Unsigned: CI has no Apple certificate.
+      - name: Build iOS (release, unsigned)
         if: matrix.platform == 'ios'
-        run: flutter build ios --debug --no-codesign
+        run: flutter build ios --release --no-codesign
 
-      - name: Build macOS
+      - name: Build macOS (release)
         if: matrix.platform == 'macos'
-        run: flutter build macos --debug
+        run: flutter build macos --release
+
+      # The integration tests run the real plugins: the keychain store, path
+      # provider, and the on-device AI bridges, which skip themselves where
+      # the model is unavailable, as it is on a runner. One file per run: on
+      # macOS the second file in one invocation cannot reattach to the
+      # relaunched app.
+      - name: Integration tests (macOS)
+        if: matrix.platform == 'macos'
+        run: |
+          for test in integration_test/*_test.dart; do
+            flutter test "$test" -d macos
+          done
