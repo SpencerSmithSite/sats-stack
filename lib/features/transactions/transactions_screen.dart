@@ -223,7 +223,6 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
               onPressed: _openFilterSheet,
               tooltip: 'Filter',
               padding: const EdgeInsets.all(8),
-              visualDensity: VisualDensity.compact,
             ),
           ),
           IconButton(
@@ -231,14 +230,12 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
             onPressed: _openWallets,
             tooltip: 'Bitcoin wallets',
             padding: const EdgeInsets.all(8),
-            visualDensity: VisualDensity.compact,
           ),
           IconButton(
             icon: const Icon(Icons.upload_file_outlined),
             onPressed: () => context.push('/import'),
             tooltip: 'Import',
             padding: const EdgeInsets.all(8),
-            visualDensity: VisualDensity.compact,
           ),
         ],
       ),
@@ -306,7 +303,6 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                     onPressed: _clearFilters,
                     style: TextButton.styleFrom(
                       foregroundColor: context.textSecondary,
-                      visualDensity: VisualDensity.compact,
                     ),
                     child: const Text('Clear'),
                   ),
@@ -568,8 +564,6 @@ class _ActiveFilterChip extends StatelessWidget {
       label: Text(label),
       onDeleted: onRemove,
       deleteIcon: const Icon(Icons.close, size: 14),
-      visualDensity: VisualDensity.compact,
-      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
       padding: const EdgeInsets.symmetric(horizontal: 4),
     );
   }

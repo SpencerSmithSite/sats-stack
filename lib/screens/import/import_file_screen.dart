@@ -1110,7 +1110,6 @@ class _AiBanner extends StatelessWidget {
                 icon: const Icon(Icons.close, size: 16),
                 tooltip: 'Dismiss',
                 onPressed: onDismiss,
-                visualDensity: VisualDensity.compact,
               ),
             ],
           );
@@ -1192,9 +1191,13 @@ class _SourceCard extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         // At a large text size the three buttons beside the name pushed the
         // row past the edge, so they go to a line of their own (audit U-7).
-        child: Builder(
-          builder: (context) {
-            final large = MediaQuery.textScalerOf(context).scale(10) > 13;
+        // So on a narrow card: at full touch size (audit U-14) they leave the
+        // name too little room beside them.
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final large =
+                MediaQuery.textScalerOf(context).scale(10) > 13 ||
+                constraints.maxWidth < 360;
             final badge = Container(
               width: 40,
               height: 40,
@@ -1229,21 +1232,16 @@ class _SourceCard extends StatelessWidget {
               icon: const Icon(Icons.more_vert),
               tooltip: 'More options for ${source.name}',
               onPressed: () => _showMenu(context),
-              visualDensity: VisualDensity.compact,
             );
             final photo = IconButton(
               icon: const Icon(Icons.photo_camera_outlined),
               tooltip: 'Import from photo',
               onPressed: onImportImage,
-              visualDensity: VisualDensity.compact,
             );
             final import = FilledButton.icon(
               onPressed: onImport,
               icon: const Icon(Icons.upload_file, size: 16),
               label: const Text('Import'),
-              style: FilledButton.styleFrom(
-                visualDensity: VisualDensity.compact,
-              ),
             );
             if (!large) {
               return Row(
