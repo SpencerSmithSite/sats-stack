@@ -314,7 +314,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
   - Detection also stops at the first type with history, so funds held under another type of the same key are never scanned.
 - **Impact:** A new Ledger or Trezor native-SegWit account added before its first receive stays empty forever. The user has to delete it and add it again.
 - **Fix direction:** Re-detect on rescan while the wallet is unresolved and empty, or ask the user for the type. Reuse the probe results in the first sync.
-- **Status:** fixed in #78 for the first part. Funds held under a second script type of the same key are still not scanned: a wallet stores one type
+- **Status:** fixed in #78 and #151. A key and an address type together are one wallet: the same key can be added again as another type (never twice as the same one), Automatic picks the first type with history that no wallet tracks, and a type the user chose stands
 
 ### B-8 · Low · reliability, security — No bounds on what a hostile server can send
 - **Where:** `electrum_service.dart:387-391`; `xpub_service.dart:607`, `:617`; `lib/shared/utils/bitcoin_script.dart:120-135`, `:156`, `:163`.
