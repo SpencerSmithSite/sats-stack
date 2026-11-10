@@ -254,5 +254,69 @@ void main() {
       expect(wallets, isEmpty);
       await tearDownApp(tester);
     });
+
+    testWidgets('the address type chosen is the wallet added, once (B-7)', (
+      tester,
+    ) async {
+      await setUpApp(tester);
+      Future<void> add(
+        String label,
+        String type, {
+        required Finder until,
+      }) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: AppTheme.dark(),
+            home: Scaffold(
+              body: SingleChildScrollView(
+                child: AddWalletSheet(
+                  key: UniqueKey(),
+                  xpubService: app.xpubService,
+                  walletService: app.walletService,
+                  btcPriceService: app.btcPriceService,
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.enterText(
+          find.widgetWithText(TextFormField, 'Extended public key'),
+          _zpub,
+        );
+        await tester.enterText(
+          find.widgetWithText(TextFormField, 'Wallet label'),
+          label,
+        );
+        await tester.tap(find.byType(DropdownButtonFormField<XpubFormat?>));
+        await tester.pumpAndSettle();
+        await tester.tap(find.textContaining(type).last);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Add & Sync Wallet'));
+        // The syncing step spins, so wait for [until] instead of settling.
+        for (var i = 0; i < 50 && until.evaluate().isEmpty; i++) {
+          await tester.runAsync(
+            () => Future<void>.delayed(const Duration(milliseconds: 50)),
+          );
+          await tester.pump();
+        }
+      }
+
+      await add('Nested', 'Nested SegWit', until: find.text('Done'));
+      final added = (await tester.runAsync(app.walletService.getXpubWallets))!;
+      expect(added.single.xpub, startsWith('ypub'));
+      expect(added.single.scriptTypeChosen, isTrue);
+
+      // The same key and type again is refused on the form.
+      final refused = find.textContaining(
+        'already tracked as this address type',
+      );
+      await add('Again', 'Nested SegWit', until: refused);
+      expect(refused, findsOneWidget);
+      expect(
+        await tester.runAsync(app.walletService.getXpubWallets),
+        hasLength(1),
+      );
+      await tearDownApp(tester);
+    });
   });
 }

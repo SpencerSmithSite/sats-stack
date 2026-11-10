@@ -52,7 +52,7 @@ void main() {
   }
 
   group('checking a backup', () {
-    Future<String?> problem(File f) => backupProblem(f, schemaVersion: 12);
+    Future<String?> problem(File f) => backupProblem(f, schemaVersion: 13);
 
     test('a real backup passes', () async {
       expect(await problem(await goodBackup()), isNull);
@@ -63,6 +63,9 @@ void main() {
       final old = AppDatabase.forTesting(NativeDatabase(file));
       await old.customStatement(
         'ALTER TABLE transactions DROP COLUMN is_own_transfer',
+      );
+      await old.customStatement(
+        'ALTER TABLE wallets DROP COLUMN script_type_chosen',
       );
       await old.customStatement('PRAGMA user_version = 11');
       await old.close();

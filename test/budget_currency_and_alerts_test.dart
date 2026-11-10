@@ -183,6 +183,9 @@ void main() {
         'ALTER TABLE transactions DROP COLUMN is_own_transfer',
       );
       await v9.customStatement(
+        'ALTER TABLE wallets DROP COLUMN script_type_chosen',
+      );
+      await v9.customStatement(
         'INSERT INTO budgets (category_id, amount_fiat, period, created_at) '
         "VALUES (?, 500, 'monthly', 0)",
         [food],

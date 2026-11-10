@@ -275,9 +275,12 @@ class _ListBody extends StatelessWidget {
                       wallet.label,
                       style: const TextStyle(fontWeight: FontWeight.w500),
                     ),
+                    // The address type too: one key can be two wallets, one
+                    // per type (audit B-7).
                     subtitle: Text(
                       wallet.xpub != null
-                          ? '${wallet.xpub!.substring(0, 12)}…'
+                          ? '${_typeOf(wallet)}'
+                              '${wallet.xpub!.substring(0, 12)}…'
                           : '',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: context.textSecondary,
@@ -465,5 +468,18 @@ class _DoneBody extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// "Native SegWit · " for [wallet]'s address type, or nothing while a plain
+/// `xpub`'s is still to be found from its history.
+String _typeOf(Wallet wallet) {
+  try {
+    final format =
+        XpubService.detectFormatOf(wallet.xpub!) ??
+        (wallet.scriptTypeChosen ? XpubFormat.p2pkh : null);
+    return format == null ? '' : '${addressTypeName(format)} · ';
+  } on Object {
+    return '';
   }
 }

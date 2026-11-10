@@ -56,6 +56,21 @@ class $WalletsTable extends Wallets with TableInfo<$WalletsTable, Wallet> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _scriptTypeChosenMeta = const VerificationMeta(
+    'scriptTypeChosen',
+  );
+  @override
+  late final GeneratedColumn<bool> scriptTypeChosen = GeneratedColumn<bool>(
+    'script_type_chosen',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("script_type_chosen" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   static const VerificationMeta _colorMeta = const VerificationMeta('color');
   @override
   late final GeneratedColumn<String> color = GeneratedColumn<String>(
@@ -87,6 +102,7 @@ class $WalletsTable extends Wallets with TableInfo<$WalletsTable, Wallet> {
     label,
     type,
     xpub,
+    scriptTypeChosen,
     color,
     createdAt,
   ];
@@ -125,6 +141,15 @@ class $WalletsTable extends Wallets with TableInfo<$WalletsTable, Wallet> {
       context.handle(
         _xpubMeta,
         xpub.isAcceptableOrUnknown(data['xpub']!, _xpubMeta),
+      );
+    }
+    if (data.containsKey('script_type_chosen')) {
+      context.handle(
+        _scriptTypeChosenMeta,
+        scriptTypeChosen.isAcceptableOrUnknown(
+          data['script_type_chosen']!,
+          _scriptTypeChosenMeta,
+        ),
       );
     }
     if (data.containsKey('color')) {
@@ -169,6 +194,11 @@ class $WalletsTable extends Wallets with TableInfo<$WalletsTable, Wallet> {
         DriftSqlType.string,
         data['${effectivePrefix}xpub'],
       ),
+      scriptTypeChosen:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.bool,
+            data['${effectivePrefix}script_type_chosen'],
+          )!,
       color:
           attachedDatabase.typeMapping.read(
             DriftSqlType.string,
@@ -193,6 +223,13 @@ class Wallet extends DataClass implements Insertable<Wallet> {
   final String label;
   final String type;
   final String? xpub;
+
+  /// Whether the user chose the address type, which [xpub]'s version bytes
+  /// record (`xpub`/`ypub`/`zpub`). A key and an address type together are
+  /// one wallet, so the same key can be tracked again as another type (audit
+  /// B-7). Left false, a plain `xpub` with no history yet is looked at again
+  /// on each sync; set, the user's choice stands.
+  final bool scriptTypeChosen;
   final String color;
   final DateTime createdAt;
   const Wallet({
@@ -200,6 +237,7 @@ class Wallet extends DataClass implements Insertable<Wallet> {
     required this.label,
     required this.type,
     this.xpub,
+    required this.scriptTypeChosen,
     required this.color,
     required this.createdAt,
   });
@@ -212,6 +250,7 @@ class Wallet extends DataClass implements Insertable<Wallet> {
     if (!nullToAbsent || xpub != null) {
       map['xpub'] = Variable<String>(xpub);
     }
+    map['script_type_chosen'] = Variable<bool>(scriptTypeChosen);
     map['color'] = Variable<String>(color);
     map['created_at'] = Variable<DateTime>(createdAt);
     return map;
@@ -223,6 +262,7 @@ class Wallet extends DataClass implements Insertable<Wallet> {
       label: Value(label),
       type: Value(type),
       xpub: xpub == null && nullToAbsent ? const Value.absent() : Value(xpub),
+      scriptTypeChosen: Value(scriptTypeChosen),
       color: Value(color),
       createdAt: Value(createdAt),
     );
@@ -238,6 +278,7 @@ class Wallet extends DataClass implements Insertable<Wallet> {
       label: serializer.fromJson<String>(json['label']),
       type: serializer.fromJson<String>(json['type']),
       xpub: serializer.fromJson<String?>(json['xpub']),
+      scriptTypeChosen: serializer.fromJson<bool>(json['scriptTypeChosen']),
       color: serializer.fromJson<String>(json['color']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
@@ -250,6 +291,7 @@ class Wallet extends DataClass implements Insertable<Wallet> {
       'label': serializer.toJson<String>(label),
       'type': serializer.toJson<String>(type),
       'xpub': serializer.toJson<String?>(xpub),
+      'scriptTypeChosen': serializer.toJson<bool>(scriptTypeChosen),
       'color': serializer.toJson<String>(color),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
@@ -260,6 +302,7 @@ class Wallet extends DataClass implements Insertable<Wallet> {
     String? label,
     String? type,
     Value<String?> xpub = const Value.absent(),
+    bool? scriptTypeChosen,
     String? color,
     DateTime? createdAt,
   }) => Wallet(
@@ -267,6 +310,7 @@ class Wallet extends DataClass implements Insertable<Wallet> {
     label: label ?? this.label,
     type: type ?? this.type,
     xpub: xpub.present ? xpub.value : this.xpub,
+    scriptTypeChosen: scriptTypeChosen ?? this.scriptTypeChosen,
     color: color ?? this.color,
     createdAt: createdAt ?? this.createdAt,
   );
@@ -276,6 +320,10 @@ class Wallet extends DataClass implements Insertable<Wallet> {
       label: data.label.present ? data.label.value : this.label,
       type: data.type.present ? data.type.value : this.type,
       xpub: data.xpub.present ? data.xpub.value : this.xpub,
+      scriptTypeChosen:
+          data.scriptTypeChosen.present
+              ? data.scriptTypeChosen.value
+              : this.scriptTypeChosen,
       color: data.color.present ? data.color.value : this.color,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
@@ -288,6 +336,7 @@ class Wallet extends DataClass implements Insertable<Wallet> {
           ..write('label: $label, ')
           ..write('type: $type, ')
           ..write('xpub: $xpub, ')
+          ..write('scriptTypeChosen: $scriptTypeChosen, ')
           ..write('color: $color, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
@@ -295,7 +344,8 @@ class Wallet extends DataClass implements Insertable<Wallet> {
   }
 
   @override
-  int get hashCode => Object.hash(id, label, type, xpub, color, createdAt);
+  int get hashCode =>
+      Object.hash(id, label, type, xpub, scriptTypeChosen, color, createdAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -304,6 +354,7 @@ class Wallet extends DataClass implements Insertable<Wallet> {
           other.label == this.label &&
           other.type == this.type &&
           other.xpub == this.xpub &&
+          other.scriptTypeChosen == this.scriptTypeChosen &&
           other.color == this.color &&
           other.createdAt == this.createdAt);
 }
@@ -313,6 +364,7 @@ class WalletsCompanion extends UpdateCompanion<Wallet> {
   final Value<String> label;
   final Value<String> type;
   final Value<String?> xpub;
+  final Value<bool> scriptTypeChosen;
   final Value<String> color;
   final Value<DateTime> createdAt;
   const WalletsCompanion({
@@ -320,6 +372,7 @@ class WalletsCompanion extends UpdateCompanion<Wallet> {
     this.label = const Value.absent(),
     this.type = const Value.absent(),
     this.xpub = const Value.absent(),
+    this.scriptTypeChosen = const Value.absent(),
     this.color = const Value.absent(),
     this.createdAt = const Value.absent(),
   });
@@ -328,6 +381,7 @@ class WalletsCompanion extends UpdateCompanion<Wallet> {
     required String label,
     required String type,
     this.xpub = const Value.absent(),
+    this.scriptTypeChosen = const Value.absent(),
     required String color,
     this.createdAt = const Value.absent(),
   }) : label = Value(label),
@@ -338,6 +392,7 @@ class WalletsCompanion extends UpdateCompanion<Wallet> {
     Expression<String>? label,
     Expression<String>? type,
     Expression<String>? xpub,
+    Expression<bool>? scriptTypeChosen,
     Expression<String>? color,
     Expression<DateTime>? createdAt,
   }) {
@@ -346,6 +401,7 @@ class WalletsCompanion extends UpdateCompanion<Wallet> {
       if (label != null) 'label': label,
       if (type != null) 'type': type,
       if (xpub != null) 'xpub': xpub,
+      if (scriptTypeChosen != null) 'script_type_chosen': scriptTypeChosen,
       if (color != null) 'color': color,
       if (createdAt != null) 'created_at': createdAt,
     });
@@ -356,6 +412,7 @@ class WalletsCompanion extends UpdateCompanion<Wallet> {
     Value<String>? label,
     Value<String>? type,
     Value<String?>? xpub,
+    Value<bool>? scriptTypeChosen,
     Value<String>? color,
     Value<DateTime>? createdAt,
   }) {
@@ -364,6 +421,7 @@ class WalletsCompanion extends UpdateCompanion<Wallet> {
       label: label ?? this.label,
       type: type ?? this.type,
       xpub: xpub ?? this.xpub,
+      scriptTypeChosen: scriptTypeChosen ?? this.scriptTypeChosen,
       color: color ?? this.color,
       createdAt: createdAt ?? this.createdAt,
     );
@@ -384,6 +442,9 @@ class WalletsCompanion extends UpdateCompanion<Wallet> {
     if (xpub.present) {
       map['xpub'] = Variable<String>(xpub.value);
     }
+    if (scriptTypeChosen.present) {
+      map['script_type_chosen'] = Variable<bool>(scriptTypeChosen.value);
+    }
     if (color.present) {
       map['color'] = Variable<String>(color.value);
     }
@@ -400,6 +461,7 @@ class WalletsCompanion extends UpdateCompanion<Wallet> {
           ..write('label: $label, ')
           ..write('type: $type, ')
           ..write('xpub: $xpub, ')
+          ..write('scriptTypeChosen: $scriptTypeChosen, ')
           ..write('color: $color, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
@@ -4783,6 +4845,7 @@ typedef $$WalletsTableCreateCompanionBuilder =
       required String label,
       required String type,
       Value<String?> xpub,
+      Value<bool> scriptTypeChosen,
       required String color,
       Value<DateTime> createdAt,
     });
@@ -4792,6 +4855,7 @@ typedef $$WalletsTableUpdateCompanionBuilder =
       Value<String> label,
       Value<String> type,
       Value<String?> xpub,
+      Value<bool> scriptTypeChosen,
       Value<String> color,
       Value<DateTime> createdAt,
     });
@@ -4845,6 +4909,11 @@ class $$WalletsTableFilterComposer
 
   ColumnFilters<String> get xpub => $composableBuilder(
     column: $table.xpub,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get scriptTypeChosen => $composableBuilder(
+    column: $table.scriptTypeChosen,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -4913,6 +4982,11 @@ class $$WalletsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get scriptTypeChosen => $composableBuilder(
+    column: $table.scriptTypeChosen,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get color => $composableBuilder(
     column: $table.color,
     builder: (column) => ColumnOrderings(column),
@@ -4944,6 +5018,11 @@ class $$WalletsTableAnnotationComposer
 
   GeneratedColumn<String> get xpub =>
       $composableBuilder(column: $table.xpub, builder: (column) => column);
+
+  GeneratedColumn<bool> get scriptTypeChosen => $composableBuilder(
+    column: $table.scriptTypeChosen,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<String> get color =>
       $composableBuilder(column: $table.color, builder: (column) => column);
@@ -5009,6 +5088,7 @@ class $$WalletsTableTableManager
                 Value<String> label = const Value.absent(),
                 Value<String> type = const Value.absent(),
                 Value<String?> xpub = const Value.absent(),
+                Value<bool> scriptTypeChosen = const Value.absent(),
                 Value<String> color = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
               }) => WalletsCompanion(
@@ -5016,6 +5096,7 @@ class $$WalletsTableTableManager
                 label: label,
                 type: type,
                 xpub: xpub,
+                scriptTypeChosen: scriptTypeChosen,
                 color: color,
                 createdAt: createdAt,
               ),
@@ -5025,6 +5106,7 @@ class $$WalletsTableTableManager
                 required String label,
                 required String type,
                 Value<String?> xpub = const Value.absent(),
+                Value<bool> scriptTypeChosen = const Value.absent(),
                 required String color,
                 Value<DateTime> createdAt = const Value.absent(),
               }) => WalletsCompanion.insert(
@@ -5032,6 +5114,7 @@ class $$WalletsTableTableManager
                 label: label,
                 type: type,
                 xpub: xpub,
+                scriptTypeChosen: scriptTypeChosen,
                 color: color,
                 createdAt: createdAt,
               ),

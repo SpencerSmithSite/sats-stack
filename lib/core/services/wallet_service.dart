@@ -1,6 +1,5 @@
 import 'package:drift/drift.dart';
 import '../database/database.dart';
-import 'xpub_service.dart';
 
 class WalletService {
   WalletService(this._db);
@@ -19,24 +18,19 @@ class WalletService {
         .watch();
   }
 
-  /// The wallet already tracking [xpub], if any.
+  /// The wallet already tracking [xpub] — this key as this address type —
+  /// if any.
   ///
   /// Compared on the trimmed text, which is the key's canonical base58check
-  /// encoding: the same account entered as an `xpub` and as a `zpub` derives
-  /// different addresses, so those are genuinely different wallets.
-  ///
-  /// The exception is a plain `xpub`, which a sync stores as the SegWit key
-  /// it turns out to be (see [XpubService.resolvedFormsOf]): it also matches
-  /// a wallet holding that key.
-  Future<Wallet?> findByXpub(String xpub) {
-    xpub = xpub.trim();
-    return (_db.select(_db.wallets)
-          ..where(
-            (w) => w.xpub.isIn([xpub, ...XpubService.resolvedFormsOf(xpub)]),
-          )
-          ..limit(1))
-        .getSingleOrNull();
-  }
+  /// encoding, and whose version bytes are the address type: a key and an
+  /// address type together are one wallet (audit B-7), so the same account
+  /// as a `zpub` and as a `ypub` are two. A plain `xpub` on Automatic matches
+  /// only itself; the sync then picks a type no wallet tracks, or refuses.
+  Future<Wallet?> findByXpub(String xpub) =>
+      (_db.select(_db.wallets)
+            ..where((w) => w.xpub.equals(xpub.trim()))
+            ..limit(1))
+          .getSingleOrNull();
 
   /// Returns the first manual wallet, or null if none exists.
   Future<Wallet?> getDefaultManual() async {
@@ -53,10 +47,14 @@ class WalletService {
   /// Throws [DuplicateWalletException] if [xpub] is already tracked. Every
   /// wallet's rows are hashed per wallet, so a second wallet on the same key
   /// is not deduplicated against the first — it doubled the stack.
+  ///
+  /// [scriptTypeChosen] is whether the user picked the address type that
+  /// [xpub]'s version bytes record, which a sync then never second-guesses.
   Future<Wallet> addXpubWallet({
     required String label,
     required String xpub,
     required String color,
+    bool scriptTypeChosen = false,
   }) async {
     xpub = xpub.trim();
     // The check and the insert in one transaction. Drift runs transactions
@@ -74,6 +72,7 @@ class WalletService {
               type: 'xpub',
               xpub: Value(xpub),
               color: color,
+              scriptTypeChosen: Value(scriptTypeChosen),
             ),
           );
       return (_db.select(_db.wallets)
@@ -123,6 +122,7 @@ class DuplicateWalletException implements Exception {
   final Wallet existing;
   @override
   String toString() =>
-      'This key is already tracked as "${existing.label}". Rescan it from '
-      'the wallet list instead of adding it again.';
+      'This key is already tracked as this address type, as '
+      '"${existing.label}". Rescan it from the wallet list, or choose another '
+      'address type.';
 }
