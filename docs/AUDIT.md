@@ -699,7 +699,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
   - The template `// TODO: Specify your own unique Application ID` is still there.
   - `strict-casts`, `strict-inference` and `strict-raw-types` are all off.
 - **Fix direction:** Delete the stale lines, and consider the strict modes.
-- **Status:** open
+- **Status:** fixed in #135
 
 ### P-12 · Low · security — Committed test TLS key (acceptable, but flagged by scanners)
 - **Where:** `test/fixtures/electrum_test_key.pem`, `electrum_test_cert.pem`.
