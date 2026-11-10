@@ -124,7 +124,9 @@ class StackGoalCard extends StatelessWidget {
                   Text(
                     '${(progress * 100).toStringAsFixed(1)}%',
                     style: AppTextStyles.monoMedium.copyWith(
-                      color: progressColor,
+                      // The bar keeps the raw colour; text needs contrast
+                      // (audit U-13).
+                      color: context.legibleAccent(progressColor),
                       fontWeight: FontWeight.w600,
                     ),
                   ),

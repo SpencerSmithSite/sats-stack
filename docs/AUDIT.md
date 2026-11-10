@@ -540,7 +540,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** Raw green, orange or blue used as text colour (the codebase's own figures: 3.4:1 and 2.3:1 on white).
 - **Impact:** Hard to read in light mode.
 - **Fix direction:** Route them through `context.legibleAccent` / `bitcoinOrangeText`.
-- **Status:** open
+- **Status:** fixed in #129
 
 ### U-14 · Low · accessibility — Tap targets under 48 px
 - **Where:** `transactions_screen.dart:168-189` (compact AppBar icons, 40 px), `:508`; `transaction_edit_sheet.dart:353`; `import_file_screen.dart:1033`, `:1148`, `:1154`.

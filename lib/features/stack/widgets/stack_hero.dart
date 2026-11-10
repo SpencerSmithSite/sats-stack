@@ -135,7 +135,11 @@ class MonthChange extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final positive = sats > 0;
-    final color = positive ? AppColors.success : AppColors.danger;
+    // Through legibleAccent: the raw green and red are 3.4:1 and below on
+    // the light background (audit U-13).
+    final color = context.legibleAccent(
+      positive ? AppColors.success : AppColors.danger,
+    );
     final formatted = SatConverter.formatSatsSigned(sats);
     return Row(
       mainAxisSize: MainAxisSize.min,

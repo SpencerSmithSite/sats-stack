@@ -1240,10 +1240,12 @@ class _AiSettingsSheetState extends State<_AiSettingsSheet> {
                     _testResult!,
                     style: TextStyle(
                       fontSize: 13,
-                      color:
-                          _testResult!.contains('✓')
-                              ? AppColors.success
-                              : AppColors.danger,
+                      // Through legibleAccent for light mode (audit U-13).
+                      color: context.legibleAccent(
+                        _testResult!.contains('✓')
+                            ? AppColors.success
+                            : AppColors.danger,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 12),
