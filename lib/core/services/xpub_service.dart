@@ -19,6 +19,8 @@ import '../database/database.dart';
 import '../models/bitcoin_data_source.dart';
 import '../services/btc_price_service.dart';
 import 'electrum_service.dart';
+import 'secure_key_store.dart';
+import 'server_logins.dart';
 
 // ── Public types ─────────────────────────────────────────────────────────────
 
@@ -188,11 +190,27 @@ class XpubService {
     http.Client? client,
     ElectrumService? electrum,
     @visibleForTesting Future<void> Function(Duration)? sleep,
+    SecureKeyStore keyStore = const SecureKeyStore(),
   }) : _client = client ?? http.Client(),
        electrum = electrum ?? ElectrumService(_db),
-       _sleep = sleep ?? Future.delayed;
+       _sleep = sleep ?? Future.delayed,
+       _logins = ServerLogins(
+         keyStore,
+         (key, value) => _db
+             .into(_db.appSettings)
+             .insertOnConflictUpdate(
+               AppSettingsCompanion.insert(key: key, value: value),
+             ),
+       );
 
   final AppDatabase _db;
+
+  /// The Mempool/Esplora server's login, in the keychain rather than the
+  /// exported table (audit A-17).
+  final ServerLogins _logins;
+
+  /// Whether the keychain refused that login, so it is still in the table.
+  bool get loginOutsideKeychain => _logins.outsideKeychain.isNotEmpty;
 
   /// The user's own Electrum server, used for history when [dataSource] says
   /// so. Its settings (host, port, TLS, a pinned certificate) live there.
@@ -216,7 +234,9 @@ class XpubService {
 
   String _esploraBaseUrl = AppConstants.mempoolBaseUrl;
 
-  String get esploraBaseUrl => _esploraBaseUrl;
+  /// The server's address, for showing and for the Settings field: a saved
+  /// password reads as [passwordMask], which saved back keeps it.
+  String get esploraBaseUrl => maskPassword(_esploraBaseUrl);
 
   /// Whether mempool.space's public server is the one in use — see
   /// [isDefaultMempoolServer].
@@ -264,8 +284,11 @@ class XpubService {
         await (_db.select(_db.appSettings)
           ..where((t) => t.key.equals(AppConstants.settingElectrumUrl))).get();
     if (rows.isNotEmpty) {
+      final saved = normalizeBaseUrl(rows.first.value);
       _esploraBaseUrl =
-          normalizeBaseUrl(rows.first.value) ?? AppConstants.mempoolBaseUrl;
+          saved == null
+              ? AppConstants.mempoolBaseUrl
+              : await _logins.load(AppConstants.settingElectrumUrl, saved);
     }
     final source =
         await (_db.select(_db.appSettings)..where(
@@ -340,18 +363,30 @@ class XpubService {
   /// used to leave every request pointed at a relative URL until the next
   /// launch, which surfaced as "0 transactions imported" for a perfectly good
   /// wallet.
+  ///
+  /// A login in the address goes to the keychain, not the table (audit A-17);
+  /// what is returned shows its password masked.
   Future<String?> saveSettings({required String url}) async {
     final normalized = normalizeBaseUrl(url);
-    _esploraBaseUrl = normalized ?? AppConstants.mempoolBaseUrl;
-    await _db
-        .into(_db.appSettings)
-        .insertOnConflictUpdate(
-          AppSettingsCompanion.insert(
-            key: AppConstants.settingElectrumUrl,
-            value: normalized ?? '',
-          ),
-        );
-    return normalized;
+    if (normalized == null) {
+      _esploraBaseUrl = AppConstants.mempoolBaseUrl;
+      await _logins.forget(AppConstants.settingElectrumUrl);
+      await _db
+          .into(_db.appSettings)
+          .insertOnConflictUpdate(
+            AppSettingsCompanion.insert(
+              key: AppConstants.settingElectrumUrl,
+              value: '',
+            ),
+          );
+      return null;
+    }
+    _esploraBaseUrl = await _logins.save(
+      AppConstants.settingElectrumUrl,
+      normalized,
+      current: _esploraBaseUrl,
+    );
+    return maskPassword(_esploraBaseUrl);
   }
 
   /// Cleans up a user-typed server URL, or returns null if it cannot be used.

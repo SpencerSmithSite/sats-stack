@@ -211,8 +211,12 @@ class _DataSectionState extends State<DataSection> {
           subtitle: const Text('Save a copy of your SQLite file'),
           onTap: _exportDb,
         ),
-        if (app.ollamaService.credentialsOutsideKeychain case final items
-            when items.isNotEmpty)
+        if ([
+              ...app.ollamaService.credentialsOutsideKeychain,
+              if (app.xpubService.loginOutsideKeychain)
+                'your Bitcoin server login',
+            ]
+            case final items when items.isNotEmpty)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: CredentialsOutsideKeychainNote(items: items),

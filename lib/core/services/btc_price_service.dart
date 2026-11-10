@@ -8,15 +8,34 @@ import 'package:http/http.dart' as http;
 import '../../shared/constants/app_constants.dart';
 import '../../shared/utils/url_utils.dart';
 import '../database/database.dart';
+import 'secure_key_store.dart';
+import 'server_logins.dart';
 
 class BtcPriceService {
   /// [clock] is for tests that need "today" to be a known date; [client] for
   /// tests that answer from memory instead of the network.
-  BtcPriceService(this._db, {DateTime Function()? clock, http.Client? client})
-    : _now = clock ?? DateTime.now,
-      _client = client;
+  BtcPriceService(
+    this._db, {
+    DateTime Function()? clock,
+    http.Client? client,
+    SecureKeyStore keyStore = const SecureKeyStore(),
+  }) : _now = clock ?? DateTime.now,
+       _client = client,
+       _keyStore = keyStore;
 
   final AppDatabase _db;
+  final SecureKeyStore _keyStore;
+
+  /// The Mempool/Esplora server's login, which [XpubService] saves to the
+  /// keychain (audit A-17).
+  late final _logins = ServerLogins(
+    _keyStore,
+    (key, value) => _db
+        .into(_db.appSettings)
+        .insertOnConflictUpdate(
+          AppSettingsCompanion.insert(key: key, value: value),
+        ),
+  );
   final DateTime Function() _now;
   final http.Client? _client;
 
@@ -59,8 +78,12 @@ class BtcPriceService {
       switch (row.key) {
         case AppConstants.settingElectrumUrl:
           // Normalised as Save does it, so it is compared and used as the
-          // other services see it.
-          _esploraBaseUrl = normalizeServerUrl(row.value);
+          // other services see it; with its login, if it has one.
+          final saved = normalizeServerUrl(row.value);
+          _esploraBaseUrl =
+              saved == null
+                  ? null
+                  : await _logins.load(AppConstants.settingElectrumUrl, saved);
         case AppConstants.settingCurrency:
           _currency = row.value.isNotEmpty ? row.value : 'USD';
         case AppConstants.settingBtcAllPrices:
