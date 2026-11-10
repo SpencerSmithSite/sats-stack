@@ -49,6 +49,17 @@ History lives elsewhere and is not duplicated into this file:
   AGP 9.0.1 and Kotlin 2.3.20 will be required soon. AGP 9 is a major
   release (built-in Kotlin, changed DSL defaults), so do it on its own and
   check every plugin builds.
+  `flutter_local_notifications` 23 needs it (AGP 9.1.1, compileSdk 37).
+- **The held upgrades, and what each unblocks** (the rest of audit P-4):
+  - `flutter_secure_storage` 10+: changes the options API of the store that
+    holds every API key, so keys must be read back under the new options
+    before it ships. Its Windows plugin keeps `win32` at 5, which holds
+    `file_picker` 13 (a static API, `pickFile`, no `FilePickerResult`) and
+    `package_info_plus` 10. It also lifts the Linux CMake exception.
+  - `drift_flutter` 0.3: sqlite3 3 in place of the end-of-life
+    `sqlite3_flutter_libs`, and with it `drift`/`drift_dev` 2.35, `analyzer`
+    14 and `build_runner` 2.17. The old #83 branch had the regenerated code.
+  - `fl_chart` 1.x: the chart API changed.
 - **Calendar dates across timezones (audit D-11).** Deferred 2026-11-02.
   Picker and CSV dates are stored as local midnight, an instant, and read
   back in the device's current timezone, so after moving west a transaction
