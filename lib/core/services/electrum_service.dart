@@ -439,8 +439,8 @@ class ElectrumSession {
     }
   }
 
-  void _handleError(dynamic e) {
-    _closedBy ??= e as Object;
+  void _handleError(Object e) {
+    _closedBy ??= e;
     for (final c in _pending.values) {
       if (!c.isCompleted) c.completeError(e);
     }

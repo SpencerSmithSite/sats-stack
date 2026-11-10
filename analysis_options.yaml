@@ -6,6 +6,11 @@
 # follows from regressing.
 
 analyzer:
+  # An implicit cast from dynamic, or a raw generic type, is an error rather
+  # than a silent `dynamic` (audit P-11).
+  language:
+    strict-casts: true
+    strict-raw-types: true
   exclude:
     - build/**
     - android/**
@@ -47,8 +52,11 @@ linter:
     #
     # require_trailing_commas — the formatter manages trailing commas itself
     #   from language version 3.7 (the "tall" style), so the two would fight.
-    # avoid_dynamic_calls — 43 sites, nearly all JSON decoding; worth doing as
-    #   typed parsing rather than as 43 casts to silence it. Tracked in TODO.md.
     # discarded_futures — 47 sites, mostly fire-and-forget calls from
     #   synchronous callbacks; `unawaited_futures` covers the async case that
     #   matters, and `unawaited(...)` marks the rest where it is deliberate.
+    # strict-inference (analyzer.language) — 53 sites: 19 empty collection
+    #   literals, 18 constructor calls (11 of them `Future.delayed`) and 16
+    #   generic calls (15 of them `showModalBottomSheet`) with no type
+    #   argument. Worth doing on its own, not as a side effect of another
+    #   change.
