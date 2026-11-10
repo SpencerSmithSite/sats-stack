@@ -645,7 +645,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
   - Plan `drift_flutter` 0.3 / `sqlite3` 3.x as its own change; it also unblocks SQLCipher.
   - Plan `flutter_secure_storage` 10/11 with a key-migration test.
   - Run `flutter pub upgrade` within the current constraints regularly.
-- **Status:** partly fixed in #80 (the 63 packages upgraded within their constraints), #96, #97, #100, #148, #149 and #150 (csv 8, notifications 22, go_router 17 then 18, Syncfusion 35, intl 0.20). What is left waits on three larger moves, in `docs/TODO.md` item 10: `drift_flutter` 0.3 (held), which brings sqlite3 3 in place of the end-of-life SQLite libs and lifts `drift`, `drift_dev`, `analyzer` and `build_runner`; `flutter_secure_storage` 10+ (held), whose Windows plugin keeps `win32` at 5 and so holds `file_picker` 13 and `package_info_plus` 10; and AGP 9, which `flutter_local_notifications` 23 needs.
+- **Status:** fixed in #80 (the 63 packages upgraded within their constraints), #96, #97, #100, #148, #149 and #150 (csv 8, notifications 22, go_router 17 then 18, Syncfusion 35, intl 0.20), then #152 (`flutter_secure_storage` 10.3, with the iOS keychain-class fallback), #153 (`file_picker` 13, `package_info_plus` 10), #154 (`flutter_local_notifications` 23 on AGP 9.1.1), #155 (`drift_flutter` 0.3 with sqlite3 3, retiring the end-of-life SQLite libs; the `analyzer` hold is gone) and #156 (`fl_chart` 1.3). One deliberate hold remains, `flutter_secure_storage` 11, in `docs/TODO.md` item 10.
 
 ### P-5 · Medium · privacy — ML Kit GenAI may bring Google's telemetry transport into Android builds
 - **Where:** `android/app/build.gradle.kts:94` (`com.google.mlkit:genai-prompt:1.0.0-beta2`).
