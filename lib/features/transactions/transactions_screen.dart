@@ -435,104 +435,113 @@ class _FilterSheetState extends State<_FilterSheet> {
         16,
         MediaQuery.of(context).viewInsets.bottom + 16,
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Handle + header row
-          Center(
-            child: Container(
-              width: 36,
-              height: 4,
-              margin: const EdgeInsets.only(bottom: 16),
-              decoration: BoxDecoration(
-                color: context.textSecondary.withAlpha(80),
-                borderRadius: BorderRadius.circular(2),
+      // Scrolls: with many rows or a large text size, the bottom rows
+      // and the button were out of reach (audit U-12).
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Handle + header row
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: context.textSecondary.withAlpha(80),
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
             ),
-          ),
-          Row(
-            children: [
-              Text('Filter', style: theme.textTheme.titleMedium),
-              const Spacer(),
-              if (hasAny)
-                TextButton(
-                  onPressed: _clearAll,
-                  style: TextButton.styleFrom(
-                    foregroundColor: context.textSecondary,
+            Row(
+              children: [
+                Text('Filter', style: theme.textTheme.titleMedium),
+                const Spacer(),
+                if (hasAny)
+                  TextButton(
+                    onPressed: _clearAll,
+                    style: TextButton.styleFrom(
+                      foregroundColor: context.textSecondary,
+                    ),
+                    child: const Text('Clear all'),
                   ),
-                  child: const Text('Clear all'),
-                ),
-            ],
-          ),
-          const SizedBox(height: 12),
-
-          // Source section
-          Text(
-            'Source',
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: context.textSecondary,
-              letterSpacing: 1.1,
+              ],
             ),
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 6,
-            children:
-                _allSources
-                    .map(
-                      (src) => FilterChip(
-                        label: Text(_sourceLabel(src)),
-                        selected: _sources.contains(src),
-                        onSelected:
-                            (on) => setState(
-                              () =>
-                                  on ? _sources.add(src) : _sources.remove(src),
-                            ),
-                      ),
-                    )
-                    .toList(),
-          ),
+            const SizedBox(height: 12),
 
-          const SizedBox(height: 16),
-
-          // Category section
-          Text(
-            'Category',
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: context.textSecondary,
-              letterSpacing: 1.1,
+            // Source section
+            Text(
+              'Source',
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: context.textSecondary,
+                letterSpacing: 1.1,
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 6,
-            children:
-                _allCategories
-                    .map(
-                      (cat) => FilterChip(
-                        label: Text(cat.name),
-                        selected: _categories.contains(cat.name),
-                        onSelected:
-                            (on) => setState(
-                              () =>
-                                  on
-                                      ? _categories.add(cat.name)
-                                      : _categories.remove(cat.name),
-                            ),
-                      ),
-                    )
-                    .toList(),
-          ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children:
+                  _allSources
+                      .map(
+                        (src) => FilterChip(
+                          label: Text(_sourceLabel(src)),
+                          selected: _sources.contains(src),
+                          onSelected:
+                              (on) => setState(
+                                () =>
+                                    on
+                                        ? _sources.add(src)
+                                        : _sources.remove(src),
+                              ),
+                        ),
+                      )
+                      .toList(),
+            ),
 
-          const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton(onPressed: _apply, child: const Text('Apply')),
-          ),
-        ],
+            const SizedBox(height: 16),
+
+            // Category section
+            Text(
+              'Category',
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: context.textSecondary,
+                letterSpacing: 1.1,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children:
+                  _allCategories
+                      .map(
+                        (cat) => FilterChip(
+                          label: Text(cat.name),
+                          selected: _categories.contains(cat.name),
+                          onSelected:
+                              (on) => setState(
+                                () =>
+                                    on
+                                        ? _categories.add(cat.name)
+                                        : _categories.remove(cat.name),
+                              ),
+                        ),
+                      )
+                      .toList(),
+            ),
+
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: _apply,
+                child: const Text('Apply'),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

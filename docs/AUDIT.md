@@ -533,7 +533,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** Plain `Column`s with no scroll.
 - **Impact:** With many wallets or categories, or a large font, the bottom rows and the Apply button can't be reached.
 - **Fix direction:** Wrap them as `SetBudgetSheet` does.
-- **Status:** open
+- **Status:** fixed in #128
 
 ### U-13 · Low · accessibility — Low-contrast text the `legibleAccent` pass missed
 - **Where:** `stack_hero.dart:131-144`; `stack_goal_card.dart:127`, `:213-215`; `dca_simulator.dart:263`; `analytics_screen.dart:590`; `import_file_screen.dart:986`, `:1025`; `import_preview_screen.dart:261`; `ai_chat_screen.dart:1179`.

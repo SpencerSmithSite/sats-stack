@@ -286,7 +286,9 @@ class _SetGoalSheetState extends State<SetGoalSheet> {
         ),
         child: SafeArea(
           top: false,
-          child: Padding(
+          // Scrolls: with the keyboard up or a large text size, the button
+          // below the field was out of reach (audit U-12).
+          child: SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
