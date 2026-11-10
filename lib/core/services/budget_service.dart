@@ -211,7 +211,6 @@ class BudgetService {
   /// [now] exists for tests.
   Future<void> checkAndNotify({
     required NotificationService notifications,
-    required String currency,
     DateTime? now,
   }) async {
     final month = now ?? DateTime.now();
@@ -222,9 +221,6 @@ class BudgetService {
         await notifications.showBudgetOverspend(
           categoryId: p.category.id,
           categoryName: p.category.name,
-          overBy: -p.remainingFiat!,
-          budgetAmount: p.limitFiat!,
-          currency: currency,
           month: month,
         );
       } else if (p.progress >= 0.8) {
@@ -232,8 +228,6 @@ class BudgetService {
           categoryId: p.category.id,
           categoryName: p.category.name,
           percentUsed: (p.progress * 100).round(),
-          budgetAmount: p.limitFiat!,
-          currency: currency,
           month: month,
         );
       }

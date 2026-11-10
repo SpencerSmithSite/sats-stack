@@ -672,7 +672,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** Bodies include budget overspends and "You've stacked N sats ≈ $X". No Android `visibility` or `publicVersion` is set.
 - **Impact:** Holdings show on a locked or shared screen, a physical-security concern for Bitcoin.
 - **Fix direction:** Private visibility with a generic public version, or no amounts in the text.
-- **Status:** open
+- **Status:** fixed in #134
 
 ### P-9 · Low · reliability — CI never builds Apple release configs; no job timeouts; Linux/Windows unbuilt
 - **Where:** `.github/workflows/ci.yml:166-172`; `integration_test/`; `linux/`, `windows/`.

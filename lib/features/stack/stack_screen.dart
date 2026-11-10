@@ -118,11 +118,7 @@ class _StackScreenState extends State<StackScreen> {
     final goal = _stackGoalSats;
     if (goal == null || goal <= 0) return;
     if (total >= goal) {
-      app.notificationService.showStackGoalReached(
-        goalSats: goal,
-        currency: app.currencyNotifier.value,
-        btcPrice: app.btcPriceService.priceNotifier.value,
-      );
+      app.notificationService.showStackGoalReached(goalSats: goal);
     }
   }
 

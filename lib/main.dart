@@ -179,22 +179,12 @@ void main() async {
   ).start();
 
   // Check budgets at startup and on every subsequent transaction change.
-  budgetService
-      .checkAndNotify(
-        notifications: notificationService,
-        currency: currencyNotifier.value,
-      )
-      .ignore();
+  budgetService.checkAndNotify(notifications: notificationService).ignore();
   // On every change to the transactions table. Listening to `watchAll()` for
   // this kept a full, ordered select of every row running for the life of the
   // app, re-read on each change and thrown away (audit D-1).
   db.tableUpdates(TableUpdateQuery.onTable(db.transactions)).listen((_) {
-    budgetService
-        .checkAndNotify(
-          notifications: notificationService,
-          currency: currencyNotifier.value,
-        )
-        .ignore();
+    budgetService.checkAndNotify(notifications: notificationService).ignore();
   });
 
   runApp(const _AppWithSplash());

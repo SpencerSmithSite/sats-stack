@@ -2,8 +2,6 @@ import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
-import '../../shared/utils/currency_utils.dart';
-import '../../shared/utils/sat_converter.dart';
 import '../database/database.dart';
 
 /// Wraps [FlutterLocalNotificationsPlugin] and provides budget-specific
@@ -105,6 +103,11 @@ class NotificationService {
   }
 
   // ── Budget alerts ──────────────────────────────────────────────────────────
+  //
+  // No amounts in any notification: a budget, an overspend or a stack's worth
+  // showed on a locked or shared screen, which for Bitcoin holdings is a
+  // physical-security risk (audit P-8). The percentage and the category say
+  // what to look at; the amounts are one tap away, behind the lock.
 
   /// Fires a warning notification when a budget reaches ≥ 80 %.
   /// Silent if already sent for this category in [month].
@@ -112,71 +115,40 @@ class NotificationService {
     required int categoryId,
     required String categoryName,
     required int percentUsed,
-    required double budgetAmount,
-    required String currency,
     required DateTime month,
-  }) async {
-    final budgetStr = CurrencyUtils.format(
-      budgetAmount,
-      currency,
-      decimalDigits: 0,
-    );
-    await _sendOnce(
-      'budget_warn_${categoryId}_${monthKey(month)}',
-      _budgetIdBase + categoryId * 2,
-      'Budget warning: $categoryName',
-      "You've used $percentUsed% of your $budgetStr $categoryName budget this month.",
-    );
-  }
+  }) => _sendOnce(
+    'budget_warn_${categoryId}_${monthKey(month)}',
+    _budgetIdBase + categoryId * 2,
+    'Budget warning: $categoryName',
+    "You've used $percentUsed% of your $categoryName budget this month.",
+  );
 
   /// Fires an over-budget notification when spending exceeds 100 %.
   /// Silent if already sent for this category in [month].
   Future<void> showBudgetOverspend({
     required int categoryId,
     required String categoryName,
-    required double overBy,
-    required double budgetAmount,
-    required String currency,
     required DateTime month,
-  }) async {
-    final overStr = CurrencyUtils.format(overBy, currency, decimalDigits: 0);
-    final budgetStr = CurrencyUtils.format(
-      budgetAmount,
-      currency,
-      decimalDigits: 0,
-    );
-    await _sendOnce(
-      'budget_over_${categoryId}_${monthKey(month)}',
-      _budgetIdBase + categoryId * 2 + 1,
-      'Over budget: $categoryName',
-      "You've exceeded your $budgetStr $categoryName budget by $overStr this month.",
-    );
-  }
+  }) => _sendOnce(
+    'budget_over_${categoryId}_${monthKey(month)}',
+    _budgetIdBase + categoryId * 2 + 1,
+    'Over budget: $categoryName',
+    "You've gone over your $categoryName budget this month.",
+  );
 
   /// Fires a one-time notification when the stack goal is first reached.
   /// Silent if already sent for this goal amount.
-  Future<void> showStackGoalReached({
-    required int goalSats,
-    required String currency,
-    double? btcPrice,
-  }) async {
-    final satsStr = _formatSats(goalSats);
-    final fiatPart =
-        btcPrice != null && btcPrice > 0
-            ? ' ≈ ${CurrencyUtils.format(goalSats / 1e8 * btcPrice, currency, decimalDigits: 0)}'
-            : '';
-    // Per goal amount, so raising the goal and reaching it again alerts again.
-    await _sendOnce(
-      'stack_goal_$goalSats',
-      _stackGoalId,
-      'Stack goal reached!',
-      "You've stacked $satsStr sats$fiatPart. Incredible work.",
-    );
-  }
+  Future<void> showStackGoalReached({required int goalSats}) =>
+  // Per goal amount, so raising the goal and reaching it again alerts
+  // again.
+  _sendOnce(
+    'stack_goal_$goalSats',
+    _stackGoalId,
+    'Stack goal reached!',
+    "You've reached your stack goal. Incredible work.",
+  );
 
   // ── Private ────────────────────────────────────────────────────────────────
-
-  String _formatSats(int sats) => SatConverter.formatSats(sats);
 
   /// Asks for notification permission the first time there is something to
   /// show, and remembers the answer for the session.
@@ -262,6 +234,9 @@ class NotificationService {
                 'Notifies when spending approaches or exceeds budget limits',
             importance: Importance.high,
             priority: Priority.high,
+            // On a secure lock screen Android shows only that there is a
+            // notification from the app, not its text (audit P-8).
+            visibility: NotificationVisibility.private,
           ),
         ),
       );
