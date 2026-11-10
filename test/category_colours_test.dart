@@ -52,6 +52,9 @@ void main() {
     await v10.customStatement(
       'ALTER TABLE transactions DROP COLUMN is_own_transfer',
     );
+    await v10.customStatement(
+      'ALTER TABLE wallets DROP COLUMN script_type_chosen',
+    );
     await v10.customStatement('PRAGMA user_version = 10');
     await v10.close();
 

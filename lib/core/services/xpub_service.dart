@@ -408,6 +408,11 @@ class XpubService {
 
   XpubFormat detectFormat(String extKey) => _parseExtKey(extKey).format;
 
+  /// [extKey]'s address type, or null for a plain mainnet `xpub`, whose
+  /// prefix does not say. Throws [ArgumentError] for an unusable key.
+  static XpubFormat? detectFormatOf(String extKey) =>
+      _isAmbiguous(extKey) ? null : _parseExtKey(extKey).format;
+
   XpubNetwork detectNetwork(String extKey) => _parseExtKey(extKey).network;
 
   /// What to tell the user about where in its wallet's tree [extKey] sits,
@@ -462,40 +467,34 @@ class XpubService {
     return key.format == XpubFormat.p2pkh && key.network == XpubNetwork.mainnet;
   }
 
-  /// The keys an ambiguous [extKey] may be stored as once its script type is
-  /// found: its SegWit encodings. Empty for any other key.
-  ///
-  /// So that adding a plain `xpub` again is caught as the wallet it already
-  /// is, after a sync stored it as the matching `zpub` or `ypub`.
-  static List<String> resolvedFormsOf(String extKey) {
-    try {
-      if (!_isAmbiguous(extKey)) return const [];
-      return [
-        withFormat(extKey, XpubFormat.p2wpkh),
-        withFormat(extKey, XpubFormat.p2shP2wpkh),
-      ];
-    } on Object {
-      return const [];
-    }
-  }
-
   /// Which script type [extKey]'s first receive addresses have history under,
   /// trying native SegWit, then nested, then legacy. Null if none has any.
   Future<XpubFormat?> detectUsedFormat(String extKey) =>
       _scanning(() => _detectUsedFormat(extKey));
 
   Future<XpubFormat?> _detectUsedFormat(String extKey) async =>
-      (await _probeFormats(extKey))?.format;
+      (await _probeFormat(extKey))?.format;
 
-  /// The first script type with history, as [detectUsedFormat], together
-  /// with the receive window that showed it, so the sync that follows need
-  /// not fetch it again.
-  Future<_Probe?> _probeFormats(String extKey) async {
-    for (final format in const [
-      XpubFormat.p2wpkh,
-      XpubFormat.p2shP2wpkh,
-      XpubFormat.p2pkh,
-    ]) {
+  /// The order script types are tried in: the most common today first.
+  static const _probeOrder = [
+    XpubFormat.p2wpkh,
+    XpubFormat.p2shP2wpkh,
+    XpubFormat.p2pkh,
+  ];
+
+  /// The first script type in [_probeOrder] that [extKey]'s first receive
+  /// addresses have history under, with the receive window that showed it, so
+  /// the sync that follows need not fetch it again. Types [skip] returns true
+  /// for are not looked at. Null if none has any.
+  ///
+  /// It stops at the first: each other type is a wallet of its own (audit
+  /// B-7), which the user adds by choosing that type.
+  Future<_Probe?> _probeFormat(
+    String extKey, {
+    bool Function(XpubFormat format)? skip,
+  }) async {
+    for (final format in _probeOrder) {
+      if (skip?.call(format) ?? false) continue;
       final addresses = await _deriveWindow(
         withFormat(extKey, format),
         0,
@@ -1061,24 +1060,43 @@ class XpubService {
     // was added (audit B-7). A new account added before its first payment
     // found no history, kept the plain `xpub`, and every later sync derived
     // legacy addresses from it — so its SegWit payments never showed up.
+    //
+    // A key and an address type together are one wallet (audit B-7). The
+    // type picked is the first with history that no other wallet tracks, and
+    // the rest are not looked at: the user adds another by choosing it. A
+    // type the user chose is never looked at again.
     _Probe? probe;
-    if (existingHashes.isEmpty && _isAmbiguous(extKey)) {
+    if (existingHashes.isEmpty &&
+        _isAmbiguous(extKey) &&
+        !wallet.scriptTypeChosen) {
       onProgress?.call('Checking which address type it uses…');
-      probe = await _probeFormats(extKey);
-      if (probe != null && probe.format != XpubFormat.p2pkh) {
-        final resolved = withFormat(extKey, probe.format);
-        final other =
-            await (_db.select(_db.wallets)
-                  ..where((w) => w.xpub.equals(resolved))
-                  ..where((w) => w.id.equals(wallet.id).not())
-                  ..limit(1))
-                .getSingleOrNull();
-        if (other != null) {
+      final others =
+          await (_db.select(_db.wallets)
+            ..where((w) => w.id.equals(wallet.id).not())).get();
+      String? trackedAs(XpubFormat format) {
+        final key = withFormat(extKey!, format);
+        return others.where((w) => w.xpub == key).firstOrNull?.label;
+      }
+
+      probe = await _probeFormat(
+        extKey,
+        skip: (format) => trackedAs(format) != null,
+      );
+      if (probe == null) {
+        final labels = [
+          for (final format in _probeOrder)
+            if (trackedAs(format) case final label?) '"$label"',
+        ];
+        if (labels.isNotEmpty) {
           throw XpubSyncException(
-            'This key is already tracked as "${other.label}". Rescan that '
-            'wallet instead.',
+            'This key is already tracked as ${labels.join(' and ')}, and has '
+            'no history under any other address type. Rescan '
+            '${labels.length == 1 ? 'that wallet' : 'those wallets'} instead, '
+            'or choose an address type to add it as.',
           );
         }
+      } else if (probe.format != XpubFormat.p2pkh) {
+        final resolved = withFormat(extKey, probe.format);
         extKey = resolved;
         await (_db.update(_db.wallets)..where(
           (w) => w.id.equals(wallet.id),
@@ -1422,7 +1440,7 @@ class _RawTx {
   final String dedupHash;
 }
 
-/// What [XpubService._probeFormats] found.
+/// What [XpubService._probeFormat] found.
 class _Probe {
   _Probe(this.format, this.addresses, this.history, {required this.capped});
 
