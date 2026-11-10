@@ -198,14 +198,15 @@ jobs:
         if: matrix.platform == 'macos'
         run: flutter build macos --release
 
-      # The integration tests run the real plugins: the keychain store, path
-      # provider, and the on-device AI bridges, which skip themselves where
-      # the model is unavailable, as it is on a runner. One file per run: on
-      # macOS the second file in one invocation cannot reattach to the
-      # relaunched app.
+      # The integration tests that apply to macOS, against the real plugins:
+      # the keychain store, path provider, and the Apple Intelligence bridge,
+      # which skips itself where the model is unavailable, as on a runner.
+      # Named, not globbed: gemini_nano_test is Android-only by design (it
+      # asserts the Android bridge is registered). One file per run: on macOS
+      # a second file in one invocation cannot reattach to the relaunched app.
       - name: Integration tests (macOS)
         if: matrix.platform == 'macos'
         run: |
-          for test in integration_test/*_test.dart; do
-            flutter test "$test" -d macos
+          for test in apple_intelligence path_provider secure_key_store; do
+            flutter test "integration_test/${test}_test.dart" -d macos
           done
