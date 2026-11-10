@@ -717,7 +717,6 @@ class _AiProviderSectionState extends State<AiProviderSection> {
                         label: Text(p.label),
                         selected: _selectedProvider == p,
                         onSelected: (_) => _onProviderChanged(p),
-                        visualDensity: VisualDensity.compact,
                       ),
                   ],
                 ),

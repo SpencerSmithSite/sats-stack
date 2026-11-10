@@ -174,7 +174,6 @@ class AiInsightCard extends StatelessWidget {
                   style: OutlinedButton.styleFrom(
                     foregroundColor: accentText,
                     side: BorderSide(color: accent.withValues(alpha: 0.5)),
-                    visualDensity: VisualDensity.compact,
                   ),
                 ),
               ),

@@ -220,7 +220,6 @@ class ApiKeyHelpLink extends StatelessWidget {
         label: Text('Get a ${cloud.label} API key'),
         style: TextButton.styleFrom(
           padding: const EdgeInsets.symmetric(horizontal: 4),
-          visualDensity: VisualDensity.compact,
           foregroundColor: context.bitcoinOrangeText,
         ),
       ),

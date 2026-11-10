@@ -161,7 +161,6 @@ class _GeneralSectionState extends State<GeneralSection> {
             ],
             selected: {_themeMode},
             onSelectionChanged: (s) => _saveTheme(s.first),
-            style: const ButtonStyle(visualDensity: VisualDensity.compact),
           ),
         ),
         SettingsTile(
@@ -176,7 +175,6 @@ class _GeneralSectionState extends State<GeneralSection> {
                         label: Text(code),
                         selected: _currency == code,
                         onSelected: (_) => _saveCurrency(code),
-                        visualDensity: VisualDensity.compact,
                       ),
                     )
                     .toList(),
@@ -244,9 +242,6 @@ class _GeneralSectionState extends State<GeneralSection> {
                   const SizedBox(width: 8),
                   FilledButton(
                     onPressed: _saveInflationRate,
-                    style: FilledButton.styleFrom(
-                      visualDensity: VisualDensity.compact,
-                    ),
                     child: const Text('Save'),
                   ),
                 ],
