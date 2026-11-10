@@ -71,7 +71,7 @@ dependencies:
   flutter_local_notifications: ^23.0.0
 
   # PDF text extraction
-  syncfusion_flutter_pdf: ^33.2.13
+  syncfusion_flutter_pdf: ^35.1.43
 
 flutter:
   uses-material-design: true
