@@ -1,19 +1,21 @@
-/// The guard in `flutter_test_config.dart` is in force.
+/// The test network guard covers raw sockets and parses IP literals (audit
+/// P-6).
 ///
-/// Every other test passing proves nothing about it: a test that swallows a
-/// network error passes either way, which is how `auto_category_test` was
-/// reaching live endpoints unnoticed.
+/// It overrode only `HttpClient`, while Electrum opens `Socket`s directly, so
+/// a test could reach a real Electrum server unnoticed; and its
+/// `startsWith('127.')` let `127.example.com` through.
 library;
 
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http/http.dart' as http;
+
+import 'flutter_test_config.dart' show isLoopback;
 
 void main() {
-  test('a request to the internet fails at once', () async {
+  test('a raw socket to the internet is refused', () async {
     await expectLater(
-      http.get(Uri.parse('https://mempool.space/api/v1/prices')),
+      Socket.connect('electrum.example.com', 50001),
       throwsA(
         isA<SocketException>().having(
           (e) => e.message,
@@ -24,18 +26,31 @@ void main() {
     );
   });
 
-  test('loopback is still allowed', () async {
-    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+  test('a raw socket to this machine is allowed through', () async {
+    final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
     addTearDown(server.close);
-    server.listen(
-      (r) =>
-          r.response
-            ..write('ok')
-            ..close(),
+    final socket = await Socket.connect('127.0.0.1', server.port);
+    socket.destroy();
+  });
+
+  test('loopback is read from the address, not its spelling', () {
+    expect(isLoopback('localhost'), isTrue);
+    expect(isLoopback('127.0.0.1'), isTrue);
+    expect(isLoopback('127.4.5.6'), isTrue);
+    expect(isLoopback('::1'), isTrue);
+    expect(isLoopback('[::1]'), isTrue);
+    expect(isLoopback(InternetAddress.loopbackIPv6), isTrue);
+    expect(isLoopback('127.example.com'), isFalse);
+    expect(isLoopback('mempool.space'), isFalse);
+    expect(isLoopback('192.168.1.10'), isFalse);
+  });
+
+  test('an http request to a lookalike host is refused', () async {
+    final client = HttpClient();
+    addTearDown(client.close);
+    await expectLater(
+      client.getUrl(Uri.parse('http://127.example.com/')),
+      throwsA(isA<SocketException>()),
     );
-    final response = await http.get(
-      Uri.parse('http://127.0.0.1:${server.port}/'),
-    );
-    expect(response.body, 'ok');
   });
 }
