@@ -45,21 +45,25 @@ History lives elsewhere and is not duplicated into this file:
   a random key in the keychain, an in-place migration that copies drift's
   `user_version` by hand — with two decisions still open (the export format,
   and whether macOS waits for Developer ID signing).
-- **Android toolchain, next floor.** Flutter 3.47.2 warns that Gradle 9.1,
-  AGP 9.0.1 and Kotlin 2.3.20 will be required soon. AGP 9 is a major
-  release (built-in Kotlin, changed DSL defaults), so do it on its own and
-  check every plugin builds.
-  `flutter_local_notifications` 23 needs it (AGP 9.1.1, compileSdk 37).
-- **The held upgrades, and what each unblocks** (the rest of audit P-4):
-  - `flutter_secure_storage` 10+: changes the options API of the store that
-    holds every API key, so keys must be read back under the new options
-    before it ships. Its Windows plugin keeps `win32` at 5, which holds
-    `file_picker` 13 (a static API, `pickFile`, no `FilePickerResult`) and
-    `package_info_plus` 10. It also lifts the Linux CMake exception.
-  - `drift_flutter` 0.3: sqlite3 3 in place of the end-of-life
-    `sqlite3_flutter_libs`, and with it `drift`/`drift_dev` 2.35, `analyzer`
-    14 and `build_runner` 2.17. The old #83 branch had the regenerated code.
-  - `fl_chart` 1.x: the chart API changed.
+- **`flutter_secure_storage` 11, after a release on 10.x.** 11 removes the
+  Android migration out of EncryptedSharedPreferences, so a key that 10.x
+  never moved becomes unreadable: an Android user going from a 9.x build
+  straight to an 11.x build loses their API keys. Ship a release with 10.3
+  (#152) first. 11 also finds iOS keychain items across accessibility
+  classes, which overlaps the fallback in `SecureKeyStore`.
+- **Built-in Kotlin on Android.** AGP 9.1.1 (#154) runs with
+  `android.builtInKotlin=false`, as Flutter's own template does, because
+  `file_picker` and `package_info_plus` still apply the Kotlin Gradle Plugin.
+  Flutter warns that a future version will refuse that. Switch once they
+  move: drop `kotlin-android` and the flag.
+- **Drop CocoaPods from iOS and macOS.** Every plugin builds through Swift
+  Package Manager since #152; CocoaPods installs only Flutter's own
+  framework. Deintegrate both Podfiles, remove the Pods references from the
+  Xcode projects and CI's pod cache, and update the README's prerequisites.
+- **SQLite is downloaded at build time.** sqlite3 3's build hook (#155)
+  fetches SQLite from the sqlite3.dart GitHub release, hash-checked, on every
+  clean build. A GitHub outage failed CI once (2026-11-10). Caching the
+  hook's download in CI, keyed on `pubspec.lock`, would stop that.
 - **Calendar dates across timezones (audit D-11).** Deferred 2026-11-02.
   Picker and CSV dates are stored as local midnight, an instant, and read
   back in the device's current timezone, so after moving west a transaction
@@ -98,15 +102,6 @@ History lives elsewhere and is not duplicated into this file:
   with `errSecMissingEntitlement`). At the same time, turn on the hardened
   runtime (`ENABLE_HARDENED_RUNTIME = YES` for the macOS Runner's Release
   config), which notarisation needs (the rest of audit P-10).
-- **Drop the unused media picker from iOS builds.** `file_picker` builds
-  through Swift Package Manager, whose package hardcodes its media and audio
-  pickers on, so every iOS build links DKImagePickerController, DKCamera,
-  DKPhotoGallery, SDWebImage, SwiftyGif and TOCropViewController (~12 MB of
-  debug object code) though the app only picks documents. Harmless at review:
-  the camera and photo purpose strings are there for `image_picker` anyway,
-  and the SDKs Apple lists ship privacy manifests. Removing them means
-  replacing `file_picker` — `file_selector` opens files everywhere but cannot
-  save on iOS or Android, so export there would need a share sheet instead.
 - **Bitcoin Core.** `BitcoinNodeService` compiles and is referenced by
   nothing. Core keeps no address index, so it cannot be a wallet-history
   source (the picker offers Mempool/Esplora and Electrum); it is kept for
