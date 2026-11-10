@@ -31,6 +31,8 @@ jobs:
       (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')) &&
         contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association))
     runs-on: ubuntu-latest
+    # A ceiling, as every CI job has (audit P-9).
+    timeout-minutes: 30
     permissions:
       contents: read
       pull-requests: read

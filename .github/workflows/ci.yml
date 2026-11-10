@@ -24,6 +24,10 @@ jobs:
   analyze-and-test:
     name: Format, analyze and test
     runs-on: ubuntu-latest
+    # Every job has a ceiling: a hung step used to run to GitHub's six-hour
+    # limit, billing the whole time (audit P-9). Each is about three times a
+    # normal run.
+    timeout-minutes: 20
     steps:
       # Actions are pinned to a commit, with the tag it was in a comment: a
       # tag can be moved to new code, a commit cannot (audit P-3). Dependabot
@@ -86,6 +90,7 @@ jobs:
   android:
     name: Build Android (release)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -147,6 +152,7 @@ jobs:
     # Pinned, as Xcode is below: `macos-latest` and `latest-stable` moved
     # under the project without a commit saying so.
     runs-on: macos-26
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -181,10 +187,78 @@ jobs:
 
       - run: flutter pub get --enforce-lockfile
 
-      - name: Build iOS (unsigned)
+      # Release, as Android is: only debug was built, so anything that breaks
+      # under AOT compilation, tree shaking or the release Xcode settings
+      # could ship (audit P-9). Unsigned: CI has no Apple certificate.
+      - name: Build iOS (release, unsigned)
         if: matrix.platform == 'ios'
-        run: flutter build ios --debug --no-codesign
+        run: flutter build ios --release --no-codesign
 
-      - name: Build macOS
+      - name: Build macOS (release)
         if: matrix.platform == 'macos'
-        run: flutter build macos --debug
+        run: flutter build macos --release
+
+      # The integration tests that apply to macOS, against the real plugins:
+      # the keychain store, path provider, and the Apple Intelligence bridge,
+      # which skips itself where the model is unavailable, as on a runner.
+      # Named, not globbed: gemini_nano_test is Android-only by design (it
+      # asserts the Android bridge is registered). One file per run: on macOS
+      # a second file in one invocation cannot reattach to the relaunched app.
+      - name: Integration tests (macOS)
+        if: matrix.platform == 'macos'
+        run: |
+          for test in apple_intelligence path_provider secure_key_store; do
+            flutter test "integration_test/${test}_test.dart" -d macos
+          done
+
+  # Linux and Windows ship too, so they are built like the others: the
+  # folders were tracked but never compiled, and could rot unseen (audit
+  # P-9).
+  linux:
+    name: Build Linux (release)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Flutter's Linux toolchain (GTK 3, CMake, Ninja, Clang), and
+      # libsecret and jsoncpp for flutter_secure_storage's Linux keyring.
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config \
+            libgtk-3-dev liblzma-dev libstdc++-12-dev \
+            libsecret-1-dev libjsoncpp-dev
+
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - run: flutter pub get --enforce-lockfile
+
+      - name: Build Linux (release)
+        run: flutter build linux --release
+
+  windows:
+    name: Build Windows (release)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - run: flutter pub get --enforce-lockfile
+
+      - name: Build Windows (release)
+        run: flutter build windows --release
