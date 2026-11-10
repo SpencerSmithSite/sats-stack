@@ -665,7 +665,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **Where:** `ios/Runner/` and `macos/Runner/`. There is no `PrivacyInfo.xcprivacy` outside Pods.
 - **Impact:** The App Store privacy label may understate collection, since financial context goes to the hosted AI providers when one is chosen.
 - **Fix direction:** Add a Runner manifest declaring no tracking, the data the hosted-AI path sends, and any required-reason APIs.
-- **Status:** fixed in #PR
+- **Status:** fixed in #139
 
 ### P-8 · Low · privacy — Amounts in notifications, including on the lock screen
 - **Where:** `notification_service.dart:100-104`, `:127-131`, `:152-156`, `:243-250`.
