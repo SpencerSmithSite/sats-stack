@@ -659,7 +659,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** It overrides only `HttpClient`, while Electrum uses `Socket` and `SecureSocket` directly. Its `startsWith('127.')` check also accepts a hostname like `127.example.com`.
 - **Impact:** A test could reach a real Electrum server without anyone noticing.
 - **Fix direction:** Add `IOOverrides` for sockets, compare parsed IP literals, and test the raw-socket case.
-- **Status:** fixed in #PR
+- **Status:** fixed in #133
 
 ### P-7 · Low · privacy — No privacy manifest for the app itself
 - **Where:** `ios/Runner/` and `macos/Runner/`. There is no `PrivacyInfo.xcprivacy` outside Pods.
