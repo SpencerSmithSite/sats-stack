@@ -142,6 +142,9 @@ void main() {
       await v11.customStatement(
         'ALTER TABLE transactions DROP COLUMN is_own_transfer',
       );
+      await v11.customStatement(
+        'ALTER TABLE wallets DROP COLUMN script_type_chosen',
+      );
       await v11.customStatement('PRAGMA user_version = 11');
       await v11.close();
 
@@ -163,6 +166,7 @@ void main() {
         'transactions DROP COLUMN recurring_series_id',
         'budgets DROP COLUMN currency',
         'transactions DROP COLUMN is_own_transfer',
+        'wallets DROP COLUMN script_type_chosen',
       ]) {
         await v7.customStatement('ALTER TABLE $column');
       }

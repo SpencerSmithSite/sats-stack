@@ -28,6 +28,20 @@ class AddWalletSheet extends StatefulWidget {
 
 enum _SheetStep { form, syncing, done }
 
+/// An address type, named as wallets name it.
+String addressTypeName(XpubFormat format) => switch (format) {
+  XpubFormat.p2wpkh => 'Native SegWit',
+  XpubFormat.p2shP2wpkh => 'Nested SegWit',
+  XpubFormat.p2pkh => 'Legacy',
+};
+
+/// What its mainnet addresses start with.
+String _addressStart(XpubFormat format) => switch (format) {
+  XpubFormat.p2wpkh => 'bc1q…',
+  XpubFormat.p2shP2wpkh => '3…',
+  XpubFormat.p2pkh => '1…',
+};
+
 class _AddWalletSheetState extends State<AddWalletSheet> {
   final _formKey = GlobalKey<FormState>();
   final _labelController = TextEditingController();
@@ -38,6 +52,11 @@ class _AddWalletSheetState extends State<AddWalletSheet> {
   String _syncStatus = '';
   XpubSyncResult? _syncResult;
   String? _error;
+
+  /// The address type chosen, or null for Automatic. A key and an address
+  /// type together are one wallet (audit B-7), so the same key can be added
+  /// again as another type.
+  XpubFormat? _addressType;
 
   static const _colorOptions = [
     '#F7931A', // Bitcoin orange
@@ -50,7 +69,14 @@ class _AddWalletSheetState extends State<AddWalletSheet> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final extKey = _xpubController.text.trim();
+    final typed = _xpubController.text.trim();
+    final chosen = _addressType;
+    // A chosen type is recorded the way the key records it, in its version
+    // bytes (`zpub`, `ypub`). On Automatic the key's own prefix stands, and a
+    // plain `xpub` is placed by the sync: the first type it has history under
+    // that no wallet tracks.
+    final extKey =
+        chosen == null ? typed : XpubService.withFormat(typed, chosen);
     final label = _labelController.text.trim();
 
     setState(() {
@@ -69,6 +95,7 @@ class _AddWalletSheetState extends State<AddWalletSheet> {
         label: label,
         xpub: extKey,
         color: _selectedColor,
+        scriptTypeChosen: chosen != null,
       );
 
       final result = await widget.xpubService.syncWallet(
@@ -172,6 +199,8 @@ class _AddWalletSheetState extends State<AddWalletSheet> {
                   error: _error,
                   xpubService: widget.xpubService,
                   onColorSelect: (c) => setState(() => _selectedColor = c),
+                  addressType: _addressType,
+                  onAddressType: (t) => setState(() => _addressType = t),
                   onSubmit: _submit,
                 ),
                 _SheetStep.syncing => _SyncingBody(status: _syncStatus),
@@ -200,8 +229,14 @@ class _FormBody extends StatelessWidget {
     required this.error,
     required this.xpubService,
     required this.onColorSelect,
+    required this.addressType,
+    required this.onAddressType,
     required this.onSubmit,
   });
+
+  /// Null for Automatic.
+  final XpubFormat? addressType;
+  final ValueChanged<XpubFormat?> onAddressType;
 
   final GlobalKey<FormState> formKey;
   final TextEditingController labelController;
@@ -277,6 +312,9 @@ class _FormBody extends StatelessWidget {
                   return const SizedBox.shrink();
                 }
                 hint = switch (format) {
+                  // A plain xpub does not say which addresses it is for.
+                  XpubFormat.p2pkh when xpubService.isAmbiguous(text) =>
+                    'xpub · the address type is not in the key',
                   XpubFormat.p2pkh => 'BIP44 · Legacy P2PKH',
                   XpubFormat.p2shP2wpkh => 'BIP49 · Nested SegWit P2SH-P2WPKH',
                   XpubFormat.p2wpkh => 'BIP84 · Native SegWit P2WPKH',
@@ -305,6 +343,50 @@ class _FormBody extends StatelessWidget {
                       ],
                     ],
                   ),
+                );
+              },
+            ),
+            const SizedBox(height: 12),
+
+            // Address type: Automatic unless the user knows better.
+            ListenableBuilder(
+              listenable: xpubController,
+              builder: (_, _) {
+                final text = xpubController.text.trim();
+                String automatic = 'Automatic';
+                try {
+                  automatic =
+                      xpubService.isAmbiguous(text)
+                          ? 'Automatic: from its history'
+                          : 'Automatic: '
+                              '${addressTypeName(xpubService.detectFormat(text))}'
+                              ', from the key';
+                } catch (_) {}
+                return DropdownButtonFormField<XpubFormat?>(
+                  initialValue: addressType,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Address type',
+                    helperText:
+                        'Automatic is right for most wallets. The same key '
+                        'can be added again as another type.',
+                    helperMaxLines: 2,
+                  ),
+                  items: [
+                    DropdownMenuItem(value: null, child: Text(automatic)),
+                    for (final f in const [
+                      XpubFormat.p2wpkh,
+                      XpubFormat.p2shP2wpkh,
+                      XpubFormat.p2pkh,
+                    ])
+                      DropdownMenuItem(
+                        value: f,
+                        child: Text(
+                          '${addressTypeName(f)} (${_addressStart(f)})',
+                        ),
+                      ),
+                  ],
+                  onChanged: onAddressType,
                 );
               },
             ),
