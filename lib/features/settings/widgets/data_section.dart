@@ -64,14 +64,13 @@ class _DataSectionState extends State<DataSection> {
       // will not hand back a path to write to, and threw without them.
       final bytes = await databaseSnapshot(app.db);
       if (!mounted) return;
-      final savePath = await FilePicker.platform.saveFile(
+      final saved = await FilePicker.saveFile(
         dialogTitle: 'Export Sats Stack database',
         fileName: 'sats_stack_backup.sqlite',
-        allowedExtensions: ['sqlite', 'db'],
-        type: FileType.custom,
+        mimeType: 'application/vnd.sqlite3',
         bytes: bytes,
       );
-      if (savePath == null) return;
+      if (saved == null) return;
 
       if (!mounted) return;
       _showSnack('Database exported successfully');
@@ -107,14 +106,15 @@ class _DataSectionState extends State<DataSection> {
     if (confirmed != true) return;
 
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final picked = await FilePicker.pickFile(
         dialogTitle: 'Select Sats Stack backup',
         allowedExtensions: ['sqlite', 'db'],
         type: FileType.custom,
       );
-      if (result == null || result.files.single.path == null) return;
+      final path = picked?.path;
+      if (path == null) return;
 
-      final srcFile = File(result.files.single.path!);
+      final srcFile = File(path);
       // Opened as a copy and checked before anything is replaced: the
       // header check alone let a damaged backup through, and the app then
       // could not launch.

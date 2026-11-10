@@ -98,16 +98,15 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         btcPrice: btcPrice,
       );
 
-      final savePath = await FilePicker.platform.saveFile(
+      final saved = await FilePicker.saveFile(
         dialogTitle: 'Export spending summary',
         fileName: 'sats_stack_spending_$monthLabel.csv',
-        allowedExtensions: ['csv'],
-        type: FileType.custom,
+        mimeType: 'text/csv',
         // Written by the dialog. On iOS and Android it takes the bytes rather
         // than returning a path to write to, and threw without them.
         bytes: utf8.encode(csv),
       );
-      if (savePath == null) return;
+      if (saved == null) return;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Spending summary exported')),

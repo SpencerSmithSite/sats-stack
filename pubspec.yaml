@@ -35,7 +35,7 @@ dependencies:
   fl_chart: ^0.71.0
 
   # File Picking
-  file_picker: ^10.3.10
+  file_picker: ^13.3.3
   image_picker: ^1.1.0
 
   # Explicit because `database.dart` joins the database path itself — it is
@@ -60,7 +60,7 @@ dependencies:
   intl: ^0.20.2
 
   # App metadata
-  package_info_plus: ^9.0.1
+  package_info_plus: ^10.2.2
 
   # Opens each hosted provider's "create an API key" page in the browser.
   # "Where do I get this?" is the first question every time a key field appears,

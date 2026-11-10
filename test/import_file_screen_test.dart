@@ -8,6 +8,7 @@
 library;
 
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:drift/native.dart';
@@ -45,29 +46,52 @@ class _NoAi extends OllamaService {
   Future<bool> isAvailable() async => false;
 }
 
+/// A picked file on disk.
+base class _File extends PlatformFile {
+  _File(this._file);
+  final File _file;
+
+  @override
+  String get name => _file.uri.pathSegments.last;
+  @override
+  Uri get uri => _file.uri;
+  // Untyped so the test need not depend on cross_file for `XFile`, which
+  // the screen never reads.
+  @override
+  // ignore: always_declare_return_types
+  get xFile => throw UnimplementedError();
+  @override
+  int? lengthSync() => _file.lengthSync();
+  @override
+  Future<int?> length() => _file.length();
+  @override
+  Future<Uint8List> readAsBytes() => _file.readAsBytes();
+  @override
+  Stream<Uint8List> readAsByteStream() =>
+      _file.openRead().map(Uint8List.fromList);
+}
+
 /// Hands back [next] as the picked file, or nothing for a cancelled pick.
-class _Picker extends FilePicker {
+class _Picker extends FilePickerPlatform {
   PlatformFile? next;
   var opened = 0;
 
   @override
-  Future<FilePickerResult?> pickFiles({
+  Future<PlatformFile?> pickFile({
     String? dialogTitle,
     String? initialDirectory,
     FileType type = FileType.any,
     List<String>? allowedExtensions,
     Function(FilePickerStatus)? onFileLoading,
-    bool allowCompression = false,
     int compressionQuality = 0,
-    bool allowMultiple = false,
-    bool withData = false,
-    bool withReadStream = false,
-    bool lockParentWindow = false,
-    bool readSequential = false,
+    AndroidOptions androidOptions = const AndroidOptions(),
+    DarwinOptions darwinOptions = const DarwinOptions(),
+    WindowsOptions windowsOptions = const WindowsOptions(),
+    LinuxOptions linuxOptions = const LinuxOptions(),
+    WebOptions webOptions = const WebOptions(),
   }) async {
     opened++;
-    final file = next;
-    return file == null ? null : FilePickerResult([file]);
+    return next;
   }
 }
 
@@ -96,7 +120,7 @@ void main() {
         );
       }
     });
-    FilePicker.platform = picker = _Picker();
+    FilePickerPlatform.instance = picker = _Picker();
     tester.view.physicalSize = const Size(430, 1600);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -130,11 +154,7 @@ void main() {
   Future<void> willPick(WidgetTester tester, String name, String contents) =>
       tester.runAsync(() async {
         final file = File('${dir.path}/$name')..writeAsStringSync(contents);
-        picker.next = PlatformFile(
-          name: name,
-          path: file.path,
-          size: file.lengthSync(),
-        );
+        picker.next = _File(file);
       });
 
   Future<void> importIt(WidgetTester tester) async {
