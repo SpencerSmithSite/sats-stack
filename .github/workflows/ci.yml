@@ -48,6 +48,25 @@ jobs:
       - name: Install dependencies
         run: flutter pub get --enforce-lockfile
 
+      # sqlite3 3's build hook downloads SQLite from the sqlite3.dart GitHub
+      # release on every clean build, and a GitHub outage failed CI once.
+      # Cached per job and sqlite3 version; the hook re-checks each cached
+      # file's SHA-256 and downloads again on a mismatch. The `\r` strip is
+      # for the Windows checkout's CRLF line endings.
+      - name: SQLite version
+        id: sqlite
+        shell: bash
+        run: >-
+          echo "version=$(awk '{sub(/\r$/, "")} $0 == "  sqlite3:" {f = 1}
+          f && /version:/ {gsub(/"/, "", $2); print $2; exit}' pubspec.lock)"
+          >> "$GITHUB_OUTPUT"
+
+      - name: Cache the SQLite download
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .dart_tool/hooks_runner/shared/sqlite3/build/download-*
+          key: sqlite3-test-${{ steps.sqlite.outputs.version }}
+
       # Every tracked Dart file, generated code included — Drift's output is
       # already in the formatter's style, so a schema change does not trip it.
       - name: Format
@@ -120,6 +139,21 @@ jobs:
 
       - run: flutter pub get --enforce-lockfile
 
+      # As in the test job: the SQLite the build hook downloads.
+      - name: SQLite version
+        id: sqlite
+        shell: bash
+        run: >-
+          echo "version=$(awk '{sub(/\r$/, "")} $0 == "  sqlite3:" {f = 1}
+          f && /version:/ {gsub(/"/, "", $2); print $2; exit}' pubspec.lock)"
+          >> "$GITHUB_OUTPUT"
+
+      - name: Cache the SQLite download
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .dart_tool/hooks_runner/shared/sqlite3/build/download-*
+          key: sqlite3-android-${{ steps.sqlite.outputs.version }}
+
       # Release, not debug. A debug build merges in a manifest that declares
       # INTERNET whatever `src/main` says, so it could never catch the missing
       # permission it was added to catch; and R8 runs only in release.
@@ -187,6 +221,21 @@ jobs:
 
       - run: flutter pub get --enforce-lockfile
 
+      # As in the test job: the SQLite the build hook downloads.
+      - name: SQLite version
+        id: sqlite
+        shell: bash
+        run: >-
+          echo "version=$(awk '{sub(/\r$/, "")} $0 == "  sqlite3:" {f = 1}
+          f && /version:/ {gsub(/"/, "", $2); print $2; exit}' pubspec.lock)"
+          >> "$GITHUB_OUTPUT"
+
+      - name: Cache the SQLite download
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .dart_tool/hooks_runner/shared/sqlite3/build/download-*
+          key: sqlite3-${{ matrix.platform }}-${{ steps.sqlite.outputs.version }}
+
       # Release, as Android is: only debug was built, so anything that breaks
       # under AOT compilation, tree shaking or the release Xcode settings
       # could ship (audit P-9). Unsigned: CI has no Apple certificate.
@@ -241,6 +290,21 @@ jobs:
 
       - run: flutter pub get --enforce-lockfile
 
+      # As in the test job: the SQLite the build hook downloads.
+      - name: SQLite version
+        id: sqlite
+        shell: bash
+        run: >-
+          echo "version=$(awk '{sub(/\r$/, "")} $0 == "  sqlite3:" {f = 1}
+          f && /version:/ {gsub(/"/, "", $2); print $2; exit}' pubspec.lock)"
+          >> "$GITHUB_OUTPUT"
+
+      - name: Cache the SQLite download
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .dart_tool/hooks_runner/shared/sqlite3/build/download-*
+          key: sqlite3-linux-${{ steps.sqlite.outputs.version }}
+
       - name: Build Linux (release)
         run: flutter build linux --release
 
@@ -260,6 +324,21 @@ jobs:
           cache: true
 
       - run: flutter pub get --enforce-lockfile
+
+      # As in the test job: the SQLite the build hook downloads.
+      - name: SQLite version
+        id: sqlite
+        shell: bash
+        run: >-
+          echo "version=$(awk '{sub(/\r$/, "")} $0 == "  sqlite3:" {f = 1}
+          f && /version:/ {gsub(/"/, "", $2); print $2; exit}' pubspec.lock)"
+          >> "$GITHUB_OUTPUT"
+
+      - name: Cache the SQLite download
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .dart_tool/hooks_runner/shared/sqlite3/build/download-*
+          key: sqlite3-windows-${{ steps.sqlite.outputs.version }}
 
       - name: Build Windows (release)
         run: flutter build windows --release
