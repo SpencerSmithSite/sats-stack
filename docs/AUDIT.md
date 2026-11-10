@@ -706,7 +706,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** A self-signed `localhost` pair valid until 2126, used only by `wallet_history_section_test` on loopback. The app never trusts it.
 - **Impact:** No real exposure, but secret scanners will flag it.
 - **Fix direction:** Generate it at test time, or add a scanner allowlist and a README line in `test/fixtures/`.
-- **Status:** open
+- **Status:** fixed in #PR
 
 ---
 
