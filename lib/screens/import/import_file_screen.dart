@@ -379,15 +379,12 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
   }
 
   Future<void> _pickFile(ImportSource source) async {
-    final result = await FilePicker.platform.pickFiles(
+    final file = await FilePicker.pickFile(
       type: FileType.custom,
       allowedExtensions: ['csv', 'pdf'],
-      allowMultiple: false,
     );
-
-    if (result == null || result.files.isEmpty) return;
-    final file = result.files.first;
-    if (file.path == null) return;
+    final path = file?.path;
+    if (file == null || path == null) return;
     // The picker can stay open while the screen is closed behind it.
     if (!mounted) return;
 
@@ -401,18 +398,14 @@ class _ImportFileScreenState extends State<ImportFileScreen> {
     }
 
     _discardPickedCopies();
-    _pickedCopies.add(file.path!);
+    _pickedCopies.add(path);
 
     // Store for timeout fallback
-    _processingFilePath = file.path;
+    _processingFilePath = path;
     _processingFileName = file.name;
     _processingSource = source;
 
-    await _processFile(
-      filePath: file.path!,
-      fileName: file.name,
-      source: source,
-    );
+    await _processFile(filePath: path, fileName: file.name, source: source);
   }
 
   Future<bool> _showPdfNoAiDialog() async {
