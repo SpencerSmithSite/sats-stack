@@ -51,3 +51,6 @@ app.*.map.json
 ios/Pods/
 
 android/key.properties
+
+# flutter test --coverage output (it was committed by mistake once).
+coverage/
