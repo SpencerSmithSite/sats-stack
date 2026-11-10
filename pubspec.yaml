@@ -51,10 +51,10 @@ dependencies:
   path_provider: ^2.1.5
 
   # API keys for the hosted AI providers. Keychain on Apple platforms, the
-  # EncryptedSharedPreferences-backed store on Android — anywhere but the app's
+  # Keystore-backed store on Android — anywhere but the app's
   # own SQLite file, which is exported in plaintext by Settings → Data and is
   # the same file the agent-access plan proposes handing to an MCP server.
-  flutter_secure_storage: ^9.2.2
+  flutter_secure_storage: ^10.3.4
 
   # Formatting
   intl: ^0.19.0
