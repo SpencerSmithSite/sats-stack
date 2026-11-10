@@ -192,17 +192,18 @@ void main() {
       expect(firstReceiveFetches, 1);
     }, timeout: const Timeout(Duration(minutes: 1)));
 
-    test('adding the xpub again finds the wallet it was stored as', () async {
+    test('a key and an address type are one wallet', () async {
       final wallet = await walletFor(_zpub);
-      final found = await WalletService(db).findByXpub(xpub);
-      expect(found?.id, wallet.id);
-      // A zpub and a ypub of one key are still different wallets.
+      expect((await WalletService(db).findByXpub(_zpub))?.id, wallet.id);
+      // The same key as another type is another wallet (audit B-7) …
       expect(
         await WalletService(
           db,
         ).findByXpub(XpubService.withFormat(xpub, XpubFormat.p2shP2wpkh)),
         isNull,
       );
+      // … and a plain xpub on Automatic is left for the sync to place.
+      expect(await WalletService(db).findByXpub(xpub), isNull);
     });
 
     test('a key another wallet already tracks is not stored twice', () async {
