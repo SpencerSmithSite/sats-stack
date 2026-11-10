@@ -690,7 +690,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
 - **What:** The build is ad-hoc signed with no hardened runtime. iOS declares `NSLocalNetworkUsageDescription` and macOS doesn't, though macOS users can point the app at LAN servers.
 - **Impact:** The app can't be notarised (already tracked in `TODO.md`). LAN behaviour on macOS 15+ without the string is unverified.
 - **Fix direction:** Do both when the macOS bundle id is registered.
-- **Status:** open
+- **Status:** partly fixed in #PR: macOS now declares `NSLocalNetworkUsageDescription`, and both platforms' text names a Bitcoin node as well as an AI server. The hardened runtime waits for the macOS bundle id to be registered, as the fix direction says; it is part of that item in `docs/TODO.md`.
 
 ### P-11 · Low · maintainability — Stale configuration comments; strict analyzer modes off
 - **Where:** `analysis_options.yaml:50-51`; `android/app/build.gradle.kts:37`.

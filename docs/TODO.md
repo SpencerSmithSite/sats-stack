@@ -84,7 +84,9 @@ History lives elsewhere and is not duplicated into this file:
   keychain. Needed for any macOS distribution anyway; the
   comment in `secure_key_store.dart` explains why the file-based one is in use
   (the ad-hoc-signed target cannot carry the entitlement, so every write fails
-  with `errSecMissingEntitlement`).
+  with `errSecMissingEntitlement`). At the same time, turn on the hardened
+  runtime (`ENABLE_HARDENED_RUNTIME = YES` for the macOS Runner's Release
+  config), which notarisation needs (the rest of audit P-10).
 - **Drop the unused media picker from iOS builds.** `file_picker` builds
   through Swift Package Manager, whose package hardcodes its media and audio
   pickers on, so every iOS build links DKImagePickerController, DKCamera,
