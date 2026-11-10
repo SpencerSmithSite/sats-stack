@@ -210,3 +210,55 @@ jobs:
           for test in apple_intelligence path_provider secure_key_store; do
             flutter test "integration_test/${test}_test.dart" -d macos
           done
+
+  # Linux and Windows ship too, so they are built like the others: the
+  # folders were tracked but never compiled, and could rot unseen (audit
+  # P-9).
+  linux:
+    name: Build Linux (release)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Flutter's Linux toolchain (GTK 3, CMake, Ninja, Clang), and
+      # libsecret and jsoncpp for flutter_secure_storage's Linux keyring.
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config \
+            libgtk-3-dev liblzma-dev libstdc++-12-dev \
+            libsecret-1-dev libjsoncpp-dev
+
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - run: flutter pub get --enforce-lockfile
+
+      - name: Build Linux (release)
+        run: flutter build linux --release
+
+  windows:
+    name: Build Windows (release)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - run: flutter pub get --enforce-lockfile
+
+      - name: Build Windows (release)
+        run: flutter build windows --release

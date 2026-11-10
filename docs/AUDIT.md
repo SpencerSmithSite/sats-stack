@@ -683,7 +683,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
   - `linux/` and `windows/` are tracked but never built.
 - **Impact:** Release-only Apple regressions can ship, and a hung macOS job burns hours.
 - **Fix direction:** Unsigned `--release` builds for both Apple targets, and timeouts. Delete or build Linux and Windows.
-- **Status:** partly fixed in #138: every job has a timeout; iOS and macOS are built in release (iOS unsigned); the integration tests run on macOS, one file per run. Still open: `linux/` and `windows/` are neither built nor deleted, which needs Spencer's decision.
+- **Status:** fixed in #138: every job has a timeout; iOS and macOS are built in release (iOS unsigned); the macOS integration tests run, one file per run; and Linux and Windows are built in release — decided 2026-11-10 that the app ships on every platform.
 
 ### P-10 · Low · security — macOS: no hardened runtime, and no local-network purpose string
 - **Where:** `macos/Runner.xcodeproj/project.pbxproj:560`, `:636`, `:692`; `macos/Runner/Info.plist`.
