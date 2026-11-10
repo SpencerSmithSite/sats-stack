@@ -276,6 +276,10 @@ class _ImportColumnMapperScreenState extends State<ImportColumnMapperScreen> {
                           child: DropdownButtonFormField<String>(
                             initialValue: _assignments[i],
                             isDense: true,
+                            // Shortened to fit rather than overflowing:
+                            // "Amount (signed)" ran past the edge at a large
+                            // text size (audit T-1 found it).
+                            isExpanded: true,
                             decoration: const InputDecoration(
                               contentPadding: EdgeInsets.symmetric(
                                 horizontal: 12,
