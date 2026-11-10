@@ -10,6 +10,7 @@ import '../../../shared/theme/app_colors.dart';
 import '../../../shared/utils/currency_utils.dart';
 import '../../../shared/utils/sat_converter.dart';
 import '../../../shared/utils/url_utils.dart';
+import '../../../shared/widgets/credentials_outside_keychain_note.dart';
 import 'settings_widgets.dart';
 import 'wallet_history_section.dart';
 
@@ -184,6 +185,12 @@ class _BitcoinServersSectionState extends State<BitcoinServersSection> {
                   helperMaxLines: 3,
                 ),
               ),
+              if (app.xpubService.loginOutsideKeychain) ...[
+                const SizedBox(height: 8),
+                const CredentialsOutsideKeychainNote(
+                  items: ['your Bitcoin server login'],
+                ),
+              ],
               const SizedBox(height: 10),
               // Listens to the field instead of `onChanged: setState`.
               // The only thing the text affects here is this banner, and

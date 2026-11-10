@@ -237,7 +237,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
   - Server URLs are stored and shown verbatim, so a `user:pass@` URL sits in the exported database and on screen.
 - **Impact:** Credentials can leak through an export or a screenshot.
 - **Fix direction:** Strip `userInfo` before storing or showing a URL, and warn when a plaintext key remains.
-- **Status:** fixed in #115 for the AI servers and the Maple key: a login in an Ollama, LM Studio or Maple address goes to the keychain, the table keeps the address without it, and it is masked wherever shown; whatever the keychain refuses is named beside the AI settings and Export database. Still open: the Mempool/Esplora address — `docs/TODO.md`, smaller items.
+- **Status:** fixed in #115 and #146. A login in a server address — Ollama, LM Studio, Maple (#115), and the Mempool/Esplora server (#146) — goes to the keychain, the table keeps the address without it, and it is masked wherever shown; whatever the keychain refuses, a legacy Maple key included, is named beside the settings and Export database.
 
 ### A-18 · Low · correctness — Smaller import and copy issues
 - **Where:** `import_file_screen.dart:602`, `:104`; `import_column_mapper_screen.dart:86`; `dashboard_service.dart:278`.

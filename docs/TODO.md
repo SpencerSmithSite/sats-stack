@@ -103,12 +103,6 @@ History lives elsewhere and is not duplicated into this file:
 - **Try the Electrum path against a real electrs and Fulcrum.** It is tested
   end to end against a local fake server that speaks the protocol, including
   a self-signed TLS certificate, but not against either real implementation.
-- **A login in the Mempool/Esplora address** (the rest of audit A-17). The
-  AI servers' `user:password@` now lives in the keychain and is masked
-  wherever shown; the Esplora address (`electrum_url`) is still stored and
-  shown as typed. It is read by `BtcPriceService` and `XpubService`, not
-  `OllamaService`, so it needs the same `_loadServerUrl` / `_saveServerUrl`
-  treatment there. Rare in practice: a public or Umbrel mempool has no login.
 - **Verify a real request against each hosted provider.** Every wire format is
   unit tested against the documented shape, but nothing has run against a live
   endpoint with a real key — that needs four paid accounts.

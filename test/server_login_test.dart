@@ -13,10 +13,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:sats_stack/core/database/database.dart';
+import 'package:sats_stack/core/services/btc_price_service.dart';
 import 'package:sats_stack/core/services/inference/inference_backend.dart';
 import 'package:sats_stack/core/services/inference/remote_backends.dart';
 import 'package:sats_stack/core/services/ollama_service.dart';
 import 'package:sats_stack/core/services/secure_key_store.dart';
+import 'package:sats_stack/core/services/xpub_service.dart';
 import 'package:sats_stack/shared/constants/app_constants.dart';
 import 'package:sats_stack/shared/utils/url_utils.dart';
 
@@ -200,5 +202,82 @@ void main() {
             .having((e) => e.message, 'message', isNot(contains('s3cret'))),
       ),
     );
+  });
+
+  // The rest of A-17: the Mempool/Esplora server's address, which the wallet
+  // sync saves and both it and the price service use.
+  group('the Bitcoin server', () {
+    late AppDatabase db;
+    setUp(() => db = AppDatabase.forTesting(NativeDatabase.memory()));
+    tearDown(() => db.close());
+
+    const url = 'https://alice:s3cret@node.example.com/api';
+
+    Future<String?> stored() async =>
+        (await (db.select(db.appSettings)..where(
+              (t) => t.key.equals(AppConstants.settingElectrumUrl),
+            )).getSingleOrNull())
+            ?.value;
+
+    /// The address the price service sends to, login and all.
+    Future<Uri> priceRequest(_Keychain keys) async {
+      Uri? asked;
+      final prices = BtcPriceService(
+        db,
+        keyStore: keys,
+        client: MockClient((req) async {
+          asked = req.url;
+          return http.Response('{}', 500);
+        }),
+      );
+      await prices.loadSettings();
+      await prices.fetchAndCache(force: true);
+      return asked!;
+    }
+
+    test('its login goes to the keychain, and is still sent', () async {
+      final keys = _Keychain();
+      final xpub = XpubService(db, keyStore: keys);
+      final shown = await xpub.saveSettings(url: url);
+
+      expect(await stored(), 'https://node.example.com/api');
+      expect(keys.entries.values.join(), contains('s3cret'));
+      expect(shown, 'https://alice:••••••@node.example.com/api');
+      expect(xpub.esploraBaseUrl, shown);
+      expect(xpub.loginOutsideKeychain, isFalse);
+
+      // After a restart, prices still go with the login.
+      expect((await priceRequest(keys)).userInfo, 'alice:s3cret');
+
+      // The field shows the masked address; saved back, it keeps the login.
+      final next = XpubService(db, keyStore: keys);
+      await next.loadSettings();
+      await next.saveSettings(url: next.esploraBaseUrl);
+      expect((await priceRequest(keys)).userInfo, 'alice:s3cret');
+    });
+
+    test('clearing the field forgets the login', () async {
+      final keys = _Keychain();
+      final xpub = XpubService(db, keyStore: keys);
+      await xpub.saveSettings(url: url);
+      await xpub.saveSettings(url: '');
+      expect(keys.entries.values.join(), isNot(contains('s3cret')));
+      expect(await stored(), '');
+    });
+
+    test('Reset all data deletes it', () async {
+      final keys = _Keychain();
+      await XpubService(db, keyStore: keys).saveSettings(url: url);
+      await OllamaService(db, keyStore: keys).clearAllApiKeys();
+      expect(keys.entries.values.join(), isNot(contains('s3cret')));
+    });
+
+    test('when the keychain refuses, it still works and says so', () async {
+      final keys = _Keychain(refuses: true);
+      final xpub = XpubService(db, keyStore: keys);
+      await xpub.saveSettings(url: url);
+      expect(xpub.loginOutsideKeychain, isTrue);
+      expect((await priceRequest(keys)).userInfo, 'alice:s3cret');
+    });
   });
 }

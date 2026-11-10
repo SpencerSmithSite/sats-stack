@@ -17,6 +17,7 @@ import 'inference/inference_backend.dart';
 import 'inference/platform_llm_backend.dart';
 import 'inference/remote_backends.dart';
 import 'secure_key_store.dart';
+import 'server_logins.dart';
 
 /// Owns the user's AI configuration and hands out the selected backend.
 ///
@@ -325,7 +326,7 @@ class OllamaService {
   /// Settings → Data exports that table whole, so the user is told (audit
   /// A-17).
   List<String> get credentialsOutsideKeychain => [
-    for (final key in _outsideKeychain)
+    for (final key in {..._outsideKeychain, ..._logins.outsideKeychain})
       switch (key) {
         AppConstants.settingMapleApiKey => 'your Maple API key',
         AppConstants.settingOllamaUrl => 'your Ollama server login',
@@ -565,73 +566,33 @@ class OllamaService {
     return normalizeServerUrl(raw, defaultScheme: scheme) ?? raw.trim();
   }
 
-  /// The keychain entry holding the login for the server in [settingKey].
-  static String _loginEntry(String settingKey) => 'server_login_$settingKey';
+  /// Server logins, in the keychain (audit A-17) — see [ServerLogins].
+  late final _logins = ServerLogins(_keyStore, _upsertSetting);
 
   /// The server address saved under [settingKey], with its login put back.
-  ///
-  /// The keychain holds the whole address the login was saved with, and the
-  /// login is used only while the saved address still goes to the same place:
-  /// a restored backup that names another server must not be sent it. An
-  /// address still carrying a login in the table — saved by an earlier build,
-  /// or when the keychain refused — is moved into the keychain now.
   Future<String> _loadServerUrl(
     Map<String, String> settings,
     String settingKey,
     String fallback, {
     String scheme = 'http',
-  }) async {
-    final saved = _serverUrl(settings[settingKey], fallback, scheme: scheme);
-    final split = splitUserInfo(saved);
-    if (split.userInfo != null) {
-      if (await _keyStore.writeEntry(_loginEntry(settingKey), saved)) {
-        await _upsertSetting(settingKey, split.url);
-        _outsideKeychain.remove(settingKey);
-      } else {
-        _outsideKeychain.add(settingKey);
-      }
-      return saved;
-    }
-    final withLogin = await _keyStore.readEntry(_loginEntry(settingKey));
-    if (withLogin.isEmpty || serverOrigin(withLogin) != serverOrigin(saved)) {
-      return saved;
-    }
-    return withUserInfo(saved, splitUserInfo(withLogin).userInfo);
-  }
+  }) => _logins.load(
+    settingKey,
+    _serverUrl(settings[settingKey], fallback, scheme: scheme),
+  );
 
   /// Saves the address typed into [settingKey]'s field and returns the one to
   /// use, login included.
-  ///
-  /// A `user:password@` part goes to the keychain and the address is stored
-  /// without it: `AppSettings` is plain SQLite that Settings → Data exports
-  /// whole, and stored there the password went out with every export (audit
-  /// A-17). If the keychain refuses, the whole address is stored as before, so
-  /// the server still works, and [credentialsOutsideKeychain] says so.
   Future<String> _saveServerUrl(
     String settingKey,
     String typed, {
     required String current,
     required String fallback,
     String scheme = 'http',
-  }) async {
-    final split = splitUserInfo(_serverUrl(typed, fallback, scheme: scheme));
-    final login = resolveTypedUserInfo(
-      split.userInfo,
-      splitUserInfo(current).userInfo,
-    );
-    final full = withUserInfo(split.url, login);
-    final stored = await _keyStore.writeEntry(
-      _loginEntry(settingKey),
-      login == null ? '' : full,
-    );
-    await _upsertSetting(settingKey, stored ? split.url : full);
-    if (!stored && login != null) {
-      _outsideKeychain.add(settingKey);
-    } else {
-      _outsideKeychain.remove(settingKey);
-    }
-    return full;
-  }
+  }) => _logins.save(
+    settingKey,
+    _serverUrl(typed, fallback, scheme: scheme),
+    current: current,
+  );
 
   /// Where a stored choice of the removed downloadable-model backend moves to:
   /// the platform's own on-device model, or Ollama where there is none.
@@ -757,8 +718,10 @@ class OllamaService {
       AppConstants.settingOllamaUrl,
       AppConstants.settingLmStudioUrl,
       AppConstants.settingMapleUrl,
+      // The Mempool/Esplora server's, which XpubService keeps the same way.
+      AppConstants.settingElectrumUrl,
     ]) {
-      await _keyStore.deleteEntry(_loginEntry(key));
+      await _logins.forget(key);
     }
     _outsideKeychain.clear();
     // The Bitcoin Core RPC password lives in the same keychain; a reset that
