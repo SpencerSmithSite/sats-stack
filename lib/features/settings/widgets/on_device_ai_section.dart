@@ -91,9 +91,17 @@ class PlatformModelStatus extends StatelessWidget {
 /// without a total, so this is an indeterminate bar rather than a percentage —
 /// see [GeminiNanoBackend.download].
 class GeminiNanoDownloadSection extends StatefulWidget {
-  const GeminiNanoDownloadSection({super.key, required this.onFinished});
+  const GeminiNanoDownloadSection({
+    super.key,
+    required this.onFinished,
+    @visibleForTesting this.download = GeminiNanoBackend.download,
+  });
 
   final VoidCallback onFinished;
+
+  /// The download's progress, 0–100 or negative while the size is unknown.
+  /// Replaceable in tests: the real one needs Android's AICore.
+  final Stream<int> Function() download;
 
   @override
   State<GeminiNanoDownloadSection> createState() =>
@@ -114,7 +122,7 @@ class _GeminiNanoDownloadSectionState extends State<GeminiNanoDownloadSection> {
       _percent = null;
     });
     try {
-      await for (final p in GeminiNanoBackend.download()) {
+      await for (final p in widget.download()) {
         if (mounted) setState(() => _percent = p < 0 ? null : p);
       }
       await app.ollamaService.refreshOnDeviceReadiness();
