@@ -416,11 +416,15 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                             color: context.textSecondary,
                           ),
                           const SizedBox(width: 10),
-                          Text(
-                            DateFormat(
-                              'EEEE, MMMM d, yyyy',
-                            ).format(_selectedDate),
-                            style: theme.textTheme.bodyMedium,
+                          // Wraps: "Wednesday, September 30, 2026" ran past
+                          // the field's edge at a large text size.
+                          Expanded(
+                            child: Text(
+                              DateFormat(
+                                'EEEE, MMMM d, yyyy',
+                              ).format(_selectedDate),
+                              style: theme.textTheme.bodyMedium,
+                            ),
                           ),
                         ],
                       ),
