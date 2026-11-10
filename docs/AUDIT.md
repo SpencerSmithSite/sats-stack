@@ -1,6 +1,6 @@
 # Audit — full codebase scan, 2026-10-31
 
-**Findings only, nothing fixed yet.** Each one is open until a PR fixes it; when one lands, mark its **Status** with the PR number. The earlier audits (2026-10-17, the 2026-10-18 and 2026-10-21 passes, and the record of PRs #22–#54) were in this file until now. They are in git: `git show ef5b956:docs/AUDIT.md`.
+**Where it stands, 2026-11-10:** all 77 findings are fixed, through PRs #56–#146, except D-11, deferred by decision, and the unfinished parts of three, each named in its **Status**: B-7 (funds under a second script type of one key), P-4 (the upgrades held on purpose) and P-10 (the hardened runtime, waiting on the macOS bundle id). Each finding's **Status** names the PR that fixed it. The earlier audits (2026-10-17, the 2026-10-18 and 2026-10-21 passes, and the record of PRs #22–#54) were in this file until now. They are in git: `git show ef5b956:docs/AUDIT.md`.
 
 **77 findings: 1 High, 32 Medium, 44 Low.** Fix the High first: A-1, re-importing a statement through the AI tier double-counts spending.
 
@@ -645,7 +645,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
   - Plan `drift_flutter` 0.3 / `sqlite3` 3.x as its own change; it also unblocks SQLCipher.
   - Plan `flutter_secure_storage` 10/11 with a key-migration test.
   - Run `flutter pub upgrade` within the current constraints regularly.
-- **Status:** partly fixed in #80: the 63 packages are upgraded within their constraints. Still open: `drift_flutter` 0.3 with `sqlite3` 3.x (the end-of-life SQLite libs), `flutter_secure_storage` 10+, and the majors (Syncfusion, notifications, `file_picker`, `go_router`), each as its own change
+- **Status:** partly fixed in #80 (the 63 packages upgraded within their constraints), #96, #97, #100, #148, #149 and #150 (csv 8, notifications 22, go_router 17 then 18, Syncfusion 35, intl 0.20). What is left waits on three larger moves, in `docs/TODO.md` item 10: `drift_flutter` 0.3 (held), which brings sqlite3 3 in place of the end-of-life SQLite libs and lifts `drift`, `drift_dev`, `analyzer` and `build_runner`; `flutter_secure_storage` 10+ (held), whose Windows plugin keeps `win32` at 5 and so holds `file_picker` 13 and `package_info_plus` 10; and AGP 9, which `flutter_local_notifications` 23 needs.
 
 ### P-5 · Medium · privacy — ML Kit GenAI may bring Google's telemetry transport into Android builds
 - **Where:** `android/app/build.gradle.kts:94` (`com.google.mlkit:genai-prompt:1.0.0-beta2`).
