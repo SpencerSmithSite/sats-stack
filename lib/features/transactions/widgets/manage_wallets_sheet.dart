@@ -297,7 +297,6 @@ class _ListBody extends StatelessWidget {
                               horizontal: 12,
                               vertical: 6,
                             ),
-                            visualDensity: VisualDensity.compact,
                           ),
                         ),
                         IconButton(

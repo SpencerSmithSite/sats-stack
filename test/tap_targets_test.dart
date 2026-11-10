@@ -11,13 +11,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sats_stack/core/database/database.dart';
+import 'package:sats_stack/core/models/ai_provider.dart';
 import 'package:sats_stack/core/services/btc_price_service.dart';
 import 'package:sats_stack/core/services/category_service.dart';
 import 'package:sats_stack/core/services/transaction_service.dart';
 import 'package:sats_stack/core/services/wallet_service.dart';
+import 'package:sats_stack/features/dashboard/widgets/ai_insight_card.dart';
+import 'package:sats_stack/features/stack/widgets/stack_goal_card.dart';
 import 'package:sats_stack/features/transactions/transactions_screen.dart';
 import 'package:sats_stack/main.dart' as app;
 import 'package:sats_stack/shared/theme/app_theme.dart';
+import 'package:sats_stack/shared/widgets/ai_privacy_disclosure.dart';
 
 void main() {
   driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
@@ -82,5 +86,41 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     await tester.runAsync(() => app.db.close());
     // A phone: on desktop, Material's own density is compact on purpose.
+  }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
+
+  // The same overrides, in places the audit's list did not name.
+  testWidgets('the insight card, goal presets and API key link', (
+    tester,
+  ) async {
+    final handle = tester.ensureSemantics();
+    tester.view.physicalSize = const Size(430, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: Column(
+              children: [
+                AiInsightCard(
+                  aiEnabled: true,
+                  offDeviceRecipient: 'Anthropic',
+                  onRefresh: () {},
+                ),
+                const ApiKeyHelpLink(provider: AiProvider.claude),
+                SetGoalSheet(current: null, onSave: (_) {}),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Generate an insight'), findsOneWidget);
+
+    await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
+    await expectLater(tester, meetsGuideline(iOSTapTargetGuideline));
+    handle.dispose();
   }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
 }

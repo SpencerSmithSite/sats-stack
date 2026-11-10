@@ -337,7 +337,6 @@ class _SetGoalSheetState extends State<SetGoalSheet> {
                       ActionChip(
                         label: Text(_abbrev(preset)),
                         onPressed: () => _ctrl.text = preset.toString(),
-                        visualDensity: VisualDensity.compact,
                       ),
                   ],
                 ),
