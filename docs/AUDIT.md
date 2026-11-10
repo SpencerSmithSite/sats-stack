@@ -726,7 +726,7 @@ Severity: **High** loses or misstates money or data, or sends data somewhere the
   - `on_device_ai_section.dart` (0 of 56)
 - **Impact:** The screens where the user adds money and imports statements can regress unnoticed. Several findings above (A-5, A-6, A-10, A-18) live in them.
 - **Fix direction:** Pin each with widget tests before fixing what is in them, as was done for Settings in #54.
-- **Status:** open
+- **Status:** fixed in #140–#144 and #PR (2026-11-10). Line coverage 61% → 68%. Add transaction 0 → 95%, analytics 1 → 88%, import summary 0 → 100%, on-device AI section 0 → 100%, column mapper 8 → 93%, import screen 25 → 55%. Onboarding (79–100%) and the AI chat (58%) had gained tests with earlier fixes. The tests found and fixed four layout overflows: the add sheet's date row, the import summary at a large text size, its wide card, and the column mapper's role dropdowns. Least covered still: the import screen's photo path and AI progress overlay, and the import preview (51%).
 
 ---
 
