@@ -140,10 +140,7 @@ class _BudgetsScreenState extends State<BudgetsScreen> {
   /// lowered below what has already been spent.
   void _notifyOverspend() {
     app.budgetService
-        .checkAndNotify(
-          notifications: app.notificationService,
-          currency: app.currencyNotifier.value,
-        )
+        .checkAndNotify(notifications: app.notificationService)
         .ignore();
   }
 

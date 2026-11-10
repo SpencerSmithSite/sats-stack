@@ -180,7 +180,6 @@ void main() {
             return true;
           },
         ),
-        currency: 'USD',
         now: DateTime(2026, 3, 20),
       );
       return claimed;

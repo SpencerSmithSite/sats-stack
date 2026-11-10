@@ -249,13 +249,11 @@ void main() {
       for (var i = 0; i < 3; i++) {
         await budgets.checkAndNotify(
           notifications: notifications,
-          currency: 'USD',
           now: DateTime(2026, 3, 20),
         );
       }
       await budgets.checkAndNotify(
         notifications: notifications,
-        currency: 'USD',
         now: DateTime(2026, 4, 20),
       );
 
@@ -287,8 +285,7 @@ void main() {
           return shown;
         },
       );
-      Future<void> reach() =>
-          notifications.showStackGoalReached(goalSats: 100, currency: 'USD');
+      Future<void> reach() => notifications.showStackGoalReached(goalSats: 100);
 
       await reach(); // refused
       await reach(); // still refused
@@ -309,9 +306,6 @@ void main() {
       await notifications.showBudgetOverspend(
         categoryId: foodId,
         categoryName: 'Food & Dining',
-        overBy: 50,
-        budgetAmount: 100,
-        currency: 'USD',
         month: DateTime(2026, 3),
       );
       expect(await ledger.claim('budget_over_${foodId}_2026-03'), isTrue);
@@ -324,7 +318,7 @@ void main() {
         claim: ledger.claim,
         release: ledger.release,
       );
-      await notifications.showStackGoalReached(goalSats: 100, currency: 'USD');
+      await notifications.showStackGoalReached(goalSats: 100);
       expect(await ledger.claim('stack_goal_100'), isTrue);
     });
   });
