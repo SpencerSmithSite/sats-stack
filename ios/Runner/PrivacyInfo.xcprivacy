@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Sats Stack's own privacy manifest (audit P-7). The plugins and Flutter's
+  engine ship their own; this one covers the app.
+
+  No tracking, and no tracking domains.
+
+  No data collected: the developer runs no server and receives nothing. The
+  services the app talks to (Bitcoin price and wallet servers, and a hosted AI
+  provider) are ones the user chooses, and a hosted AI provider is reached with
+  the user's own key. The disclosure in the app names each recipient.
+
+  No required-reason APIs: the app's own Swift code (AppDelegate, the
+  Foundation Models bridge) calls none of them. Dart's file and clock access
+  runs in Flutter's engine, which declares its own.
+-->
+<plist version="1.0">
+<dict>
+	<key>NSPrivacyTracking</key>
+	<false/>
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array/>
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array/>
+</dict>
+</plist>
