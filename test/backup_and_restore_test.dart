@@ -171,7 +171,11 @@ void main() {
       await tester.runAsync(
         () => tester.tap(find.text('Put back the previous data')),
       );
-      for (var i = 0; i < 3; i++) {
+      // Until the restore says it is done, not for a fixed time: the file work
+      // runs for real, and under a full parallel suite 90 ms was sometimes
+      // not enough.
+      final done = find.text('Your previous data is back');
+      for (var i = 0; i < 100 && done.evaluate().isEmpty; i++) {
         await tester.runAsync(
           () => Future<void>.delayed(const Duration(milliseconds: 30)),
         );
