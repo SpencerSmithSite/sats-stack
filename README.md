@@ -104,7 +104,7 @@ No state management library (Provider/Riverpod/Bloc) — services are plain Dart
 
 - Flutter 3.47.2 (the version CI builds with)
 - For macOS: Xcode
-- For iOS and macOS: Xcode + CocoaPods (`brew install cocoapods`). Every plugin builds through Swift Package Manager; CocoaPods installs only Flutter's own framework
+- For iOS and macOS: Xcode. Every plugin builds through Swift Package Manager, so CocoaPods is not needed
 - For Android: JDK 21 (not 25 — see `.github/workflows/ci.yml`)
 
 ### Run
@@ -128,9 +128,11 @@ dart run build_runner build --delete-conflicting-outputs
 
 ### iOS note
 
-The minimum is iOS 15, set in `ios/Podfile` and the Xcode project — the
-lowest the current Xcode supports. `pod install` needs a UTF-8 locale
-(`LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8`).
+The minimum is iOS 15, set in the Xcode project — the lowest the current
+Xcode supports.
+
+A checkout from before CocoaPods was removed may still have `ios/Pods` or
+`macos/Pods` folders; they are ignored and can be deleted.
 
 ### Moving macOS data from before the bundle id change
 
