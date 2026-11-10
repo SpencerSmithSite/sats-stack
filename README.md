@@ -104,7 +104,7 @@ No state management library (Provider/Riverpod/Bloc) — services are plain Dart
 
 - Flutter 3.47.2 (the version CI builds with)
 - For macOS: Xcode
-- For iOS and macOS: Xcode + CocoaPods (`brew install cocoapods`) — macOS has a Podfile too, for `flutter_secure_storage_macos`
+- For iOS and macOS: Xcode + CocoaPods (`brew install cocoapods`). Every plugin builds through Swift Package Manager; CocoaPods installs only Flutter's own framework
 - For Android: JDK 21 (not 25 — see `.github/workflows/ci.yml`)
 
 ### Run

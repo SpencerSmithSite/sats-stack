@@ -18,9 +18,15 @@ class SecureKeyStore {
   const SecureKeyStore();
 
   static const FlutterSecureStorage _storage = FlutterSecureStorage(
-    // Without this Android falls back to plain SharedPreferences on older API
-    // levels, which would defeat the point of moving the keys at all.
-    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+    // The plugin's own ciphers, keyed in the Android Keystore. Keys saved
+    // under 9.x's `encryptedSharedPreferences: true` (Jetpack Security, which
+    // Google deprecated) are moved across on first access.
+    //
+    // `resetOnError` defaults to true from 10.0, which deletes every stored
+    // key when that move or a read fails. False, as it was before: a failed
+    // move falls back to the old store, and a failed read is "no key" (see
+    // [read]), which the user can fix, where a wiped key is gone.
+    aOptions: AndroidOptions(resetOnError: false),
     // `first_unlock_this_device`. This was `first_unlock`, justified by a
     // background insight refresh that does not exist — the insight is only
     // ever generated in the foreground — and the plain class lets the key
@@ -28,10 +34,9 @@ class SecureKeyStore {
     // for a paid account should not. `this_device` keeps it here. Readable
     // after the first unlock, so a key is never missing in the foreground.
     //
-    // The iOS plugin's reads ignore the class, so keys stored under the old
-    // one are still found; `OllamaService.loadSettings` rewrites them once,
-    // which the plugin does by deleting the old item and adding one under
-    // this class.
+    // From 10.0 the plugin puts the class in every query, so a key stored
+    // under the old one is not found under this one: [_read] and [_write]
+    // look for it under [_legacyIos] and move it.
     iOptions: IOSOptions(
       accessibility: KeychainAccessibility.first_unlock_this_device,
     ),
@@ -50,14 +55,50 @@ class SecureKeyStore {
       // at runtime with errSecMissingEntitlement (-34018) — it compiles, links
       // and launches, and only the write fails. See
       // integration_test/secure_key_store_test.dart, which is what caught it.
+      // From 10.0 it is on unless turned off, so this must stay explicit.
       //
       // The file-based keychain is still encrypted at rest and still gated on
       // the app's code signature; it is what Mac apps used before the
       // data-protection keychain existed. If the macOS build is ever properly
       // provisioned, flip this back and add the entitlement.
-      useDataProtectionKeyChain: false,
+      usesDataProtectionKeychain: false,
     ),
   );
+
+  /// The iOS class keys were stored under before `first_unlock_this_device`.
+  static const FlutterSecureStorage _legacyIos = FlutterSecureStorage(
+    iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
+  );
+
+  static bool get _onIos => defaultTargetPlatform == TargetPlatform.iOS;
+
+  /// [entry]'s value, moving it to the current class if it is stored under
+  /// [_legacyIos]'s. The move is a delete and an add (a write would collide
+  /// with the old item, which the plugin's delete matches whatever its
+  /// class); if the add fails the old item is put back.
+  static Future<String?> _read(String entry) async {
+    final value = await _storage.read(key: entry);
+    if (value != null || !_onIos) return value;
+    final old = await _legacyIos.read(key: entry);
+    if (old == null) return null;
+    await _storage.delete(key: entry);
+    try {
+      await _storage.write(key: entry, value: old);
+    } catch (e) {
+      debugPrint('SecureKeyStore: could not move $entry to this device: $e');
+      await _legacyIos.write(key: entry, value: old);
+    }
+    return old;
+  }
+
+  /// Stores [value] under [entry], first deleting any item stored under
+  /// [_legacyIos]'s class, which the add would collide with.
+  static Future<void> _write(String entry, String value) async {
+    if (_onIos && await _legacyIos.containsKey(key: entry)) {
+      await _storage.delete(key: entry);
+    }
+    await _storage.write(key: entry, value: value);
+  }
 
   /// Entry name for a provider's key. Derived from the provider id, so renaming
   /// an id orphans the stored key rather than exposing it.
@@ -72,7 +113,7 @@ class SecureKeyStore {
   /// message as a user who has not entered one yet.
   Future<String> read(String providerId) async {
     try {
-      return await _storage.read(key: entryName(providerId)) ?? '';
+      return await _read(entryName(providerId)) ?? '';
     } catch (e) {
       debugPrint('SecureKeyStore: could not read $providerId key: $e');
       return '';
@@ -95,7 +136,7 @@ class SecureKeyStore {
       if (trimmed.isEmpty) {
         await _storage.delete(key: entryName(providerId));
       } else {
-        await _storage.write(key: entryName(providerId), value: trimmed);
+        await _write(entryName(providerId), trimmed);
       }
       return true;
     } catch (e) {
@@ -125,7 +166,7 @@ class SecureKeyStore {
   /// reasons given on [read].
   Future<String> readEntry(String entry) async {
     try {
-      return await _storage.read(key: entry) ?? '';
+      return await _read(entry) ?? '';
     } catch (e) {
       debugPrint('SecureKeyStore: could not read $entry: $e');
       return '';
@@ -139,7 +180,7 @@ class SecureKeyStore {
       if (value.isEmpty) {
         await _storage.delete(key: entry);
       } else {
-        await _storage.write(key: entry, value: value);
+        await _write(entry, value);
       }
       return true;
     } catch (e) {

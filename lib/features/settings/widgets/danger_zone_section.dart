@@ -56,7 +56,7 @@ class _DangerZoneSectionState extends State<DangerZoneSection> {
       } catch (_) {}
       // And any statement or photo the pickers copied into the app's cache.
       try {
-        await FilePicker.platform.clearTemporaryFiles();
+        await FilePicker.clearTemporaryFiles();
       } catch (_) {}
       // A fresh start takes a new install's default: out of iCloud. Left
       // unset, the next launch would read the finished onboarding as an old

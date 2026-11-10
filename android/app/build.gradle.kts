@@ -20,17 +20,15 @@ val hasReleaseKey = keyProperties.getProperty("storeFile") != null
 
 android {
     namespace = "app.satsstack.satsstack"
-    compileSdk = flutter.compileSdkVersion
+    // 37 for flutter_local_notifications 23, which compiles against it;
+    // Flutter 3.47.2's default is 36.
+    compileSdk = maxOf(37, flutter.compileSdkVersion)
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
         isCoreLibraryDesugaringEnabled = true
-    }
-
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_11.toString()
     }
 
     defaultConfig {
@@ -75,6 +73,12 @@ android {
                 null
             }
         }
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
     }
 }
 
