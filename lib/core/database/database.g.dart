@@ -4867,7 +4867,7 @@ final class $$WalletsTableReferences
   static MultiTypedResultKey<$TransactionsTable, List<Transaction>>
   _transactionsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
     db.transactions,
-    aliasName: $_aliasNameGenerator(db.wallets.id, db.transactions.walletId),
+    aliasName: 'wallets__id__transactions__wallet_id',
   );
 
   $$TransactionsTableProcessedTableManager get transactionsRefs {
@@ -5123,7 +5123,7 @@ class $$WalletsTableTableManager
                   p0
                       .map(
                         (e) => (
-                          e.readTable(table),
+                          e.readTable<$WalletsTable, Wallet>(table),
                           $$WalletsTableReferences(db, table, e),
                         ),
                       )
@@ -5136,10 +5136,11 @@ class $$WalletsTableTableManager
               getPrefetchedDataCallback: (items) async {
                 return [
                   if (transactionsRefs)
-                    await $_getPrefetchedData<
+                    await $_getPrefetchedDataByColumns<
                       Wallet,
                       $WalletsTable,
-                      Transaction
+                      Transaction,
+                      $TransactionsTable
                     >(
                       currentTable: table,
                       referencedTable: $$WalletsTableReferences
@@ -5151,10 +5152,8 @@ class $$WalletsTableTableManager
                                 table,
                                 p0,
                               ).transactionsRefs,
-                      referencedItemsForCurrentItem:
-                          (item, referencedItems) => referencedItems.where(
-                            (e) => e.walletId == item.id,
-                          ),
+                      currentColumn: 'id',
+                      referencedColumn: 'wallet_id',
                       typedResults: items,
                     ),
                 ];
@@ -5225,9 +5224,7 @@ final class $$TransactionsTableReferences
   $$TransactionsTableReferences(super.$_db, super.$_table, super.$_typedResult);
 
   static $WalletsTable _walletIdTable(_$AppDatabase db) =>
-      db.wallets.createAlias(
-        $_aliasNameGenerator(db.transactions.walletId, db.wallets.id),
-      );
+      db.wallets.createAlias('transactions__wallet_id__wallets__id');
 
   $$WalletsTableProcessedTableManager get walletId {
     final $_column = $_itemColumn<int>('wallet_id')!;
@@ -5675,7 +5672,7 @@ class $$TransactionsTableTableManager
                   p0
                       .map(
                         (e) => (
-                          e.readTable(table),
+                          e.readTable<$TransactionsTable, Transaction>(table),
                           $$TransactionsTableReferences(db, table, e),
                         ),
                       )
@@ -5764,7 +5761,7 @@ final class $$CategoriesTableReferences
     _$AppDatabase db,
   ) => MultiTypedResultKey.fromTable(
     db.budgets,
-    aliasName: $_aliasNameGenerator(db.categories.id, db.budgets.categoryId),
+    aliasName: 'categories__id__budgets__category_id',
   );
 
   $$BudgetsTableProcessedTableManager get budgetsRefs {
@@ -5984,7 +5981,7 @@ class $$CategoriesTableTableManager
                   p0
                       .map(
                         (e) => (
-                          e.readTable(table),
+                          e.readTable<$CategoriesTable, Category>(table),
                           $$CategoriesTableReferences(db, table, e),
                         ),
                       )
@@ -5997,10 +5994,11 @@ class $$CategoriesTableTableManager
               getPrefetchedDataCallback: (items) async {
                 return [
                   if (budgetsRefs)
-                    await $_getPrefetchedData<
+                    await $_getPrefetchedDataByColumns<
                       Category,
                       $CategoriesTable,
-                      Budget
+                      Budget,
+                      $BudgetsTable
                     >(
                       currentTable: table,
                       referencedTable: $$CategoriesTableReferences
@@ -6012,10 +6010,8 @@ class $$CategoriesTableTableManager
                                 table,
                                 p0,
                               ).budgetsRefs,
-                      referencedItemsForCurrentItem:
-                          (item, referencedItems) => referencedItems.where(
-                            (e) => e.categoryId == item.id,
-                          ),
+                      currentColumn: 'id',
+                      referencedColumn: 'category_id',
                       typedResults: items,
                     ),
                 ];
@@ -6064,9 +6060,7 @@ final class $$BudgetsTableReferences
   $$BudgetsTableReferences(super.$_db, super.$_table, super.$_typedResult);
 
   static $CategoriesTable _categoryIdTable(_$AppDatabase db) =>
-      db.categories.createAlias(
-        $_aliasNameGenerator(db.budgets.categoryId, db.categories.id),
-      );
+      db.categories.createAlias('budgets__category_id__categories__id');
 
   $$CategoriesTableProcessedTableManager get categoryId {
     final $_column = $_itemColumn<int>('category_id')!;
@@ -6312,7 +6306,7 @@ class $$BudgetsTableTableManager
                   p0
                       .map(
                         (e) => (
-                          e.readTable(table),
+                          e.readTable<$BudgetsTable, Budget>(table),
                           $$BudgetsTableReferences(db, table, e),
                         ),
                       )
@@ -6496,8 +6490,12 @@ class $$AppSettingsTableTableManager
                   p0
                       .map(
                         (e) => (
-                          e.readTable(table),
-                          BaseReferences(db, table, e),
+                          e.readTable<$AppSettingsTable, AppSetting>(table),
+                          BaseReferences<
+                            _$AppDatabase,
+                            $AppSettingsTable,
+                            AppSetting
+                          >(db, table, e),
                         ),
                       )
                       .toList(),
@@ -6667,8 +6665,14 @@ class $$BtcPriceCacheTableTableManager
                   p0
                       .map(
                         (e) => (
-                          e.readTable(table),
-                          BaseReferences(db, table, e),
+                          e.readTable<$BtcPriceCacheTable, BtcPriceCacheData>(
+                            table,
+                          ),
+                          BaseReferences<
+                            _$AppDatabase,
+                            $BtcPriceCacheTable,
+                            BtcPriceCacheData
+                          >(db, table, e),
                         ),
                       )
                       .toList(),
@@ -6849,8 +6853,15 @@ class $$BtcPriceHistoryTableTableManager
                   p0
                       .map(
                         (e) => (
-                          e.readTable(table),
-                          BaseReferences(db, table, e),
+                          e.readTable<
+                            $BtcPriceHistoryTable,
+                            BtcPriceHistoryData
+                          >(table),
+                          BaseReferences<
+                            _$AppDatabase,
+                            $BtcPriceHistoryTable,
+                            BtcPriceHistoryData
+                          >(db, table, e),
                         ),
                       )
                       .toList(),
@@ -7067,8 +7078,14 @@ class $$AiConversationsTableTableManager
                   p0
                       .map(
                         (e) => (
-                          e.readTable(table),
-                          BaseReferences(db, table, e),
+                          e.readTable<$AiConversationsTable, AiConversation>(
+                            table,
+                          ),
+                          BaseReferences<
+                            _$AppDatabase,
+                            $AiConversationsTable,
+                            AiConversation
+                          >(db, table, e),
                         ),
                       )
                       .toList(),
@@ -7128,10 +7145,7 @@ final class $$ImportSourcesTableReferences
   _importedTransactionsRefsTable(_$AppDatabase db) =>
       MultiTypedResultKey.fromTable(
         db.importedTransactions,
-        aliasName: $_aliasNameGenerator(
-          db.importSources.id,
-          db.importedTransactions.sourceId,
-        ),
+        aliasName: 'import_sources__id__imported_transactions__source_id',
       );
 
   $$ImportedTransactionsTableProcessedTableManager
@@ -7156,10 +7170,8 @@ final class $$ImportSourcesTableReferences
   _descriptionCategoryMappingsRefsTable(_$AppDatabase db) =>
       MultiTypedResultKey.fromTable(
         db.descriptionCategoryMappings,
-        aliasName: $_aliasNameGenerator(
-          db.importSources.id,
-          db.descriptionCategoryMappings.sourceId,
-        ),
+        aliasName:
+            'import_sources__id__description_category_mappings__source_id',
       );
 
   $$DescriptionCategoryMappingsTableProcessedTableManager
@@ -7467,7 +7479,7 @@ class $$ImportSourcesTableTableManager
                   p0
                       .map(
                         (e) => (
-                          e.readTable(table),
+                          e.readTable<$ImportSourcesTable, ImportSource>(table),
                           $$ImportSourcesTableReferences(db, table, e),
                         ),
                       )
@@ -7487,10 +7499,11 @@ class $$ImportSourcesTableTableManager
               getPrefetchedDataCallback: (items) async {
                 return [
                   if (importedTransactionsRefs)
-                    await $_getPrefetchedData<
+                    await $_getPrefetchedDataByColumns<
                       ImportSource,
                       $ImportSourcesTable,
-                      ImportedTransaction
+                      ImportedTransaction,
+                      $ImportedTransactionsTable
                     >(
                       currentTable: table,
                       referencedTable: $$ImportSourcesTableReferences
@@ -7502,17 +7515,16 @@ class $$ImportSourcesTableTableManager
                                 table,
                                 p0,
                               ).importedTransactionsRefs,
-                      referencedItemsForCurrentItem:
-                          (item, referencedItems) => referencedItems.where(
-                            (e) => e.sourceId == item.id,
-                          ),
+                      currentColumn: 'id',
+                      referencedColumn: 'source_id',
                       typedResults: items,
                     ),
                   if (descriptionCategoryMappingsRefs)
-                    await $_getPrefetchedData<
+                    await $_getPrefetchedDataByColumns<
                       ImportSource,
                       $ImportSourcesTable,
-                      DescriptionCategoryMapping
+                      DescriptionCategoryMapping,
+                      $DescriptionCategoryMappingsTable
                     >(
                       currentTable: table,
                       referencedTable: $$ImportSourcesTableReferences
@@ -7524,10 +7536,8 @@ class $$ImportSourcesTableTableManager
                                 table,
                                 p0,
                               ).descriptionCategoryMappingsRefs,
-                      referencedItemsForCurrentItem:
-                          (item, referencedItems) => referencedItems.where(
-                            (e) => e.sourceId == item.id,
-                          ),
+                      currentColumn: 'id',
+                      referencedColumn: 'source_id',
                       typedResults: items,
                     ),
                 ];
@@ -7597,13 +7607,9 @@ final class $$ImportedTransactionsTableReferences
     super.$_typedResult,
   );
 
-  static $ImportSourcesTable _sourceIdTable(_$AppDatabase db) =>
-      db.importSources.createAlias(
-        $_aliasNameGenerator(
-          db.importedTransactions.sourceId,
-          db.importSources.id,
-        ),
-      );
+  static $ImportSourcesTable _sourceIdTable(_$AppDatabase db) => db
+      .importSources
+      .createAlias('imported_transactions__source_id__import_sources__id');
 
   $$ImportSourcesTableProcessedTableManager get sourceId {
     final $_column = $_itemColumn<int>('source_id')!;
@@ -7951,7 +7957,10 @@ class $$ImportedTransactionsTableTableManager
                   p0
                       .map(
                         (e) => (
-                          e.readTable(table),
+                          e.readTable<
+                            $ImportedTransactionsTable,
+                            ImportedTransaction
+                          >(table),
                           $$ImportedTransactionsTableReferences(db, table, e),
                         ),
                       )
@@ -8046,10 +8055,7 @@ final class $$DescriptionCategoryMappingsTableReferences
 
   static $ImportSourcesTable _sourceIdTable(_$AppDatabase db) =>
       db.importSources.createAlias(
-        $_aliasNameGenerator(
-          db.descriptionCategoryMappings.sourceId,
-          db.importSources.id,
-        ),
+        'description_category_mappings__source_id__import_sources__id',
       );
 
   $$ImportSourcesTableProcessedTableManager get sourceId {
@@ -8276,7 +8282,10 @@ class $$DescriptionCategoryMappingsTableTableManager
                   p0
                       .map(
                         (e) => (
-                          e.readTable(table),
+                          e.readTable<
+                            $DescriptionCategoryMappingsTable,
+                            DescriptionCategoryMapping
+                          >(table),
                           $$DescriptionCategoryMappingsTableReferences(
                             db,
                             table,
