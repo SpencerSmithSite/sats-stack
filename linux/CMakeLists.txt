@@ -74,16 +74,6 @@ set_target_properties(${BINARY_NAME}
 # them to the application.
 include(flutter/generated_plugins.cmake)
 
-# flutter_secure_storage_linux 1.x (held with flutter_secure_storage 9, see
-# CLAUDE.md) bundles an old nlohmann json.hpp whose `operator"" _json` newer
-# Clang flags as deprecated, and APPLY_STANDARD_SETTINGS makes every warning
-# an error. Only that warning, only for that plugin; lift with the 10.x
-# upgrade.
-if(TARGET flutter_secure_storage_linux_plugin)
-  target_compile_options(flutter_secure_storage_linux_plugin
-    PRIVATE -Wno-deprecated-literal-operator)
-endif()
-
 
 # === Installation ===
 # By default, "installing" just makes a relocatable bundle in the build
