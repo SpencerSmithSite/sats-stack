@@ -7,6 +7,7 @@ import '../../../core/services/category_service.dart';
 import '../../../main.dart' as app;
 import '../../../shared/theme/app_colors.dart';
 import '../../../shared/theme/app_text_styles.dart';
+import '../../../shared/theme/category_palette.dart';
 import '../../../shared/utils/amount_input.dart';
 import '../../../shared/utils/currency_utils.dart';
 import '../../../shared/widgets/tappable.dart';
@@ -250,7 +251,8 @@ class _SelectedCategoryRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = _parseColor(category.color) ?? context.textSecondary;
+    final color =
+        CategoryPalette.parseHex(category.color) ?? context.textSecondary;
     return Row(
       children: [
         Container(
@@ -267,13 +269,6 @@ class _SelectedCategoryRow extends StatelessWidget {
         ),
       ],
     );
-  }
-
-  Color? _parseColor(String hex) {
-    final clean = hex.replaceFirst('#', '');
-    if (clean.length != 6) return null;
-    final value = int.tryParse('FF$clean', radix: 16);
-    return value != null ? Color(value) : null;
   }
 }
 
@@ -318,7 +313,8 @@ class _CategoryChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = _parseColor(category.color) ?? context.textSecondary;
+    final color =
+        CategoryPalette.parseHex(category.color) ?? context.textSecondary;
     return Tappable(
       selected: isSelected,
       onTap: onTap,
@@ -358,12 +354,5 @@ class _CategoryChip extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  Color? _parseColor(String hex) {
-    final clean = hex.replaceFirst('#', '');
-    if (clean.length != 6) return null;
-    final value = int.tryParse('FF$clean', radix: 16);
-    return value != null ? Color(value) : null;
   }
 }

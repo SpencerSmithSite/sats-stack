@@ -6,6 +6,7 @@ import '../../../core/services/btc_price_service.dart';
 import '../../../core/services/wallet_service.dart';
 import '../../../core/services/xpub_service.dart';
 import '../../../shared/theme/app_colors.dart';
+import '../../../shared/theme/category_palette.dart';
 import '../../../shared/utils/colour_names.dart';
 import '../../../shared/widgets/tappable.dart';
 
@@ -535,14 +536,9 @@ class _ColorDot extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
 
-  Color _parse(String hex) {
-    final clean = hex.replaceFirst('#', '');
-    return Color(int.parse('FF$clean', radix: 16));
-  }
-
   @override
   Widget build(BuildContext context) {
-    final color = _parse(hex);
+    final color = CategoryPalette.parseHex(hex) ?? AppColors.bitcoinOrange;
     return Tappable(
       label: colourName(color),
       selected: selected,

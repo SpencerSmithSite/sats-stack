@@ -10,6 +10,7 @@ import '../../../core/services/wallet_service.dart';
 import '../../../main.dart' as app;
 import '../../../shared/theme/app_colors.dart';
 import '../../../shared/theme/app_text_styles.dart';
+import '../../../shared/theme/category_palette.dart';
 import '../../../shared/utils/amount_input.dart';
 import '../../../shared/utils/currency_utils.dart';
 import '../../../shared/utils/hash_utils.dart';
@@ -648,7 +649,8 @@ class _CategoryChips extends StatelessWidget {
         itemBuilder: (_, i) {
           final cat = categories[i];
           final isSelected = selected?.id == cat.id;
-          final color = _parseColor(cat.color) ?? context.textSecondary;
+          final color =
+              CategoryPalette.parseHex(cat.color) ?? context.textSecondary;
 
           return Tappable(
             selected: isSelected,
@@ -683,13 +685,6 @@ class _CategoryChips extends StatelessWidget {
         },
       ),
     );
-  }
-
-  Color? _parseColor(String hex) {
-    final clean = hex.replaceFirst('#', '');
-    if (clean.length != 6) return null;
-    final value = int.tryParse('FF$clean', radix: 16);
-    return value != null ? Color(value) : null;
   }
 }
 

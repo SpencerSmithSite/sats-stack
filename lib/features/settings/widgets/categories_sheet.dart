@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../core/database/database.dart';
 import '../../../core/services/category_service.dart';
 import '../../../shared/theme/app_colors.dart';
+import '../../../shared/theme/category_icons.dart';
+import '../../../shared/theme/category_palette.dart';
 import '../../../shared/utils/colour_names.dart';
 import '../../../shared/widgets/inline_error.dart';
 import '../../../shared/widgets/tappable.dart';
@@ -125,16 +127,13 @@ class _CategoryTile extends StatelessWidget {
   final Category category;
   final CategoryService categoryService;
 
-  Color _parseColor(String hex) {
-    final clean = hex.replaceFirst('#', '');
-    return Color(int.parse('FF$clean', radix: 16));
-  }
-
-  IconData _iconData(String name) => _kIconMap[name] ?? Icons.circle;
+  IconData _iconData(String name) => categoryIcon(name, fallback: Icons.circle);
 
   @override
   Widget build(BuildContext context) {
-    final color = _parseColor(category.color);
+    // A malformed colour — a restored database can hold one — threw and
+    // red-screened the sheet (audit U-22).
+    final color = CategoryPalette.of(category.name, userHex: category.color);
     return ListTile(
       leading: Container(
         width: 36,
@@ -431,12 +430,7 @@ class _EditCategorySheetState extends State<_EditCategorySheet> {
                     runSpacing: 10,
                     children:
                         _kColorOptions.map((hex) {
-                          final color = Color(
-                            int.parse(
-                              'FF${hex.replaceFirst('#', '')}',
-                              radix: 16,
-                            ),
-                          );
+                          final color = CategoryPalette.parseHex(hex)!;
                           final selected = _selectedColor == hex;
                           return Tappable(
                             label: colourName(color),
@@ -530,9 +524,8 @@ class _IconGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final activeColor = Color(
-      int.parse('FF${selectedColor.replaceFirst('#', '')}', radix: 16),
-    );
+    final activeColor =
+        CategoryPalette.parseHex(selectedColor) ?? AppColors.bitcoinOrange;
     // As many columns as fit at 48 px or more. Eight fixed columns made each
     // cell about 33 px on a phone, under the 48 px touch floor.
     return LayoutBuilder(
@@ -610,65 +603,5 @@ const _kColorOptions = [
   '#888780', // Grey
 ];
 
-const _kIconOptions = <(String, IconData)>[
-  ('restaurant', Icons.restaurant),
-  ('coffee', Icons.coffee),
-  ('directions_car', Icons.directions_car),
-  ('local_gas_station', Icons.local_gas_station),
-  ('flight', Icons.flight),
-  ('home', Icons.home),
-  ('bed', Icons.bed),
-  ('shopping_bag', Icons.shopping_bag),
-  ('shopping_cart', Icons.shopping_cart),
-  ('subscriptions', Icons.subscriptions),
-  ('movie', Icons.movie),
-  ('sports_esports', Icons.sports_esports),
-  ('fitness_center', Icons.fitness_center),
-  ('local_hospital', Icons.local_hospital),
-  ('school', Icons.school),
-  ('work', Icons.work),
-  ('computer', Icons.computer),
-  ('phone_android', Icons.phone_android),
-  ('currency_bitcoin', Icons.currency_bitcoin),
-  ('payments', Icons.payments),
-  ('savings', Icons.savings),
-  ('attach_money', Icons.attach_money),
-  ('pets', Icons.pets),
-  ('child_care', Icons.child_care),
-  ('park', Icons.park),
-  ('celebration', Icons.celebration),
-  ('card_giftcard', Icons.card_giftcard),
-  ('more_horiz', Icons.more_horiz),
-];
-
-// Icon name → IconData lookup used by the tile renderer
-const Map<String, IconData> _kIconMap = {
-  'restaurant': Icons.restaurant,
-  'coffee': Icons.coffee,
-  'directions_car': Icons.directions_car,
-  'local_gas_station': Icons.local_gas_station,
-  'flight': Icons.flight,
-  'home': Icons.home,
-  'bed': Icons.bed,
-  'shopping_bag': Icons.shopping_bag,
-  'shopping_cart': Icons.shopping_cart,
-  'subscriptions': Icons.subscriptions,
-  'movie': Icons.movie,
-  'sports_esports': Icons.sports_esports,
-  'fitness_center': Icons.fitness_center,
-  'local_hospital': Icons.local_hospital,
-  'school': Icons.school,
-  'work': Icons.work,
-  'computer': Icons.computer,
-  'phone_android': Icons.phone_android,
-  'currency_bitcoin': Icons.currency_bitcoin,
-  'payments': Icons.payments,
-  'savings': Icons.savings,
-  'attach_money': Icons.attach_money,
-  'pets': Icons.pets,
-  'child_care': Icons.child_care,
-  'park': Icons.park,
-  'celebration': Icons.celebration,
-  'card_giftcard': Icons.card_giftcard,
-  'more_horiz': Icons.more_horiz,
-};
+/// The icon picker's choices, in order.
+final _kIconOptions = [for (final e in categoryIcons.entries) (e.key, e.value)];

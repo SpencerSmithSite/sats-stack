@@ -10,6 +10,7 @@ import '../../features/transactions/widgets/manage_wallets_sheet.dart';
 import '../../features/transactions/widgets/transaction_list_item.dart';
 import '../../main.dart' as app;
 import '../../shared/theme/app_colors.dart';
+import '../../shared/theme/category_palette.dart';
 import '../../shared/utils/currency_utils.dart';
 import '../../shared/utils/month_cursor.dart';
 import '../../shared/utils/sat_converter.dart';
@@ -712,14 +713,8 @@ class _WalletRow extends StatelessWidget {
   final double? btcPrice;
   final String currency;
 
-  Color get _walletColor {
-    try {
-      final hex = summary.wallet.color.replaceFirst('#', '');
-      return Color(int.parse('FF$hex', radix: 16));
-    } catch (_) {
-      return AppColors.bitcoinOrange;
-    }
-  }
+  Color get _walletColor =>
+      CategoryPalette.parseHex(summary.wallet.color) ?? AppColors.bitcoinOrange;
 
   @override
   Widget build(BuildContext context) {

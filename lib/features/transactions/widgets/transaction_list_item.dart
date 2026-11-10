@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../core/database/database.dart';
 import '../../../shared/theme/app_colors.dart';
 import '../../../shared/theme/app_text_styles.dart';
+import '../../../shared/theme/category_icons.dart';
+import '../../../shared/theme/category_palette.dart';
 import '../../../shared/utils/currency_utils.dart';
 import '../../../shared/utils/sat_converter.dart';
 import '../../../shared/widgets/shrink_to_fit.dart';
@@ -34,7 +36,7 @@ class TransactionListItem extends StatelessWidget {
         isBtc ? transaction.amountSats < 0 : transaction.amountFiat < 0;
 
     final catColor =
-        _parseColor(category?.color) ??
+        CategoryPalette.parseHex(category?.color) ??
         (isBtc ? AppColors.bitcoinOrange : context.textSecondary);
 
     final satsDisplay =
@@ -64,7 +66,11 @@ class TransactionListItem extends StatelessWidget {
                 color: catColor.withAlpha(30),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Icon(_iconData(category?.icon), size: 18, color: catColor),
+              child: Icon(
+                categoryIcon(category?.icon),
+                size: 18,
+                color: catColor,
+              ),
             ),
             const SizedBox(width: 12),
 
@@ -159,47 +165,5 @@ class TransactionListItem extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  Color? _parseColor(String? hex) {
-    if (hex == null) return null;
-    final clean = hex.replaceFirst('#', '');
-    if (clean.length != 6) return null;
-    final value = int.tryParse('FF$clean', radix: 16);
-    return value != null ? Color(value) : null;
-  }
-
-  IconData _iconData(String? name) {
-    const map = <String, IconData>{
-      'restaurant': Icons.restaurant,
-      'coffee': Icons.coffee,
-      'directions_car': Icons.directions_car,
-      'local_gas_station': Icons.local_gas_station,
-      'flight': Icons.flight,
-      'home': Icons.home,
-      'bed': Icons.bed,
-      'shopping_bag': Icons.shopping_bag,
-      'shopping_cart': Icons.shopping_cart,
-      'subscriptions': Icons.subscriptions,
-      'movie': Icons.movie,
-      'sports_esports': Icons.sports_esports,
-      'fitness_center': Icons.fitness_center,
-      'local_hospital': Icons.local_hospital,
-      'school': Icons.school,
-      'work': Icons.work,
-      'computer': Icons.computer,
-      'phone_android': Icons.phone_android,
-      'currency_bitcoin': Icons.currency_bitcoin,
-      'payments': Icons.payments,
-      'savings': Icons.savings,
-      'attach_money': Icons.attach_money,
-      'pets': Icons.pets,
-      'child_care': Icons.child_care,
-      'park': Icons.park,
-      'celebration': Icons.celebration,
-      'card_giftcard': Icons.card_giftcard,
-      'more_horiz': Icons.more_horiz,
-    };
-    return map[name] ?? Icons.receipt_long;
   }
 }
