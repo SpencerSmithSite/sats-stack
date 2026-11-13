@@ -5,10 +5,11 @@ import '../../../main.dart' as app;
 import '../../../shared/constants/app_constants.dart';
 import '../../../shared/utils/currency_utils.dart';
 import 'categories_sheet.dart';
+import 'price_alerts_sheet.dart';
 import 'settings_widgets.dart';
 
-/// Settings → General: theme, currency, the price chip, categories and the
-/// expected inflation rate.
+/// Settings → General: theme, currency, the price chip, price alerts,
+/// categories and the expected inflation rate.
 class GeneralSection extends StatefulWidget {
   const GeneralSection({super.key});
 
@@ -193,6 +194,28 @@ class _GeneralSectionState extends State<GeneralSection> {
           ),
           value: _showBtcPrice,
           onChanged: _saveShowBtcPrice,
+        ),
+        ListTile(
+          leading: const Icon(Icons.notifications_active_outlined),
+          title: const Text('Price alerts'),
+          subtitle: const Text(
+            'A notification when Bitcoin crosses a price you set, while the '
+            'app is open',
+          ),
+          trailing: const Icon(Icons.chevron_right),
+          onTap:
+              () => showModalBottomSheet(
+                context: context,
+                useRootNavigator: true,
+                isScrollControlled: true,
+                backgroundColor: Colors.transparent,
+                builder:
+                    (_) => PriceAlertsSheet(
+                      service: app.priceAlertService,
+                      currency: _currency,
+                      priceFor: app.btcPriceService.priceFor,
+                    ),
+              ),
         ),
         ListTile(
           leading: const Icon(Icons.category_outlined),

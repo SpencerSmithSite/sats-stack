@@ -76,6 +76,7 @@ class _DangerZoneSectionState extends State<DangerZoneSection> {
       await app.ollamaService.loadSettings();
       await app.xpubService.loadSettings();
       await app.btcPriceService.loadSettings();
+      await app.priceAlertService.load();
       app.currencyNotifier.value = 'USD';
       app.btcPriceService.switchCurrency('USD');
       app.showBtcPriceNotifier.value = true;

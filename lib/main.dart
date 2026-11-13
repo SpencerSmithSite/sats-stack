@@ -16,6 +16,7 @@ import 'core/services/icloud_backup.dart';
 import 'core/services/import_service.dart';
 import 'core/services/notification_service.dart';
 import 'core/services/ollama_service.dart';
+import 'core/services/price_alert_service.dart';
 import 'core/services/recurring_catch_up.dart';
 import 'core/services/removed_model_cleanup.dart';
 import 'core/services/transaction_service.dart';
@@ -36,6 +37,7 @@ late BudgetService budgetService;
 late OllamaService ollamaService;
 late ImportService importService;
 late NotificationService notificationService;
+late PriceAlertService priceAlertService;
 late ValueNotifier<ThemeMode> themeModeNotifier;
 late ValueNotifier<String> currencyNotifier;
 late ValueNotifier<bool> showBtcPriceNotifier;
@@ -116,6 +118,7 @@ void main() async {
     claim: notificationLedger.claim,
     release: notificationLedger.release,
   );
+  priceAlertService = PriceAlertService(db, notifications: notificationService);
 
   // Independent of one another, so started together rather than awaited in
   // turn: between them they read the keychain, the notification plugin and
@@ -126,6 +129,7 @@ void main() async {
     xpubService.loadSettings(),
     notificationService.initialize(),
     btcPriceService.initialize(),
+    priceAlertService.load(),
   ]);
   // Chat transcripts are no longer stored; drop any an earlier build kept.
   unawaited(ollamaService.clearStoredTranscripts());
@@ -159,6 +163,10 @@ void main() async {
   );
 
   btcPriceService.startAutoRefresh();
+  // Price alerts ride on the refreshes above, so they are checked only while
+  // the app runs. Now as well, for a crossing the last session saw the start
+  // of and a fetch that landed before this listener did.
+  priceAlertService.watch(btcPriceService);
   // Timers do not run while the app is suspended, so catch up on return.
   AppLifecycleListener(
     onResume:

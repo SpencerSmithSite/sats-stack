@@ -10,14 +10,18 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sats_stack/core/database/database.dart';
 import 'package:sats_stack/core/models/ai_provider.dart';
+import 'package:sats_stack/core/models/price_alert.dart';
 import 'package:sats_stack/core/services/btc_price_service.dart';
 import 'package:sats_stack/core/services/category_service.dart';
 import 'package:sats_stack/core/services/import_service.dart';
+import 'package:sats_stack/core/services/notification_service.dart';
 import 'package:sats_stack/core/services/ollama_service.dart';
+import 'package:sats_stack/core/services/price_alert_service.dart';
 import 'package:sats_stack/core/services/secure_key_store.dart';
 import 'package:sats_stack/core/services/xpub_service.dart';
 import 'package:sats_stack/features/settings/settings_screen.dart';
 import 'package:sats_stack/features/settings/widgets/categories_sheet.dart';
+import 'package:sats_stack/features/settings/widgets/price_alerts_sheet.dart';
 import 'package:sats_stack/main.dart' as app;
 import 'package:sats_stack/shared/constants/app_constants.dart';
 import 'package:sats_stack/shared/theme/app_theme.dart';
@@ -80,6 +84,10 @@ void main() {
     app.ollamaService = OllamaService(app.db, keyStore: keys);
     await app.ollamaService.loadSettings();
     app.importService = ImportService(app.db, app.ollamaService);
+    app.priceAlertService = PriceAlertService(
+      app.db,
+      notifications: NotificationService(),
+    );
     app.themeModeNotifier = ValueNotifier(ThemeMode.dark);
     app.currencyNotifier = ValueNotifier('USD');
     app.showBtcPriceNotifier = ValueNotifier(true);
@@ -215,6 +223,19 @@ void main() {
       await tester.tap(find.text('Categories'));
       await settle(tester);
       expect(find.byType(CategoriesSheet), findsOneWidget);
+      await close(tester);
+    });
+
+    testWidgets('Price alerts opens its sheet, in the display currency', (
+      tester,
+    ) async {
+      await open(tester, 'General');
+      await tester.tap(find.widgetWithText(ChoiceChip, 'GBP'));
+      await settle(tester);
+      await tester.tap(find.text('Price alerts'));
+      await settle(tester);
+      expect(find.byType(PriceAlertsSheet), findsOneWidget);
+      expect(find.text('Price in GBP'), findsOneWidget);
       await close(tester);
     });
   });
@@ -431,6 +452,13 @@ void main() {
       app.themeModeNotifier.value = ThemeMode.light;
       app.showBtcPriceNotifier.value = false;
       await keys.write('anthropic', 'sk-ant-test');
+      await tester.runAsync(
+        () => app.priceAlertService.add(
+          direction: PriceAlertDirection.above,
+          price: 100000,
+          currency: 'USD',
+        ),
+      );
 
       await tester.tap(find.text('Reset all data'));
       await settle(tester);
@@ -443,6 +471,9 @@ void main() {
       expect(app.showBtcPriceNotifier.value, isTrue);
       expect(app.onboardingCompleteNotifier.value, isFalse);
       expect(keys.keys['anthropic'] ?? '', isEmpty);
+      // Reread, not only deleted: the old list would otherwise stay live, and
+      // be saved back on the next price check.
+      expect(app.priceAlertService.alerts.value, isEmpty);
       // A genuine first run: everything was deleted.
       expect(find.text('ONBOARD first'), findsOneWidget);
       await close(tester);

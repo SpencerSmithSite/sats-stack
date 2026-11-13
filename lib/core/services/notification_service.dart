@@ -3,9 +3,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../database/database.dart';
+import '../models/price_alert.dart';
 
-/// Wraps [FlutterLocalNotificationsPlugin] and provides budget-specific
-/// notification helpers.
+/// Wraps [FlutterLocalNotificationsPlugin] and provides the budget, stack
+/// goal and price alert notifications.
 ///
 /// Each alert is sent once per occasion: a budget warning or overspend once
 /// per category per month, the stack goal once per goal amount. [claim]
@@ -39,6 +40,9 @@ class NotificationService {
       _release = release ?? (_) async {};
     }
     _deliver = deliver ?? _show;
+    _deliverPriceAlert =
+        deliver ??
+        (id, title, body) => _show(id, title, body, priceAlert: true);
   }
 
   final _plugin = FlutterLocalNotificationsPlugin();
@@ -46,6 +50,8 @@ class NotificationService {
   late final Future<bool> Function(String key) _claim;
   late final Future<void> Function(String key) _release;
   late final Future<bool> Function(int id, String title, String body) _deliver;
+  late final Future<bool> Function(int id, String title, String body)
+  _deliverPriceAlert;
 
   /// Sends the alert for [key] unless it has been sent, and gives the claim
   /// back if it could not be shown.
@@ -69,6 +75,17 @@ class NotificationService {
   /// which would have silently replaced the goal notification.
   static const _budgetIdBase = 100000;
   static const _stackGoalId = 9999;
+
+  /// Price alerts take the ids from here up to [_budgetIdBase]: above the
+  /// stack goal and below the lowest budget id (category ids start at 1), so
+  /// neither can replace one. Room for [_priceAlertIdCount] alerts before an
+  /// id repeats, which would only replace an alert's own long-gone banner.
+  static const _priceAlertIdBase = 10000;
+  static const _priceAlertIdCount = _budgetIdBase - _priceAlertIdBase;
+
+  @visibleForTesting
+  static int priceAlertNotificationId(int alertId) =>
+      _priceAlertIdBase + alertId % _priceAlertIdCount;
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
@@ -148,6 +165,34 @@ class NotificationService {
     "You've reached your stack goal. Incredible work.",
   );
 
+  // ── Price alerts ───────────────────────────────────────────────────────────
+
+  /// Tells the user the price has crossed one of their alerts, and returns
+  /// whether it reached the screen.
+  ///
+  /// Not through [_sendOnce]: the alert records that it has fired itself
+  /// (`PriceAlert.triggeredAt`), and a ledger row per alert would outlive the
+  /// alert. The answer comes back instead, so an alert that could not be
+  /// shown stays waiting, as a budget alert's claim is released (audit D-9).
+  ///
+  /// No price in the text, as no amount is in any other notification (audit
+  /// P-8): the level someone set alerts at says what they are watching for,
+  /// and on a locked screen that is nobody else's business. The price is one
+  /// tap away, in the app.
+  Future<bool> showPriceAlert({
+    required int alertId,
+    required PriceAlertDirection direction,
+  }) => _deliverPriceAlert(
+    priceAlertNotificationId(alertId),
+    'Bitcoin price alert',
+    switch (direction) {
+      PriceAlertDirection.above =>
+        'Bitcoin has risen past a price you set an alert for.',
+      PriceAlertDirection.below =>
+        'Bitcoin has fallen past a price you set an alert for.',
+    },
+  );
+
   // ── Private ────────────────────────────────────────────────────────────────
 
   /// Asks for notification permission the first time there is something to
@@ -206,8 +251,15 @@ class NotificationService {
     return _permissionGranted = true;
   }
 
-  /// True only when the plugin accepted the notification.
-  Future<bool> _show(int id, String title, String body) async {
+  /// True only when the plugin accepted the notification. [priceAlert] puts
+  /// it on its own Android channel, so either kind can be silenced in the
+  /// system settings without the other.
+  Future<bool> _show(
+    int id,
+    String title,
+    String body, {
+    bool priceAlert = false,
+  }) async {
     if (!_initialized) return false;
     try {
       if (!await _ensurePermission()) return false;
@@ -216,28 +268,18 @@ class NotificationService {
         id: id,
         title: title,
         body: body,
-        notificationDetails: const NotificationDetails(
-          iOS: DarwinNotificationDetails(
+        notificationDetails: NotificationDetails(
+          iOS: const DarwinNotificationDetails(
             presentAlert: true,
             presentBadge: false,
             presentSound: true,
           ),
-          macOS: DarwinNotificationDetails(
+          macOS: const DarwinNotificationDetails(
             presentAlert: true,
             presentBadge: false,
             presentSound: true,
           ),
-          android: AndroidNotificationDetails(
-            'budget_alerts',
-            'Budget Alerts',
-            channelDescription:
-                'Notifies when spending approaches or exceeds budget limits',
-            importance: Importance.high,
-            priority: Priority.high,
-            // On a secure lock screen Android shows only that there is a
-            // notification from the app, not its text (audit P-8).
-            visibility: NotificationVisibility.private,
-          ),
+          android: priceAlert ? _priceAlertChannel : _budgetChannel,
         ),
       );
       return true;
@@ -245,6 +287,28 @@ class NotificationService {
       return false;
     }
   }
+
+  static const _budgetChannel = AndroidNotificationDetails(
+    'budget_alerts',
+    'Budget Alerts',
+    channelDescription:
+        'Notifies when spending approaches or exceeds budget limits',
+    importance: Importance.high,
+    priority: Priority.high,
+    // On a secure lock screen Android shows only that there is a
+    // notification from the app, not its text (audit P-8).
+    visibility: NotificationVisibility.private,
+  );
+
+  static const _priceAlertChannel = AndroidNotificationDetails(
+    'price_alerts',
+    'Price Alerts',
+    channelDescription:
+        'Notifies when the Bitcoin price crosses a level you set',
+    importance: Importance.high,
+    priority: Priority.high,
+    visibility: NotificationVisibility.private,
+  );
 }
 
 /// Remembers which alerts have been sent, in `AppSettings`, so a restart does

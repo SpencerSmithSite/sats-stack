@@ -26,6 +26,9 @@ abstract final class AppConstants {
   static const settingBtcAllPrices = 'btc_all_prices';
   static const settingShowBtcPrice = 'show_btc_price';
 
+  /// The user's BTC price alerts, as a JSON list — see `PriceAlertService`.
+  static const settingPriceAlerts = 'price_alerts';
+
   /// iOS only: whether the database goes into iCloud and device backups —
   /// see `ICloudBackup`.
   static const settingICloudBackup = 'icloud_backup';
