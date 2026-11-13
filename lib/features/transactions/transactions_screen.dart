@@ -8,8 +8,10 @@ import 'package:intl/intl.dart';
 import '../../core/database/database.dart';
 import '../../main.dart' as app;
 import '../../shared/theme/app_colors.dart';
+import '../../shared/utils/date_range.dart';
 import '../../shared/widgets/btc_price_chip.dart';
 import '../../shared/widgets/empty_state.dart';
+import 'transaction_filter.dart';
 import 'widgets/add_transaction_sheet.dart';
 import 'widgets/manage_wallets_sheet.dart';
 import 'widgets/transaction_edit_sheet.dart';
@@ -26,6 +28,10 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   String _searchQuery = '';
   final Set<String> _filterCategories = {};
   final Set<String> _filterSources = {};
+
+  /// Half-open, like every other range in the app, so the whole of its last
+  /// day is in it. Tested against each row's stored date the way months are.
+  DateRange? _filterDates;
   late final TextEditingController _searchCtrl;
 
   /// Built once. `watchAll()` returns a *new* Drift stream on every call, so
@@ -49,41 +55,60 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   Timer? _searchPause;
   static const _searchPauseLength = Duration(milliseconds: 250);
   ({
-    List<Transaction> rows,
     String query,
     Set<String> categories,
     Set<String> sources,
-    List<(DateTime, List<Transaction>)> days,
+    DateRange? dates,
+    _Days days,
   })?
   _shown;
 
-  /// [all] filtered and grouped by day, newest first.
-  List<(DateTime, List<Transaction>)> _days(List<Transaction> all) {
+  /// The rows' searchable text, prepared once per list of rows rather than
+  /// on every search.
+  TransactionSearch? _search;
+
+  /// [all] filtered and grouped by day, newest first: the exact matches, and
+  /// separately the close ones.
+  _Days _days(List<Transaction> all) {
+    var search = _search;
     final shown = _shown;
-    if (shown != null &&
-        identical(shown.rows, all) &&
+    final sameRows = search != null && identical(search.rows, all);
+    if (sameRows &&
+        shown != null &&
         shown.query == _searchQuery &&
         setEquals(shown.categories, _filterCategories) &&
-        setEquals(shown.sources, _filterSources)) {
+        setEquals(shown.sources, _filterSources) &&
+        shown.dates == _filterDates) {
       return shown.days;
     }
-    final groups = <DateTime, List<Transaction>>{};
-    for (final tx in _applyFilters(all)) {
-      final date = DateTime(tx.date.year, tx.date.month, tx.date.day);
-      groups.putIfAbsent(date, () => []).add(tx);
-    }
-    final days = [
-      for (final date in groups.keys.toList()..sort((a, b) => b.compareTo(a)))
-        (date, groups[date]!),
-    ];
+    if (!sameRows) search = _search = TransactionSearch(all);
+    final results = search.search(_searchQuery, include: _passesFilters);
+    final days = (
+      exact: _groupByDay(results.exact),
+      close: _groupByDay(results.close),
+    );
     _shown = (
-      rows: all,
       query: _searchQuery,
       categories: {..._filterCategories},
       sources: {..._filterSources},
+      dates: _filterDates,
       days: days,
     );
     return days;
+  }
+
+  static List<(DateTime, List<Transaction>)> _groupByDay(
+    List<Transaction> rows,
+  ) {
+    final groups = <DateTime, List<Transaction>>{};
+    for (final tx in rows) {
+      final date = DateTime(tx.date.year, tx.date.month, tx.date.day);
+      groups.putIfAbsent(date, () => []).add(tx);
+    }
+    return [
+      for (final date in groups.keys.toList()..sort((a, b) => b.compareTo(a)))
+        (date, groups[date]!),
+    ];
   }
 
   void _onSearchChanged(String text) {
@@ -112,38 +137,24 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     super.dispose();
   }
 
-  bool get _hasActiveFilters =>
-      _filterCategories.isNotEmpty || _filterSources.isNotEmpty;
+  /// How many filters are on, for the badge on the filter button.
+  int get _activeFilterCount =>
+      _filterCategories.length +
+      _filterSources.length +
+      (_filterDates == null ? 0 : 1);
 
-  List<Transaction> _applyFilters(List<Transaction> all) {
-    var result = all;
-    if (_searchQuery.isNotEmpty) {
-      final q = _searchQuery.toLowerCase();
-      result =
-          result
-              .where(
-                (t) =>
-                    t.description.toLowerCase().contains(q) ||
-                    (t.category?.toLowerCase().contains(q) ?? false) ||
-                    (t.notes?.toLowerCase().contains(q) ?? false),
-              )
-              .toList();
-    }
-    if (_filterCategories.isNotEmpty) {
-      result =
-          result
-              .where((t) => _filterCategories.contains(t.category ?? 'Other'))
-              .toList();
-    }
-    if (_filterSources.isNotEmpty) {
-      result = result.where((t) => _filterSources.contains(t.source)).toList();
-    }
-    return result;
-  }
+  bool get _hasActiveFilters => _activeFilterCount > 0;
+
+  bool _passesFilters(Transaction t) =>
+      (_filterCategories.isEmpty ||
+          _filterCategories.contains(t.category ?? 'Other')) &&
+      (_filterSources.isEmpty || _filterSources.contains(t.source)) &&
+      (_filterDates?.contains(t.date) ?? true);
 
   void _clearFilters() => setState(() {
     _filterCategories.clear();
     _filterSources.clear();
+    _filterDates = null;
   });
 
   void _openAddSheet() {
@@ -187,14 +198,16 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
           (_) => _FilterSheet(
             activeCategories: Set.from(_filterCategories),
             activeSources: Set.from(_filterSources),
+            activeDates: _filterDates,
             onApply:
-                (cats, sources) => setState(() {
+                (cats, sources, dates) => setState(() {
                   _filterCategories
                     ..clear()
                     ..addAll(cats);
                   _filterSources
                     ..clear()
                     ..addAll(sources);
+                  _filterDates = dates;
                 }),
           ),
     );
@@ -217,7 +230,9 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
           const SizedBox(width: 4),
           Badge(
             isLabelVisible: _hasActiveFilters,
+            label: Text('$_activeFilterCount'),
             backgroundColor: AppColors.bitcoinOrange,
+            textColor: AppColors.onBitcoinOrange,
             child: IconButton(
               icon: const Icon(Icons.filter_list_outlined),
               onPressed: _openFilterSheet,
@@ -281,6 +296,11 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                       spacing: 6,
                       runSpacing: 4,
                       children: [
+                        if (_filterDates case final dates?)
+                          _ActiveFilterChip(
+                            label: dateRangeLabel(dates, DateTime.now()),
+                            onRemove: () => setState(() => _filterDates = null),
+                          ),
                         for (final cat in _filterCategories)
                           _ActiveFilterChip(
                             label: cat,
@@ -334,7 +354,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
 
                 final days = _days(all);
 
-                if (days.isEmpty) {
+                if (days.exact.isEmpty && days.close.isEmpty) {
                   return EmptyState(
                     icon: Icons.search_off_outlined,
                     title: 'No results',
@@ -353,7 +373,8 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                 }
 
                 return _TransactionList(
-                  days: days,
+                  days: days.exact,
+                  closeDays: days.close,
                   categoriesByName: _categoriesByName,
                 );
               },
@@ -377,12 +398,19 @@ class _FilterSheet extends StatefulWidget {
   const _FilterSheet({
     required this.activeCategories,
     required this.activeSources,
+    required this.activeDates,
     required this.onApply,
   });
 
   final Set<String> activeCategories;
   final Set<String> activeSources;
-  final void Function(Set<String> categories, Set<String> sources) onApply;
+  final DateRange? activeDates;
+  final void Function(
+    Set<String> categories,
+    Set<String> sources,
+    DateRange? dates,
+  )
+  onApply;
 
   @override
   State<_FilterSheet> createState() => _FilterSheetState();
@@ -391,6 +419,7 @@ class _FilterSheet extends StatefulWidget {
 class _FilterSheetState extends State<_FilterSheet> {
   late final Set<String> _categories;
   late final Set<String> _sources;
+  DateRange? _dates;
   List<Category> _allCategories = [];
 
   static const _allSources = ['manual', 'csv', 'xpub'];
@@ -400,25 +429,65 @@ class _FilterSheetState extends State<_FilterSheet> {
     super.initState();
     _categories = Set.from(widget.activeCategories);
     _sources = Set.from(widget.activeSources);
+    _dates = widget.activeDates;
     app.categoryService.getAll().then((cats) {
       if (mounted) setState(() => _allCategories = cats);
     });
   }
 
   void _apply() {
-    widget.onApply(_categories, _sources);
+    widget.onApply(_categories, _sources, _dates);
     Navigator.pop(context);
   }
 
   void _clearAll() => setState(() {
     _categories.clear();
     _sources.clear();
+    _dates = null;
   });
+
+  Future<void> _pickDates() async {
+    final today = DateUtils.dateOnly(DateTime.now());
+    final current = _dates;
+    // Opens on the range already chosen, preset or not, so it can be
+    // adjusted rather than picked again from nothing.
+    final initial =
+        current == null
+            ? null
+            : DateTimeRange(start: current.start, end: current.lastDay);
+    // Imported rows can predate Bitcoin, and a bank can date one ahead; the
+    // picker asserts if the initial range is outside its bounds (audit U-11).
+    final first = DateTime(1970);
+    final last = DateTime(today.year + 1, 12, 31);
+    final picked = await showDateRangePicker(
+      context: context,
+      initialDateRange: initial,
+      firstDate:
+          initial != null && initial.start.isBefore(first)
+              ? initial.start
+              : first,
+      lastDate:
+          initial != null && initial.end.isAfter(last) ? initial.end : last,
+      currentDate: today,
+      helpText: 'Show transactions from',
+      saveText: 'Done',
+      confirmText: 'Done',
+    );
+    if (picked == null || !mounted) return;
+    // The picker's end is the last day itself, at midnight: the range runs
+    // to the start of the day after it, so that day is included in full.
+    setState(() => _dates = DateRange.days(picked.start, picked.end));
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final hasAny = _categories.isNotEmpty || _sources.isNotEmpty;
+    final hasAny =
+        _categories.isNotEmpty || _sources.isNotEmpty || _dates != null;
+    final today = DateTime.now();
+    final dates = _dates;
+    final preset = dates == null ? null : DatePreset.of(dates, today);
+    final isCustom = dates != null && preset == null;
 
     return Container(
       decoration: BoxDecoration(
@@ -465,6 +534,44 @@ class _FilterSheetState extends State<_FilterSheet> {
               ],
             ),
             const SizedBox(height: 12),
+
+            // Date section
+            Text(
+              'Date',
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: context.textSecondary,
+                letterSpacing: 1.1,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                // One range at a time: choosing a preset replaces the last
+                // choice, and choosing it again turns it off.
+                for (final p in DatePreset.values)
+                  FilterChip(
+                    label: Text(p.label),
+                    selected: preset == p,
+                    onSelected:
+                        (on) => setState(
+                          () => _dates = on ? p.rangeOn(today) : null,
+                        ),
+                  ),
+                FilterChip(
+                  avatar: isCustom ? null : const Icon(Icons.date_range),
+                  label: Text(
+                    isCustom ? dateRangeLabel(dates, today) : 'Custom…',
+                  ),
+                  selected: isCustom,
+                  tooltip: 'Choose dates',
+                  onSelected: (_) => _pickDates(),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 16),
 
             // Source section
             Text(
@@ -571,26 +678,72 @@ class _ActiveFilterChip extends StatelessWidget {
 
 // ── Transaction list (unchanged logic) ───────────────────────────────────────
 
+/// Each day with its transactions, newest first: the rows that match the
+/// search as typed, and those found only by tolerating a typo.
+typedef _Days =
+    ({
+      List<(DateTime, List<Transaction>)> exact,
+      List<(DateTime, List<Transaction>)> close,
+    });
+
 class _TransactionList extends StatelessWidget {
-  const _TransactionList({required this.days, required this.categoriesByName});
+  const _TransactionList({
+    required this.days,
+    required this.closeDays,
+    required this.categoriesByName,
+  });
 
   /// Each day with its transactions, newest first.
   final List<(DateTime, List<Transaction>)> days;
+
+  /// The same for close matches, after every exact one and under a heading
+  /// of their own: mixed in by date, a near miss could sit above the row the
+  /// user typed exactly.
+  final List<(DateTime, List<Transaction>)> closeDays;
   final Map<String, Category> categoriesByName;
 
   @override
   Widget build(BuildContext context) {
+    final hasClose = closeDays.isNotEmpty;
     return ListView.builder(
       padding: const EdgeInsets.only(bottom: 80),
-      itemCount: days.length,
+      itemCount: days.length + (hasClose ? closeDays.length + 1 : 0),
       itemBuilder: (context, i) {
-        final (date, dayTxs) = days[i];
+        if (i == days.length) return const _CloseMatchesHeading();
+        final (date, dayTxs) =
+            i < days.length ? days[i] : closeDays[i - days.length - 1];
         return _DateGroup(
           date: date,
           transactions: dayTxs,
           categoriesByName: categoriesByName,
         );
       },
+    );
+  }
+}
+
+class _CloseMatchesHeading extends StatelessWidget {
+  const _CloseMatchesHeading();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
+      child: Row(
+        children: [
+          Icon(Icons.manage_search, size: 18, color: context.textSecondary),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              'Close matches',
+              style: theme.textTheme.titleSmall?.copyWith(
+                color: context.textSecondary,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

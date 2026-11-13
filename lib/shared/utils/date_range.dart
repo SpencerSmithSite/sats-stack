@@ -33,5 +33,28 @@ class DateRange {
   factory DateRange.year(DateTime date) =>
       DateRange(DateTime(date.year, 1, 1), DateTime(date.year + 1, 1, 1));
 
+  /// Whole calendar days, [firstDay] through [lastDay] inclusive: from
+  /// midnight on [firstDay] up to — but not including — midnight on the day
+  /// after [lastDay], so everything on the last day counts.
+  ///
+  /// The end is built from the calendar fields, not by adding 24 hours, so a
+  /// daylight-saving change inside the range cannot move it off midnight.
+  factory DateRange.days(DateTime firstDay, DateTime lastDay) => DateRange(
+    DateTime(firstDay.year, firstDay.month, firstDay.day),
+    DateTime(lastDay.year, lastDay.month, lastDay.day + 1),
+  );
+
+  /// The last whole day in the range, for showing it to someone: the day
+  /// before [end]. Only meaningful when [end] is a midnight, as it is for
+  /// every range built by the factories above.
+  DateTime get lastDay => DateTime(end.year, end.month, end.day - 1);
+
   bool contains(DateTime date) => !date.isBefore(start) && date.isBefore(end);
+
+  @override
+  bool operator ==(Object other) =>
+      other is DateRange && other.start == start && other.end == end;
+
+  @override
+  int get hashCode => Object.hash(start, end);
 }
