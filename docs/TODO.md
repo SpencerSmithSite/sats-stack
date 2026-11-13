@@ -88,8 +88,6 @@ History lives elsewhere and is not duplicated into this file:
 - **iCloud / local automatic backup** — complements the manual export in
   Settings → Data, which now takes a consistent `VACUUM INTO` snapshot and
   keeps a `.bak` on restore.
-- **BTC price alerts** — threshold notification via
-  `flutter_local_notifications`, which now actually fires on iOS.
 - **Register the macOS bundle id** (`app.satsstack.SatsStack`, settled on
   2026-10-20) with Apple, and switch `SecureKeyStore` to the data-protection
   keychain. Needed for any macOS distribution anyway; the
