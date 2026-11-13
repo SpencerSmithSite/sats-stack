@@ -82,7 +82,6 @@ History lives elsewhere and is not duplicated into this file:
 
 - **Tab roadmap**, from the deleted `SatsStackNotes.md`: Accounts and Goals
   as tabs of their own, and a Cash flow view.
-- **Transaction search/filter polish** — fuzzy matching, date-range picker.
 - **Home screen widget** — stack balance + BTC price. Needs `home_widget` and
   an app group entitlement.
 - **iCloud / local automatic backup** — complements the manual export in
