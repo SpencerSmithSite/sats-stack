@@ -56,10 +56,6 @@ History lives elsewhere and is not duplicated into this file:
   `file_picker` and `package_info_plus` still apply the Kotlin Gradle Plugin.
   Flutter warns that a future version will refuse that. Switch once they
   move: drop `kotlin-android` and the flag.
-- **SQLite is downloaded at build time.** sqlite3 3's build hook (#155)
-  fetches SQLite from the sqlite3.dart GitHub release, hash-checked, on every
-  clean build. A GitHub outage failed CI once (2026-11-10). Caching the
-  hook's download in CI, keyed on `pubspec.lock`, would stop that.
 - **Calendar dates across timezones (audit D-11).** Deferred 2026-11-02.
   Picker and CSV dates are stored as local midnight, an instant, and read
   back in the device's current timezone, so after moving west a transaction
